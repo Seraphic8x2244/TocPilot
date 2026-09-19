@@ -840,6 +840,152 @@ void StartPackageInspection(
         .detach();
 }
 
+void StartPackageInstall(
+    HWND hwnd,
+    std::size_t index) {
+    if (index >= g_state.packages.size()) {
+        return;
+    }
+
+    const auto package =
+        g_state.packages[index];
+
+    if (package.provider != L"github" ||
+        package.mode != L"branch" ||
+        package.ref.empty()) {
+        return;
+    }
+
+    std::vector<std::wstring> otherInstalledFiles;
+    for (std::size_t i = 0;
+         i < g_state.packages.size();
+         ++i) {
+        if (i == index ||
+            g_state.packages[i].target != L"addons") {
+            continue;
+        }
+
+        const auto& files =
+            g_state.packages[i].installedFiles;
+        otherInstalledFiles.insert(
+            otherInstalledFiles.end(),
+            files.begin(),
+            files.end());
+    }
+
+    g_packageInstallInProgress = true;
+    UpdatePackageButtons();
+    SetPackageRowStatus(
+        index,
+        package.installedRevision.empty()
+            ? L"Preparing install..."
+            : L"Preparing update...");
+
+    if (g_packageHint) {
+        const std::wstring message =
+            package.name +
+            L": downloading, validating, and preparing " +
+            package.ref +
+            L". Live addons are unchanged until the final commit.";
+
+        SetWindowTextW(
+            g_packageHint,
+            message.c_str());
+    }
+
+    const auto wowRoot = g_root;
+
+    std::thread(
+        [hwnd,
+         index,
+         package,
+         otherInstalledFiles = std::move(otherInstalledFiles),
+         wowRoot]() mutable {
+            auto result =
+                std::make_unique<PackageInstallResult>();
+
+            result->index = index;
+            result->packageId = package.id;
+            result->packageName = package.name;
+            result->branch = package.ref;
+
+            if (!tp::ResolveGitHubBranchHead(
+                    package.repository,
+                    package.ref,
+                    result->remoteSha,
+                    result->error)) {
+                result->ok = false;
+            } else if (!tp::ResetGitHubPackageStaging(
+                    wowRoot,
+                    package.repository,
+                    result->inspection.stagingDirectory,
+                    result->error)) {
+                result->ok = false;
+            } else {
+                result->inspection.archivePath =
+                    result->inspection.stagingDirectory /
+                    L"archive.zip";
+
+                result->inspection.extractedRoot =
+                    result->inspection.stagingDirectory /
+                    L"extracted";
+
+                if (!tp::DownloadGitHubArchive(
+                        package.repository,
+                        result->remoteSha,
+                        result->inspection.archivePath,
+                        result->downloadedBytes,
+                        result->error)) {
+                    result->ok = false;
+                } else if (!tp::ExtractZipSecure(
+                        result->inspection.archivePath,
+                        result->inspection.extractedRoot,
+                        result->inspection.entryCount,
+                        result->inspection.totalUncompressedBytes,
+                        result->error)) {
+                    result->ok = false;
+                } else if (!tp::DetectAddonCandidates(
+                        result->inspection.extractedRoot,
+                        result->inspection.candidates,
+                        result->error)) {
+                    result->ok = false;
+                } else {
+                    tp::AddonInstallPlan plan;
+                    if (!tp::BuildAddonInstallPlan(
+                            wowRoot,
+                            package.id,
+                            result->inspection.extractedRoot,
+                            result->inspection.candidates,
+                            package.installedFiles,
+                            otherInstalledFiles,
+                            plan,
+                            result->error)) {
+                        result->ok = false;
+                    } else if (!tp::PrepareAddonInstallTransaction(
+                            plan,
+                            result->transaction,
+                            result->error)) {
+                        result->ok = false;
+                    } else {
+                        result->ok = true;
+                    }
+                }
+            }
+
+            if (!PostMessageW(
+                    hwnd,
+                    WM_TP_PACKAGE_INSTALL_COMPLETE,
+                    0,
+                    reinterpret_cast<LPARAM>(
+                        result.get()))) {
+                return;
+            }
+
+            result.release();
+        })
+        .detach();
+}
+
 void StartUpdateCheck(HWND hwnd) {
     EnableWindow(g_updateButton, FALSE);
     SetWindowTextW(g_updateButton, L"Checking app...");
