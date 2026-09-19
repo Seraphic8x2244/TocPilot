@@ -3,7 +3,7 @@
 ## Continuation checkpoint — 2026-09-19
 
 - Active branch: `p2-github-branches`.
-- Current application version: `v0.1.11`; published and runtime-validated for transactional uninstall/reinstall.
+- Current application version: `v0.1.11`; published and runtime-validated for transactional uninstall/reinstall. Update All source changes are not yet released. Update All is implemented in source and remains unreleased pending Windows CI.
 - Latest implementation commit: `9dd56e4` — Polish uninstall development controls.
 - New uninstall implementation commits:
   - `f75f286` — Add transactional package uninstall UI.
@@ -16,6 +16,8 @@
 - Completed in source: transactional uninstall for TocPilot-owned addon roots now reuses the existing install transaction/backup/rollback engine; shared ownership is refused; failed filesystem commits roll back; failed state saves restore removed roots; successful uninstall clears installed revision/file ownership while retaining repository/branch tracking; the existing **Forget** action remains explicitly non-destructive; deterministic install/state tests cover removal, shared ownership refusal, injected rollback, and installed-state clearing.
 - Previously completed and runtime-validated: P0 self-update; P1 state/UI/provider foundation; GitHub branch selection/Refresh/Inspect; transactional single-package install/reinstall; unmanaged addon-root collision refusal, through `v0.1.10`.
 - Runtime gate cleared for the uninstall slice: the user confirmed `v0.1.11` Uninstall behaved as expected through uninstall, restart, retained package state, and reinstall.
+- Update All implementation head: `18d0f84` — Stop Update All after rollback failure. Supporting commits: `bc803fd` (sequential UI orchestration), `3df5659` (CTest wiring), `30989b0`/`c2d06a2` (test/source include hardening), `4e785ec` (queue tests), `642b536`/`d854cbb` (Update All queue module).
+- Update All behavior now implemented: only installed TocPilot-owned GitHub branch packages are queued; each package is refreshed first; already-current packages are left untouched; changed branches reuse the existing single-package staged transaction; ordinary package failures are isolated so remaining packages continue; rollback failure stops the batch; not-installed packages are ignored; a final summary reports queued/processed/updated/current/failed counts.
 - Deferred beyond this slice: Update All orchestration, explicit adoption of pre-existing unmanaged addon roots, crash-recovery journaling for unexpected process/power loss during live commit, GitHub release assets, GitLab support, DLL/direct-file installation, import/export, column persistence, and modification detection/backups.
 - Exact next step: bump/request `v0.1.11`; the release workflow will re-run Windows x64 build + full CTest before publishing. Then self-update from `v0.1.10`, runtime-test Uninstall (owned roots removed, package retained as Not installed, restart stable, unrelated addons preserved), then Reinstall. Do not begin Update All until this runtime gate passes.
 - Delivery rule: publish runtime-test builds only after their exact source version passes Windows CI.
@@ -30,7 +32,7 @@
 - License: MIT
 - Intended platform: Windows x64
 - Implementation: native C++20 / Win32 / CMake
-- Highest priority: implement Update All orchestration over the same central package transaction primitives
+- Highest priority: CI-validate the Update All implementation, then publish the next runtime-test release
 - Current application version: `v0.1.11`; published and runtime-validated for transactional uninstall/reinstall.
 
 ## Latest commits
@@ -357,9 +359,8 @@ P0 edge/failure paths not yet deliberately forced:
 - paths containing spaces;
 - non-system drive such as `D:\Games\WoW`.
 
-Deferred beyond the current transactional P2 uninstall validation slice:
+Deferred beyond the current Update All validation slice:
 
-- Update All orchestration;
 - explicit adoption/replacement flow for pre-existing unmanaged addon roots;
 - crash-recovery journal/reconciliation after unexpected process or power loss during live commit;
 - GitHub release package/assets support;
@@ -437,8 +438,8 @@ Complete. A real `v0.1.0 -> v0.1.1` in-app self-update succeeded on Windows besi
 
 ## Exact next step
 
-1. `v0.1.11` transactional uninstall/reinstall runtime gate is passed.
-2. Implement **Update All** orchestration by reusing the existing per-package Refresh/prepare/commit/state-save transaction path rather than adding a separate updater implementation.
-3. Add deterministic coverage for mixed Current/Update available/Not installed packages, failure isolation, and state-save rollback behavior.
-4. CI-validate the exact Update All head on Windows x64 before the next runtime release.
-5. After runtime validation, simplify the temporary development UI toward Add Git Link + branch dropdown + automatic refresh/status + compact per-package actions.
+1. Confirm Update All implementation head `18d0f84` passes the Windows x64 build and full CTest suite, including the new `update-all-orchestration` test.
+2. If CI is green, bump TocPilot to the next runtime-test version and publish through the automated release path.
+3. Runtime-test **Update All** with at least two installed managed packages: one already current and one with an available branch update; confirm the current package is not reinstalled and only the changed package is updated.
+4. Confirm a deliberately failing package does not prevent later packages from being checked, while a rollback failure would stop the batch.
+5. After the Update All runtime gate passes, simplify the temporary development UI toward Add Git Link + branch dropdown + automatic refresh/status + compact per-package actions.
