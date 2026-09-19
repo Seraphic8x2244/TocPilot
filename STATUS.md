@@ -3,15 +3,15 @@
 ## Continuation checkpoint — 2026-09-19
 
 - Active branch: `p2-github-branches`.
-- Current application version: `v0.1.7`; published successfully and awaiting runtime validation through the installed `v0.1.6` self-updater.
+- Current application version: `v0.1.7`; published and runtime-validated successfully.
 - Latest archive-inspection implementation head: `6803330` — Correct archive traversal fixture assertion.
 - Key implementation commits: `ce5cc79` (non-destructive Inspect UI), `b3adbcf` (exact-ref GitHub archive download), `5021fb3` (secure ZIP extraction/addon detection), `99ff601` (miniz/CMake/archive CTest wiring).
 - Completed through this checkpoint: P0 self-update, P1 state/UI/provider foundation, GitHub branch selection, tracked-branch metadata Refresh, and the first non-destructive P2 archive download/extraction/layout-inspection slice.
 - CI gate for the archive-inspection source slice passed on Windows x64: Actions run `35457055183` built Release, passed the full CTest suite, and uploaded the executable artifact.
 - Runtime gate passed: user confirmed the published `v0.1.6` Refresh build works.
 - Deferred: live addon installation/update/removal and ownership transactions, GitHub release assets, GitLab branch support, import/export, column-layout persistence, modification detection/backups, and other later-roadmap items.
-- Exact next step: self-update from `v0.1.6` to published `v0.1.7`, then validate real pfUI staging/preview while confirming `Interface\AddOns` remains untouched.
-- Delivery rule: publish runtime-test builds only after their source version passes Windows CI; `v0.1.7` followed this rule and is now the pending runtime gate.
+- Exact next step: begin the live install transaction/ownership slice, preserving the rule that the complete staged package must validate before any live addon files are removed or replaced.
+- Delivery rule: publish runtime-test builds only after their source version passes Windows CI; `v0.1.7` has now cleared its runtime gate.
 
 ## Current state
 
@@ -21,8 +21,8 @@
 - License: MIT
 - Intended platform: Windows x64
 - Implementation: native C++20 / Win32 / CMake
-- Highest priority: runtime-test the published `v0.1.7` archive-inspection slice without installing addon files
-- Current application version: `v0.1.7`; published successfully and awaiting runtime validation through the installed `v0.1.6` self-updater.
+- Highest priority: implement the first transactional live-install/ownership slice for GitHub branch packages
+- Current application version: `v0.1.7`; published and runtime-validated successfully.
 
 ## Latest commits
 
@@ -119,6 +119,7 @@
 - Corrected the release validator regex escaping after CI exposed the first regex form as over-escaped.
 - Automated `v0.1.7` release run `35459015449` completed successfully: source validation, Release build, CTest, checksum sidecar, tag creation, and asset publishing all passed.
 - GitHub release `v0.1.7` points to commit `2112d040e822360b0dbf17c58edd832117ccec8f` and publishes `TocPilot.exe` plus `TocPilot.exe.sha256`.
+- User runtime-validated `v0.1.7`: self-update succeeded; real pfUI Inspect produced the expected staging/archive/extracted preview behavior; repeated Inspect remained healthy; Refresh/Set Branch remained healthy; `Interface\AddOns` stayed untouched and Installed remained unset.
 
 ## CI validation
 
@@ -269,8 +270,8 @@ Tracked-branch Refresh test release `v0.1.6` was published automatically. Releas
 Current P2 runtime gates:
 
 - Published `v0.1.6` Refresh is runtime-validated successfully.
-- Published `v0.1.7` archive inspection is CI/release-validated but not yet live-runtime tested.
-- Runtime validation still required: self-update `v0.1.6 -> v0.1.7`, real GitHub ZIP download/redirect handling, pfUI extraction under `Interface\TocPilot\staging`, sensible detected addon-root preview, clean staging replacement on a second Inspect, and confirmation that live `Interface\AddOns` remains untouched and Installed remains a dash.
+- Published `v0.1.7` archive inspection is runtime-validated successfully.
+- Next runtime gate will be the first live-install build: exact staged revision installed transactionally, ownership persisted, Installed updated only after filesystem commit succeeds, and failure must preserve the prior live addon state.
 
 P1 runtime testing still required:
 
@@ -377,11 +378,10 @@ Complete. A real `v0.1.0 -> v0.1.1` in-app self-update succeeded on Windows besi
 
 ## Exact next step
 
-1. Launch the installed `v0.1.6` and self-update normally to published `v0.1.7`.
-2. Select the configured pfUI branch package and click **Inspect**.
-3. Confirm staging appears under `Interface\TocPilot\staging\github-Shagu-pfUI` with `archive.zip` plus `extracted`.
-4. Confirm the preview lists sensible addon root(s)/`.toc` files for pfUI.
-5. Confirm `Interface\AddOns` is untouched and the package Installed column remains a dash.
-6. Run **Inspect** a second time to prove the disposable staging directory is replaced cleanly.
-7. Confirm **Refresh** and **Set Branch** still behave normally after inspection.
-8. If all of the above passes, record `v0.1.7` runtime validation and begin the live install transaction/ownership slice; stage and validate the complete new package before any live addon files are removed or replaced.
+1. Define persisted ownership/install metadata for each managed package without breaking existing `TocPilot.json` records or unknown-field preservation.
+2. Build a transaction planner from the already-staged/validated archive candidate roots to target folders under `Interface\AddOns`.
+3. Before changing live addons, validate the whole candidate set for collisions, duplicate install-folder names, and unsafe live destinations.
+4. Commit through a backup/swap transaction so a failed copy/rename can restore the previous managed addon folders.
+5. Only after the filesystem commit succeeds, persist the exact installed revision and ownership metadata.
+6. Add deterministic tests for first install, update replacement, multi-root packages, collision rejection, and rollback on injected failure.
+7. Keep package removal and broad Update All UX deferred until the single-package transaction path is CI-green and runtime-tested.
