@@ -225,14 +225,14 @@ void ShowAddPackageDialog(HWND owner) {
 
     constexpr int width = 600;
     constexpr int height = 270;
-    const int x = ownerRect.left +
-        std::max(
-            0,
-            ((ownerRect.right - ownerRect.left) - width) / 2);
-    const int y = ownerRect.top +
-        std::max(
-            0,
-            ((ownerRect.bottom - ownerRect.top) - height) / 2);
+    const int ownerWidth =
+        static_cast<int>(ownerRect.right - ownerRect.left);
+    const int ownerHeight =
+        static_cast<int>(ownerRect.bottom - ownerRect.top);
+    const int x = static_cast<int>(ownerRect.left) +
+        std::max(0, (ownerWidth - width) / 2);
+    const int y = static_cast<int>(ownerRect.top) +
+        std::max(0, (ownerHeight - height) / 2);
 
     HWND dialog = CreateWindowExW(
         WS_EX_DLGMODALFRAME | WS_EX_CONTROLPARENT,
