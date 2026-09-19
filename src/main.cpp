@@ -191,7 +191,8 @@ std::wstring PackageHintText() {
         std::to_wstring(g_state.packages.size()) +
         L" package record(s). Set Branch changes tracking; Refresh checks "
         L"the saved branch head; Inspect previews without live changes; "
-        L"Install/Update uses a staged rollback transaction.";
+        L"Install/Update and Uninstall use staged rollback transactions; "
+        L"Forget removes only the TocPilot record.";
 }
 
 BOOL CALLBACK ApplyFontToChild(HWND child, LPARAM fontValue) {
@@ -1277,8 +1278,8 @@ void StartUpdate(HWND hwnd) {
     if (g_packageInstallInProgress) {
         MessageBoxW(
             hwnd,
-            L"Finish the active package install before replacing TocPilot itself.",
-            L"TocPilot - Package Install Active",
+            L"Finish the active package filesystem transaction before replacing TocPilot itself.",
+            L"TocPilot - Package Transaction Active",
             MB_OK | MB_ICONINFORMATION);
         return;
     }
@@ -1592,7 +1593,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             L"BUTTON",
             L"Add Package",
             WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON,
-            490,
+            575,
             145,
             100,
             32,
@@ -1606,7 +1607,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             L"BUTTON",
             L"Forget",
             WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON,
-            595,
+            680,
             145,
             65,
             32,
@@ -1631,9 +1632,9 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             L"BUTTON",
             L"Check app update",
             WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON,
-            435,
+            750,
             145,
-            145,
+            100,
             32,
             hwnd,
             reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_UPDATE)),
@@ -1731,7 +1732,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
 
     case WM_GETMINMAXINFO: {
         auto* info = reinterpret_cast<MINMAXINFO*>(lParam);
-        info->ptMinTrackSize.x = 980;
+        info->ptMinTrackSize.x = 1100;
         info->ptMinTrackSize.y = 500;
         return 0;
     }
@@ -2753,7 +2754,7 @@ int RunMainWindow(HINSTANCE instance) {
         WS_OVERLAPPEDWINDOW,
         CW_USEDEFAULT,
         CW_USEDEFAULT,
-        1040,
+        1100,
         560,
         nullptr,
         nullptr,
