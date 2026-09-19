@@ -3,15 +3,15 @@
 ## Continuation checkpoint — 2026-09-19
 
 - Active branch: `p2-github-branches`.
-- Current application version: `v0.1.6`; no post-`v0.1.6` release has been requested.
+- Current source version: `v0.1.7`; latest published/runtime-validated version is `v0.1.6`.
 - Latest archive-inspection implementation head: `6803330` — Correct archive traversal fixture assertion.
 - Key implementation commits: `ce5cc79` (non-destructive Inspect UI), `b3adbcf` (exact-ref GitHub archive download), `5021fb3` (secure ZIP extraction/addon detection), `99ff601` (miniz/CMake/archive CTest wiring).
 - Completed through this checkpoint: P0 self-update, P1 state/UI/provider foundation, GitHub branch selection, tracked-branch metadata Refresh, and the first non-destructive P2 archive download/extraction/layout-inspection slice.
 - CI gate for the archive-inspection source slice passed on Windows x64: Actions run `35457055183` built Release, passed the full CTest suite, and uploaded the executable artifact.
-- Runtime gate still pending: the already-published `v0.1.6` Refresh build still needs user validation through the installed `v0.1.5` updater unless recorded separately after this checkpoint.
+- Runtime gate passed: user confirmed the published `v0.1.6` Refresh build works.
 - Deferred: live addon installation/update/removal and ownership transactions, GitHub release assets, GitLab branch support, import/export, column-layout persistence, modification detection/backups, and other later-roadmap items.
-- Exact next step: runtime-validate `v0.1.6`; after that gate passes, bump/publish the archive-inspection work as the next self-update test build and validate real pfUI staging/preview while confirming `Interface\AddOns` remains untouched.
-- Delivery rule: do not bump `.github/release-version` or publish the archive-inspection runtime build until the `v0.1.6` runtime gate is confirmed.
+- Exact next step: publish the prepared `v0.1.7` archive-inspection build through the automated self-update path, then validate real pfUI staging/preview while confirming `Interface\AddOns` remains untouched.
+- Delivery rule: publish runtime-test builds only after their source version passes Windows CI; `v0.1.6` has now cleared its runtime gate.
 
 ## Current state
 
@@ -21,8 +21,8 @@
 - License: MIT
 - Intended platform: Windows x64
 - Implementation: native C++20 / Win32 / CMake
-- Highest priority: runtime-validate the already-published `v0.1.6` tracked-branch Refresh slice, then publish/runtime-test the now-CI-green archive-inspection slice without installing addon files
-- Current application version: `v0.1.6`; published successfully and awaiting runtime validation through the installed `v0.1.5` self-updater. Archive-inspection source work remains on the branch at the same compiled version and has not been released.
+- Highest priority: publish and runtime-test the `v0.1.7` archive-inspection slice without installing addon files
+- Current source version: `v0.1.7`; latest published/runtime-validated version is `v0.1.6`.
 
 ## Latest commits
 
@@ -104,6 +104,7 @@
 - Per-package Refresh shows `Checking...`, a row-level failure state plus detailed hint on error, and a successful branch/SHA hint without modal spam.
 - Failed remote refreshes leave the previously saved remote SHA untouched.
 - Added deterministic tracked-branch lookup tests (including case-sensitive branch matching) and state tests proving Refresh metadata updates do not create an installed revision.
+- User runtime-validated `v0.1.6`: the tracked-branch Refresh slice works as intended; this clears the gate for the archive-inspection release.
 - Vendored miniz 3.1.2, pinned to upstream commit `77d0dce8627735138c51770d1799a1ef48f2117d`, and linked it statically for ZIP inspection/extraction.
 - Added a disposable per-package staging area under `Interface\TocPilot\staging`; archive inspection resets only its package staging directory and does not write to `Interface\AddOns`.
 - Added exact-ref GitHub archive download support. Inspect resolves the selected branch to a commit SHA first, percent-encodes the API path safely, streams the ZIP with a 256 MiB download limit, checks the HTTP result and ZIP signature, and deletes partial downloads on failure.
@@ -249,9 +250,9 @@ Tracked-branch Refresh test release `v0.1.6` was published automatically. Releas
 
 Current P2 runtime gates:
 
-- Published `v0.1.6` still needs runtime validation through self-update from `v0.1.5`: Refresh a configured pfUI branch, confirm Installed remains a dash, Latest persists, Set Branch remains separate, and `Interface\AddOns` remains unchanged.
-- Archive inspection is CI-tested but not yet live-runtime tested: real GitHub ZIP download/redirect handling, pfUI extraction under `Interface\TocPilot\staging`, detected addon-root preview, staging cleanup/re-inspection, and confirmation that live AddOns remain untouched still require the next versioned runtime build.
-- The archive-inspection source is intentionally still compiled as `v0.1.6` on the development branch; it must not be distributed as `v0.1.6` because the published tag/release already represents the earlier Refresh-only build.
+- Published `v0.1.6` Refresh is runtime-validated successfully.
+- Archive inspection is CI-tested but not yet live-runtime tested: real GitHub ZIP download/redirect handling, pfUI extraction under `Interface\TocPilot\staging`, detected addon-root preview, staging cleanup/re-inspection, and confirmation that live AddOns remain untouched require the `v0.1.7` runtime build.
+- Archive-inspection source is now versioned `v0.1.7` and must pass the versioned-source Windows CI before `.github/release-version` is changed.
 
 P1 runtime testing still required:
 
@@ -358,8 +359,11 @@ Complete. A real `v0.1.0 -> v0.1.1` in-app self-update succeeded on Windows besi
 
 ## Exact next step
 
-1. Runtime-validate the already-published `v0.1.6` Refresh build if not already done: self-update from `v0.1.5`, select the existing pfUI row, use Refresh, confirm Installed remains a dash, Latest persists after restart, Set Branch remains separate, and `Interface\AddOns` is untouched.
-2. Once that gate passes, bump the development source/version and `.github/release-version` to the next version (expected `v0.1.7`) and publish the CI-green archive-inspection slice through the normal automated self-update path.
-3. Runtime-test **Inspect** on pfUI. Expected staging is under `Interface\TocPilot\staging\github-Shagu-pfUI` with `archive.zip` plus `extracted`; the preview should list candidate addon roots/`.toc` files and the live `Interface\AddOns` tree must remain unchanged.
-4. Re-run Inspect to prove disposable staging replacement works cleanly and verify Refresh/Set Branch behaviour remains healthy.
-5. Only after that runtime gate passes, begin the live install transaction/ownership slice. Installation must stage and validate the full new package before any live addon files are removed or replaced.
+1. Let the versioned `v0.1.7` source build complete in Windows CI.
+2. If green, change `.github/release-version` to `v0.1.7` to trigger the normal automated release workflow.
+3. Self-update the installed `v0.1.6` to `v0.1.7`.
+4. Select the configured pfUI branch package and click **Inspect**.
+5. Confirm staging appears under `Interface\TocPilot\staging\github-Shagu-pfUI` with `archive.zip` plus `extracted`, and the preview lists sensible addon roots/`.toc` files.
+6. Confirm `Interface\AddOns` is untouched and Installed remains a dash.
+7. Re-run Inspect to prove disposable staging replacement works cleanly and confirm Refresh/Set Branch still work.
+8. After that runtime gate passes, begin the live install transaction/ownership slice.
