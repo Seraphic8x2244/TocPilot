@@ -2138,12 +2138,19 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                 result->transaction,
                 cleanupError);
 
+        const auto& installedPackage =
+            g_state.packages[index];
+
+        std::wstring stagingCleanupError;
+        const bool stagingCleanupOk =
+            tp::CleanupGitHubPackageStaging(
+                g_root,
+                installedPackage.repository,
+                stagingCleanupError);
+
         RefreshPackageStateUi();
         SelectPackageRow(index);
         UpdatePackageButtons();
-
-        const auto& installedPackage =
-            g_state.packages[index];
         const std::wstring shortSha =
             installedPackage.installedRevision.substr(
                 0,
@@ -2167,6 +2174,11 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             hint +=
                 L" Install succeeded, but transaction cleanup needs attention: " +
                 cleanupError;
+        }
+        if (!stagingCleanupOk) {
+            hint +=
+                L" Staging cleanup needs attention: " +
+                stagingCleanupError;
         }
 
         if (g_packageHint) {
@@ -2198,13 +2210,18 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                 L"\r\n\r\nThe install and state save succeeded, but old transaction backup cleanup failed:\r\n" +
                 cleanupError;
         }
+        if (!stagingCleanupOk) {
+            summary +=
+                L"\r\n\r\nPackage staging cleanup failed:\r\n" +
+                stagingCleanupError;
+        }
 
         MessageBoxW(
             hwnd,
             summary.c_str(),
             L"TocPilot - Package Installed",
             MB_OK |
-                (cleanupOk
+                (cleanupOk && stagingCleanupOk
                     ? MB_ICONINFORMATION
                     : MB_ICONWARNING));
 
