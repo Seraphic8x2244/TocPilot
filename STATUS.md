@@ -9,15 +9,15 @@
 - Intended platform: Windows x64
 - Implementation: native C++20 / Win32 / CMake
 - Highest priority: publish and runtime-validate `v0.1.4` through TocPilot self-update; this build introduces persistent repository package sources
-- Current source version: `v0.1.4` prepared for the next user-test build; latest published/runtime-validated version is `v0.1.3`
+- Current application version: `v0.1.4`; published successfully and awaiting runtime validation through the installed `v0.1.3` self-updater
 
 ## Latest commits
 
+- `f34be07` — Request v0.1.4 release
+- `84fc7d2` — Prepare v0.1.4 persistent package test release
 - `413b8c4` — Persist repository package sources
 - `ff78443` — Record v0.1.3 runtime validation
 - `4bf21f8` — Record automated v0.1.3 provider release
-- `dd5d77d` — Request v0.1.3 release
-- `ba7adc6` — Prepare v0.1.3 provider URL test release
 
 ## Completed
 
@@ -161,6 +161,8 @@ This was validated with `v0.1.1`, and again with the first P1 test release `v0.1
 
 Provider-normalization test release `v0.1.3` was also published automatically. Release workflow run `35448024199` validated source/version consistency, built Release x64, passed the provider URL CTest, created tag `v0.1.3` at commit `dd5d77d`, and published `TocPilot.exe` (373,248 bytes; SHA-256 `bb1eb5dea85fdf208542155eaaeecff9be339bd3e4de9dc0d65f6aa3fd5942df`) plus `TocPilot.exe.sha256`.
 
+Persistent-package test release `v0.1.4` was published automatically. Release workflow run `35449831222` validated source/version consistency, built Release x64, passed both provider URL and state/package CTests, created tag `v0.1.4` at commit `f34be07`, and published `TocPilot.exe` (398,336 bytes; SHA-256 `0c0257a1781c9d9184a21c0d1079b5885817853a6a71f2ba3c1f5e19ee142780`) plus `TocPilot.exe.sha256`.
+
 ## Untested / remaining validation
 
 P1 runtime testing still required:
@@ -268,11 +270,11 @@ Complete. A real `v0.1.0 -> v0.1.1` in-app self-update succeeded on Windows besi
 
 ## Exact next step
 
-1. Publish `v0.1.4` through the automated release workflow after the version-bump CI passes.
-2. Keep the user's installed `v0.1.3` and self-update normally to `v0.1.4`.
-3. In `v0.1.4`, use Add Package -> Save source with `https://github.com/Shagu/pfUI`.
-4. Confirm a pfUI row immediately appears as `GitHub / source only`, Installed/Latest are blank dashes, and Status is `Not configured`.
-5. Close/reopen TocPilot and confirm the pfUI row remains; `TocPilot.json` should contain one package record.
-6. Try adding the same pfUI URL again and confirm TocPilot rejects it as already managed without adding a second row.
-7. Optionally add the previously tested GitLab repository and confirm it also survives restart.
-8. If this passes, P1's core state/UI/provider foundation is effectively complete; next development can begin the P2 GitHub branch-selection/remote-SHA flow without installing files yet.
+1. Keep the user's installed `v0.1.3` and let TocPilot self-update normally to `v0.1.4`; do not manually replace the EXE.
+2. In `v0.1.4`, use Add Package -> Save source with `https://github.com/Shagu/pfUI`.
+3. Confirm a `pfUI` row immediately appears as `GitHub / source only`, Installed/Latest show dashes, and Status is `Not configured`.
+4. Close/reopen TocPilot and confirm the pfUI row remains.
+5. Try adding the same pfUI URL again and confirm TocPilot rejects it as already managed without adding a second row.
+6. Optionally add the previously tested GitLab repository and confirm that row also survives restart.
+7. Confirm Text size still persists and app-update status reports `v0.1.4` current.
+8. If this passes, treat the core P1 state/UI/provider foundation as validated and begin P2 with GitHub branch listing/selection and remote-SHA resolution, still without installing files in the first P2 slice.
