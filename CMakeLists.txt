@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.24)
 
-project(TocPilot VERSION 0.1.0 LANGUAGES CXX)
+project(TocPilot VERSION 0.1.1 LANGUAGES CXX)
 
 add_executable(TocPilot WIN32
     src/main.cpp
