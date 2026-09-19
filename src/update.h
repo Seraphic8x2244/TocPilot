@@ -14,11 +14,17 @@ struct ReleaseInfo {
     std::wstring checksumUrl;
 };
 
+enum class ReleaseCheckState {
+    NoRelease,
+    UpToDate,
+    UpdateAvailable
+};
+
 std::filesystem::path ExecutablePath();
 
 bool CheckLatestRelease(
     ReleaseInfo& release,
-    bool& updateAvailable,
+    ReleaseCheckState& state,
     std::wstring& error);
 
 bool DownloadVerifyAndLaunchUpdater(

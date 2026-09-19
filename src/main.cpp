@@ -17,16 +17,21 @@ namespace {
 constexpr wchar_t kWindowClass[] = L"TocPilotMainWindow";
 constexpr UINT WM_TP_CHECK_COMPLETE = WM_APP + 1;
 constexpr UINT WM_TP_UPDATE_COMPLETE = WM_APP + 2;
-constexpr int IDC_UPDATE = 1001;
-constexpr int IDC_STATUS = 1002;
 
-HWND g_status = nullptr;
+constexpr int IDC_UPDATE = 1001;
+constexpr int IDC_WOW_STATUS = 1002;
+constexpr int IDC_GITHUB_STATUS = 1003;
+constexpr int IDC_RELEASE_STATUS = 1004;
+
+HWND g_wowStatus = nullptr;
+HWND g_githubStatus = nullptr;
+HWND g_releaseStatus = nullptr;
 HWND g_updateButton = nullptr;
 tp::ReleaseInfo g_release;
 
 struct CheckResult {
     bool ok = false;
-    bool updateAvailable = false;
+    tp::ReleaseCheckState state = tp::ReleaseCheckState::NoRelease;
     tp::ReleaseInfo release;
     std::wstring error;
 };
@@ -36,22 +41,24 @@ struct UpdateResult {
     std::wstring error;
 };
 
-void SetStatus(const std::wstring& text) {
-    if (g_status) {
-        SetWindowTextW(g_status, text.c_str());
+void SetIndicator(HWND control, const std::wstring& text) {
+    if (control) {
+        SetWindowTextW(control, text.c_str());
+        InvalidateRect(control, nullptr, TRUE);
     }
 }
 
 void StartUpdateCheck(HWND hwnd) {
     EnableWindow(g_updateButton, FALSE);
     SetWindowTextW(g_updateButton, L"Checking...");
-    SetStatus(L"Checking GitHub for updates...");
+    SetIndicator(g_githubStatus, L"GitHub Comms: Checking...");
+    SetIndicator(g_releaseStatus, L"Release: Checking...");
 
     std::thread([hwnd]() {
         auto result = std::make_unique<CheckResult>();
         result->ok = tp::CheckLatestRelease(
             result->release,
-            result->updateAvailable,
+            result->state,
             result->error);
 
         if (!PostMessageW(
@@ -68,7 +75,7 @@ void StartUpdateCheck(HWND hwnd) {
 void StartUpdate(HWND hwnd) {
     EnableWindow(g_updateButton, FALSE);
     SetWindowTextW(g_updateButton, L"Updating...");
-    SetStatus(L"Downloading and verifying update...");
+    SetIndicator(g_releaseStatus, L"Release: Downloading and verifying...");
 
     const auto target = tp::ExecutablePath();
     const auto workingDirectory = target.parent_path();
@@ -93,6 +100,54 @@ void StartUpdate(HWND hwnd) {
         }
         result.release();
     }).detach();
+}
+
+LRESULT HandleStatusColour(WPARAM wParam, LPARAM lParam) {
+    const HWND control = reinterpret_cast<HWND>(lParam);
+    const int id = GetDlgCtrlID(control);
+    const std::wstring text = [&]() {
+        const int length = GetWindowTextLengthW(control);
+        std::wstring value(static_cast<size_t>(length), L'\0');
+        if (length > 0) {
+            GetWindowTextW(control, value.data(), length + 1);
+        }
+        return value;
+    }();
+
+    COLORREF colour = GetSysColor(COLOR_WINDOWTEXT);
+
+    if (id == IDC_WOW_STATUS) {
+        colour = RGB(0, 128, 0);
+    } else if (id == IDC_GITHUB_STATUS) {
+        if (text.find(L"Good") != std::wstring::npos) {
+            colour = RGB(0, 128, 0);
+        } else if (text.find(L"Failed") != std::wstring::npos) {
+            colour = RGB(180, 0, 0);
+        } else {
+            colour = GetSysColor(COLOR_GRAYTEXT);
+        }
+    } else if (id == IDC_RELEASE_STATUS) {
+        if (text.find(L"Update available") != std::wstring::npos) {
+            colour = RGB(0, 110, 180);
+        } else if (text.find(L"Current") != std::wstring::npos) {
+            colour = RGB(0, 128, 0);
+        } else if (text.find(L"Not found") != std::wstring::npos) {
+            colour = RGB(180, 100, 0);
+        } else if (text.find(L"failed") != std::wstring::npos ||
+                   text.find(L"Failed") != std::wstring::npos ||
+                   text.find(L"Unavailable") != std::wstring::npos) {
+            colour = RGB(180, 0, 0);
+        } else {
+            colour = GetSysColor(COLOR_GRAYTEXT);
+        }
+    } else {
+        return 0;
+    }
+
+    HDC dc = reinterpret_cast<HDC>(wParam);
+    SetTextColor(dc, colour);
+    SetBkColor(dc, GetSysColor(COLOR_WINDOW));
+    return reinterpret_cast<LRESULT>(GetSysColorBrush(COLOR_WINDOW));
 }
 
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) {
@@ -122,7 +177,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             versionText.c_str(),
             WS_CHILD | WS_VISIBLE,
             20,
-            52,
+            50,
             300,
             22,
             hwnd,
@@ -130,7 +185,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             GetModuleHandleW(nullptr),
             nullptr);
 
-        std::wstring rootText = L"World of Warcraft: ";
+        std::wstring rootText = L"WoW Path: ";
         rootText += root.wstring();
         CreateWindowExW(
             0,
@@ -138,7 +193,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             rootText.c_str(),
             WS_CHILD | WS_VISIBLE | SS_PATHELLIPSIS,
             20,
-            80,
+            78,
             620,
             22,
             hwnd,
@@ -146,17 +201,45 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             GetModuleHandleW(nullptr),
             nullptr);
 
-        g_status = CreateWindowExW(
+        g_wowStatus = CreateWindowExW(
             0,
             L"STATIC",
-            L"Starting...",
+            L"WoW Install: Found",
             WS_CHILD | WS_VISIBLE,
             20,
-            118,
-            620,
-            42,
+            116,
+            360,
+            24,
             hwnd,
-            reinterpret_cast<HMENU>(IDC_STATUS),
+            reinterpret_cast<HMENU>(IDC_WOW_STATUS),
+            GetModuleHandleW(nullptr),
+            nullptr);
+
+        g_githubStatus = CreateWindowExW(
+            0,
+            L"STATIC",
+            L"GitHub Comms: Checking...",
+            WS_CHILD | WS_VISIBLE,
+            20,
+            146,
+            360,
+            24,
+            hwnd,
+            reinterpret_cast<HMENU>(IDC_GITHUB_STATUS),
+            GetModuleHandleW(nullptr),
+            nullptr);
+
+        g_releaseStatus = CreateWindowExW(
+            0,
+            L"STATIC",
+            L"Release: Checking...",
+            WS_CHILD | WS_VISIBLE,
+            20,
+            176,
+            500,
+            24,
+            hwnd,
+            reinterpret_cast<HMENU>(IDC_RELEASE_STATUS),
             GetModuleHandleW(nullptr),
             nullptr);
 
@@ -166,7 +249,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             L"Check for updates",
             WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON,
             20,
-            170,
+            218,
             170,
             32,
             hwnd,
@@ -176,6 +259,14 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
 
         StartUpdateCheck(hwnd);
         return 0;
+    }
+
+    case WM_CTLCOLORSTATIC: {
+        const LRESULT colourResult = HandleStatusColour(wParam, lParam);
+        if (colourResult != 0) {
+            return colourResult;
+        }
+        break;
     }
 
     case WM_COMMAND:
@@ -195,23 +286,48 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
 
         if (!result->ok) {
             g_release = {};
-            SetStatus(L"Update check failed: " + result->error);
+            SetIndicator(g_githubStatus, L"GitHub Comms: Failed");
+            SetIndicator(g_releaseStatus, L"Release: Unavailable");
             SetWindowTextW(g_updateButton, L"Retry");
             EnableWindow(g_updateButton, TRUE);
+
+            if (!result->error.empty()) {
+                SetWindowTextW(
+                    hwnd,
+                    (L"TocPilot " TOCPILOT_VERSION_TAG_W L" - " + result->error).c_str());
+            }
             return 0;
         }
 
-        if (result->updateAvailable) {
-            g_release = result->release;
-            SetStatus(L"Update available: " + result->release.tag);
-            SetWindowTextW(g_updateButton, L"Update now");
-            EnableWindow(g_updateButton, TRUE);
-        } else {
+        SetIndicator(g_githubStatus, L"GitHub Comms: Good");
+
+        switch (result->state) {
+        case tp::ReleaseCheckState::NoRelease:
             g_release = {};
-            SetStatus(L"Up to date. Latest release: " + result->release.tag);
+            SetIndicator(g_releaseStatus, L"Release: Not found");
             SetWindowTextW(g_updateButton, L"Check again");
             EnableWindow(g_updateButton, TRUE);
+            break;
+
+        case tp::ReleaseCheckState::UpdateAvailable:
+            g_release = result->release;
+            SetIndicator(
+                g_releaseStatus,
+                L"Release: Update available - " + result->release.tag);
+            SetWindowTextW(g_updateButton, L"Update now");
+            EnableWindow(g_updateButton, TRUE);
+            break;
+
+        case tp::ReleaseCheckState::UpToDate:
+            g_release = {};
+            SetIndicator(
+                g_releaseStatus,
+                L"Release: Current - " + result->release.tag);
+            SetWindowTextW(g_updateButton, L"Check again");
+            EnableWindow(g_updateButton, TRUE);
+            break;
         }
+
         return 0;
     }
 
@@ -220,13 +336,15 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             reinterpret_cast<UpdateResult*>(lParam));
 
         if (!result->ok) {
-            SetStatus(L"Update failed: " + result->error);
+            SetIndicator(
+                g_releaseStatus,
+                L"Release: Update failed - " + result->error);
             SetWindowTextW(g_updateButton, L"Retry update");
             EnableWindow(g_updateButton, TRUE);
             return 0;
         }
 
-        SetStatus(L"Update verified. Restarting...");
+        SetIndicator(g_releaseStatus, L"Release: Verified - restarting...");
         PostMessageW(hwnd, WM_CLOSE, 0, 0);
         return 0;
     }
@@ -313,7 +431,7 @@ int RunMainWindow(HINSTANCE instance) {
         CW_USEDEFAULT,
         CW_USEDEFAULT,
         680,
-        260,
+        310,
         nullptr,
         nullptr,
         instance,

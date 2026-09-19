@@ -136,6 +136,7 @@ bool CrackUrl(const std::wstring& url, UrlParts& parts, std::wstring& error) {
 bool OpenRequest(
     const std::wstring& url,
     InternetHandles& handles,
+    DWORD& status,
     std::wstring& error) {
     UrlParts parts;
     if (!CrackUrl(url, parts, error)) {
@@ -211,7 +212,7 @@ bool OpenRequest(
         return false;
     }
 
-    DWORD status = 0;
+    status = 0;
     DWORD statusSize = sizeof(status);
     if (!WinHttpQueryHeaders(
             handles.request,
@@ -224,20 +225,16 @@ bool OpenRequest(
         return false;
     }
 
-    if (status < 200 || status >= 300) {
-        error = L"HTTP request returned status " + std::to_wstring(status);
-        return false;
-    }
-
     return true;
 }
 
 bool HttpGetString(
     const std::wstring& url,
     std::string& body,
+    DWORD& status,
     std::wstring& error) {
     InternetHandles handles;
-    if (!OpenRequest(url, handles, error)) {
+    if (!OpenRequest(url, handles, status, error)) {
         return false;
     }
 
@@ -270,7 +267,13 @@ bool DownloadFile(
     const std::filesystem::path& destination,
     std::wstring& error) {
     InternetHandles handles;
-    if (!OpenRequest(url, handles, error)) {
+    DWORD status = 0;
+    if (!OpenRequest(url, handles, status, error)) {
+        return false;
+    }
+
+    if (status < 200 || status >= 300) {
+        error = L"HTTP request returned status " + std::to_wstring(status);
         return false;
     }
 
@@ -764,8 +767,20 @@ bool ResolveExpectedDigest(
     }
 
     std::string checksumBody;
-    if (!HttpGetString(release.checksumUrl, checksumBody, error)) {
+    DWORD checksumStatus = 0;
+    if (!HttpGetString(
+            release.checksumUrl,
+            checksumBody,
+            checksumStatus,
+            error)) {
         error = L"Could not download checksum: " + error;
+        return false;
+    }
+
+    if (checksumStatus < 200 || checksumStatus >= 300) {
+        error =
+            L"Checksum request returned status " +
+            std::to_wstring(checksumStatus);
         return false;
     }
 
@@ -911,13 +926,23 @@ std::filesystem::path ExecutablePath() {
 
 bool CheckLatestRelease(
     ReleaseInfo& release,
-    bool& updateAvailable,
+    ReleaseCheckState& state,
     std::wstring& error) {
     release = {};
-    updateAvailable = false;
+    state = ReleaseCheckState::NoRelease;
 
     std::string body;
-    if (!HttpGetString(kLatestReleaseUrl, body, error)) {
+    DWORD status = 0;
+    if (!HttpGetString(kLatestReleaseUrl, body, status, error)) {
+        return false;
+    }
+
+    if (status == 404) {
+        return true;
+    }
+
+    if (status < 200 || status >= 300) {
+        error = L"GitHub returned status " + std::to_wstring(status);
         return false;
     }
 
@@ -937,7 +962,9 @@ bool CheckLatestRelease(
         return false;
     }
 
-    updateAvailable = IsNewer(release.tag, TOCPILOT_VERSION_TAG_W);
+    state = IsNewer(release.tag, TOCPILOT_VERSION_TAG_W)
+        ? ReleaseCheckState::UpdateAvailable
+        : ReleaseCheckState::UpToDate;
     return true;
 }
 
