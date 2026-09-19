@@ -864,11 +864,10 @@ bool BuildAddonInstallPlan(
     return true;
 }
 
-bool BeginAddonInstallTransaction(
+bool PrepareAddonInstallTransaction(
     const AddonInstallPlan& plan,
     AddonInstallTransaction& transaction,
-    std::wstring& error,
-    const AddonInstallOptions& options) {
+    std::wstring& error) {
     transaction = {};
     error.clear();
 
@@ -938,20 +937,41 @@ bool BeginAddonInstallTransaction(
         }
     }
 
+    transaction.plan = plan;
+    transaction.prepared = true;
+    return true;
+}
+
+bool CommitAddonInstallTransaction(
+    AddonInstallTransaction& transaction,
+    std::wstring& error,
+    const AddonInstallOptions& options) {
+    error.clear();
+
+    if (!transaction.prepared ||
+        transaction.active ||
+        transaction.plan.roots.empty()) {
+        error =
+            L"Install transaction is not ready to commit.";
+        return false;
+    }
+
+    auto& plan = transaction.plan;
+    std::error_code ec;
+
     std::filesystem::create_directories(
         plan.addOnsRoot,
         ec);
     if (ec) {
-        std::wstring cleanupError;
-        RemoveAllWithRetries(
-            plan.transactionRoot,
-            cleanupError);
         error =
             L"Could not create Interface\\AddOns.";
+        std::wstring cleanupError;
+        RollbackAddonInstallTransaction(
+            transaction,
+            cleanupError);
         return false;
     }
 
-    transaction.plan = plan;
     transaction.active = true;
 
     std::vector<std::wstring> rootsToBackup;
@@ -989,10 +1009,18 @@ bool BeginAddonInstallTransaction(
                 live,
                 exists,
                 error)) {
+            const std::wstring commitError = error;
             std::wstring rollbackError;
-            RollbackAddonInstallTransaction(
-                transaction,
-                rollbackError);
+            if (!RollbackAddonInstallTransaction(
+                    transaction,
+                    rollbackError)) {
+                error =
+                    commitError +
+                    L" Rollback also failed: " +
+                    rollbackError;
+            } else {
+                error = commitError;
+            }
             return false;
         }
 
@@ -1006,12 +1034,19 @@ bool BeginAddonInstallTransaction(
             backup.parent_path(),
             ec);
         if (ec) {
-            error =
+            const std::wstring commitError =
                 L"Could not create install rollback directory.";
             std::wstring rollbackError;
-            RollbackAddonInstallTransaction(
-                transaction,
-                rollbackError);
+            if (!RollbackAddonInstallTransaction(
+                    transaction,
+                    rollbackError)) {
+                error =
+                    commitError +
+                    L" Rollback also failed: " +
+                    rollbackError;
+            } else {
+                error = commitError;
+            }
             return false;
         }
 
@@ -1019,10 +1054,18 @@ bool BeginAddonInstallTransaction(
                 live,
                 backup,
                 error)) {
+            const std::wstring commitError = error;
             std::wstring rollbackError;
-            RollbackAddonInstallTransaction(
-                transaction,
-                rollbackError);
+            if (!RollbackAddonInstallTransaction(
+                    transaction,
+                    rollbackError)) {
+                error =
+                    commitError +
+                    L" Rollback also failed: " +
+                    rollbackError;
+            } else {
+                error = commitError;
+            }
             return false;
         }
 
@@ -1075,19 +1118,51 @@ bool BeginAddonInstallTransaction(
     return true;
 }
 
+bool BeginAddonInstallTransaction(
+    const AddonInstallPlan& plan,
+    AddonInstallTransaction& transaction,
+    std::wstring& error,
+    const AddonInstallOptions& options) {
+    if (!PrepareAddonInstallTransaction(
+            plan,
+            transaction,
+            error)) {
+        return false;
+    }
+
+    if (!CommitAddonInstallTransaction(
+            transaction,
+            error,
+            options)) {
+        std::wstring cleanupError;
+        RollbackAddonInstallTransaction(
+            transaction,
+            cleanupError);
+        return false;
+    }
+
+    return true;
+}
+
 bool RollbackAddonInstallTransaction(
     AddonInstallTransaction& transaction,
     std::wstring& error) {
     error.clear();
 
-    if (!transaction.active) {
+    if (!transaction.prepared) {
         return true;
     }
 
-    if (!RestoreBackups(
-            transaction,
-            error)) {
-        return false;
+    if (transaction.active) {
+        if (!RestoreBackups(
+                transaction,
+                error)) {
+            return false;
+        }
+
+        transaction.active = false;
+        transaction.backedUpRoots.clear();
+        transaction.installedRoots.clear();
     }
 
     std::wstring cleanupError;
@@ -1098,9 +1173,7 @@ bool RollbackAddonInstallTransaction(
         return false;
     }
 
-    transaction.active = false;
-    transaction.backedUpRoots.clear();
-    transaction.installedRoots.clear();
+    transaction.prepared = false;
     return true;
 }
 
@@ -1109,9 +1182,16 @@ bool FinalizeAddonInstallTransaction(
     std::wstring& error) {
     error.clear();
 
-    if (!transaction.active) {
+    if (!transaction.prepared) {
         return true;
     }
+
+    // Once package state is saved, the new live files are authoritative.
+    // Cleanup failure must never cause a later destructor/path to restore
+    // the old backup over the committed installation.
+    transaction.active = false;
+    transaction.backedUpRoots.clear();
+    transaction.installedRoots.clear();
 
     if (!RemoveAllWithRetries(
             transaction.plan.transactionRoot,
@@ -1119,9 +1199,7 @@ bool FinalizeAddonInstallTransaction(
         return false;
     }
 
-    transaction.active = false;
-    transaction.backedUpRoots.clear();
-    transaction.installedRoots.clear();
+    transaction.prepared = false;
     return true;
 }
 
