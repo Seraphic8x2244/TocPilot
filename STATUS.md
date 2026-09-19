@@ -288,6 +288,7 @@ First P2 GitHub branch-tracking test release `v0.1.5` was published automaticall
 Tracked-branch Refresh test release `v0.1.6` was published automatically. Release workflow run `35453833168` validated source/version consistency, built Release x64, passed provider URL, state/package Refresh, and GitHub API/tracked-branch CTests, created tag `v0.1.6` at commit `45b87a1`, and published `TocPilot.exe` (444,928 bytes; SHA-256 `80b6c33368a3287a95b9725c61532f92d64d2e3fa64ded42c2c12b4ec1e78ece`) plus `TocPilot.exe.sha256`.
 
 ## Untested / remaining validation
+- Runtime finding on `v0.1.8`: Shagu/pfUI on branch `brues` reported a successful install instead of the expected unmanaged-root refusal. If `Interface\\AddOns\\pfUI` existed before the click, this is a safety bug and live-install testing must pause until the collision/adoption path is diagnosed.
 
 Current P2 runtime gates:
 
