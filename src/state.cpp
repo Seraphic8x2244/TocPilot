@@ -1520,6 +1520,22 @@ bool SetPackageInstalledState(
     return true;
 }
 
+bool ClearPackageInstalledState(
+    PackageRecord& package,
+    std::wstring& error) {
+    error.clear();
+
+    if (package.target != L"addons") {
+        error =
+            L"Only addon package installed state can be cleared by this operation.";
+        return false;
+    }
+
+    package.installedRevision.clear();
+    package.installedFiles.clear();
+    return true;
+}
+
 bool LoadOrCreateState(
     const std::filesystem::path& wowRoot,
     AppState& state,
