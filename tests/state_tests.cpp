@@ -1,0 +1,211 @@
+#include "state.h"
+
+#include <windows.h>
+
+#include <filesystem>
+#include <fstream>
+#include <iostream>
+#include <sstream>
+#include <string>
+
+namespace {
+
+int failures = 0;
+
+void Fail(const std::string& message) {
+    std::cerr << message << '\n';
+    ++failures;
+}
+
+std::filesystem::path MakeTempRoot() {
+    wchar_t temp[MAX_PATH + 1]{};
+    const DWORD length =
+        GetTempPathW(MAX_PATH, temp);
+    if (length == 0 || length > MAX_PATH) {
+        return {};
+    }
+
+    const std::filesystem::path root =
+        std::filesystem::path(temp) /
+        (L"TocPilotStateTest-" +
+         std::to_wstring(GetCurrentProcessId()) +
+         L"-" +
+         std::to_wstring(GetTickCount64()));
+
+    std::error_code ec;
+    std::filesystem::create_directories(root, ec);
+    return ec ? std::filesystem::path{} : root;
+}
+
+std::string ReadAll(
+    const std::filesystem::path& path) {
+    std::ifstream stream(
+        path,
+        std::ios::binary);
+    std::ostringstream output;
+    output << stream.rdbuf();
+    return output.str();
+}
+
+bool WriteAll(
+    const std::filesystem::path& path,
+    const std::string& content) {
+    std::ofstream stream(
+        path,
+        std::ios::binary | std::ios::trunc);
+    stream.write(
+        content.data(),
+        static_cast<std::streamsize>(content.size()));
+    return stream.good();
+}
+
+void TestCreateAddRoundTrip(
+    const std::filesystem::path& root) {
+    tp::AppState state;
+    bool created = false;
+    std::wstring error;
+
+    if (!tp::LoadOrCreateState(
+            root,
+            state,
+            created,
+            error)) {
+        Fail("initial LoadOrCreateState failed");
+        return;
+    }
+
+    if (!created || !state.packages.empty()) {
+        Fail("default state was not created empty");
+        return;
+    }
+
+    tp::PackageRecord package =
+        tp::MakeRepositoryPackage(
+            L"github",
+            L"Shagu/pfUI");
+
+    if (!tp::AppendPackage(
+            state,
+            package,
+            error)) {
+        Fail("AppendPackage failed");
+        return;
+    }
+
+    if (tp::AppendPackage(
+            state,
+            package,
+            error)) {
+        Fail("duplicate package was accepted");
+        return;
+    }
+
+    state.settings.textScale = 1.25;
+    if (!tp::SaveState(root, state, error)) {
+        Fail("SaveState failed");
+        return;
+    }
+
+    tp::AppState loaded;
+    created = true;
+    if (!tp::LoadOrCreateState(
+            root,
+            loaded,
+            created,
+            error)) {
+        Fail("round-trip LoadOrCreateState failed");
+        return;
+    }
+
+    if (created ||
+        loaded.packages.size() != 1 ||
+        loaded.packages[0].name != L"pfUI" ||
+        loaded.packages[0].provider != L"github" ||
+        loaded.packages[0].repository != L"Shagu/pfUI" ||
+        loaded.packages[0].mode != L"unconfigured" ||
+        loaded.settings.textScale != 1.25) {
+        Fail("round-trip state values did not match");
+    }
+}
+
+void TestUnknownFieldPreservation(
+    const std::filesystem::path& root) {
+    const std::string json =
+        "{\n"
+        "  \"schema\": 1,\n"
+        "  \"settings\": {"
+        "\"text_scale\": 1.0,"
+        "\"check_app_updates\": true"
+        "},\n"
+        "  \"future_top\": {\"enabled\": true},\n"
+        "  \"packages\": ["
+        "{"
+        "\"id\":\"gitlab:group/project\","
+        "\"name\":\"project\","
+        "\"provider\":\"gitlab\","
+        "\"repository\":\"group/project\","
+        "\"mode\":\"unconfigured\","
+        "\"target\":\"addons\","
+        "\"future_package\":{\"answer\":42}"
+        "}"
+        "]\n"
+        "}\n";
+
+    if (!WriteAll(tp::StatePath(root), json)) {
+        Fail("could not write preservation fixture");
+        return;
+    }
+
+    tp::AppState state;
+    bool created = false;
+    std::wstring error;
+    if (!tp::LoadOrCreateState(
+            root,
+            state,
+            created,
+            error)) {
+        Fail("preservation fixture did not load");
+        return;
+    }
+
+    state.settings.textScale = 1.10;
+    if (!tp::SaveState(root, state, error)) {
+        Fail("preservation fixture did not save");
+        return;
+    }
+
+    const std::string saved =
+        ReadAll(tp::StatePath(root));
+    if (saved.find("\"future_top\"") ==
+            std::string::npos ||
+        saved.find("\"future_package\"") ==
+            std::string::npos) {
+        Fail("unknown fields were not preserved");
+    }
+}
+
+} // namespace
+
+int main() {
+    const std::filesystem::path root =
+        MakeTempRoot();
+    if (root.empty()) {
+        Fail("could not create temporary test directory");
+    } else {
+        TestCreateAddRoundTrip(root);
+        TestUnknownFieldPreservation(root);
+
+        std::error_code ec;
+        std::filesystem::remove_all(root, ec);
+    }
+
+    if (failures != 0) {
+        std::cerr
+            << failures
+            << " state test(s) failed\n";
+        return 1;
+    }
+
+    std::cout << "state tests passed\n";
+    return 0;
+}

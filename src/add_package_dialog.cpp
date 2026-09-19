@@ -4,15 +4,22 @@
 
 #include <algorithm>
 #include <string>
+#include <utility>
 
 namespace tp {
 namespace {
 
-constexpr wchar_t kClassName[] = L"TocPilotAddPackageDialog";
+constexpr wchar_t kClassName[] =
+    L"TocPilotAddPackageDialog";
 constexpr int IDC_REPOSITORY_URL = 2001;
-constexpr int IDC_CHECK_URL = 2002;
+constexpr int IDC_ADD_SOURCE = 2002;
 constexpr int IDC_RESULT = 2003;
 constexpr int IDC_CLOSE_DIALOG = 2004;
+
+struct DialogContext {
+    PackageRecord* package = nullptr;
+    bool accepted = false;
+};
 
 void SetControlFont(HWND control) {
     if (control) {
@@ -28,20 +35,31 @@ void SetControlFont(HWND control) {
 std::wstring ControlText(HWND control) {
     const int length = GetWindowTextLengthW(control);
     std::wstring text(
-        static_cast<std::size_t>(std::max(0, length)) + 1,
+        static_cast<std::size_t>(
+            std::max(0, length)) + 1,
         L'\0');
 
     if (length > 0) {
-        GetWindowTextW(control, text.data(), length + 1);
+        GetWindowTextW(
+            control,
+            text.data(),
+            length + 1);
     }
     text.resize(static_cast<std::size_t>(
         std::max(0, length)));
     return text;
 }
 
-void CheckRepositoryUrl(HWND hwnd) {
-    const HWND edit = GetDlgItem(hwnd, IDC_REPOSITORY_URL);
-    const HWND result = GetDlgItem(hwnd, IDC_RESULT);
+DialogContext* Context(HWND hwnd) {
+    return reinterpret_cast<DialogContext*>(
+        GetWindowLongPtrW(hwnd, GWLP_USERDATA));
+}
+
+void ValidateAndAccept(HWND hwnd) {
+    const HWND edit =
+        GetDlgItem(hwnd, IDC_REPOSITORY_URL);
+    const HWND result =
+        GetDlgItem(hwnd, IDC_RESULT);
 
     RepositoryIdentity identity;
     std::wstring error;
@@ -55,15 +73,25 @@ void CheckRepositoryUrl(HWND hwnd) {
         return;
     }
 
-    std::wstring message =
-        L"Recognized " +
-        std::wstring(ProviderName(identity.provider)) +
-        L" repository\r\nRepository: " +
-        identity.repository +
-        L"\r\nNormalized: " +
-        identity.canonicalUrl +
-        L"\r\n\r\nInstallation options are not enabled yet.";
-    SetWindowTextW(result, message.c_str());
+    DialogContext* context = Context(hwnd);
+    if (!context || !context->package) {
+        SetWindowTextW(
+            result,
+            L"Could not prepare the package record.");
+        return;
+    }
+
+    std::wstring provider =
+        identity.provider == ProviderKind::GitHub
+        ? L"github"
+        : L"gitlab";
+
+    *context->package =
+        MakeRepositoryPackage(
+            std::move(provider),
+            identity.repository);
+    context->accepted = true;
+    DestroyWindow(hwnd);
 }
 
 LRESULT CALLBACK DialogProc(
@@ -72,8 +100,20 @@ LRESULT CALLBACK DialogProc(
     WPARAM wParam,
     LPARAM lParam) {
     switch (message) {
+    case WM_NCCREATE: {
+        const auto* create =
+            reinterpret_cast<CREATESTRUCTW*>(lParam);
+        SetWindowLongPtrW(
+            hwnd,
+            GWLP_USERDATA,
+            reinterpret_cast<LONG_PTR>(
+                create->lpCreateParams));
+        return TRUE;
+    }
+
     case WM_CREATE: {
-        const auto instance = GetModuleHandleW(nullptr);
+        const auto instance =
+            GetModuleHandleW(nullptr);
 
         HWND intro = CreateWindowExW(
             0,
@@ -101,51 +141,55 @@ LRESULT CALLBACK DialogProc(
             26,
             hwnd,
             reinterpret_cast<HMENU>(
-                static_cast<INT_PTR>(IDC_REPOSITORY_URL)),
+                static_cast<INT_PTR>(
+                    IDC_REPOSITORY_URL)),
             instance,
             nullptr);
 
-        HWND check = CreateWindowExW(
+        HWND add = CreateWindowExW(
             0,
             L"BUTTON",
-            L"Check URL",
+            L"Save source",
             WS_CHILD | WS_VISIBLE | WS_TABSTOP |
                 BS_DEFPUSHBUTTON,
             20,
             86,
-            100,
+            110,
             30,
             hwnd,
             reinterpret_cast<HMENU>(
-                static_cast<INT_PTR>(IDC_CHECK_URL)),
+                static_cast<INT_PTR>(
+                    IDC_ADD_SOURCE)),
             instance,
             nullptr);
 
         HWND close = CreateWindowExW(
             0,
             L"BUTTON",
-            L"Close",
+            L"Cancel",
             WS_CHILD | WS_VISIBLE | WS_TABSTOP |
                 BS_PUSHBUTTON,
-            460,
+            450,
             86,
-            100,
+            110,
             30,
             hwnd,
             reinterpret_cast<HMENU>(
-                static_cast<INT_PTR>(IDC_CLOSE_DIALOG)),
+                static_cast<INT_PTR>(
+                    IDC_CLOSE_DIALOG)),
             instance,
             nullptr);
 
         HWND result = CreateWindowExW(
             0,
             L"STATIC",
-            L"Nothing is installed or saved by this dialog.",
+            L"This saves the package source only. "
+            L"Nothing will be downloaded or installed yet.",
             WS_CHILD | WS_VISIBLE | SS_LEFT,
             20,
             128,
             540,
-            88,
+            70,
             hwnd,
             reinterpret_cast<HMENU>(
                 static_cast<INT_PTR>(IDC_RESULT)),
@@ -154,7 +198,7 @@ LRESULT CALLBACK DialogProc(
 
         SetControlFont(intro);
         SetControlFont(edit);
-        SetControlFont(check);
+        SetControlFont(add);
         SetControlFont(close);
         SetControlFont(result);
         SetFocus(edit);
@@ -162,9 +206,9 @@ LRESULT CALLBACK DialogProc(
     }
 
     case WM_COMMAND:
-        if (LOWORD(wParam) == IDC_CHECK_URL &&
+        if (LOWORD(wParam) == IDC_ADD_SOURCE &&
             HIWORD(wParam) == BN_CLICKED) {
-            CheckRepositoryUrl(hwnd);
+            ValidateAndAccept(hwnd);
             return 0;
         }
 
@@ -180,7 +224,11 @@ LRESULT CALLBACK DialogProc(
         return 0;
     }
 
-    return DefWindowProcW(hwnd, message, wParam, lParam);
+    return DefWindowProcW(
+        hwnd,
+        message,
+        wParam,
+        lParam);
 }
 
 bool EnsureDialogClass() {
@@ -199,7 +247,8 @@ bool EnsureDialogClass() {
     wc.lpszClassName = kClassName;
 
     if (!RegisterClassExW(&wc)) {
-        if (GetLastError() != ERROR_CLASS_ALREADY_EXISTS) {
+        if (GetLastError() !=
+            ERROR_CLASS_ALREADY_EXISTS) {
             return false;
         }
     }
@@ -210,34 +259,45 @@ bool EnsureDialogClass() {
 
 } // namespace
 
-void ShowAddPackageDialog(HWND owner) {
+bool ShowAddPackageDialog(
+    HWND owner,
+    PackageRecord& package) {
+    package = {};
+
     if (!EnsureDialogClass()) {
         MessageBoxW(
             owner,
             L"Could not create the Add Package window.",
             L"TocPilot",
             MB_OK | MB_ICONERROR);
-        return;
+        return false;
     }
 
     RECT ownerRect{};
     GetWindowRect(owner, &ownerRect);
 
     constexpr int width = 600;
-    constexpr int height = 270;
+    constexpr int height = 245;
     const int ownerWidth =
-        static_cast<int>(ownerRect.right - ownerRect.left);
+        static_cast<int>(
+            ownerRect.right - ownerRect.left);
     const int ownerHeight =
-        static_cast<int>(ownerRect.bottom - ownerRect.top);
-    const int x = static_cast<int>(ownerRect.left) +
+        static_cast<int>(
+            ownerRect.bottom - ownerRect.top);
+    const int x =
+        static_cast<int>(ownerRect.left) +
         std::max(0, (ownerWidth - width) / 2);
-    const int y = static_cast<int>(ownerRect.top) +
+    const int y =
+        static_cast<int>(ownerRect.top) +
         std::max(0, (ownerHeight - height) / 2);
+
+    DialogContext context;
+    context.package = &package;
 
     HWND dialog = CreateWindowExW(
         WS_EX_DLGMODALFRAME | WS_EX_CONTROLPARENT,
         kClassName,
-        L"Add Package - Check Repository",
+        L"Add Package - Save Repository Source",
         WS_CAPTION | WS_SYSMENU | WS_POPUP,
         x,
         y,
@@ -246,7 +306,7 @@ void ShowAddPackageDialog(HWND owner) {
         owner,
         nullptr,
         GetModuleHandleW(nullptr),
-        nullptr);
+        &context);
 
     if (!dialog) {
         MessageBoxW(
@@ -254,7 +314,7 @@ void ShowAddPackageDialog(HWND owner) {
             L"Could not create the Add Package window.",
             L"TocPilot",
             MB_OK | MB_ICONERROR);
-        return;
+        return false;
     }
 
     EnableWindow(owner, FALSE);
@@ -263,7 +323,8 @@ void ShowAddPackageDialog(HWND owner) {
 
     MSG msg{};
     while (IsWindow(dialog)) {
-        const BOOL result = GetMessageW(&msg, nullptr, 0, 0);
+        const BOOL result =
+            GetMessageW(&msg, nullptr, 0, 0);
         if (result <= 0) {
             if (result == 0) {
                 PostQuitMessage(
@@ -280,6 +341,7 @@ void ShowAddPackageDialog(HWND owner) {
 
     EnableWindow(owner, TRUE);
     SetActiveWindow(owner);
+    return context.accepted;
 }
 
 } // namespace tp

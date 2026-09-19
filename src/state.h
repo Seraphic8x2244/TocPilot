@@ -1,8 +1,8 @@
 #pragma once
 
-#include <cstddef>
 #include <filesystem>
 #include <string>
+#include <vector>
 
 namespace tp {
 
@@ -11,16 +11,38 @@ struct AppSettings {
     bool checkAppUpdates = true;
 };
 
+struct PackageRecord {
+    std::wstring id;
+    std::wstring name;
+    std::wstring provider;
+    std::wstring repository;
+    std::wstring mode = L"unconfigured";
+    std::wstring target = L"addons";
+
+    // Preserve the complete package object so fields from newer versions are
+    // not discarded when this version updates unrelated state.
+    std::string sourceJson;
+};
+
 struct AppState {
     int schema = 1;
     AppSettings settings;
-    std::size_t packageCount = 0;
+    std::vector<PackageRecord> packages;
 
-    // P1 initially preserves package JSON verbatim until package editing lands.
+    // Preserve the complete top-level document so unknown/new fields survive.
     std::string sourceJson;
 };
 
 std::filesystem::path StatePath(const std::filesystem::path& wowRoot);
+
+PackageRecord MakeRepositoryPackage(
+    std::wstring provider,
+    std::wstring repository);
+
+bool AppendPackage(
+    AppState& state,
+    PackageRecord package,
+    std::wstring& error);
 
 bool LoadOrCreateState(
     const std::filesystem::path& wowRoot,

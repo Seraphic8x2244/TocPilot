@@ -47,4 +47,23 @@ if(BUILD_TESTING)
     endif()
 
     add_test(NAME provider-url-normalization COMMAND TocPilotProviderTests)
+
+    add_executable(TocPilotStateTests
+        tests/state_tests.cpp
+        src/state.cpp
+    )
+    target_compile_features(TocPilotStateTests PRIVATE cxx_std_20)
+    target_compile_definitions(TocPilotStateTests PRIVATE
+        UNICODE
+        _UNICODE
+        WIN32_LEAN_AND_MEAN
+        NOMINMAX
+    )
+    target_include_directories(TocPilotStateTests PRIVATE src)
+
+    if(MSVC)
+        target_compile_options(TocPilotStateTests PRIVATE /W4 /permissive- /utf-8)
+    endif()
+
+    add_test(NAME state-package-roundtrip COMMAND TocPilotStateTests)
 endif()

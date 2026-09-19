@@ -105,8 +105,11 @@ std::wstring StateStatusText() {
         text += L" (created)";
     }
     text += L" - ";
-    text += std::to_wstring(g_state.packageCount);
-    text += g_state.packageCount == 1 ? L" package record" : L" package records";
+    const std::size_t packageCount = g_state.packages.size();
+    text += std::to_wstring(packageCount);
+    text += packageCount == 1
+        ? L" package record"
+        : L" package records";
     return text;
 }
 
@@ -115,13 +118,15 @@ std::wstring PackageHintText() {
         return L"Package state is read-only until TocPilot.json is fixed.";
     }
 
-    if (g_state.packageCount == 0) {
-        return L"No managed packages yet. Add Package can validate GitHub/GitLab repository URLs; install flow comes next.";
+    if (g_state.packages.empty()) {
+        return
+            L"No managed packages yet. Add Package saves a repository "
+            L"source; branch/release setup and installation come next.";
     }
 
     return
-        std::to_wstring(g_state.packageCount) +
-        L" package records are stored; row parsing is not enabled in this first P1 slice.";
+        std::to_wstring(g_state.packages.size()) +
+        L" package source record(s) saved. Installation is not enabled yet.";
 }
 
 BOOL CALLBACK ApplyFontToChild(HWND child, LPARAM fontValue) {
@@ -350,6 +355,73 @@ void AddPackageListColumns() {
         column.iSubItem = index;
         ListView_InsertColumn(g_packageList, index, &column);
     }
+}
+
+std::wstring ProviderLabel(const std::wstring& provider) {
+    if (provider == L"github") {
+        return L"GitHub";
+    }
+    if (provider == L"gitlab") {
+        return L"GitLab";
+    }
+    return provider;
+}
+
+void PopulatePackageList() {
+    if (!g_packageList) {
+        return;
+    }
+
+    ListView_DeleteAllItems(g_packageList);
+
+    for (std::size_t i = 0; i < g_state.packages.size(); ++i) {
+        const auto& package = g_state.packages[i];
+
+        LVITEMW item{};
+        item.mask = LVIF_TEXT;
+        item.iItem = static_cast<int>(i);
+        item.iSubItem = 0;
+        item.pszText = const_cast<LPWSTR>(package.name.c_str());
+
+        const int row = ListView_InsertItem(g_packageList, &item);
+        if (row < 0) {
+            continue;
+        }
+
+        const std::wstring source =
+            ProviderLabel(package.provider) +
+            L" / source only";
+        ListView_SetItemText(
+            g_packageList,
+            row,
+            1,
+            const_cast<LPWSTR>(source.c_str()));
+        ListView_SetItemText(
+            g_packageList,
+            row,
+            2,
+            const_cast<LPWSTR>(L"—"));
+        ListView_SetItemText(
+            g_packageList,
+            row,
+            3,
+            const_cast<LPWSTR>(L"—"));
+        ListView_SetItemText(
+            g_packageList,
+            row,
+            4,
+            const_cast<LPWSTR>(L"Not configured"));
+    }
+}
+
+void RefreshPackageStateUi() {
+    SetIndicator(g_stateStatus, StateStatusText());
+    if (g_packageHint) {
+        SetWindowTextW(
+            g_packageHint,
+            PackageHintText().c_str());
+    }
+    PopulatePackageList();
 }
 
 void StartUpdateCheck(HWND hwnd) {
@@ -726,6 +798,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                 LVS_EX_LABELTIP);
 
         AddPackageListColumns();
+        PopulatePackageList();
         ApplyUiFont(hwnd);
         LayoutControls(hwnd);
 
@@ -769,7 +842,44 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
 
         if (LOWORD(wParam) == IDC_ADD_PACKAGE &&
             HIWORD(wParam) == BN_CLICKED) {
-            tp::ShowAddPackageDialog(hwnd);
+            tp::PackageRecord package;
+            if (!tp::ShowAddPackageDialog(hwnd, package)) {
+                return 0;
+            }
+
+            tp::AppState updatedState = g_state;
+            std::wstring error;
+            if (!tp::AppendPackage(
+                    updatedState,
+                    std::move(package),
+                    error)) {
+                MessageBoxW(
+                    hwnd,
+                    error.c_str(),
+                    L"TocPilot - Add Package",
+                    MB_OK | MB_ICONWARNING);
+                return 0;
+            }
+
+            if (!tp::SaveState(
+                    g_root,
+                    updatedState,
+                    error)) {
+                SetIndicator(
+                    g_stateStatus,
+                    L"State: Save failed - " + error);
+                MessageBoxW(
+                    hwnd,
+                    error.c_str(),
+                    L"TocPilot - Add Package",
+                    MB_OK | MB_ICONERROR);
+                return 0;
+            }
+
+            g_state = std::move(updatedState);
+            g_stateCreated = false;
+            g_stateError.clear();
+            RefreshPackageStateUi();
             return 0;
         }
 

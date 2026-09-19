@@ -1,9 +1,13 @@
 #pragma once
 
+#include "state.h"
+
 #include <windows.h>
 
 namespace tp {
 
-void ShowAddPackageDialog(HWND owner);
+bool ShowAddPackageDialog(
+    HWND owner,
+    PackageRecord& package);
 
 } // namespace tp
