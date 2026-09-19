@@ -37,6 +37,7 @@ struct AddonInstallTransaction {
     AddonInstallPlan plan;
     std::vector<std::wstring> backedUpRoots;
     std::vector<std::wstring> installedRoots;
+    bool prepared = false;
     bool active = false;
 };
 
@@ -49,6 +50,16 @@ bool BuildAddonInstallPlan(
     const std::vector<std::wstring>& otherInstalledFiles,
     AddonInstallPlan& plan,
     std::wstring& error);
+
+bool PrepareAddonInstallTransaction(
+    const AddonInstallPlan& plan,
+    AddonInstallTransaction& transaction,
+    std::wstring& error);
+
+bool CommitAddonInstallTransaction(
+    AddonInstallTransaction& transaction,
+    std::wstring& error,
+    const AddonInstallOptions& options = {});
 
 bool BeginAddonInstallTransaction(
     const AddonInstallPlan& plan,
