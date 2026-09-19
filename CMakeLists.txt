@@ -3,7 +3,9 @@ cmake_minimum_required(VERSION 3.24)
 project(TocPilot VERSION 0.1.2 LANGUAGES CXX)
 
 add_executable(TocPilot WIN32
+    src/add_package_dialog.cpp
     src/main.cpp
+    src/provider.cpp
     src/state.cpp
     src/update.cpp
 )
@@ -29,3 +31,20 @@ target_link_libraries(TocPilot PRIVATE winhttp bcrypt shell32 comctl32)
 set_target_properties(TocPilot PROPERTIES
     OUTPUT_NAME "TocPilot"
 )
+
+include(CTest)
+
+if(BUILD_TESTING)
+    add_executable(TocPilotProviderTests
+        tests/provider_tests.cpp
+        src/provider.cpp
+    )
+    target_compile_features(TocPilotProviderTests PRIVATE cxx_std_20)
+    target_include_directories(TocPilotProviderTests PRIVATE src)
+
+    if(MSVC)
+        target_compile_options(TocPilotProviderTests PRIVATE /W4 /permissive- /utf-8)
+    endif()
+
+    add_test(NAME provider-url-normalization COMMAND TocPilotProviderTests)
+endif()

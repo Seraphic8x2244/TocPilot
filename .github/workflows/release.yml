@@ -68,6 +68,9 @@ jobs:
       - name: Build Release
         run: cmake --build build --config Release
 
+      - name: Test Release
+        run: ctest --test-dir build -C Release --output-on-failure
+
       - name: Write SHA-256 sidecar
         shell: pwsh
         run: |

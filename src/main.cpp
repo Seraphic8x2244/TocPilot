@@ -1,3 +1,4 @@
+#include "add_package_dialog.h"
 #include "state.h"
 #include "update.h"
 #include "version.h"
@@ -115,7 +116,7 @@ std::wstring PackageHintText() {
     }
 
     if (g_state.packageCount == 0) {
-        return L"No managed packages yet. The package engine is the next P1 step.";
+        return L"No managed packages yet. Add Package can validate GitHub/GitLab repository URLs; install flow comes next.";
     }
 
     return
@@ -638,7 +639,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
 
         EnableWindow(g_updateAllButton, FALSE);
         EnableWindow(g_refreshPackagesButton, FALSE);
-        EnableWindow(g_addPackageButton, FALSE);
+        EnableWindow(g_addPackageButton, g_stateReady ? TRUE : FALSE);
 
         g_updateButton = CreateWindowExW(
             0,
@@ -763,6 +764,12 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             } else {
                 StartUpdateCheck(hwnd);
             }
+            return 0;
+        }
+
+        if (LOWORD(wParam) == IDC_ADD_PACKAGE &&
+            HIWORD(wParam) == BN_CLICKED) {
+            tp::ShowAddPackageDialog(hwnd);
             return 0;
         }
 
