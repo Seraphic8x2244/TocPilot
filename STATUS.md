@@ -4,65 +4,92 @@
 
 - Repository: `Seraphic8x2244/TocPilot`
 - Branch: `p0-self-update`
-- Product stage: P0 implementation started
+- Product stage: P0 self-update bootstrap implemented; Windows runtime testing pending
 - License: MIT
 - Intended platform: Windows x64
 - Implementation: native C++20 / Win32 / CMake
-- Highest priority: self-update bootstrap before addon-management features
-- Current application version: `v0.1.0` (implementation target; not yet released/tested)
+- Highest priority: prove self-update end-to-end before addon-management features
+- Current application version: `v0.1.0` (compiled successfully; not yet published as a GitHub release)
 
 ## Latest commits
 
+- `20c3ad5` — Implement P0 self-update bootstrap
+- `ce21df8` — Start P0 self-update implementation
 - `49c8e0b` — Add TocPilot implementation handoff
 - `3d5c9f2` — Expand TocPilot project overview
 - `63c1910` — Add TocPilot development plan
 
 ## Completed
 
-- Repository created.
-- Product named **TocPilot**.
-- Core product scope defined.
-- Full development/architecture document added as `DEVELOPMENT.md`.
-- README updated with project direction.
-- Decision made to use one TocPilot instance per WoW directory rather than multi-directory profiles.
-- Decision made to manage remote packages/snapshots rather than local Git repositories.
-- GitHub/GitLab branches and releases are first-class source types.
-- Direct release assets such as DLLs are part of the package model.
-- Native Windows implementation selected to avoid the large Qt deployment used by GitAddonsManager.
-- Self-update architecture designed around a direct `TocPilot.exe` release asset and a two-process Windows-safe replacement flow.
-- Development milestones and test strategy documented.
-- P0 implementation branch `p0-self-update` created.
+- Native C++20 / Win32 / CMake application scaffold.
+- Static MSVC runtime selected for portable Release builds.
+- Compile-time application version `v0.1.0`.
+- Executable-directory discovery.
+- Startup validation requiring `WoW.exe` beside TocPilot.
+- Startup creation/validation of `Interface\AddOns`.
+- Minimal native window showing current version, WoW root, update status, and update action.
+- Automatic non-blocking GitHub latest-release check.
+- Semantic-version comparison against the compiled version.
+- Discovery of direct `TocPilot.exe` release assets.
+- SHA-256 verification using GitHub release asset `digest` when available.
+- `TocPilot.exe.sha256` sidecar fallback supported.
+- Streaming download to a unique Windows temp staging directory.
+- Downloaded executable is preserved separately until validation succeeds.
+- Downloaded/new executable doubles as updater helper mode.
+- Helper waits on the old TocPilot process handle before replacement.
+- Replacement is staged beside the target and uses `ReplaceFileW` with a backup.
+- File replacement uses bounded retries for transient file/AV locks.
+- Failed replacement leaves the old executable in place.
+- Failed relaunch attempts automatic rollback to the previous executable.
+- Successful restart receives cleanup arguments for backup/staging cleanup.
+- GitHub Actions Windows x64 Release build workflow.
+- GitHub Actions tag-release workflow that publishes:
+  - `TocPilot.exe`
+  - `TocPilot.exe.sha256`
+- First Windows x64 CI build succeeded for commit `20c3ad5`.
+- CI artifact `TocPilot-windows-x64` was uploaded successfully.
 
-## In progress — P0 self-update bootstrap
+## CI validation
 
-This branch is implementing only the P0 milestone:
+GitHub Actions run `35443134276` completed the important build steps successfully:
 
-- native Win32 application skeleton;
-- own-directory / `WoW.exe` validation;
-- visible compile-time version `v0.1.0`;
-- asynchronous GitHub latest-release discovery;
-- direct `TocPilot.exe` download;
-- SHA-256 validation;
-- updater-helper mode using the downloaded executable;
-- wait-for-parent-exit plus bounded replacement retries;
-- rollback-safe executable replacement and restart;
-- GitHub Actions x64 Release build/release workflow.
+- checkout: success;
+- CMake configure: success;
+- x64 Release compile/link: success;
+- executable artifact upload: success.
 
-## Untested / unimplemented
+Artifact metadata:
 
-P0 is not yet compiled or run on Windows. The following still require validation after the first implementation commit:
+- artifact ID: `10584660938`;
+- artifact name: `TocPilot-windows-x64`;
+- ZIP artifact size: 101,139 bytes;
+- artifact SHA-256: `21cb498988c178f999db64d8735ac42fa76bcea5c9da4316b93d8c82aa4e358c`.
 
-- MSVC/CMake compile;
-- real WoW-directory startup validation;
-- GitHub API/release parsing against an actual TocPilot release;
-- download and SHA-256 verification;
-- updater wait/retry behaviour with a live locked executable;
-- rollback behaviour on replacement failure;
-- restart into the installed version;
-- GitHub Actions build artifacts;
-- end-to-end `v0.1.0 -> v0.1.1` update.
+This validates compilation and CI packaging only. It does not validate runtime updater behaviour.
 
-Everything after P0 also remains unimplemented:
+## Untested / remaining P0 work
+
+The following require real Windows/WoW-directory validation:
+
+- launch beside a real `WoW.exe`;
+- missing-`WoW.exe` error path;
+- `Interface\AddOns` creation;
+- GitHub latest-release parsing against a published TocPilot release;
+- current-version == latest behaviour;
+- direct release EXE download;
+- SHA-256 metadata-digest path;
+- SHA-256 sidecar fallback path;
+- deliberate digest mismatch refusal;
+- helper waiting while the original executable remains locked/running;
+- transient replacement retry behaviour;
+- rollback after a forced replacement/relaunch failure;
+- successful restart and cleanup;
+- paths containing spaces;
+- non-system drive such as `D:\Games\WoW`;
+- tag-triggered release workflow;
+- end-to-end `v0.1.0 -> v0.1.1` self-update.
+
+Everything after P0 remains deferred until the self-update test succeeds:
 
 - local JSON state;
 - package engine;
@@ -87,29 +114,13 @@ Everything after P0 also remains unimplemented:
 8. Self-update publishes/downloads a direct `TocPilot.exe` asset.
 9. The updater waits for the old process to fully terminate before replacing the EXE and uses retries/rollback rather than reproducing GitAddonsManager's Windows file-lock false failure.
 10. Local state is portable with the WoW install, initially planned as `TocPilot.json`.
+11. P0 release builds also publish a small `TocPilot.exe.sha256` sidecar as a fallback if GitHub does not expose an asset digest.
 
 ## Priority roadmap
 
 ### P0 — Self-update bootstrap
 
-Build `v0.1.0` with:
-
-- native Win32 app/window;
-- own-directory detection;
-- `WoW.exe` validation;
-- visible compiled version;
-- GitHub latest-release check;
-- direct `TocPilot.exe` download;
-- SHA-256 verification;
-- updater-helper mode using the downloaded/new executable;
-- wait-for-parent-exit and bounded replacement retries;
-- safe rollback/failure behaviour;
-- restart into the new executable;
-- GitHub Actions x64 Release build.
-
-Then publish a minimal `v0.1.1` and prove `v0.1.0 -> v0.1.1` through the in-app updater.
-
-**Do not move on to addon/package implementation until this succeeds.**
+Implementation is present and compiles. P0 is not complete until a real `v0.1.0 -> v0.1.1` in-app update succeeds.
 
 ### P1 — State and basic UI
 
@@ -159,4 +170,9 @@ Then publish a minimal `v0.1.1` and prove `v0.1.0 -> v0.1.1` through the in-app 
 
 ## Exact next step
 
-Scaffold the P0 CMake/native source tree on `p0-self-update`, implement the `v0.1.0` application and updater state machine, add Windows CI/release workflows, then validate the branch with GitHub Actions before preparing the `v0.1.0` release test.
+1. Download/extract the successful `TocPilot-windows-x64` artifact from Actions run `35443134276`.
+2. Place `TocPilot.exe` beside a real `WoW.exe` and run the v0.1.0 smoke test.
+3. If startup is healthy, publish/tag `v0.1.0` so the release workflow produces direct `TocPilot.exe` and checksum assets.
+4. Verify v0.1.0 reports itself current.
+5. Change only the compiled version/build text to `v0.1.1`, build/publish that tag, and use the v0.1.0 UI to update itself.
+6. Do not start P1 until that end-to-end replacement/restart test succeeds.
