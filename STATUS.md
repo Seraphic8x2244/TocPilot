@@ -9,7 +9,7 @@
 - Intended platform: Windows x64
 - Implementation: native C++20 / Win32 / CMake
 - Highest priority: publish and runtime-validate `v0.1.4` through TocPilot self-update; this build introduces persistent repository package sources
-- Current application version: `v0.1.4`; published successfully and awaiting runtime validation through the installed `v0.1.3` self-updater
+- Current application version: `v0.1.4`; published and runtime-validated successfully through the installed `v0.1.3` self-updater
 
 ## Latest commits
 
@@ -70,6 +70,7 @@
 - Duplicate repository sources are rejected before disk state is changed.
 - Package saves remain atomic: the updated state is staged in memory, written through `TocPilot.json.tmp`, flushed, and only then replaces the live file.
 - Persisted package records render in the main ListView immediately after save and after application restart; rows show Source only / Not configured until P2 tracking/install support exists.
+- User runtime-validated `v0.1.4`: self-update from `v0.1.3` succeeded, saving a GitHub repository source created the expected row, the row survived restart, duplicate repository add was rejected without a second row, text-size persistence remained healthy, and no addon files were installed.
 - Added state/package CTest coverage for default creation, package add/save/reload, duplicate rejection, setting persistence, and preservation of unknown top-level/package JSON fields.
 
 ## CI validation
@@ -270,11 +271,9 @@ Complete. A real `v0.1.0 -> v0.1.1` in-app self-update succeeded on Windows besi
 
 ## Exact next step
 
-1. Keep the user's installed `v0.1.3` and let TocPilot self-update normally to `v0.1.4`; do not manually replace the EXE.
-2. In `v0.1.4`, use Add Package -> Save source with `https://github.com/Shagu/pfUI`.
-3. Confirm a `pfUI` row immediately appears as `GitHub / source only`, Installed/Latest show dashes, and Status is `Not configured`.
-4. Close/reopen TocPilot and confirm the pfUI row remains.
-5. Try adding the same pfUI URL again and confirm TocPilot rejects it as already managed without adding a second row.
-6. Optionally add the previously tested GitLab repository and confirm that row also survives restart.
-7. Confirm Text size still persists and app-update status reports `v0.1.4` current.
-8. If this passes, treat the core P1 state/UI/provider foundation as validated and begin P2 with GitHub branch listing/selection and remote-SHA resolution, still without installing files in the first P2 slice.
+1. Begin P2 with GitHub branch discovery for persisted GitHub repository sources; do not install or modify addon files yet.
+2. Add a provider/API path that resolves repository metadata, lists branches, and captures each branch head commit SHA.
+3. Extend the package definition flow so a saved GitHub source can select a branch and persist `mode: branch`, `ref`, and the resolved remote SHA.
+4. Render branch tracking and the resolved SHA/status in the main package table.
+5. Keep Update All/Refresh/install/remove file actions disabled until the remote tracking slice is runtime-validated.
+6. Add deterministic tests around GitHub API response parsing/state persistence; use Windows CI before publishing the next self-update build.
