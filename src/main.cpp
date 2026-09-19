@@ -90,6 +90,7 @@ bool g_stateCreated = false;
 bool g_packageRefreshInProgress = false;
 bool g_packageInspectInProgress = false;
 bool g_packageInstallInProgress = false;
+bool g_appUpdateInProgress = false;
 std::wstring g_stateError;
 
 struct CheckResult {
@@ -573,7 +574,8 @@ void UpdatePackageButtons() {
     const bool packageBusy =
         g_packageRefreshInProgress ||
         g_packageInspectInProgress ||
-        g_packageInstallInProgress;
+        g_packageInstallInProgress ||
+        g_appUpdateInProgress;
 
     if (g_refreshPackagesButton) {
         EnableWindow(
@@ -1015,6 +1017,17 @@ void StartUpdateCheck(HWND hwnd) {
 }
 
 void StartUpdate(HWND hwnd) {
+    if (g_packageInstallInProgress) {
+        MessageBoxW(
+            hwnd,
+            L"Finish the active package install before replacing TocPilot itself.",
+            L"TocPilot - Package Install Active",
+            MB_OK | MB_ICONINFORMATION);
+        return;
+    }
+
+    g_appUpdateInProgress = true;
+    UpdatePackageButtons();
     EnableWindow(g_updateButton, FALSE);
     SetWindowTextW(g_updateButton, L"Updating app...");
     SetIndicator(g_releaseStatus, L"Release: Downloading and verifying...");
@@ -2203,6 +2216,8 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             reinterpret_cast<UpdateResult*>(lParam));
 
         if (!result->ok) {
+            g_appUpdateInProgress = false;
+            UpdatePackageButtons();
             SetIndicator(
                 g_releaseStatus,
                 L"Release: Update failed - " + result->error);
