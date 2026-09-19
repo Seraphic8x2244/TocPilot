@@ -4,12 +4,12 @@
 
 - Repository: `Seraphic8x2244/TocPilot`
 - Branch: `p0-self-update`
-- Product stage: P0 self-update bootstrap implemented; Windows runtime testing pending
+- Product stage: P0 self-update bootstrap implemented; initial Windows smoke test passed
 - License: MIT
 - Intended platform: Windows x64
 - Implementation: native C++20 / Win32 / CMake
 - Highest priority: prove self-update end-to-end before addon-management features
-- Current application version: `v0.1.0` (compiled successfully; not yet published as a GitHub release)
+- Current application version: `v0.1.0` (compiled and smoke-tested successfully; not yet published as a GitHub release)
 
 ## Latest commits
 
@@ -170,9 +170,7 @@ Implementation is present and compiles. P0 is not complete until a real `v0.1.0 
 
 ## Exact next step
 
-1. Download/extract the successful `TocPilot-windows-x64` artifact from Actions run `35443134276`.
-2. Place `TocPilot.exe` beside a real `WoW.exe` and run the v0.1.0 smoke test.
-3. If startup is healthy, publish/tag `v0.1.0` so the release workflow produces direct `TocPilot.exe` and checksum assets.
-4. Verify v0.1.0 reports itself current.
-5. Change only the compiled version/build text to `v0.1.1`, build/publish that tag, and use the v0.1.0 UI to update itself.
-6. Do not start P1 until that end-to-end replacement/restart test succeeds.
+1. Publish/tag `v0.1.0` from the current `p0-self-update` branch so the release workflow produces direct `TocPilot.exe` and checksum assets.
+2. Run the existing local v0.1.0 build and verify it changes from `Release: Not found` to `Release: Current - v0.1.0`.
+3. Change only the compiled version/build text to `v0.1.1`, build/publish that tag, and use the local v0.1.0 UI to update itself.
+4. Do not start P1 until that end-to-end replacement/restart test succeeds.
