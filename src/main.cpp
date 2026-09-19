@@ -185,8 +185,8 @@ std::wstring PackageHintText() {
     return
         std::to_wstring(g_state.packages.size()) +
         L" package record(s). Set Branch changes tracking; Refresh checks "
-        L"the saved branch head; Inspect stages and previews the exact remote "
-        L"archive. Installation remains disabled.";
+        L"the saved branch head; Inspect previews without live changes; "
+        L"Install/Update uses a staged rollback transaction.";
 }
 
 BOOL CALLBACK ApplyFontToChild(HWND child, LPARAM fontValue) {
@@ -546,26 +546,30 @@ void UpdatePackageButtons() {
     bool canSetBranch = false;
     bool canRefresh = false;
     bool canInspect = false;
+    bool canInstall = false;
+    const tp::PackageRecord* selectedPackage = nullptr;
 
     if (validSelection) {
-        const auto& package =
-            g_state.packages[
+        selectedPackage =
+            &g_state.packages[
                 static_cast<std::size_t>(row)];
 
         canSetBranch =
-            package.provider == L"github";
+            selectedPackage->provider == L"github";
 
         canRefresh =
             canSetBranch &&
-            package.mode == L"branch" &&
-            !package.ref.empty();
+            selectedPackage->mode == L"branch" &&
+            !selectedPackage->ref.empty();
 
         canInspect = canRefresh;
+        canInstall = canRefresh;
     }
 
     const bool packageBusy =
         g_packageRefreshInProgress ||
-        g_packageInspectInProgress;
+        g_packageInspectInProgress ||
+        g_packageInstallInProgress;
 
     if (g_refreshPackagesButton) {
         EnableWindow(
@@ -579,6 +583,27 @@ void UpdatePackageButtons() {
         EnableWindow(
             g_inspectPackageButton,
             canInspect && !packageBusy
+                ? TRUE
+                : FALSE);
+    }
+
+    if (g_installPackageButton) {
+        const wchar_t* label = L"Install";
+        if (selectedPackage &&
+            !selectedPackage->installedRevision.empty()) {
+            label =
+                selectedPackage->installedRevision ==
+                        selectedPackage->latestRevision
+                    ? L"Reinstall"
+                    : L"Update";
+        }
+
+        SetWindowTextW(
+            g_installPackageButton,
+            label);
+        EnableWindow(
+            g_installPackageButton,
+            canInstall && !packageBusy
                 ? TRUE
                 : FALSE);
     }
