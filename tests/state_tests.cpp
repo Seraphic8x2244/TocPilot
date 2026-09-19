@@ -119,6 +119,25 @@ void TestCreateAddRoundTrip(
         return;
     }
 
+    const std::wstring installedSha =
+        L"fedcba9876543210fedcba9876543210fedcba98";
+    const std::vector<std::wstring> installedFiles{
+        L"Interface/AddOns/pfUI/pfUI.toc",
+        L"Interface/AddOns/pfUI/core.lua"
+    };
+
+    if (!tp::SetPackageInstalledState(
+            state.packages[0],
+            installedSha,
+            installedFiles,
+            error) ||
+        state.packages[0].installedRevision != installedSha ||
+        state.packages[0].latestRevision != installedSha ||
+        state.packages[0].installedFiles != installedFiles) {
+        Fail("SetPackageInstalledState failed");
+        return;
+    }
+
     state.settings.textScale = 1.25;
     if (!tp::SaveState(root, state, error)) {
         Fail("SaveState failed");
@@ -143,8 +162,9 @@ void TestCreateAddRoundTrip(
         loaded.packages[0].repository != L"Shagu/pfUI" ||
         loaded.packages[0].mode != L"branch" ||
         loaded.packages[0].ref != L"master" ||
-        loaded.packages[0].latestRevision !=
-            L"89abcdef0123456789abcdef0123456789abcdef" ||
+        loaded.packages[0].installedRevision != installedSha ||
+        loaded.packages[0].latestRevision != installedSha ||
+        loaded.packages[0].installedFiles != installedFiles ||
         loaded.settings.textScale != 1.25) {
         Fail("round-trip state values did not match");
     }
