@@ -122,6 +122,33 @@ int main() {
                 error)) {
             Fail("first install plan failed");
         } else {
+            tp::AddonInstallTransaction preparedOnly;
+            if (!tp::PrepareAddonInstallTransaction(
+                    firstPlan,
+                    preparedOnly,
+                    error)) {
+                Fail("prepare-only transaction failed");
+            } else {
+                const auto addOns =
+                    wowRoot /
+                    L"Interface" /
+                    L"AddOns";
+
+                if (Exists(
+                        addOns /
+                        L"AddOn") ||
+                    !Exists(firstPlan.transactionRoot)) {
+                    Fail("prepare-only phase touched live addons or missed transaction staging");
+                }
+
+                if (!tp::RollbackAddonInstallTransaction(
+                        preparedOnly,
+                        error) ||
+                    Exists(firstPlan.transactionRoot)) {
+                    Fail("prepare-only transaction cleanup failed");
+                }
+            }
+
             tp::AddonInstallTransaction firstTransaction;
             if (!tp::BeginAddonInstallTransaction(
                     firstPlan,
