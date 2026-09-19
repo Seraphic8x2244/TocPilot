@@ -3,15 +3,15 @@
 ## Continuation checkpoint — 2026-09-19
 
 - Active branch: `p2-github-branches`.
-- Current source version: `v0.1.7`; latest published/runtime-validated version is `v0.1.6`.
+- Current application version: `v0.1.7`; published successfully and awaiting runtime validation through the installed `v0.1.6` self-updater.
 - Latest archive-inspection implementation head: `6803330` — Correct archive traversal fixture assertion.
 - Key implementation commits: `ce5cc79` (non-destructive Inspect UI), `b3adbcf` (exact-ref GitHub archive download), `5021fb3` (secure ZIP extraction/addon detection), `99ff601` (miniz/CMake/archive CTest wiring).
 - Completed through this checkpoint: P0 self-update, P1 state/UI/provider foundation, GitHub branch selection, tracked-branch metadata Refresh, and the first non-destructive P2 archive download/extraction/layout-inspection slice.
 - CI gate for the archive-inspection source slice passed on Windows x64: Actions run `35457055183` built Release, passed the full CTest suite, and uploaded the executable artifact.
 - Runtime gate passed: user confirmed the published `v0.1.6` Refresh build works.
 - Deferred: live addon installation/update/removal and ownership transactions, GitHub release assets, GitLab branch support, import/export, column-layout persistence, modification detection/backups, and other later-roadmap items.
-- Exact next step: publish the prepared `v0.1.7` archive-inspection build through the automated self-update path, then validate real pfUI staging/preview while confirming `Interface\AddOns` remains untouched.
-- Delivery rule: publish runtime-test builds only after their source version passes Windows CI; `v0.1.6` has now cleared its runtime gate.
+- Exact next step: self-update from `v0.1.6` to published `v0.1.7`, then validate real pfUI staging/preview while confirming `Interface\AddOns` remains untouched.
+- Delivery rule: publish runtime-test builds only after their source version passes Windows CI; `v0.1.7` followed this rule and is now the pending runtime gate.
 
 ## Current state
 
@@ -21,19 +21,19 @@
 - License: MIT
 - Intended platform: Windows x64
 - Implementation: native C++20 / Win32 / CMake
-- Highest priority: publish and runtime-test the `v0.1.7` archive-inspection slice without installing addon files
-- Current source version: `v0.1.7`; latest published/runtime-validated version is `v0.1.6`.
+- Highest priority: runtime-test the published `v0.1.7` archive-inspection slice without installing addon files
+- Current application version: `v0.1.7`; published successfully and awaiting runtime validation through the installed `v0.1.6` self-updater.
 
 ## Latest commits
 
+- `2112d04` — Retry v0.1.7 release after validator fix
+- `a0472a5` — Fix release version regex escaping
+- `436a5c7` — Make release version validation language-agnostic
+- `5aa50e6` — Retry v0.1.7 release
+- `b297739` — Request v0.1.7 release
+- `4e571b8` — Record v0.1.6 runtime validation
 - `6803330` — Correct archive traversal fixture assertion
-- `a2d3a88` — Fix archive downloader standard includes
 - `ce5cc79` — Add non-destructive branch archive inspection UI
-- `60e1ced` — Test GitHub archive ref URL encoding
-- `b3adbcf` — Download exact GitHub archive refs safely
-- `99ff601` — Wire secure archive inspection tests
-- `5021fb3` — Implement secure ZIP extraction and addon detection
-- `45b87a1` — Request v0.1.6 release
 
 ## Completed
 
@@ -114,8 +114,26 @@
 - Added a separate asynchronous **Inspect** action for configured GitHub branch packages. The preview reports the exact resolved SHA, staging path, archive/extracted sizes, and detected addon roots while leaving package installed state unchanged.
 - Inspect, Refresh, Set Branch, and Add Package are mutually gated while package network/staging work is active.
 - Added archive/path/layout CTest coverage, including a malicious `../` ZIP fixture, plus GitHub archive-ref URL encoding tests.
+- Versioned the archive-inspection slice as `v0.1.7` after user confirmation that `v0.1.6` Refresh works.
+- Updated release-version validation so it checks the TocPilot project/version independently of the CMake language list; this was required after vendored miniz added C to `LANGUAGES C CXX`.
+- Corrected the release validator regex escaping after CI exposed the first regex form as over-escaped.
+- Automated `v0.1.7` release run `35459015449` completed successfully: source validation, Release build, CTest, checksum sidecar, tag creation, and asset publishing all passed.
+- GitHub release `v0.1.7` points to commit `2112d040e822360b0dbf17c58edd832117ccec8f` and publishes `TocPilot.exe` plus `TocPilot.exe.sha256`.
 
 ## CI validation
+
+Published archive-inspection release: Actions release run `35459015449` completed successfully at commit `2112d04`.
+
+- release source/version validation: success;
+- x64 Release configure/build: success;
+- complete Release CTest suite: success;
+- SHA-256 sidecar generation: success;
+- tag `v0.1.7` creation: success;
+- release asset publication: success;
+- `TocPilot.exe`: 587,264 bytes; SHA-256 `136ff21c3c58f972f62ca886ebd11e10b8cef6d15b225c02db37291351e4c0f1`;
+- `TocPilot.exe.sha256`: 78 bytes; asset SHA-256 `b103a8b6155b55cbf482aed62e16d6ddd9eaf2c51665f5bd7f350710f7817ba3`.
+
+Two earlier `v0.1.7` release attempts failed safely at the pre-build source-version validation step because the validator still assumed `LANGUAGES CXX`, then because the first replacement regex was over-escaped. Neither failed run created a release tag or published assets; the validator was fixed before the successful release.
 
 Latest archive-inspection Windows build: Actions run `35457055183` for implementation head `6803330` completed successfully.
 
@@ -251,8 +269,8 @@ Tracked-branch Refresh test release `v0.1.6` was published automatically. Releas
 Current P2 runtime gates:
 
 - Published `v0.1.6` Refresh is runtime-validated successfully.
-- Archive inspection is CI-tested but not yet live-runtime tested: real GitHub ZIP download/redirect handling, pfUI extraction under `Interface\TocPilot\staging`, detected addon-root preview, staging cleanup/re-inspection, and confirmation that live AddOns remain untouched require the `v0.1.7` runtime build.
-- Archive-inspection source is now versioned `v0.1.7` and must pass the versioned-source Windows CI before `.github/release-version` is changed.
+- Published `v0.1.7` archive inspection is CI/release-validated but not yet live-runtime tested.
+- Runtime validation still required: self-update `v0.1.6 -> v0.1.7`, real GitHub ZIP download/redirect handling, pfUI extraction under `Interface\TocPilot\staging`, sensible detected addon-root preview, clean staging replacement on a second Inspect, and confirmation that live `Interface\AddOns` remains untouched and Installed remains a dash.
 
 P1 runtime testing still required:
 
@@ -359,11 +377,11 @@ Complete. A real `v0.1.0 -> v0.1.1` in-app self-update succeeded on Windows besi
 
 ## Exact next step
 
-1. Let the versioned `v0.1.7` source build complete in Windows CI.
-2. If green, change `.github/release-version` to `v0.1.7` to trigger the normal automated release workflow.
-3. Self-update the installed `v0.1.6` to `v0.1.7`.
-4. Select the configured pfUI branch package and click **Inspect**.
-5. Confirm staging appears under `Interface\TocPilot\staging\github-Shagu-pfUI` with `archive.zip` plus `extracted`, and the preview lists sensible addon roots/`.toc` files.
-6. Confirm `Interface\AddOns` is untouched and Installed remains a dash.
-7. Re-run Inspect to prove disposable staging replacement works cleanly and confirm Refresh/Set Branch still work.
-8. After that runtime gate passes, begin the live install transaction/ownership slice.
+1. Launch the installed `v0.1.6` and self-update normally to published `v0.1.7`.
+2. Select the configured pfUI branch package and click **Inspect**.
+3. Confirm staging appears under `Interface\TocPilot\staging\github-Shagu-pfUI` with `archive.zip` plus `extracted`.
+4. Confirm the preview lists sensible addon root(s)/`.toc` files for pfUI.
+5. Confirm `Interface\AddOns` is untouched and the package Installed column remains a dash.
+6. Run **Inspect** a second time to prove the disposable staging directory is replaced cleanly.
+7. Confirm **Refresh** and **Set Branch** still behave normally after inspection.
+8. If all of the above passes, record `v0.1.7` runtime validation and begin the live install transaction/ownership slice; stage and validate the complete new package before any live addon files are removed or replaced.
