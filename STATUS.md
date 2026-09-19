@@ -9,15 +9,15 @@
 - Intended platform: Windows x64
 - Implementation: native C++20 / Win32 / CMake
 - Highest priority: implement and validate the first P2 GitHub branch-tracking slice without installing addon files
-- Current source version: `v0.1.5` prepared for the first P2 branch-tracking test release; latest published/runtime-validated version is `v0.1.4`
+- Current application version: `v0.1.5`; published successfully and awaiting runtime validation through the installed `v0.1.4` self-updater
 
 ## Latest commits
 
+- `6d8fcbf` — Request v0.1.5 release
+- `28332d7` — Prepare v0.1.5 GitHub branch test release
 - `ac740c7` — Add GitHub branch tracking foundation
 - `5fe7056` — Record v0.1.4 runtime validation
 - `2866782` — Record automated v0.1.4 package release
-- `f34be07` — Request v0.1.4 release
-- `84fc7d2` — Prepare v0.1.4 persistent package test release
 
 ## Completed
 
@@ -185,6 +185,8 @@ Provider-normalization test release `v0.1.3` was also published automatically. R
 
 Persistent-package test release `v0.1.4` was published automatically. Release workflow run `35449831222` validated source/version consistency, built Release x64, passed both provider URL and state/package CTests, created tag `v0.1.4` at commit `f34be07`, and published `TocPilot.exe` (398,336 bytes; SHA-256 `0c0257a1781c9d9184a21c0d1079b5885817853a6a71f2ba3c1f5e19ee142780`) plus `TocPilot.exe.sha256`.
 
+First P2 GitHub branch-tracking test release `v0.1.5` was published automatically. Release workflow run `35451120184` validated source/version consistency, built Release x64, passed provider URL, state/package, and GitHub API parser CTests, created tag `v0.1.5` at commit `6d8fcbf`, and published `TocPilot.exe` (433,152 bytes; SHA-256 `0449a725ef0ca2b1226c3e54c987d65923d1451906523b7086b80f32fe92b0a9`) plus `TocPilot.exe.sha256`.
+
 ## Untested / remaining validation
 
 P1 runtime testing still required:
@@ -292,11 +294,10 @@ Complete. A real `v0.1.0 -> v0.1.1` in-app self-update succeeded on Windows besi
 
 ## Exact next step
 
-1. Publish `v0.1.5` through the automated release workflow after the versioned-source CI passes.
-2. Keep the installed `v0.1.4` and self-update normally to `v0.1.5`.
-3. Select the existing pfUI row and click Set Branch; confirm the GitHub lookup loads real branches without freezing the main UI.
-4. Save the desired branch (the dialog should initially select the repository default/current branch).
-5. Confirm the pfUI row changes to `GitHub / <branch>`, Latest shows a seven-character remote SHA, Installed remains a dash, and Status is `Not installed`.
-6. Close/reopen TocPilot and confirm the selected branch and Latest SHA persist.
-7. Confirm no files/folders were created or modified under `Interface\\AddOns` by this operation.
-8. If this passes, continue P2 with Refresh: re-resolve tracked branch heads and distinguish Current/Update available only after a real installed revision exists; archive download/install remains a later gated slice.
+1. Keep the user's installed `v0.1.4` and let TocPilot self-update normally to `v0.1.5`; do not manually replace the EXE.
+2. Select the existing pfUI row and click Set Branch.
+3. Confirm the GitHub lookup completes and shows the repository branches; pfUI currently reports `master` as its default branch, so an unconfigured record should initially select `master`.
+4. Save `master` (or another chosen branch) and confirm the row becomes `GitHub / <branch>`, Latest shows a seven-character remote SHA, Installed remains a dash, and Status is `Not installed`.
+5. Close/reopen TocPilot and confirm the branch and Latest SHA persist.
+6. Confirm no files/folders were created or modified under `Interface\\AddOns` by Set Branch.
+7. If this passes, record the runtime validation and continue P2 with tracked-branch Refresh/re-resolution before any archive download/install work.
