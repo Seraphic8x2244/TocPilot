@@ -3,14 +3,14 @@
 ## Continuation checkpoint — 2026-09-19
 
 - Active branch: `p2-github-branches`.
-- Current application version: `v0.1.7`; published and runtime-validated successfully.
+- Current source version: `v0.1.8`; latest published/runtime-validated version is `v0.1.7`.
 - Latest live-install implementation head: `6c75c40` — Clean package staging after commit.
 - Key live-install commits: `11aa63d` (installed revision/file ownership persistence), `80146e3` (off-thread prepare/live commit split), `974bea7` + `5bf973e` (transaction/rollback and prepare-only tests), `ab64793` (UI commit + state-save rollback), and `6c75c40` (post-success staging cleanup).
 - Completed through this checkpoint: P0 self-update, P1 state/UI/provider foundation, GitHub branch selection/Refresh/Inspect, plus the first source-complete P2 transactional single-package install/update slice.
 - Exact implementation head CI passed on Windows x64: Actions run `35460533602` built Release, passed the full CTest suite, and uploaded the executable artifact.
 - Runtime gates are cleared through `v0.1.7`; the transactional install slice is not yet published/runtime-tested.
 - Deferred beyond this slice: package removal, Update All orchestration, explicit adoption of pre-existing unmanaged addon roots, crash-recovery journaling for unexpected process/power loss during live commit, GitHub release assets, GitLab support, import/export, column persistence, and modification detection/backups.
-- Exact next step: version the CI-green transactional install slice as `v0.1.8`, publish it through normal self-update, and runtime-test first install/update safety.
+- Exact next step: let the versioned `v0.1.8` source pass Windows CI, then publish it through normal self-update and runtime-test first install/update safety.
 - Delivery rule: publish runtime-test builds only after their exact source version passes Windows CI.
 
 ## Current state
@@ -22,7 +22,7 @@
 - Intended platform: Windows x64
 - Implementation: native C++20 / Win32 / CMake
 - Highest priority: publish and runtime-validate the first transactional live-install/update slice for GitHub branch packages
-- Current application version: `v0.1.7`; published and runtime-validated successfully.
+- Current source version: `v0.1.8`; latest published/runtime-validated version is `v0.1.7`.
 
 ## Latest commits
 
@@ -392,11 +392,10 @@ Complete. A real `v0.1.0 -> v0.1.1` in-app self-update succeeded on Windows besi
 
 ## Exact next step
 
-1. Bump source/CMake version from `v0.1.7` to `v0.1.8`.
-2. Let that exact versioned source pass Windows Release build and the full CTest suite.
-3. Update `.github/release-version` to `v0.1.8` and verify the normal automated release creates the tag, direct EXE, and SHA-256 sidecar.
-4. Self-update the installed `v0.1.7` through TocPilot.
-5. Runtime-test **Install** with a configured GitHub branch package whose detected addon root is not already present as an unmanaged folder. Confirm files appear under `Interface\AddOns`, Installed becomes the exact short SHA, Latest matches it, Status becomes Current, ownership persists in `TocPilot.json`, and restart preserves the state.
-6. Reinstall/update the same TocPilot-owned package and confirm replacement succeeds without touching unrelated addon roots.
-7. Confirm an attempted install onto a pre-existing unmanaged addon root is refused rather than overwritten.
-8. After this runtime gate passes, implement package removal, then Update All. Keep unmanaged-root adoption and crash-recovery journaling as separately designed safety work.
+1. Let the exact versioned `v0.1.8` source pass Windows Release build and the full CTest suite.
+2. Update `.github/release-version` to `v0.1.8` and verify the normal automated release creates the tag, direct EXE, and SHA-256 sidecar.
+3. Self-update the installed `v0.1.7` through TocPilot.
+4. Runtime-test **Install** with a configured GitHub branch package whose detected addon root is not already present as an unmanaged folder. Confirm files appear under `Interface\AddOns`, Installed becomes the exact short SHA, Latest matches it, Status becomes Current, ownership persists in `TocPilot.json`, and restart preserves the state.
+5. Reinstall/update the same TocPilot-owned package and confirm replacement succeeds without touching unrelated addon roots.
+6. Confirm an attempted install onto a pre-existing unmanaged addon root is refused rather than overwritten.
+7. After this runtime gate passes, implement package removal, then Update All. Keep unmanaged-root adoption and crash-recovery journaling as separately designed safety work.
