@@ -3,6 +3,7 @@
 #include "version.h"
 
 #include <windows.h>
+#include <windowsx.h>
 #include <commctrl.h>
 #include <shellapi.h>
 
@@ -214,7 +215,7 @@ void ResizeListColumns() {
 
     RECT rect{};
     GetClientRect(g_packageList, &rect);
-    const int width = std::max(720, rect.right - rect.left - 4);
+    const int width = std::max(720, static_cast<int>(rect.right - rect.left - 4));
 
     const int nameWidth = 180;
     const int sourceWidth = 250;
@@ -547,7 +548,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             205,
             24,
             hwnd,
-            reinterpret_cast<HMENU>(IDC_WOW_STATUS),
+            reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_WOW_STATUS)),
             GetModuleHandleW(nullptr),
             nullptr);
 
@@ -561,7 +562,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             220,
             24,
             hwnd,
-            reinterpret_cast<HMENU>(IDC_GITHUB_STATUS),
+            reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_GITHUB_STATUS)),
             GetModuleHandleW(nullptr),
             nullptr);
 
@@ -575,7 +576,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             380,
             24,
             hwnd,
-            reinterpret_cast<HMENU>(IDC_RELEASE_STATUS),
+            reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_RELEASE_STATUS)),
             GetModuleHandleW(nullptr),
             nullptr);
 
@@ -589,7 +590,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             820,
             24,
             hwnd,
-            reinterpret_cast<HMENU>(IDC_STATE_STATUS),
+            reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_STATE_STATUS)),
             GetModuleHandleW(nullptr),
             nullptr);
 
@@ -603,7 +604,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             105,
             32,
             hwnd,
-            reinterpret_cast<HMENU>(IDC_UPDATE_ALL),
+            reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_UPDATE_ALL)),
             GetModuleHandleW(nullptr),
             nullptr);
 
@@ -617,7 +618,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             120,
             32,
             hwnd,
-            reinterpret_cast<HMENU>(IDC_REFRESH_PACKAGES),
+            reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_REFRESH_PACKAGES)),
             GetModuleHandleW(nullptr),
             nullptr);
 
@@ -631,7 +632,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             115,
             32,
             hwnd,
-            reinterpret_cast<HMENU>(IDC_ADD_PACKAGE),
+            reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_ADD_PACKAGE)),
             GetModuleHandleW(nullptr),
             nullptr);
 
@@ -649,7 +650,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             150,
             32,
             hwnd,
-            reinterpret_cast<HMENU>(IDC_UPDATE),
+            reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_UPDATE)),
             GetModuleHandleW(nullptr),
             nullptr);
 
@@ -678,7 +679,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             110,
             180,
             hwnd,
-            reinterpret_cast<HMENU>(IDC_TEXT_SCALE),
+            reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_TEXT_SCALE)),
             GetModuleHandleW(nullptr),
             nullptr);
 
@@ -713,7 +714,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             820,
             280,
             hwnd,
-            reinterpret_cast<HMENU>(IDC_PACKAGE_LIST),
+            reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_PACKAGE_LIST)),
             GetModuleHandleW(nullptr),
             nullptr);
 
