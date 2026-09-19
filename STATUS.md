@@ -1,5 +1,16 @@
 # TocPilot status / handoff
 
+## Continuation checkpoint — 2026-09-19
+
+- Active branch: `p2-github-branches`.
+- Current application version: `v0.1.6`.
+- Latest implementation/release commits: `b6a6793` (tracked-branch Refresh), `e081fd3` (prepare v0.1.6), `45b87a1` (request v0.1.6 release).
+- Completed through this checkpoint: P0 self-update, P1 state/UI/provider foundation, GitHub branch selection, tracked-branch metadata Refresh, and deterministic tests for those paths.
+- Untested gate: the published `v0.1.6` Refresh slice still needs runtime validation through the installed `v0.1.5` updater unless that validation is recorded separately after this checkpoint.
+- Deferred: live addon installation/removal, release assets, GitLab branch support, import/export, column-layout persistence, modification detection/backups, and other later-roadmap items.
+- Exact next implementation step: add a non-destructive P2 archive-inspection slice under `Interface\\TocPilot\\staging`: download the selected GitHub branch archive, securely extract it with traversal defenses, detect candidate addon roots/`.toc` files, and present the prospective install layout without modifying `Interface\\AddOns`.
+- Delivery rule: do not bump/publish the next runtime-test version until the `v0.1.6` runtime gate is confirmed; source/CI work may proceed meanwhile.
+
 ## Current state
 
 - Repository: `Seraphic8x2244/TocPilot`
