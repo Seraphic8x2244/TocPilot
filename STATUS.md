@@ -4,14 +4,14 @@
 
 - Active branch: `p2-github-branches`.
 - Current application version: `v0.1.7`; published and runtime-validated successfully.
-- Latest archive-inspection implementation head: `6803330` — Correct archive traversal fixture assertion.
-- Key implementation commits: `ce5cc79` (non-destructive Inspect UI), `b3adbcf` (exact-ref GitHub archive download), `5021fb3` (secure ZIP extraction/addon detection), `99ff601` (miniz/CMake/archive CTest wiring).
-- Completed through this checkpoint: P0 self-update, P1 state/UI/provider foundation, GitHub branch selection, tracked-branch metadata Refresh, and the first non-destructive P2 archive download/extraction/layout-inspection slice.
-- CI gate for the archive-inspection source slice passed on Windows x64: Actions run `35457055183` built Release, passed the full CTest suite, and uploaded the executable artifact.
-- Runtime gate passed: user confirmed the published `v0.1.6` Refresh build works.
-- Deferred: live addon installation/update/removal and ownership transactions, GitHub release assets, GitLab branch support, import/export, column-layout persistence, modification detection/backups, and other later-roadmap items.
-- Exact next step: begin the live install transaction/ownership slice, preserving the rule that the complete staged package must validate before any live addon files are removed or replaced.
-- Delivery rule: publish runtime-test builds only after their source version passes Windows CI; `v0.1.7` has now cleared its runtime gate.
+- Latest live-install implementation head: `6c75c40` — Clean package staging after commit.
+- Key live-install commits: `11aa63d` (installed revision/file ownership persistence), `80146e3` (off-thread prepare/live commit split), `974bea7` + `5bf973e` (transaction/rollback and prepare-only tests), `ab64793` (UI commit + state-save rollback), and `6c75c40` (post-success staging cleanup).
+- Completed through this checkpoint: P0 self-update, P1 state/UI/provider foundation, GitHub branch selection/Refresh/Inspect, plus the first source-complete P2 transactional single-package install/update slice.
+- Exact implementation head CI passed on Windows x64: Actions run `35460533602` built Release, passed the full CTest suite, and uploaded the executable artifact.
+- Runtime gates are cleared through `v0.1.7`; the transactional install slice is not yet published/runtime-tested.
+- Deferred beyond this slice: package removal, Update All orchestration, explicit adoption of pre-existing unmanaged addon roots, crash-recovery journaling for unexpected process/power loss during live commit, GitHub release assets, GitLab support, import/export, column persistence, and modification detection/backups.
+- Exact next step: version the CI-green transactional install slice as `v0.1.8`, publish it through normal self-update, and runtime-test first install/update safety.
+- Delivery rule: publish runtime-test builds only after their exact source version passes Windows CI.
 
 ## Current state
 
@@ -21,19 +21,19 @@
 - License: MIT
 - Intended platform: Windows x64
 - Implementation: native C++20 / Win32 / CMake
-- Highest priority: implement the first transactional live-install/ownership slice for GitHub branch packages
+- Highest priority: publish and runtime-validate the first transactional live-install/update slice for GitHub branch packages
 - Current application version: `v0.1.7`; published and runtime-validated successfully.
 
 ## Latest commits
 
-- `2112d04` — Retry v0.1.7 release after validator fix
-- `a0472a5` — Fix release version regex escaping
-- `436a5c7` — Make release version validation language-agnostic
-- `5aa50e6` — Retry v0.1.7 release
-- `b297739` — Request v0.1.7 release
-- `4e571b8` — Record v0.1.6 runtime validation
-- `6803330` — Correct archive traversal fixture assertion
-- `ce5cc79` — Add non-destructive branch archive inspection UI
+- `6c75c40` — Clean package staging after commit
+- `6a10cae` — Clean package staging after successful installs
+- `c70ec64` — Make rollback retries idempotent
+- `5bf973e` — Test prepare phase leaves live addons untouched
+- `3305fb9` — Gate package installs against app replacement
+- `ab64793` — Commit installs with state-save rollback
+- `80146e3` — Prepare installs off-thread before live commit
+- `75e871d` — Wire addon install transaction tests
 
 ## Completed
 
@@ -120,6 +120,18 @@
 - Automated `v0.1.7` release run `35459015449` completed successfully: source validation, Release build, CTest, checksum sidecar, tag creation, and asset publishing all passed.
 - GitHub release `v0.1.7` points to commit `2112d040e822360b0dbf17c58edd832117ccec8f` and publishes `TocPilot.exe` plus `TocPilot.exe.sha256`.
 - User runtime-validated `v0.1.7`: self-update succeeded; real pfUI Inspect produced the expected staging/archive/extracted preview behavior; repeated Inspect remained healthy; Refresh/Set Branch remained healthy; `Interface\AddOns` stayed untouched and Installed remained unset.
+
+- Added persisted `installed_revision` and `installed_files` ownership state while preserving schema-1 backward compatibility and unknown package fields.
+- Installed ownership is stored as WoW-root-relative file paths such as `Interface/AddOns/Example/Example.toc`; state round-trip tests cover installed revision and file ownership.
+- Added a transaction planner that validates addon roots/files, rejects duplicate or case-insensitive mappings, rejects other-package ownership collisions, and refuses to overwrite an existing live addon folder that TocPilot does not already own.
+- Updates back up current package-owned roots, swap in the fully prepared roots, and remove previously owned roots absent from the new package as obsolete.
+- Split installation into an off-thread **prepare** phase and a short live **commit** phase. Download, secure extraction, mapping, validation, and full file copying all complete before `Interface\AddOns` is changed.
+- Added rollback that removes newly committed roots and restores prior backups, with idempotent retry behaviour for partially completed rollback attempts.
+- Added deterministic install CTests for first install, multi-root packages, update replacement, obsolete-root cleanup, unowned collision rejection, other-package ownership collision rejection, explicit rollback, injected mid-commit failure, and proof that prepare-only work leaves live AddOns untouched.
+- Added a temporary single-package **Install / Update / Reinstall** test control. Package state is saved only after the filesystem commit succeeds; if state save fails, the old live addon state is restored and old package state remains authoritative.
+- Successful install state records the exact installed SHA plus complete file ownership. Transaction backups and package download/extraction staging are cleaned after the state commit; cleanup failures become warnings rather than restoring obsolete content over authoritative new state.
+- Normal window close is blocked while a package install is active, and application self-replacement is gated against package installation.
+- Core install transaction CI run `35460118275` passed; prepare-only safety run `35460454903` passed; exact implementation run `35460533602` passed Release build, full CTest, and artifact upload.
 
 ## CI validation
 
@@ -271,7 +283,10 @@ Current P2 runtime gates:
 
 - Published `v0.1.6` Refresh is runtime-validated successfully.
 - Published `v0.1.7` archive inspection is runtime-validated successfully.
-- Next runtime gate will be the first live-install build: exact staged revision installed transactionally, ownership persisted, Installed updated only after filesystem commit succeeds, and failure must preserve the prior live addon state.
+- Transactional single-package install/update is CI-green but not yet published/runtime-tested. The next runtime gate is expected `v0.1.8`.
+- Runtime validation must cover a first install into an addon root that is not already present, exact Installed/Latest SHA persistence across restart, repeat reinstall/update, unrelated addon preservation, and transaction/staging cleanup.
+- An existing live addon folder without TocPilot ownership must be refused rather than overwritten; explicit adoption of unmanaged addons is deferred.
+- In-process commit/state-save failures are rollback-covered and CI-tested. Crash/power-loss recovery during the short live-commit/state-save window is not yet journaled and remains deferred.
 
 P1 runtime testing still required:
 
@@ -284,7 +299,6 @@ P1 runtime testing still required:
 
 P0 edge/failure paths not yet deliberately forced:
 
-
 - missing-`WoW.exe` error path;
 - `Interface\AddOns` creation;
 - direct release EXE download;
@@ -294,15 +308,15 @@ P0 edge/failure paths not yet deliberately forced:
 - helper waiting while the original executable remains locked/running;
 - transient replacement retry behaviour;
 - rollback after a forced replacement/relaunch failure;
-- successful restart and cleanup;
 - paths containing spaces;
-- non-system drive such as `D:\Games\WoW`;
+- non-system drive such as `D:\Games\WoW`.
 
-Deferred beyond the current non-destructive P2 inspection slice:
+Deferred beyond the current transactional P2 install slice:
 
-- live package install/update/remove transaction engine;
-- installed-file ownership and obsolete-file cleanup;
-- rollback/backup semantics for package installation;
+- package removal transaction/UI;
+- Update All orchestration;
+- explicit adoption/replacement flow for pre-existing unmanaged addon roots;
+- crash-recovery journal/reconciliation after unexpected process or power loss during live commit;
 - GitHub release package/assets support;
 - GitLab support;
 - DLL/direct-file installation;
@@ -322,7 +336,7 @@ Deferred beyond the current non-destructive P2 inspection slice:
 9. The updater waits for the old process to fully terminate before replacing the EXE and uses retries/rollback rather than reproducing GitAddonsManager's Windows file-lock false failure.
 10. Local state is portable with the WoW install, initially planned as `TocPilot.json`.
 11. P0 release builds also publish a small `TocPilot.exe.sha256` sidecar as a fallback if GitHub does not expose an asset digest.
-12. P2 archive inspection/staging uses a visible disposable directory under `Interface\\TocPilot\\staging`; live addon content remains under `Interface\\AddOns` and must not be touched until installation is explicitly enabled.
+12. P2 Inspect remains non-destructive under `Interface\\TocPilot\\staging`; Install may touch `Interface\\AddOns` only after the exact revision is fully downloaded, securely extracted, mapped, collision-checked, and copied into transaction preparation.
 
 ## Priority roadmap
 
@@ -378,10 +392,11 @@ Complete. A real `v0.1.0 -> v0.1.1` in-app self-update succeeded on Windows besi
 
 ## Exact next step
 
-1. Define persisted ownership/install metadata for each managed package without breaking existing `TocPilot.json` records or unknown-field preservation.
-2. Build a transaction planner from the already-staged/validated archive candidate roots to target folders under `Interface\AddOns`.
-3. Before changing live addons, validate the whole candidate set for collisions, duplicate install-folder names, and unsafe live destinations.
-4. Commit through a backup/swap transaction so a failed copy/rename can restore the previous managed addon folders.
-5. Only after the filesystem commit succeeds, persist the exact installed revision and ownership metadata.
-6. Add deterministic tests for first install, update replacement, multi-root packages, collision rejection, and rollback on injected failure.
-7. Keep package removal and broad Update All UX deferred until the single-package transaction path is CI-green and runtime-tested.
+1. Bump source/CMake version from `v0.1.7` to `v0.1.8`.
+2. Let that exact versioned source pass Windows Release build and the full CTest suite.
+3. Update `.github/release-version` to `v0.1.8` and verify the normal automated release creates the tag, direct EXE, and SHA-256 sidecar.
+4. Self-update the installed `v0.1.7` through TocPilot.
+5. Runtime-test **Install** with a configured GitHub branch package whose detected addon root is not already present as an unmanaged folder. Confirm files appear under `Interface\AddOns`, Installed becomes the exact short SHA, Latest matches it, Status becomes Current, ownership persists in `TocPilot.json`, and restart preserves the state.
+6. Reinstall/update the same TocPilot-owned package and confirm replacement succeeds without touching unrelated addon roots.
+7. Confirm an attempted install onto a pre-existing unmanaged addon root is refused rather than overwritten.
+8. After this runtime gate passes, implement package removal, then Update All. Keep unmanaged-root adoption and crash-recovery journaling as separately designed safety work.
