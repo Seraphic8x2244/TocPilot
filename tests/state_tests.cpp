@@ -170,6 +170,85 @@ void TestCreateAddRoundTrip(
     }
 }
 
+void TestRemovePackageRecord(
+    const std::filesystem::path& root) {
+    tp::AppState state;
+    bool created = false;
+    std::wstring error;
+
+    if (!tp::LoadOrCreateState(
+            root,
+            state,
+            created,
+            error)) {
+        Fail("remove-record fixture did not load");
+        return;
+    }
+
+    state.packages.clear();
+
+    auto first =
+        tp::MakeRepositoryPackage(
+            L"github",
+            L"Shagu/pfUI");
+    auto second =
+        tp::MakeRepositoryPackage(
+            L"github",
+            L"brues-code/pfUI");
+
+    if (!tp::AppendPackage(
+            state,
+            first,
+            error) ||
+        !tp::AppendPackage(
+            state,
+            second,
+            error)) {
+        Fail("remove-record fixture add failed");
+        return;
+    }
+
+    if (!tp::RemovePackageRecord(
+            state,
+            L"github:Shagu/pfUI",
+            error) ||
+        state.packages.size() != 1 ||
+        state.packages[0].repository !=
+            L"brues-code/pfUI") {
+        Fail("RemovePackageRecord removed the wrong record");
+        return;
+    }
+
+    if (tp::RemovePackageRecord(
+            state,
+            L"github:missing/repo",
+            error)) {
+        Fail("RemovePackageRecord accepted a missing package");
+        return;
+    }
+
+    if (!tp::SaveState(
+            root,
+            state,
+            error)) {
+        Fail("remove-record fixture save failed");
+        return;
+    }
+
+    tp::AppState loaded;
+    created = true;
+    if (!tp::LoadOrCreateState(
+            root,
+            loaded,
+            created,
+            error) ||
+        loaded.packages.size() != 1 ||
+        loaded.packages[0].repository !=
+            L"brues-code/pfUI") {
+        Fail("removed package record returned after reload");
+    }
+}
+
 void TestUnknownFieldPreservation(
     const std::filesystem::path& root) {
     const std::string json =
@@ -235,6 +314,7 @@ int main() {
         Fail("could not create temporary test directory");
     } else {
         TestCreateAddRoundTrip(root);
+        TestRemovePackageRecord(root);
         TestUnknownFieldPreservation(root);
 
         std::error_code ec;
