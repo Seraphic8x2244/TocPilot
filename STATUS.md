@@ -8,16 +8,16 @@
 - License: MIT
 - Intended platform: Windows x64
 - Implementation: native C++20 / Win32 / CMake
-- Highest priority: implement and validate the first P2 GitHub branch-tracking slice without installing addon files
-- Current application version: `v0.1.5`; published and runtime-validated successfully through the installed `v0.1.4` self-updater
+- Highest priority: publish and runtime-validate the P2 tracked-branch Refresh slice without installing addon files
+- Current source version: `v0.1.6` prepared for the tracked-branch Refresh test release; latest published/runtime-validated version is `v0.1.5`
 
 ## Latest commits
 
+- `b6a6793` — Add tracked branch refresh
+- `5df5630` — Record v0.1.5 runtime validation
+- `9476cb7` — Record automated v0.1.5 branch release
 - `6d8fcbf` — Request v0.1.5 release
 - `28332d7` — Prepare v0.1.5 GitHub branch test release
-- `ac740c7` — Add GitHub branch tracking foundation
-- `5fe7056` — Record v0.1.4 runtime validation
-- `2866782` — Record automated v0.1.4 package release
 
 ## Completed
 
@@ -56,7 +56,7 @@
 - Persisted settings currently include `text_scale` and `check_app_updates`.
 - Invalid/unsupported state is surfaced read-only rather than overwritten.
 - Main window now uses a resizable native ListView package table with Name, Source / Track, Installed, Latest, and Status columns.
-- Package-action buttons are present but intentionally disabled until the package engine exists.
+- Install/update-all file actions remain disabled; branch selection and metadata Refresh are enabled only where their provider/state supports them.
 - Text-size selector persists to `TocPilot.json` and reapplies the native UI font.
 - Existing application self-update status and action remain in the main window; updater implementation files were not changed.
 - User confirmed the installed `v0.1.1` client detected, applied, and restarted into `v0.1.2` through TocPilot self-update.
@@ -82,8 +82,26 @@
 - GitLab source records remain persistent but branch browsing is intentionally deferred to P4.
 - Added deterministic GitHub repository/branch JSON parser CTests and extended the state round-trip test to verify branch/ref/remote-SHA persistence.
 - User runtime-validated `v0.1.5`: self-update from `v0.1.4` succeeded, the existing pfUI source loaded real GitHub branches, branch selection persisted the selected ref and remote SHA, the row survived restart, and `Interface\\AddOns` remained untouched.
+- Added a separate asynchronous Refresh action for configured GitHub branch packages while retaining Set Branch as a distinct action.
+- Refresh re-resolves the tracked branch head from GitHub and updates only `latest_revision`; it never writes `installed_revision`.
+- Refresh, Set Branch, and Add Package are gated while a package refresh is active; selection changes update action availability.
+- Per-package Refresh shows `Checking...`, a row-level failure state plus detailed hint on error, and a successful branch/SHA hint without modal spam.
+- Failed remote refreshes leave the previously saved remote SHA untouched.
+- Added deterministic tracked-branch lookup tests (including case-sensitive branch matching) and state tests proving Refresh metadata updates do not create an installed revision.
 
 ## CI validation
+
+Latest tracked-branch Refresh Windows build: Actions run `35453670639` for commit `b6a6793` completed successfully.
+
+- x64 Release compile/link: success;
+- provider URL normalization CTest: success;
+- state/package branch/refresh round-trip and unknown-field preservation CTest: success;
+- GitHub repository/branch API parsing and tracked-branch lookup CTest: success;
+- executable artifact upload: success;
+- artifact ID: `10587671685`;
+- artifact name: `TocPilot-windows-x64`;
+- artifact ZIP size: 215,307 bytes;
+- artifact SHA-256: `36a8a365d60dad7a08582cfb68e94a221c76d3d851e2eb94f75739e578baeb02`.
 
 Latest P2 GitHub branch-tracking Windows build: Actions run `35450961396` for commit `ac740c7` completed successfully.
 
@@ -295,10 +313,11 @@ Complete. A real `v0.1.0 -> v0.1.1` in-app self-update succeeded on Windows besi
 
 ## Exact next step
 
-1. Add a distinct Refresh action for persisted GitHub branch packages; keep Set Branch available separately for branch changes.
-2. Refresh must query the selected branch's current remote head SHA and update only remote tracking metadata in `TocPilot.json`.
-3. Do not download archives, extract files, or modify `Interface\\AddOns`.
-4. Surface per-package refresh state/errors without converting a remote SHA into an installed revision.
-5. Add deterministic tests for tracked-branch SHA lookup/parsing/state update and keep all existing tests.
-6. Publish the next versioned self-update build only after Windows CI passes.
-7. Runtime gate: Refresh on pfUI should complete, preserve `Installed = —`, keep Status `Not installed`, update/preserve Latest appropriately, survive restart, and leave addon files untouched.
+1. Publish `v0.1.6` through the automated release workflow after the versioned-source CI passes.
+2. Keep the installed `v0.1.5` and self-update normally to `v0.1.6`.
+3. Select the configured pfUI branch package and click Refresh.
+4. Confirm the row briefly shows `Checking...`, then returns to `Not installed`; Installed must remain a dash and Latest should remain or update to the current seven-character remote SHA.
+5. Confirm the hint reports the tracked branch and refreshed short SHA and explicitly says no addon files were changed.
+6. Close/reopen TocPilot and confirm the refreshed Latest SHA persists.
+7. Confirm Set Branch remains separate and still works, and no files/folders under `Interface\\AddOns` were created/modified by Refresh.
+8. If this passes, the next P2 slice can begin archive download-to-temp and inspection only; live addon installation should remain gated until archive/path/layout validation is proven.
