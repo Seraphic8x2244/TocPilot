@@ -260,6 +260,7 @@ Deferred beyond the current P1 slice:
 9. The updater waits for the old process to fully terminate before replacing the EXE and uses retries/rollback rather than reproducing GitAddonsManager's Windows file-lock false failure.
 10. Local state is portable with the WoW install, initially planned as `TocPilot.json`.
 11. P0 release builds also publish a small `TocPilot.exe.sha256` sidecar as a fallback if GitHub does not expose an asset digest.
+12. P2 archive inspection/staging uses a visible disposable directory under `Interface\\TocPilot\\staging`; live addon content remains under `Interface\\AddOns` and must not be touched until installation is explicitly enabled.
 
 ## Priority roadmap
 
@@ -315,11 +316,10 @@ Complete. A real `v0.1.0 -> v0.1.1` in-app self-update succeeded on Windows besi
 
 ## Exact next step
 
-1. Keep the user's installed `v0.1.5` and let TocPilot self-update normally to `v0.1.6`; do not manually replace the EXE.
-2. Select the configured pfUI package and click Refresh.
-3. Confirm the row briefly shows `Checking...`, then returns to `Not installed`; Installed must remain a dash and Latest should remain or update to the current seven-character remote SHA.
-4. Confirm the hint reports the tracked branch and refreshed short SHA and says no addon files were changed.
-5. Close/reopen TocPilot and confirm the refreshed Latest SHA persists.
-6. Confirm Set Branch remains a separate action and still works.
-7. Confirm no files/folders under `Interface\\AddOns` were created or modified by Refresh.
-8. If this passes, record runtime validation. The next P2 slice should download a selected branch archive to Windows temp and inspect it only; live addon installation remains gated until secure archive/path/layout validation is proven.
+1. Runtime-validate published `v0.1.6` Refresh if not already done: self-update from `v0.1.5`, refresh pfUI, confirm Installed remains a dash, Latest persists, Set Branch remains separate, and `Interface\\AddOns` is untouched.
+2. After that gate passes, implement the next P2 archive-inspection slice using `Interface\\TocPilot\\staging` as the disposable working area rather than the system temp directory.
+3. Suggested package staging layout: `Interface\\TocPilot\\staging\\github-Shagu-pfUI\\archive.zip` plus an `extracted` subdirectory.
+4. Download only the selected tracked branch archive into that staging area, verify the request/response safely, then extract with path-traversal defenses.
+5. Inspect extracted content for candidate addon roots/`.toc` files and present what TocPilot would install.
+6. Do not copy, move, delete, or overwrite anything under `Interface\\AddOns` during this slice.
+7. Add deterministic archive/path/layout tests and publish a versioned self-update build only after Windows CI passes.
