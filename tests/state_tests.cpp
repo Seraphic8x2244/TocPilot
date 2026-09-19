@@ -249,6 +249,84 @@ void TestRemovePackageRecord(
     }
 }
 
+void TestClearInstalledState(
+    const std::filesystem::path& root) {
+    tp::AppState state;
+    bool created = false;
+    std::wstring error;
+
+    if (!tp::LoadOrCreateState(
+            root,
+            state,
+            created,
+            error)) {
+        Fail("clear-installed-state fixture did not load");
+        return;
+    }
+
+    state.packages.clear();
+    auto package =
+        tp::MakeRepositoryPackage(
+            L"github",
+            L"Owner/Addon");
+
+    if (!tp::AppendPackage(
+            state,
+            std::move(package),
+            error) ||
+        !tp::SetPackageBranch(
+            state.packages[0],
+            L"main",
+            L"1111111111111111111111111111111111111111",
+            error) ||
+        !tp::SetPackageInstalledState(
+            state.packages[0],
+            L"1111111111111111111111111111111111111111",
+            {
+                L"Interface/AddOns/Addon/Addon.toc",
+                L"Interface/AddOns/Addon/main.lua"
+            },
+            error)) {
+        Fail("clear-installed-state fixture setup failed");
+        return;
+    }
+
+    const std::wstring latest =
+        state.packages[0].latestRevision;
+
+    if (!tp::ClearPackageInstalledState(
+            state.packages[0],
+            error) ||
+        !state.packages[0].installedRevision.empty() ||
+        !state.packages[0].installedFiles.empty() ||
+        state.packages[0].latestRevision != latest) {
+        Fail("ClearPackageInstalledState changed the wrong tracking fields");
+        return;
+    }
+
+    if (!tp::SaveState(
+            root,
+            state,
+            error)) {
+        Fail("cleared installed state did not save");
+        return;
+    }
+
+    tp::AppState loaded;
+    created = true;
+    if (!tp::LoadOrCreateState(
+            root,
+            loaded,
+            created,
+            error) ||
+        loaded.packages.size() != 1 ||
+        !loaded.packages[0].installedRevision.empty() ||
+        !loaded.packages[0].installedFiles.empty() ||
+        loaded.packages[0].latestRevision != latest) {
+        Fail("cleared installed state did not round-trip");
+    }
+}
+
 void TestUnknownFieldPreservation(
     const std::filesystem::path& root) {
     const std::string json =
@@ -315,6 +393,7 @@ int main() {
     } else {
         TestCreateAddRoundTrip(root);
         TestRemovePackageRecord(root);
+        TestClearInstalledState(root);
         TestUnknownFieldPreservation(root);
 
         std::error_code ec;
