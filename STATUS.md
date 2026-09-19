@@ -3,16 +3,21 @@
 ## Continuation checkpoint — 2026-09-19
 
 - Active branch: `p2-github-branches`.
-- Active work slice: implementing transactional uninstall/removal for TocPilot-owned addon roots, preserving the separate non-destructive Forget action and reusing the existing install transaction rollback machinery.
-- Current application version: `v0.1.10`; published and runtime-validated for unmanaged-collision refusal plus successful transactional install/restart/reinstall. `v0.1.8` exposed the GitHub wrapper-layout bug fixed in `v0.1.9`, and `v0.1.9` exposed missing user-facing install failure dialogs fixed in `v0.1.10`.
-- Latest live-install implementation head: `6c75c40` — Clean package staging after commit.
-- Key live-install commits: `11aa63d` (installed revision/file ownership persistence), `80146e3` (off-thread prepare/live commit split), `974bea7` + `5bf973e` (transaction/rollback and prepare-only tests), `ab64793` (UI commit + state-save rollback), and `6c75c40` (post-success staging cleanup).
-- Completed through this checkpoint: P0 self-update, P1 state/UI/provider foundation, GitHub branch selection/Refresh/Inspect, plus the first source-complete P2 transactional single-package install/update slice.
-- Exact implementation head CI passed on Windows x64: Actions run `35460533602` built Release, passed the full CTest suite, and uploaded the executable artifact.
-- Runtime gates are cleared through `v0.1.7`; `v0.1.8` transactional install is published and awaiting runtime validation.
-- Deferred beyond this slice: package removal, Update All orchestration, explicit adoption of pre-existing unmanaged addon roots, crash-recovery journaling for unexpected process/power loss during live commit, GitHub release assets, GitLab support, import/export, column persistence, and modification detection/backups.
-- Minimal package-record removal is now required for the `v0.1.9` test workflow so obsolete/mistaken source records can be forgotten without touching live addon files.
-- Exact next step: self-update to `v0.1.8` and runtime-test first install/update safety, including refusal to overwrite pre-existing unowned addon roots.
+- Current application version: `v0.1.10`; no release/version bump has been made for the uninstall work yet.
+- Latest implementation commit: `9dd56e4` — Polish uninstall development controls.
+- New uninstall implementation commits:
+  - `f75f286` — Add transactional package uninstall UI.
+  - `c4c1864` — Test uninstall state clearing.
+  - `582b2a4` — Test transactional addon uninstall.
+  - `3203e25` — Clear package ownership after uninstall.
+  - `5ca70ee` — Add installed-state clear operation.
+  - `ef0ddd2` — Reuse install transactions for addon removal.
+  - `7a194fb` — Add removal transaction planning API.
+- Completed in source: transactional uninstall for TocPilot-owned addon roots now reuses the existing install transaction/backup/rollback engine; shared ownership is refused; failed filesystem commits roll back; failed state saves restore removed roots; successful uninstall clears installed revision/file ownership while retaining repository/branch tracking; the existing **Forget** action remains explicitly non-destructive; deterministic install/state tests cover removal, shared ownership refusal, injected rollback, and installed-state clearing.
+- Previously completed and runtime-validated: P0 self-update; P1 state/UI/provider foundation; GitHub branch selection/Refresh/Inspect; transactional single-package install/reinstall; unmanaged addon-root collision refusal, through `v0.1.10`.
+- Untested for the new slice: the exact uninstall implementation head has not yet been confirmed by Windows CI through the currently available connector, and no `v0.1.11` runtime release has been published. Runtime uninstall/restart/reinstall and unrelated-addon preservation still need validation.
+- Deferred beyond this slice: Update All orchestration, explicit adoption of pre-existing unmanaged addon roots, crash-recovery journaling for unexpected process/power loss during live commit, GitHub release assets, GitLab support, DLL/direct-file installation, import/export, column persistence, and modification detection/backups.
+- Exact next step: confirm the exact uninstall source head passes Windows x64 build + full CTest; only then bump/request `v0.1.11`, self-update from `v0.1.10`, runtime-test Uninstall (owned roots removed, package retained as Not installed, restart stable, unrelated addons preserved), then Reinstall. Do not begin Update All until this runtime gate passes.
 - Delivery rule: publish runtime-test builds only after their exact source version passes Windows CI.
 
 ## Current state
@@ -21,23 +26,23 @@
 
 - Repository: `Seraphic8x2244/TocPilot`
 - Branch: `p2-github-branches`
-- Product stage: P0 self-update and P1 core state/UI/provider foundation validated; P2 GitHub branch tracking in progress
+- Product stage: P0/P1 validated; P2 GitHub branch tracking and single-package install/reinstall runtime-validated, transactional uninstall implemented in source and awaiting CI/runtime validation
 - License: MIT
 - Intended platform: Windows x64
 - Implementation: native C++20 / Win32 / CMake
-- Highest priority: move beyond the now-runtime-validated single-package install/reinstall slice into real package uninstall/removal and Update All orchestration
-- Current application version: `v0.1.8`; published successfully and awaiting runtime validation.
+- Highest priority: CI- and runtime-validate transactional uninstall before starting Update All orchestration
+- Current application version: `v0.1.10`; published and runtime-validated. Uninstall changes remain unreleased until their exact source head is CI-green.
 
 ## Latest commits
 
-- `6c75c40` — Clean package staging after commit
-- `6a10cae` — Clean package staging after successful installs
-- `c70ec64` — Make rollback retries idempotent
-- `5bf973e` — Test prepare phase leaves live addons untouched
-- `3305fb9` — Gate package installs against app replacement
-- `ab64793` — Commit installs with state-save rollback
-- `80146e3` — Prepare installs off-thread before live commit
-- `75e871d` — Wire addon install transaction tests
+- `9dd56e4` — Polish uninstall development controls
+- `f75f286` — Add transactional package uninstall UI
+- `c4c1864` — Test uninstall state clearing
+- `582b2a4` — Test transactional addon uninstall
+- `3203e25` — Clear package ownership after uninstall
+- `5ca70ee` — Add installed-state clear operation
+- `ef0ddd2` — Reuse install transactions for addon removal
+- `7a194fb` — Add removal transaction planning API
 
 ## Completed
 
@@ -349,9 +354,8 @@ P0 edge/failure paths not yet deliberately forced:
 - paths containing spaces;
 - non-system drive such as `D:\Games\WoW`.
 
-Deferred beyond the current transactional P2 install slice:
+Deferred beyond the current transactional P2 uninstall validation slice:
 
-- package removal transaction/UI;
 - Update All orchestration;
 - explicit adoption/replacement flow for pre-existing unmanaged addon roots;
 - crash-recovery journal/reconciliation after unexpected process or power loss during live commit;
@@ -430,9 +434,9 @@ Complete. A real `v0.1.0 -> v0.1.1` in-app self-update succeeded on Windows besi
 
 ## Exact next step
 
-1. Treat the single-package GitHub branch install/reinstall transaction as runtime-validated in `v0.1.10`.
-2. Implement real transactional package uninstall/removal for TocPilot-owned addon roots, distinct from the existing safe **Forget** action.
-3. Reuse the same ownership/transaction primitives rather than introducing a separate deletion path.
-4. Add deterministic tests for owned-root uninstall, shared/foreign ownership refusal, rollback on failure, and state-save rollback.
-5. After uninstall is validated, implement Update All orchestration over the same central single-package operations.
-6. Then simplify the temporary development UI toward Add Git Link + branch dropdown + automatic refresh/status + compact per-package actions.
+1. Confirm implementation commit `9dd56e4` (plus the uninstall test/state commits beneath it) passes the Windows x64 build and full CTest suite.
+2. If CI is green, bump the application to `v0.1.11` and update the automated release request; do not hand out an unvalidated CI artifact.
+3. Self-update the installed `v0.1.10` client to `v0.1.11`.
+4. Runtime-test **Uninstall** on a TocPilot-managed addon: owned addon roots disappear, unrelated addons remain untouched, the package row remains configured but becomes **Not installed**, and restart preserves that state.
+5. Use **Reinstall** on the same retained package record and confirm the addon returns cleanly.
+6. Only after that runtime gate passes, implement Update All orchestration over the same central single-package operations.
