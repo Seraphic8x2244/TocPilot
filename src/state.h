@@ -21,6 +21,7 @@ struct PackageRecord {
     std::wstring target = L"addons";
     std::wstring installedRevision;
     std::wstring latestRevision;
+    std::vector<std::wstring> installedFiles;
 
     // Preserve the complete package object so fields from newer versions are
     // not discarded when this version updates unrelated state.
@@ -56,6 +57,12 @@ bool SetPackageBranch(
 bool SetPackageLatestRevision(
     PackageRecord& package,
     std::wstring remoteSha,
+    std::wstring& error);
+
+bool SetPackageInstalledState(
+    PackageRecord& package,
+    std::wstring installedRevision,
+    std::vector<std::wstring> installedFiles,
     std::wstring& error);
 
 bool LoadOrCreateState(
