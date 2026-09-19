@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstdint>
+#include <filesystem>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -41,6 +43,19 @@ bool ResolveGitHubBranchHead(
     std::wstring_view repository,
     std::wstring_view branch,
     std::wstring& remoteSha,
+    std::wstring& error);
+
+bool BuildGitHubArchiveApiPath(
+    std::wstring_view repository,
+    std::wstring_view ref,
+    std::wstring& apiPath,
+    std::wstring& error);
+
+bool DownloadGitHubArchive(
+    std::wstring_view repository,
+    std::wstring_view ref,
+    const std::filesystem::path& destination,
+    std::uint64_t& downloadedBytes,
     std::wstring& error);
 
 } // namespace tp
