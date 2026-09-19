@@ -32,6 +32,7 @@ add_executable(TocPilot WIN32
     src/provider.cpp
     src/state.cpp
     src/update.cpp
+    src/update_all.cpp
 )
 
 target_compile_features(TocPilot PRIVATE cxx_std_20)
@@ -149,4 +150,17 @@ if(BUILD_TESTING)
     endif()
 
     add_test(NAME addon-install-transaction COMMAND TocPilotInstallTests)
+
+    add_executable(TocPilotUpdateAllTests
+        tests/update_all_tests.cpp
+        src/update_all.cpp
+    )
+    target_compile_features(TocPilotUpdateAllTests PRIVATE cxx_std_20)
+    target_include_directories(TocPilotUpdateAllTests PRIVATE src)
+
+    if(MSVC)
+        target_compile_options(TocPilotUpdateAllTests PRIVATE /W4 /permissive- /utf-8)
+    endif()
+
+    add_test(NAME update-all-orchestration COMMAND TocPilotUpdateAllTests)
 endif()
