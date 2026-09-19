@@ -9,7 +9,7 @@
 - Intended platform: Windows x64
 - Implementation: native C++20 / Win32 / CMake
 - Highest priority: implement and validate the first P2 GitHub branch-tracking slice without installing addon files
-- Current application version: `v0.1.5`; published successfully and awaiting runtime validation through the installed `v0.1.4` self-updater
+- Current application version: `v0.1.5`; published and runtime-validated successfully through the installed `v0.1.4` self-updater
 
 ## Latest commits
 
@@ -81,6 +81,7 @@
 - Main package rows display the selected branch under Source / Track and a short remote SHA under Latest; Installed remains empty until an install transaction exists.
 - GitLab source records remain persistent but branch browsing is intentionally deferred to P4.
 - Added deterministic GitHub repository/branch JSON parser CTests and extended the state round-trip test to verify branch/ref/remote-SHA persistence.
+- User runtime-validated `v0.1.5`: self-update from `v0.1.4` succeeded, the existing pfUI source loaded real GitHub branches, branch selection persisted the selected ref and remote SHA, the row survived restart, and `Interface\\AddOns` remained untouched.
 
 ## CI validation
 
@@ -294,10 +295,10 @@ Complete. A real `v0.1.0 -> v0.1.1` in-app self-update succeeded on Windows besi
 
 ## Exact next step
 
-1. Keep the user's installed `v0.1.4` and let TocPilot self-update normally to `v0.1.5`; do not manually replace the EXE.
-2. Select the existing pfUI row and click Set Branch.
-3. Confirm the GitHub lookup completes and shows the repository branches; pfUI currently reports `master` as its default branch, so an unconfigured record should initially select `master`.
-4. Save `master` (or another chosen branch) and confirm the row becomes `GitHub / <branch>`, Latest shows a seven-character remote SHA, Installed remains a dash, and Status is `Not installed`.
-5. Close/reopen TocPilot and confirm the branch and Latest SHA persist.
-6. Confirm no files/folders were created or modified under `Interface\\AddOns` by Set Branch.
-7. If this passes, record the runtime validation and continue P2 with tracked-branch Refresh/re-resolution before any archive download/install work.
+1. Add a distinct Refresh action for persisted GitHub branch packages; keep Set Branch available separately for branch changes.
+2. Refresh must query the selected branch's current remote head SHA and update only remote tracking metadata in `TocPilot.json`.
+3. Do not download archives, extract files, or modify `Interface\\AddOns`.
+4. Surface per-package refresh state/errors without converting a remote SHA into an installed revision.
+5. Add deterministic tests for tracked-branch SHA lookup/parsing/state update and keep all existing tests.
+6. Publish the next versioned self-update build only after Windows CI passes.
+7. Runtime gate: Refresh on pfUI should complete, preserve `Installed = —`, keep Status `Not installed`, update/preserve Latest appropriately, survive restart, and leave addon files untouched.
