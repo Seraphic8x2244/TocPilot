@@ -3,6 +3,7 @@
 #include <windows.h>
 
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <cmath>
 #include <cwctype>
@@ -565,6 +566,35 @@ bool GetStringMember(
         DecodeJsonString(json.substr(start, end - start), value);
 }
 
+bool GetNullableStringMember(
+    std::string_view json,
+    std::size_t objectStart,
+    std::size_t objectEnd,
+    std::string_view key,
+    std::wstring& value) {
+    std::size_t start = 0;
+    std::size_t end = 0;
+    if (!FindObjectMember(
+            json,
+            objectStart,
+            objectEnd,
+            key,
+            start,
+            end)) {
+        value.clear();
+        return true;
+    }
+
+    const std::string_view token =
+        json.substr(start, end - start);
+    if (token == "null") {
+        value.clear();
+        return true;
+    }
+
+    return DecodeJsonString(token, value);
+}
+
 bool ParseIntegerToken(
     std::string_view token,
     int& value) {
@@ -674,6 +704,53 @@ std::string EscapeJson(std::wstring_view value) {
     return output;
 }
 
+std::string JsonStringOrNull(std::wstring_view value) {
+    return value.empty() ? "null" : EscapeJson(value);
+}
+
+bool SetObjectMemberJson(
+    std::string& json,
+    std::string_view key,
+    std::string_view replacement) {
+    std::size_t objectStart = 0;
+    std::size_t objectEnd = 0;
+    if (!RootObjectRange(json, objectStart, objectEnd)) {
+        return false;
+    }
+
+    std::size_t valueStart = 0;
+    std::size_t valueEnd = 0;
+    if (FindObjectMember(
+            json,
+            objectStart,
+            objectEnd,
+            key,
+            valueStart,
+            valueEnd)) {
+        json.replace(
+            valueStart,
+            valueEnd - valueStart,
+            replacement);
+        return true;
+    }
+
+    const std::size_t close = objectEnd - 1;
+    std::size_t probe = objectStart + 1;
+    SkipWhitespace(json, probe);
+    const bool empty = probe == close;
+
+    std::string insertion;
+    if (!empty) {
+        insertion += ",";
+    }
+    insertion += "\"";
+    insertion += key;
+    insertion += "\":";
+    insertion += replacement;
+    json.insert(close, insertion);
+    return true;
+}
+
 std::string SerializePackage(const PackageRecord& package) {
     std::ostringstream stream;
     stream
@@ -683,13 +760,42 @@ std::string SerializePackage(const PackageRecord& package) {
         << "\"provider\":" << EscapeJson(package.provider) << ","
         << "\"repository\":" << EscapeJson(package.repository) << ","
         << "\"mode\":" << EscapeJson(package.mode) << ","
-        << "\"ref\":null,"
+        << "\"ref\":" << JsonStringOrNull(package.ref) << ","
         << "\"asset\":null,"
         << "\"target\":" << EscapeJson(package.target) << ","
-        << "\"installed_revision\":null,"
+        << "\"installed_revision\":"
+        << JsonStringOrNull(package.installedRevision) << ","
+        << "\"latest_revision\":"
+        << JsonStringOrNull(package.latestRevision) << ","
         << "\"installed_files\":[]"
         << "}";
     return stream.str();
+}
+
+std::string MergePackageJson(const PackageRecord& package) {
+    if (package.sourceJson.empty()) {
+        return SerializePackage(package);
+    }
+
+    std::string json = package.sourceJson;
+    const std::array<std::pair<std::string_view, std::string>, 8> values{{
+        {"id", EscapeJson(package.id)},
+        {"name", EscapeJson(package.name)},
+        {"provider", EscapeJson(package.provider)},
+        {"repository", EscapeJson(package.repository)},
+        {"mode", EscapeJson(package.mode)},
+        {"ref", JsonStringOrNull(package.ref)},
+        {"target", EscapeJson(package.target)},
+        {"latest_revision", JsonStringOrNull(package.latestRevision)}
+    }};
+
+    for (const auto& [key, value] : values) {
+        if (!SetObjectMemberJson(json, key, value)) {
+            return SerializePackage(package);
+        }
+    }
+
+    return json;
 }
 
 std::string IndentJsonObject(std::string_view json) {
@@ -719,9 +825,7 @@ std::string SerializePackages(const AppState& state) {
     stream << "[\n";
     for (std::size_t i = 0; i < state.packages.size(); ++i) {
         const auto& package = state.packages[i];
-        const std::string object = package.sourceJson.empty()
-            ? SerializePackage(package)
-            : package.sourceJson;
+        const std::string object = MergePackageJson(package);
 
         stream << IndentJsonObject(object);
         if (i + 1 != state.packages.size()) {
@@ -885,6 +989,29 @@ bool ParsePackages(
             error =
                 L"TocPilot.json contains a package record "
                 L"without the required id/name/provider/repository/mode fields.";
+            return false;
+        }
+
+        if (!GetNullableStringMember(
+                json,
+                objectStart,
+                objectEnd,
+                "ref",
+                package.ref) ||
+            !GetNullableStringMember(
+                json,
+                objectStart,
+                objectEnd,
+                "installed_revision",
+                package.installedRevision) ||
+            !GetNullableStringMember(
+                json,
+                objectStart,
+                objectEnd,
+                "latest_revision",
+                package.latestRevision)) {
+            error =
+                L"TocPilot.json contains an invalid package tracking field.";
             return false;
         }
 
@@ -1194,6 +1321,30 @@ bool AppendPackage(
     }
 
     state.packages.push_back(std::move(package));
+    return true;
+}
+
+bool SetPackageBranch(
+    PackageRecord& package,
+    std::wstring branch,
+    std::wstring remoteSha,
+    std::wstring& error) {
+    error.clear();
+
+    if (package.provider != L"github") {
+        error =
+            L"Branch selection is currently available for GitHub packages only.";
+        return false;
+    }
+    if (branch.empty() || remoteSha.empty()) {
+        error =
+            L"GitHub did not provide a valid branch and commit SHA.";
+        return false;
+    }
+
+    package.mode = L"branch";
+    package.ref = std::move(branch);
+    package.latestRevision = std::move(remoteSha);
     return true;
 }
 

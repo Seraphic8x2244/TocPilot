@@ -4,6 +4,8 @@ project(TocPilot VERSION 0.1.4 LANGUAGES CXX)
 
 add_executable(TocPilot WIN32
     src/add_package_dialog.cpp
+    src/branch_dialog.cpp
+    src/github_api.cpp
     src/main.cpp
     src/provider.cpp
     src/state.cpp
@@ -66,4 +68,24 @@ if(BUILD_TESTING)
     endif()
 
     add_test(NAME state-package-roundtrip COMMAND TocPilotStateTests)
+
+    add_executable(TocPilotGitHubApiTests
+        tests/github_api_tests.cpp
+        src/github_api.cpp
+    )
+    target_compile_features(TocPilotGitHubApiTests PRIVATE cxx_std_20)
+    target_compile_definitions(TocPilotGitHubApiTests PRIVATE
+        UNICODE
+        _UNICODE
+        WIN32_LEAN_AND_MEAN
+        NOMINMAX
+    )
+    target_include_directories(TocPilotGitHubApiTests PRIVATE src)
+    target_link_libraries(TocPilotGitHubApiTests PRIVATE winhttp)
+
+    if(MSVC)
+        target_compile_options(TocPilotGitHubApiTests PRIVATE /W4 /permissive- /utf-8)
+    endif()
+
+    add_test(NAME github-api-parsing COMMAND TocPilotGitHubApiTests)
 endif()

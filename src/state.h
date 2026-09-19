@@ -17,7 +17,10 @@ struct PackageRecord {
     std::wstring provider;
     std::wstring repository;
     std::wstring mode = L"unconfigured";
+    std::wstring ref;
     std::wstring target = L"addons";
+    std::wstring installedRevision;
+    std::wstring latestRevision;
 
     // Preserve the complete package object so fields from newer versions are
     // not discarded when this version updates unrelated state.
@@ -42,6 +45,12 @@ PackageRecord MakeRepositoryPackage(
 bool AppendPackage(
     AppState& state,
     PackageRecord package,
+    std::wstring& error);
+
+bool SetPackageBranch(
+    PackageRecord& package,
+    std::wstring branch,
+    std::wstring remoteSha,
     std::wstring& error);
 
 bool LoadOrCreateState(

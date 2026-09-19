@@ -6,6 +6,7 @@ on:
       - main
       - p0-self-update
       - p1-state-ui
+      - p2-github-branches
   pull_request:
 
 jobs:

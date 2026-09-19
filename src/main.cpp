@@ -1,4 +1,5 @@
 #include "add_package_dialog.h"
+#include "branch_dialog.h"
 #include "state.h"
 #include "update.h"
 #include "version.h"
@@ -120,13 +121,14 @@ std::wstring PackageHintText() {
 
     if (g_state.packages.empty()) {
         return
-            L"No managed packages yet. Add Package saves a repository "
-            L"source; branch/release setup and installation come next.";
+            L"No managed packages yet. Add Package saves a repository source; "
+            L"no addon files are installed.";
     }
 
     return
         std::to_wstring(g_state.packages.size()) +
-        L" package source record(s) saved. Installation is not enabled yet.";
+        L" package record(s). Select a GitHub row and Set Branch to save "
+        L"remote tracking; installation remains disabled.";
 }
 
 BOOL CALLBACK ApplyFontToChild(HWND child, LPARAM fontValue) {
@@ -388,9 +390,43 @@ void PopulatePackageList() {
             continue;
         }
 
+        const bool branchMode =
+            package.mode == L"branch" &&
+            !package.ref.empty();
+
         const std::wstring source =
             ProviderLabel(package.provider) +
-            L" / source only";
+            (branchMode
+                ? L" / " + package.ref
+                : L" / source only");
+
+        const std::wstring installed =
+            package.installedRevision.empty()
+                ? L"—"
+                : package.installedRevision.substr(
+                    0,
+                    std::min<std::size_t>(
+                        7,
+                        package.installedRevision.size()));
+
+        const std::wstring latest =
+            package.latestRevision.empty()
+                ? L"—"
+                : package.latestRevision.substr(
+                    0,
+                    std::min<std::size_t>(
+                        7,
+                        package.latestRevision.size()));
+
+        const wchar_t* status = branchMode
+            ? (package.installedRevision.empty()
+                ? L"Not installed"
+                : (package.installedRevision ==
+                       package.latestRevision
+                    ? L"Current"
+                    : L"Update available"))
+            : L"Not configured";
+
         ListView_SetItemText(
             g_packageList,
             row,
@@ -400,17 +436,25 @@ void PopulatePackageList() {
             g_packageList,
             row,
             2,
-            const_cast<LPWSTR>(L"—"));
+            const_cast<LPWSTR>(installed.c_str()));
         ListView_SetItemText(
             g_packageList,
             row,
             3,
-            const_cast<LPWSTR>(L"—"));
+            const_cast<LPWSTR>(latest.c_str()));
         ListView_SetItemText(
             g_packageList,
             row,
             4,
-            const_cast<LPWSTR>(L"Not configured"));
+            const_cast<LPWSTR>(status));
+    }
+
+    if (!g_state.packages.empty()) {
+        ListView_SetItemState(
+            g_packageList,
+            0,
+            LVIS_SELECTED | LVIS_FOCUSED,
+            LVIS_SELECTED | LVIS_FOCUSED);
     }
 }
 
@@ -422,6 +466,15 @@ void RefreshPackageStateUi() {
             PackageHintText().c_str());
     }
     PopulatePackageList();
+
+    if (g_refreshPackagesButton) {
+        EnableWindow(
+            g_refreshPackagesButton,
+            g_stateReady &&
+                    !g_state.packages.empty()
+                ? TRUE
+                : FALSE);
+    }
 }
 
 void StartUpdateCheck(HWND hwnd) {
@@ -684,7 +737,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
         g_refreshPackagesButton = CreateWindowExW(
             0,
             L"BUTTON",
-            L"Refresh",
+            L"Set Branch",
             WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON,
             135,
             145,
@@ -710,7 +763,12 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             nullptr);
 
         EnableWindow(g_updateAllButton, FALSE);
-        EnableWindow(g_refreshPackagesButton, FALSE);
+        EnableWindow(
+            g_refreshPackagesButton,
+            g_stateReady &&
+                    !g_state.packages.empty()
+                ? TRUE
+                : FALSE);
         EnableWindow(g_addPackageButton, g_stateReady ? TRUE : FALSE);
 
         g_updateButton = CreateWindowExW(
@@ -837,6 +895,69 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             } else {
                 StartUpdateCheck(hwnd);
             }
+            return 0;
+        }
+
+        if (LOWORD(wParam) == IDC_REFRESH_PACKAGES &&
+            HIWORD(wParam) == BN_CLICKED) {
+            const int row = ListView_GetNextItem(
+                g_packageList,
+                -1,
+                LVNI_SELECTED);
+
+            if (row < 0 ||
+                row >= static_cast<int>(
+                    g_state.packages.size())) {
+                MessageBoxW(
+                    hwnd,
+                    L"Select a package row first.",
+                    L"TocPilot - Set Branch",
+                    MB_OK | MB_ICONINFORMATION);
+                return 0;
+            }
+
+            const auto index =
+                static_cast<std::size_t>(row);
+
+            tp::BranchSelection selection;
+            if (!tp::ShowBranchDialog(
+                    hwnd,
+                    g_state.packages[index],
+                    selection)) {
+                return 0;
+            }
+
+            tp::AppState updatedState = g_state;
+            std::wstring error;
+
+            if (!tp::SetPackageBranch(
+                    updatedState.packages[index],
+                    std::move(selection.name),
+                    std::move(selection.sha),
+                    error) ||
+                !tp::SaveState(
+                    g_root,
+                    updatedState,
+                    error)) {
+                SetIndicator(
+                    g_stateStatus,
+                    L"State: Save failed - " +
+                        error);
+
+                MessageBoxW(
+                    hwnd,
+                    error.c_str(),
+                    L"TocPilot - Set Branch",
+                    MB_OK | MB_ICONERROR);
+                return 0;
+            }
+
+            g_state =
+                std::move(updatedState);
+            g_stateCreated = false;
+            g_stateError.clear();
+
+            RefreshPackageStateUi();
             return 0;
         }
 

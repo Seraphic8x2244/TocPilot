@@ -100,6 +100,15 @@ void TestCreateAddRoundTrip(
         return;
     }
 
+    if (!tp::SetPackageBranch(
+            state.packages[0],
+            L"master",
+            L"0123456789abcdef0123456789abcdef01234567",
+            error)) {
+        Fail("SetPackageBranch failed");
+        return;
+    }
+
     state.settings.textScale = 1.25;
     if (!tp::SaveState(root, state, error)) {
         Fail("SaveState failed");
@@ -122,7 +131,10 @@ void TestCreateAddRoundTrip(
         loaded.packages[0].name != L"pfUI" ||
         loaded.packages[0].provider != L"github" ||
         loaded.packages[0].repository != L"Shagu/pfUI" ||
-        loaded.packages[0].mode != L"unconfigured" ||
+        loaded.packages[0].mode != L"branch" ||
+        loaded.packages[0].ref != L"master" ||
+        loaded.packages[0].latestRevision !=
+            L"0123456789abcdef0123456789abcdef01234567" ||
         loaded.settings.textScale != 1.25) {
         Fail("round-trip state values did not match");
     }

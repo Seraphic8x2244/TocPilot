@@ -3,12 +3,12 @@
 ## Current state
 
 - Repository: `Seraphic8x2244/TocPilot`
-- Branch: `p1-state-ui`
-- Product stage: P0 self-update validated end-to-end; P1 state/UI foundation in progress
+- Branch: `p2-github-branches`
+- Product stage: P0 self-update and P1 core state/UI/provider foundation validated; P2 GitHub branch tracking in progress
 - License: MIT
 - Intended platform: Windows x64
 - Implementation: native C++20 / Win32 / CMake
-- Highest priority: publish and runtime-validate `v0.1.4` through TocPilot self-update; this build introduces persistent repository package sources
+- Highest priority: implement and validate the first P2 GitHub branch-tracking slice without installing addon files
 - Current application version: `v0.1.4`; published and runtime-validated successfully through the installed `v0.1.3` self-updater
 
 ## Latest commits
@@ -271,9 +271,8 @@ Complete. A real `v0.1.0 -> v0.1.1` in-app self-update succeeded on Windows besi
 
 ## Exact next step
 
-1. Begin P2 with GitHub branch discovery for persisted GitHub repository sources; do not install or modify addon files yet.
-2. Add a provider/API path that resolves repository metadata, lists branches, and captures each branch head commit SHA.
-3. Extend the package definition flow so a saved GitHub source can select a branch and persist `mode: branch`, `ref`, and the resolved remote SHA.
-4. Render branch tracking and the resolved SHA/status in the main package table.
-5. Keep Update All/Refresh/install/remove file actions disabled until the remote tracking slice is runtime-validated.
-6. Add deterministic tests around GitHub API response parsing/state persistence; use Windows CI before publishing the next self-update build.
+1. Build the first P2 slice on `p2-github-branches`: GitHub repository metadata lookup, branch listing, selected branch persistence, and remote head SHA persistence.
+2. Keep all addon download/extraction/install behaviour disabled.
+3. CI must pass provider URL, state/package round-trip, and deterministic GitHub API parsing tests.
+4. After CI passes, prepare the next versioned self-update build and runtime-test it against the already persisted pfUI package.
+5. Runtime gate: Set Branch should load pfUI branches, save the selected branch, show its short remote SHA in Latest, survive restart, and still leave `Interface\AddOns` untouched.
