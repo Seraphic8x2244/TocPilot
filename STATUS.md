@@ -4,7 +4,7 @@
 
 - Repository: `Seraphic8x2244/TocPilot`
 - Branch: `p0-self-update`
-- Product stage: P0 self-update bootstrap implemented; v0.1.0 local/release lookup path validated; v0.1.1 self-update proof next
+- Product stage: P0 self-update bootstrap implemented; v0.1.0 local/release lookup path validated; release publishing automation being added before v0.1.1 self-update proof
 - License: MIT
 - Intended platform: Windows x64
 - Implementation: native C++20 / Win32 / CMake
@@ -80,6 +80,10 @@ This validates compilation and CI packaging only. It does not validate runtime u
 - The permanent release workflow now uploads to an existing release when present and can create one when absent.
 - A one-off repair workflow checked out the exact `v0.1.0` tag and successfully attached `TocPilot.exe` plus `TocPilot.exe.sha256` to the existing release.
 - The one-off repair workflow was then removed.
+
+## Release automation direction
+
+Routine releases should not require manually drafting a GitHub release. The repository will use a small `.github/release-version` request file. Changing it to a new validated version will trigger Actions to create the matching tag/release and publish the direct EXE plus checksum. Manual dispatch remains a fallback once the workflow is on the default branch.
 
 ## Untested / remaining P0 work
 
@@ -184,7 +188,8 @@ Implementation is present and compiles. P0 is not complete until a real `v0.1.0 
 
 ## Exact next step
 
-1. Publish/tag `v0.1.1` from the current `p0-self-update` branch.
-2. Verify the Release workflow attaches `TocPilot.exe` plus `TocPilot.exe.sha256` automatically.
-3. Keep the existing local `v0.1.0` copy in the WoW folder, let it detect `v0.1.1`, click `Update now`, and verify replacement/restart/cleanup.
-4. Do not start P1 until that end-to-end replacement/restart test succeeds.
+1. Replace the manual tag/release step with a controlled release-request workflow triggered by `.github/release-version`.
+2. Set the release request to `v0.1.1`; Actions must validate the source version, create the tag if absent, build, create/update the release, and attach `TocPilot.exe` plus `TocPilot.exe.sha256`.
+3. Verify the published `v0.1.1` assets.
+4. Keep the existing local `v0.1.0` copy in the WoW folder, let it detect `v0.1.1`, click `Update now`, and verify replacement/restart/cleanup.
+5. Do not start P1 until that end-to-end replacement/restart test succeeds.
