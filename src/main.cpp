@@ -1495,6 +1495,55 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             return 0;
         }
 
+        if (LOWORD(wParam) == IDC_INSTALL_PACKAGE &&
+            HIWORD(wParam) == BN_CLICKED) {
+            const int row = SelectedPackageRow();
+
+            if (row >= 0 &&
+                row < static_cast<int>(
+                    g_state.packages.size())) {
+                const auto index =
+                    static_cast<std::size_t>(row);
+                const auto& package =
+                    g_state.packages[index];
+
+                std::wstring prompt;
+                if (package.installedRevision.empty()) {
+                    prompt =
+                        L"Install " +
+                        package.name +
+                        L" from " +
+                        package.ref +
+                        L"?";
+                } else {
+                    prompt =
+                        L"Update/reinstall " +
+                        package.name +
+                        L" from " +
+                        package.ref +
+                        L"?";
+                }
+
+                prompt +=
+                    L"\r\n\r\nTocPilot will fully stage and validate the package first, "
+                    L"then replace only addon roots owned by this package. Existing "
+                    L"unowned addon folders will not be overwritten.";
+
+                if (MessageBoxW(
+                        hwnd,
+                        prompt.c_str(),
+                        L"TocPilot - Install Package",
+                        MB_YESNO |
+                            MB_ICONQUESTION |
+                            MB_DEFBUTTON2) == IDYES) {
+                    StartPackageInstall(
+                        hwnd,
+                        index);
+                }
+            }
+            return 0;
+        }
+
         if (LOWORD(wParam) == IDC_SET_BRANCH &&
             HIWORD(wParam) == BN_CLICKED) {
             const int row = SelectedPackageRow();
