@@ -9,7 +9,7 @@
 - Intended platform: Windows x64
 - Implementation: native C++20 / Win32 / CMake
 - Highest priority: publish and validate `v0.1.3` through TocPilot self-update, then continue P1 package-record/add-package work
-- Current application version: `v0.1.3`; published successfully and awaiting user runtime validation through the installed `v0.1.2` self-updater
+- Current application version: `v0.1.3`; published and runtime-validated successfully through the installed `v0.1.2` self-updater
 
 ## Latest commits
 
@@ -64,6 +64,7 @@
 - URL normalization accepts normal HTTPS URLs, scheme-less URLs, common SSH/scp-style clone URLs, `.git` suffixes, GitHub repository subpages, and GitLab nested groups/`/-/` routes.
 - Unsupported hosts, incomplete repository paths, and unsafe path segments are rejected with a user-facing reason.
 - Added a minimal Add Package source-check dialog. It validates and normalizes a repository URL but deliberately does not install or save a package yet.
+- User runtime-validated `v0.1.3`: self-update from `v0.1.2` succeeded, GitHub and GitLab repository normalization behaved as expected, unsupported hosts were rejected cleanly, and existing state/text-size UI remained healthy.
 - Added automated provider URL tests through CTest and required them in both normal Windows CI and release CI.
 
 ## CI validation
@@ -252,9 +253,9 @@ Complete. A real `v0.1.0 -> v0.1.1` in-app self-update succeeded on Windows besi
 
 ## Exact next step
 
-1. Keep the user's installed `v0.1.2` and let TocPilot detect `v0.1.3`; use `Update app` rather than manually replacing the EXE.
-2. Confirm TocPilot closes, replaces itself, reopens as `v0.1.3`, and then reports the app release as current.
-3. Click `Add Package` and test `https://github.com/Shagu/pfUI`; it should report GitHub, repository `Shagu/pfUI`, and normalized URL `https://github.com/Shagu/pfUI` without installing or saving anything.
-4. Repeat with `https://gitlab.com/gitlab-org/gitlab`; then try an unsupported URL such as `https://bitbucket.org/example/example` and confirm it is rejected cleanly.
-5. Also recheck that the package table/state UI appears and that the Text size selection still persists across a close/reopen.
-6. If this smoke test passes, continue P1 with real package-record parsing/writing and turn Add Package from source validation into the first persistent package-definition flow.
+1. Implement schema-1 package-record parsing/writing instead of only preserving/counting the raw packages array.
+2. Extend Add Package so a normalized GitHub/GitLab repository can be saved as a persistent package definition without installing files yet.
+3. Render persisted package records in the main ListView after save/restart.
+4. Keep package install/update/remove actions disabled until branch/release selection and install transactions exist.
+5. Add automated state/package round-trip tests and retain provider URL tests in CI.
+6. Publish the next user-testable version through self-update only after Windows CI passes.
