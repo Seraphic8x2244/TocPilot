@@ -3,8 +3,8 @@
 ## Current state
 
 - Repository: `Seraphic8x2244/TocPilot`
-- Branch: `p0-self-update`
-- Product stage: P0 self-update validated end-to-end; ready to begin P1
+- Branch: `p1-state-ui`
+- Product stage: P0 self-update validated end-to-end; P1 state/UI foundation in progress
 - License: MIT
 - Intended platform: Windows x64
 - Implementation: native C++20 / Win32 / CMake
@@ -13,6 +13,7 @@
 
 ## Latest commits
 
+- `ba43b98` — Mark P0 self-update complete
 - `30a441b` — Request v0.1.1 release
 - `05c41f6` — Automate release creation from version request
 - `7181942` — Plan automated release requests
@@ -196,6 +197,7 @@ Complete. A real `v0.1.0 -> v0.1.1` in-app self-update succeeded on Windows besi
 
 ## Exact next step
 
-1. Treat P0 self-update as complete.
-2. Begin P1: portable local state (`TocPilot.json`), package list, text-size preference, and provider/URL parsing.
-3. Preserve the proven self-update path unchanged while P1 functionality is added.
+1. Add a small native state module for versioned `TocPilot.json` with atomic writes and sensible defaults.
+2. Add persisted `text_scale` and an empty `packages` array without changing the proven self-update path.
+3. Replace the P0-only status layout with the first package-list table foundation while retaining the updater status area.
+4. Add provider/URL normalization after the state/UI slice compiles and smoke-tests.
