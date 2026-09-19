@@ -3,6 +3,7 @@
 ## Continuation checkpoint — 2026-09-19
 
 - Active branch: `p2-github-branches`.
+- Active work slice: implementing transactional uninstall/removal for TocPilot-owned addon roots, preserving the separate non-destructive Forget action and reusing the existing install transaction rollback machinery.
 - Current application version: `v0.1.10`; published and runtime-validated for unmanaged-collision refusal plus successful transactional install/restart/reinstall. `v0.1.8` exposed the GitHub wrapper-layout bug fixed in `v0.1.9`, and `v0.1.9` exposed missing user-facing install failure dialogs fixed in `v0.1.10`.
 - Latest live-install implementation head: `6c75c40` — Clean package staging after commit.
 - Key live-install commits: `11aa63d` (installed revision/file ownership persistence), `80146e3` (off-thread prepare/live commit split), `974bea7` + `5bf973e` (transaction/rollback and prepare-only tests), `ab64793` (UI commit + state-save rollback), and `6c75c40` (post-success staging cleanup).
