@@ -2,12 +2,15 @@ name: Release
 
 on:
   push:
-    tags:
-      - "v*"
+    branches:
+      - "main"
+      - "p0-self-update"
+    paths:
+      - ".github/release-version"
   workflow_dispatch:
     inputs:
       tag:
-        description: "Release tag to build/upload, for example v0.1.0"
+        description: "Release tag to publish, for example v0.1.1"
         required: true
         type: string
 
@@ -17,14 +20,46 @@ permissions:
 jobs:
   windows-x64-release:
     runs-on: windows-latest
-    env:
-      RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
 
     steps:
-      - name: Checkout release tag
+      - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: ${{ env.RELEASE_TAG }}
+          fetch-depth: 0
+
+      - name: Resolve release tag
+        id: release
+        shell: pwsh
+        run: |
+          if ("${{ github.event_name }}" -eq "workflow_dispatch") {
+            $tag = "${{ inputs.tag }}"
+          } else {
+            $tag = (Get-Content ".github/release-version" -Raw).Trim()
+          }
+
+          if ($tag -notmatch '^v\d+\.\d+\.\d+$') {
+            throw "Invalid release tag: $tag"
+          }
+
+          "tag=$tag" >> $env:GITHUB_OUTPUT
+
+      - name: Validate source version
+        shell: pwsh
+        run: |
+          $tag = "${{ steps.release.outputs.tag }}"
+          $version = $tag.Substring(1)
+          $cmake = Get-Content "CMakeLists.txt" -Raw
+          $header = Get-Content "src/version.h" -Raw
+          $expectedCmake = "project(TocPilot VERSION $version LANGUAGES CXX)"
+          $expectedTag = '#define TOCPILOT_VERSION_TAG_W L"' + $tag + '"'
+
+          if (-not $cmake.Contains($expectedCmake)) {
+            throw "CMake version does not match requested release $tag"
+          }
+
+          if (-not $header.Contains($expectedTag)) {
+            throw "version.h does not match requested release $tag"
+          }
 
       - name: Configure
         run: cmake -S . -B build -A x64
@@ -39,22 +74,44 @@ jobs:
           $hash = (Get-FileHash -Algorithm SHA256 $exe).Hash.ToLowerInvariant()
           "$hash  TocPilot.exe" | Set-Content -NoNewline -Encoding ascii "build/Release/TocPilot.exe.sha256"
 
+      - name: Create or verify tag
+        shell: pwsh
+        run: |
+          $tag = "${{ steps.release.outputs.tag }}"
+          git fetch --tags --force
+          $existing = git rev-list -n 1 $tag 2>$null
+
+          if ($LASTEXITCODE -eq 0 -and $existing) {
+            if ($existing.Trim() -ne $env:GITHUB_SHA) {
+              throw "Tag $tag already points to $existing instead of $env:GITHUB_SHA"
+            }
+          } else {
+            git tag $tag $env:GITHUB_SHA
+            git push origin "refs/tags/$tag"
+            if ($LASTEXITCODE -ne 0) {
+              exit $LASTEXITCODE
+            }
+          }
+
       - name: Publish release assets
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release view "$env:RELEASE_TAG" *> $null
+          $tag = "${{ steps.release.outputs.tag }}"
+          gh release view "$tag" *> $null
+
           if ($LASTEXITCODE -eq 0) {
-            gh release upload "$env:RELEASE_TAG" `
+            gh release upload "$tag" `
               "build/Release/TocPilot.exe" `
               "build/Release/TocPilot.exe.sha256" `
               --clobber
           } else {
-            gh release create "$env:RELEASE_TAG" `
+            gh release create "$tag" `
               "build/Release/TocPilot.exe" `
               "build/Release/TocPilot.exe.sha256" `
-              --title "$env:RELEASE_TAG" `
+              --target "$env:GITHUB_SHA" `
+              --title "$tag" `
               --generate-notes
           }
 
