@@ -1,9 +1,14 @@
+#include "state.h"
 #include "update.h"
 #include "version.h"
 
 #include <windows.h>
+#include <commctrl.h>
 #include <shellapi.h>
 
+#include <algorithm>
+#include <array>
+#include <cmath>
 #include <cwchar>
 #include <filesystem>
 #include <memory>
@@ -22,12 +27,52 @@ constexpr int IDC_UPDATE = 1001;
 constexpr int IDC_WOW_STATUS = 1002;
 constexpr int IDC_GITHUB_STATUS = 1003;
 constexpr int IDC_RELEASE_STATUS = 1004;
+constexpr int IDC_STATE_STATUS = 1005;
+constexpr int IDC_PACKAGE_LIST = 1006;
+constexpr int IDC_TEXT_SCALE = 1007;
+constexpr int IDC_UPDATE_ALL = 1008;
+constexpr int IDC_REFRESH_PACKAGES = 1009;
+constexpr int IDC_ADD_PACKAGE = 1010;
+
+constexpr std::array<double, 5> kTextScales{
+    0.90,
+    1.00,
+    1.10,
+    1.25,
+    1.50
+};
+
+constexpr std::array<const wchar_t*, 5> kTextScaleLabels{
+    L"90%",
+    L"100%",
+    L"110%",
+    L"125%",
+    L"150%"
+};
 
 HWND g_wowStatus = nullptr;
 HWND g_githubStatus = nullptr;
 HWND g_releaseStatus = nullptr;
+HWND g_stateStatus = nullptr;
 HWND g_updateButton = nullptr;
+HWND g_updateAllButton = nullptr;
+HWND g_refreshPackagesButton = nullptr;
+HWND g_addPackageButton = nullptr;
+HWND g_packageList = nullptr;
+HWND g_packageHint = nullptr;
+HWND g_textScaleLabel = nullptr;
+HWND g_textScaleCombo = nullptr;
+HWND g_rootLabel = nullptr;
+HWND g_versionLabel = nullptr;
+
+HFONT g_uiFont = nullptr;
+
 tp::ReleaseInfo g_release;
+tp::AppState g_state;
+std::filesystem::path g_root;
+bool g_stateReady = false;
+bool g_stateCreated = false;
+std::wstring g_stateError;
 
 struct CheckResult {
     bool ok = false;
@@ -48,9 +93,266 @@ void SetIndicator(HWND control, const std::wstring& text) {
     }
 }
 
+std::wstring StateStatusText() {
+    if (!g_stateReady) {
+        return L"State: Error - " + g_stateError;
+    }
+
+    std::wstring text = L"State: TocPilot.json ready";
+    if (g_stateCreated) {
+        text += L" (created)";
+    }
+    text += L" - ";
+    text += std::to_wstring(g_state.packageCount);
+    text += g_state.packageCount == 1 ? L" package record" : L" package records";
+    return text;
+}
+
+std::wstring PackageHintText() {
+    if (!g_stateReady) {
+        return L"Package state is read-only until TocPilot.json is fixed.";
+    }
+
+    if (g_state.packageCount == 0) {
+        return L"No managed packages yet. The package engine is the next P1 step.";
+    }
+
+    return
+        std::to_wstring(g_state.packageCount) +
+        L" package records are stored; row parsing is not enabled in this first P1 slice.";
+}
+
+BOOL CALLBACK ApplyFontToChild(HWND child, LPARAM fontValue) {
+    SendMessageW(
+        child,
+        WM_SETFONT,
+        static_cast<WPARAM>(fontValue),
+        TRUE);
+    return TRUE;
+}
+
+void ApplyUiFont(HWND hwnd) {
+    HDC dc = GetDC(hwnd);
+    const int dpi = dc ? GetDeviceCaps(dc, LOGPIXELSY) : 96;
+    if (dc) {
+        ReleaseDC(hwnd, dc);
+    }
+
+    const double scale = g_stateReady
+        ? g_state.settings.textScale
+        : 1.0;
+
+    const int pointTimes100 =
+        static_cast<int>(std::lround(1000.0 * scale));
+    const int height = -MulDiv(
+        pointTimes100,
+        dpi,
+        72 * 100);
+
+    HFONT font = CreateFontW(
+        height,
+        0,
+        0,
+        0,
+        FW_NORMAL,
+        FALSE,
+        FALSE,
+        FALSE,
+        DEFAULT_CHARSET,
+        OUT_DEFAULT_PRECIS,
+        CLIP_DEFAULT_PRECIS,
+        CLEARTYPE_QUALITY,
+        DEFAULT_PITCH | FF_DONTCARE,
+        L"Segoe UI");
+
+    if (!font) {
+        return;
+    }
+
+    SendMessageW(hwnd, WM_SETFONT, reinterpret_cast<WPARAM>(font), TRUE);
+    EnumChildWindows(
+        hwnd,
+        ApplyFontToChild,
+        reinterpret_cast<LPARAM>(font));
+
+    if (g_uiFont) {
+        DeleteObject(g_uiFont);
+    }
+    g_uiFont = font;
+}
+
+void SetTextScaleSelection() {
+    if (!g_textScaleCombo) {
+        return;
+    }
+
+    const double current = g_stateReady
+        ? g_state.settings.textScale
+        : 1.0;
+
+    int bestIndex = 0;
+    double bestDistance = std::abs(current - kTextScales[0]);
+
+    for (int index = 1;
+         index < static_cast<int>(kTextScales.size());
+         ++index) {
+        const double distance =
+            std::abs(current - kTextScales[static_cast<std::size_t>(index)]);
+        if (distance < bestDistance) {
+            bestDistance = distance;
+            bestIndex = index;
+        }
+    }
+
+    ComboBox_SetCurSel(g_textScaleCombo, bestIndex);
+}
+
+void ResizeListColumns() {
+    if (!g_packageList) {
+        return;
+    }
+
+    RECT rect{};
+    GetClientRect(g_packageList, &rect);
+    const int width = std::max(720, rect.right - rect.left - 4);
+
+    const int nameWidth = 180;
+    const int sourceWidth = 250;
+    const int installedWidth = 115;
+    const int latestWidth = 115;
+    const int statusWidth = std::max(
+        120,
+        width - nameWidth - sourceWidth - installedWidth - latestWidth);
+
+    ListView_SetColumnWidth(g_packageList, 0, nameWidth);
+    ListView_SetColumnWidth(g_packageList, 1, sourceWidth);
+    ListView_SetColumnWidth(g_packageList, 2, installedWidth);
+    ListView_SetColumnWidth(g_packageList, 3, latestWidth);
+    ListView_SetColumnWidth(g_packageList, 4, statusWidth);
+}
+
+void LayoutControls(HWND hwnd) {
+    RECT client{};
+    GetClientRect(hwnd, &client);
+
+    const int width = client.right - client.left;
+    const int height = client.bottom - client.top;
+    const int contentWidth = std::max(720, width - 40);
+
+    if (g_rootLabel) {
+        MoveWindow(g_rootLabel, 20, 48, contentWidth, 22, TRUE);
+    }
+
+    if (g_wowStatus) {
+        MoveWindow(g_wowStatus, 20, 80, 205, 24, TRUE);
+    }
+    if (g_githubStatus) {
+        MoveWindow(g_githubStatus, 235, 80, 220, 24, TRUE);
+    }
+    if (g_releaseStatus) {
+        MoveWindow(
+            g_releaseStatus,
+            465,
+            80,
+            std::max(260, width - 485),
+            24,
+            TRUE);
+    }
+
+    if (g_stateStatus) {
+        MoveWindow(g_stateStatus, 20, 108, contentWidth, 24, TRUE);
+    }
+
+    int x = 20;
+    const int buttonY = 145;
+
+    if (g_updateAllButton) {
+        MoveWindow(g_updateAllButton, x, buttonY, 105, 32, TRUE);
+        x += 115;
+    }
+    if (g_refreshPackagesButton) {
+        MoveWindow(g_refreshPackagesButton, x, buttonY, 120, 32, TRUE);
+        x += 130;
+    }
+    if (g_addPackageButton) {
+        MoveWindow(g_addPackageButton, x, buttonY, 115, 32, TRUE);
+        x += 125;
+    }
+    if (g_updateButton) {
+        MoveWindow(g_updateButton, x, buttonY, 150, 32, TRUE);
+    }
+
+    if (g_textScaleLabel) {
+        MoveWindow(
+            g_textScaleLabel,
+            std::max(620, width - 205),
+            151,
+            70,
+            22,
+            TRUE);
+    }
+    if (g_textScaleCombo) {
+        MoveWindow(
+            g_textScaleCombo,
+            std::max(690, width - 130),
+            145,
+            110,
+            180,
+            TRUE);
+    }
+
+    if (g_packageHint) {
+        MoveWindow(g_packageHint, 20, 188, contentWidth, 22, TRUE);
+    }
+
+    const int listTop = 215;
+    const int listBottomPadding = 24;
+    const int listHeight = std::max(
+        190,
+        height - listTop - listBottomPadding);
+
+    if (g_packageList) {
+        MoveWindow(
+            g_packageList,
+            20,
+            listTop,
+            contentWidth,
+            listHeight,
+            TRUE);
+        ResizeListColumns();
+    }
+}
+
+void AddPackageListColumns() {
+    struct ColumnSpec {
+        const wchar_t* name;
+        int width;
+    };
+
+    constexpr std::array<ColumnSpec, 5> columns{{
+        {L"Name", 180},
+        {L"Source / Track", 250},
+        {L"Installed", 115},
+        {L"Latest", 115},
+        {L"Status", 140}
+    }};
+
+    for (int index = 0;
+         index < static_cast<int>(columns.size());
+         ++index) {
+        LVCOLUMNW column{};
+        column.mask = LVCF_TEXT | LVCF_WIDTH | LVCF_SUBITEM;
+        column.pszText = const_cast<LPWSTR>(
+            columns[static_cast<std::size_t>(index)].name);
+        column.cx = columns[static_cast<std::size_t>(index)].width;
+        column.iSubItem = index;
+        ListView_InsertColumn(g_packageList, index, &column);
+    }
+}
+
 void StartUpdateCheck(HWND hwnd) {
     EnableWindow(g_updateButton, FALSE);
-    SetWindowTextW(g_updateButton, L"Checking...");
+    SetWindowTextW(g_updateButton, L"Checking app...");
     SetIndicator(g_githubStatus, L"GitHub Comms: Checking...");
     SetIndicator(g_releaseStatus, L"Release: Checking...");
 
@@ -74,7 +376,7 @@ void StartUpdateCheck(HWND hwnd) {
 
 void StartUpdate(HWND hwnd) {
     EnableWindow(g_updateButton, FALSE);
-    SetWindowTextW(g_updateButton, L"Updating...");
+    SetWindowTextW(g_updateButton, L"Updating app...");
     SetIndicator(g_releaseStatus, L"Release: Downloading and verifying...");
 
     const auto target = tp::ExecutablePath();
@@ -141,6 +443,12 @@ LRESULT HandleStatusColour(WPARAM wParam, LPARAM lParam) {
         } else {
             colour = GetSysColor(COLOR_GRAYTEXT);
         }
+    } else if (id == IDC_STATE_STATUS) {
+        if (text.find(L"ready") != std::wstring::npos) {
+            colour = RGB(0, 128, 0);
+        } else {
+            colour = RGB(180, 0, 0);
+        }
     } else {
         return 0;
     }
@@ -151,19 +459,46 @@ LRESULT HandleStatusColour(WPARAM wParam, LPARAM lParam) {
     return reinterpret_cast<LRESULT>(GetSysColorBrush(COLOR_WINDOW));
 }
 
+void HandleTextScaleChange(HWND hwnd) {
+    if (!g_stateReady || !g_textScaleCombo) {
+        return;
+    }
+
+    const int selection = ComboBox_GetCurSel(g_textScaleCombo);
+    if (selection < 0 ||
+        selection >= static_cast<int>(kTextScales.size())) {
+        return;
+    }
+
+    g_state.settings.textScale =
+        kTextScales[static_cast<std::size_t>(selection)];
+
+    std::wstring error;
+    if (!tp::SaveState(g_root, g_state, error)) {
+        g_stateError = error;
+        SetIndicator(
+            g_stateStatus,
+            L"State: Save failed - " + error);
+        return;
+    }
+
+    g_stateCreated = false;
+    SetIndicator(g_stateStatus, StateStatusText());
+    ApplyUiFont(hwnd);
+    LayoutControls(hwnd);
+}
+
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) {
     switch (message) {
     case WM_CREATE: {
-        const auto root = tp::ExecutablePath().parent_path();
-
         CreateWindowExW(
             0,
             L"STATIC",
             L"TocPilot",
             WS_CHILD | WS_VISIBLE,
             20,
-            18,
-            180,
+            16,
+            220,
             28,
             hwnd,
             nullptr,
@@ -172,30 +507,30 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
 
         std::wstring versionText = L"Version ";
         versionText += TOCPILOT_VERSION_TAG_W;
-        CreateWindowExW(
+        g_versionLabel = CreateWindowExW(
             0,
             L"STATIC",
             versionText.c_str(),
-            WS_CHILD | WS_VISIBLE,
-            20,
-            50,
-            300,
-            22,
+            WS_CHILD | WS_VISIBLE | SS_RIGHT,
+            620,
+            18,
+            240,
+            24,
             hwnd,
             nullptr,
             GetModuleHandleW(nullptr),
             nullptr);
 
-        std::wstring rootText = L"WoW Path: ";
-        rootText += root.wstring();
-        CreateWindowExW(
+        std::wstring rootText = L"World of Warcraft: ";
+        rootText += g_root.wstring();
+        g_rootLabel = CreateWindowExW(
             0,
             L"STATIC",
             rootText.c_str(),
             WS_CHILD | WS_VISIBLE | SS_PATHELLIPSIS,
             20,
-            78,
-            620,
+            48,
+            820,
             22,
             hwnd,
             nullptr,
@@ -208,8 +543,8 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             L"WoW Install: Found",
             WS_CHILD | WS_VISIBLE,
             20,
-            116,
-            360,
+            80,
+            205,
             24,
             hwnd,
             reinterpret_cast<HMENU>(IDC_WOW_STATUS),
@@ -219,11 +554,11 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
         g_githubStatus = CreateWindowExW(
             0,
             L"STATIC",
-            L"GitHub Comms: Checking...",
+            L"GitHub Comms: Not checked",
             WS_CHILD | WS_VISIBLE,
-            20,
-            146,
-            360,
+            235,
+            80,
+            220,
             24,
             hwnd,
             reinterpret_cast<HMENU>(IDC_GITHUB_STATUS),
@@ -233,32 +568,182 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
         g_releaseStatus = CreateWindowExW(
             0,
             L"STATIC",
-            L"Release: Checking...",
+            L"Release: Not checked",
             WS_CHILD | WS_VISIBLE,
-            20,
-            176,
-            500,
+            465,
+            80,
+            380,
             24,
             hwnd,
             reinterpret_cast<HMENU>(IDC_RELEASE_STATUS),
             GetModuleHandleW(nullptr),
             nullptr);
 
+        g_stateStatus = CreateWindowExW(
+            0,
+            L"STATIC",
+            StateStatusText().c_str(),
+            WS_CHILD | WS_VISIBLE | SS_PATHELLIPSIS,
+            20,
+            108,
+            820,
+            24,
+            hwnd,
+            reinterpret_cast<HMENU>(IDC_STATE_STATUS),
+            GetModuleHandleW(nullptr),
+            nullptr);
+
+        g_updateAllButton = CreateWindowExW(
+            0,
+            L"BUTTON",
+            L"Update All",
+            WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON,
+            20,
+            145,
+            105,
+            32,
+            hwnd,
+            reinterpret_cast<HMENU>(IDC_UPDATE_ALL),
+            GetModuleHandleW(nullptr),
+            nullptr);
+
+        g_refreshPackagesButton = CreateWindowExW(
+            0,
+            L"BUTTON",
+            L"Refresh",
+            WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON,
+            135,
+            145,
+            120,
+            32,
+            hwnd,
+            reinterpret_cast<HMENU>(IDC_REFRESH_PACKAGES),
+            GetModuleHandleW(nullptr),
+            nullptr);
+
+        g_addPackageButton = CreateWindowExW(
+            0,
+            L"BUTTON",
+            L"Add Package",
+            WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON,
+            265,
+            145,
+            115,
+            32,
+            hwnd,
+            reinterpret_cast<HMENU>(IDC_ADD_PACKAGE),
+            GetModuleHandleW(nullptr),
+            nullptr);
+
+        EnableWindow(g_updateAllButton, FALSE);
+        EnableWindow(g_refreshPackagesButton, FALSE);
+        EnableWindow(g_addPackageButton, FALSE);
+
         g_updateButton = CreateWindowExW(
             0,
             L"BUTTON",
-            L"Check for updates",
+            L"Check app update",
             WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON,
-            20,
-            218,
-            170,
+            390,
+            145,
+            150,
             32,
             hwnd,
             reinterpret_cast<HMENU>(IDC_UPDATE),
             GetModuleHandleW(nullptr),
             nullptr);
 
-        StartUpdateCheck(hwnd);
+        g_textScaleLabel = CreateWindowExW(
+            0,
+            L"STATIC",
+            L"Text size",
+            WS_CHILD | WS_VISIBLE | SS_RIGHT,
+            650,
+            151,
+            70,
+            22,
+            hwnd,
+            nullptr,
+            GetModuleHandleW(nullptr),
+            nullptr);
+
+        g_textScaleCombo = CreateWindowExW(
+            0,
+            L"COMBOBOX",
+            nullptr,
+            WS_CHILD | WS_VISIBLE | WS_TABSTOP |
+                CBS_DROPDOWNLIST | WS_VSCROLL,
+            730,
+            145,
+            110,
+            180,
+            hwnd,
+            reinterpret_cast<HMENU>(IDC_TEXT_SCALE),
+            GetModuleHandleW(nullptr),
+            nullptr);
+
+        for (const wchar_t* label : kTextScaleLabels) {
+            ComboBox_AddString(g_textScaleCombo, label);
+        }
+        SetTextScaleSelection();
+        EnableWindow(g_textScaleCombo, g_stateReady ? TRUE : FALSE);
+
+        g_packageHint = CreateWindowExW(
+            0,
+            L"STATIC",
+            PackageHintText().c_str(),
+            WS_CHILD | WS_VISIBLE | SS_PATHELLIPSIS,
+            20,
+            188,
+            820,
+            22,
+            hwnd,
+            nullptr,
+            GetModuleHandleW(nullptr),
+            nullptr);
+
+        g_packageList = CreateWindowExW(
+            WS_EX_CLIENTEDGE,
+            WC_LISTVIEWW,
+            L"",
+            WS_CHILD | WS_VISIBLE | WS_TABSTOP |
+                LVS_REPORT | LVS_SHOWSELALWAYS | LVS_SINGLESEL,
+            20,
+            215,
+            820,
+            280,
+            hwnd,
+            reinterpret_cast<HMENU>(IDC_PACKAGE_LIST),
+            GetModuleHandleW(nullptr),
+            nullptr);
+
+        ListView_SetExtendedListViewStyle(
+            g_packageList,
+            LVS_EX_FULLROWSELECT |
+                LVS_EX_DOUBLEBUFFER |
+                LVS_EX_LABELTIP);
+
+        AddPackageListColumns();
+        ApplyUiFont(hwnd);
+        LayoutControls(hwnd);
+
+        if (!g_stateReady || g_state.settings.checkAppUpdates) {
+            StartUpdateCheck(hwnd);
+        } else {
+            EnableWindow(g_updateButton, TRUE);
+        }
+
+        return 0;
+    }
+
+    case WM_SIZE:
+        LayoutControls(hwnd);
+        return 0;
+
+    case WM_GETMINMAXINFO: {
+        auto* info = reinterpret_cast<MINMAXINFO*>(lParam);
+        info->ptMinTrackSize.x = 820;
+        info->ptMinTrackSize.y = 500;
         return 0;
     }
 
@@ -279,6 +764,12 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             }
             return 0;
         }
+
+        if (LOWORD(wParam) == IDC_TEXT_SCALE &&
+            HIWORD(wParam) == CBN_SELCHANGE) {
+            HandleTextScaleChange(hwnd);
+            return 0;
+        }
         break;
 
     case WM_TP_CHECK_COMPLETE: {
@@ -289,9 +780,8 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             g_release = {};
             SetIndicator(g_githubStatus, L"GitHub Comms: Failed");
             SetIndicator(g_releaseStatus, L"Release: Unavailable");
-            SetWindowTextW(g_updateButton, L"Retry");
+            SetWindowTextW(g_updateButton, L"Retry app check");
             EnableWindow(g_updateButton, TRUE);
-
             return 0;
         }
 
@@ -301,7 +791,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
         case tp::ReleaseCheckState::NoRelease:
             g_release = {};
             SetIndicator(g_releaseStatus, L"Release: Not found");
-            SetWindowTextW(g_updateButton, L"Check again");
+            SetWindowTextW(g_updateButton, L"Check app update");
             EnableWindow(g_updateButton, TRUE);
             break;
 
@@ -310,7 +800,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             SetIndicator(
                 g_releaseStatus,
                 L"Release: Update available - " + result->release.tag);
-            SetWindowTextW(g_updateButton, L"Update now");
+            SetWindowTextW(g_updateButton, L"Update app");
             EnableWindow(g_updateButton, TRUE);
             break;
 
@@ -319,7 +809,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             SetIndicator(
                 g_releaseStatus,
                 L"Release: Current - " + result->release.tag);
-            SetWindowTextW(g_updateButton, L"Check again");
+            SetWindowTextW(g_updateButton, L"Check app update");
             EnableWindow(g_updateButton, TRUE);
             break;
         }
@@ -335,7 +825,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             SetIndicator(
                 g_releaseStatus,
                 L"Release: Update failed - " + result->error);
-            SetWindowTextW(g_updateButton, L"Retry update");
+            SetWindowTextW(g_updateButton, L"Retry app update");
             EnableWindow(g_updateButton, TRUE);
             return 0;
         }
@@ -346,6 +836,10 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
     }
 
     case WM_DESTROY:
+        if (g_uiFont) {
+            DeleteObject(g_uiFont);
+            g_uiFont = nullptr;
+        }
         PostQuitMessage(0);
         return 0;
     }
@@ -385,9 +879,10 @@ int RunMainWindow(HINSTANCE instance) {
         return 2;
     }
 
-    const auto root = exe.parent_path();
+    g_root = exe.parent_path();
+
     std::wstring error;
-    if (!ValidateWowRoot(root, error)) {
+    if (!ValidateWowRoot(g_root, error)) {
         MessageBoxW(
             nullptr,
             error.c_str(),
@@ -396,7 +891,18 @@ int RunMainWindow(HINSTANCE instance) {
         return 2;
     }
 
-    SetCurrentDirectoryW(root.c_str());
+    SetCurrentDirectoryW(g_root.c_str());
+
+    g_stateReady = tp::LoadOrCreateState(
+        g_root,
+        g_state,
+        g_stateCreated,
+        g_stateError);
+
+    INITCOMMONCONTROLSEX controls{};
+    controls.dwSize = sizeof(controls);
+    controls.dwICC = ICC_LISTVIEW_CLASSES | ICC_STANDARD_CLASSES;
+    InitCommonControlsEx(&controls);
 
     WNDCLASSEXW wc{};
     wc.cbSize = sizeof(wc);
@@ -423,11 +929,11 @@ int RunMainWindow(HINSTANCE instance) {
         0,
         kWindowClass,
         title.c_str(),
-        WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX,
+        WS_OVERLAPPEDWINDOW,
         CW_USEDEFAULT,
         CW_USEDEFAULT,
-        680,
-        310,
+        900,
+        560,
         nullptr,
         nullptr,
         instance,

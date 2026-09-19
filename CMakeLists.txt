@@ -4,6 +4,7 @@ project(TocPilot VERSION 0.1.1 LANGUAGES CXX)
 
 add_executable(TocPilot WIN32
     src/main.cpp
+    src/state.cpp
     src/update.cpp
 )
 
