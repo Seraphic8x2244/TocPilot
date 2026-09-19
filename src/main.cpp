@@ -2,6 +2,7 @@
 #include "archive.h"
 #include "branch_dialog.h"
 #include "github_api.h"
+#include "install.h"
 #include "state.h"
 #include "update.h"
 #include "version.h"
@@ -29,6 +30,7 @@ constexpr UINT WM_TP_CHECK_COMPLETE = WM_APP + 1;
 constexpr UINT WM_TP_UPDATE_COMPLETE = WM_APP + 2;
 constexpr UINT WM_TP_PACKAGE_REFRESH_COMPLETE = WM_APP + 3;
 constexpr UINT WM_TP_PACKAGE_INSPECT_COMPLETE = WM_APP + 4;
+constexpr UINT WM_TP_PACKAGE_INSTALL_COMPLETE = WM_APP + 5;
 
 constexpr int IDC_UPDATE = 1001;
 constexpr int IDC_WOW_STATUS = 1002;
@@ -42,6 +44,7 @@ constexpr int IDC_REFRESH_PACKAGES = 1009;
 constexpr int IDC_ADD_PACKAGE = 1010;
 constexpr int IDC_SET_BRANCH = 1011;
 constexpr int IDC_INSPECT_PACKAGE = 1012;
+constexpr int IDC_INSTALL_PACKAGE = 1013;
 
 constexpr std::array<double, 5> kTextScales{
     0.90,
@@ -68,6 +71,7 @@ HWND g_updateAllButton = nullptr;
 HWND g_refreshPackagesButton = nullptr;
 HWND g_setBranchButton = nullptr;
 HWND g_inspectPackageButton = nullptr;
+HWND g_installPackageButton = nullptr;
 HWND g_addPackageButton = nullptr;
 HWND g_packageList = nullptr;
 HWND g_packageHint = nullptr;
@@ -85,6 +89,7 @@ bool g_stateReady = false;
 bool g_stateCreated = false;
 bool g_packageRefreshInProgress = false;
 bool g_packageInspectInProgress = false;
+bool g_packageInstallInProgress = false;
 std::wstring g_stateError;
 
 struct CheckResult {
@@ -117,6 +122,28 @@ struct PackageInspectResult {
     std::uint64_t downloadedBytes = 0;
     tp::ArchiveInspection inspection;
     std::wstring error;
+};
+
+struct PackageInstallResult {
+    bool ok = false;
+    std::size_t index = 0;
+    std::wstring packageId;
+    std::wstring packageName;
+    std::wstring branch;
+    std::wstring remoteSha;
+    std::uint64_t downloadedBytes = 0;
+    tp::ArchiveInspection inspection;
+    tp::AddonInstallTransaction transaction;
+    std::wstring error;
+
+    ~PackageInstallResult() {
+        if (transaction.prepared) {
+            std::wstring ignored;
+            tp::RollbackAddonInstallTransaction(
+                transaction,
+                ignored);
+        }
+    }
 };
 
 void SetIndicator(HWND control, const std::wstring& text) {
