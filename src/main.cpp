@@ -107,10 +107,11 @@ LRESULT HandleStatusColour(WPARAM wParam, LPARAM lParam) {
     const int id = GetDlgCtrlID(control);
     const std::wstring text = [&]() {
         const int length = GetWindowTextLengthW(control);
-        std::wstring value(static_cast<size_t>(length), L'\0');
+        std::wstring value(static_cast<size_t>(length) + 1, L'\0');
         if (length > 0) {
             GetWindowTextW(control, value.data(), length + 1);
         }
+        value.resize(static_cast<size_t>(length));
         return value;
     }();
 
@@ -291,11 +292,6 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             SetWindowTextW(g_updateButton, L"Retry");
             EnableWindow(g_updateButton, TRUE);
 
-            if (!result->error.empty()) {
-                SetWindowTextW(
-                    hwnd,
-                    (L"TocPilot " TOCPILOT_VERSION_TAG_W L" - " + result->error).c_str());
-            }
             return 0;
         }
 
