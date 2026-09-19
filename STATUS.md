@@ -9,15 +9,15 @@
 - Intended platform: Windows x64
 - Implementation: native C++20 / Win32 / CMake
 - Highest priority: implement and validate the first P2 GitHub branch-tracking slice without installing addon files
-- Current application version: `v0.1.4`; published and runtime-validated successfully through the installed `v0.1.3` self-updater
+- Current source version: `v0.1.5` prepared for the first P2 branch-tracking test release; latest published/runtime-validated version is `v0.1.4`
 
 ## Latest commits
 
+- `ac740c7` — Add GitHub branch tracking foundation
+- `5fe7056` — Record v0.1.4 runtime validation
+- `2866782` — Record automated v0.1.4 package release
 - `f34be07` — Request v0.1.4 release
 - `84fc7d2` — Prepare v0.1.4 persistent package test release
-- `413b8c4` — Persist repository package sources
-- `ff78443` — Record v0.1.3 runtime validation
-- `4bf21f8` — Record automated v0.1.3 provider release
 
 ## Completed
 
@@ -72,8 +72,29 @@
 - Persisted package records render in the main ListView immediately after save and after application restart; rows show Source only / Not configured until P2 tracking/install support exists.
 - User runtime-validated `v0.1.4`: self-update from `v0.1.3` succeeded, saving a GitHub repository source created the expected row, the row survived restart, duplicate repository add was rejected without a second row, text-size persistence remained healthy, and no addon files were installed.
 - Added state/package CTest coverage for default creation, package add/save/reload, duplicate rejection, setting persistence, and preservation of unknown top-level/package JSON fields.
+- Created P2 branch `p2-github-branches` from the validated P1 line and enabled normal/release CI on it.
+- Added a GitHub provider API module using WinHTTP with explicit GitHub API headers, timeouts, public-repository metadata lookup, branch pagination, and rate/not-found error handling.
+- GitHub repository metadata resolves the default branch; branch responses capture branch names and each remote head commit SHA.
+- Added an asynchronous native Set Branch dialog so GitHub network lookup does not block the main window.
+- Existing GitHub source records can now save `mode: branch`, `ref`, and `latest_revision` without downloading or installing files.
+- Package JSON updates merge known tracking fields into the existing raw package object so unknown/future package fields remain preserved.
+- Main package rows display the selected branch under Source / Track and a short remote SHA under Latest; Installed remains empty until an install transaction exists.
+- GitLab source records remain persistent but branch browsing is intentionally deferred to P4.
+- Added deterministic GitHub repository/branch JSON parser CTests and extended the state round-trip test to verify branch/ref/remote-SHA persistence.
 
 ## CI validation
+
+Latest P2 GitHub branch-tracking Windows build: Actions run `35450961396` for commit `ac740c7` completed successfully.
+
+- x64 Release compile/link: success;
+- provider URL normalization CTest: success;
+- state/package branch round-trip and unknown-field preservation CTest: success;
+- GitHub repository/branch API parsing CTest: success;
+- executable artifact upload: success;
+- artifact ID: `10586721132`;
+- artifact name: `TocPilot-windows-x64`;
+- artifact ZIP size: 210,443 bytes;
+- artifact SHA-256: `be5790d819c08b7e710de970f79379dfc0d0f4460b5cf31a6f4d8fbcfc09cc56`.
 
 Latest persistent-package Windows build: Actions run `35449693734` for commit `413b8c4` completed successfully.
 
@@ -271,8 +292,11 @@ Complete. A real `v0.1.0 -> v0.1.1` in-app self-update succeeded on Windows besi
 
 ## Exact next step
 
-1. Build the first P2 slice on `p2-github-branches`: GitHub repository metadata lookup, branch listing, selected branch persistence, and remote head SHA persistence.
-2. Keep all addon download/extraction/install behaviour disabled.
-3. CI must pass provider URL, state/package round-trip, and deterministic GitHub API parsing tests.
-4. After CI passes, prepare the next versioned self-update build and runtime-test it against the already persisted pfUI package.
-5. Runtime gate: Set Branch should load pfUI branches, save the selected branch, show its short remote SHA in Latest, survive restart, and still leave `Interface\AddOns` untouched.
+1. Publish `v0.1.5` through the automated release workflow after the versioned-source CI passes.
+2. Keep the installed `v0.1.4` and self-update normally to `v0.1.5`.
+3. Select the existing pfUI row and click Set Branch; confirm the GitHub lookup loads real branches without freezing the main UI.
+4. Save the desired branch (the dialog should initially select the repository default/current branch).
+5. Confirm the pfUI row changes to `GitHub / <branch>`, Latest shows a seven-character remote SHA, Installed remains a dash, and Status is `Not installed`.
+6. Close/reopen TocPilot and confirm the selected branch and Latest SHA persist.
+7. Confirm no files/folders were created or modified under `Interface\\AddOns` by this operation.
+8. If this passes, continue P2 with Refresh: re-resolve tracked branch heads and distinguish Current/Update available only after a real installed revision exists; archive download/install remains a later gated slice.
