@@ -8,18 +8,16 @@
 - License: MIT
 - Intended platform: Windows x64
 - Implementation: native C++20 / Win32 / CMake
-- Highest priority: prove self-update end-to-end before addon-management features
-- Current application version: `v0.1.1` on branch; `v0.1.0` is published and validated as current by the local v0.1.0 client
+- Highest priority: validate the first P1 state/UI slice, then add provider/URL parsing
+- Current application version: `v0.1.1`; published `v0.1.1` self-update is validated, while P1 development remains on an unreleased branch build
 
 ## Latest commits
 
+- `698b984` — Fix P1 Win32 compile errors
+- `54263ea` — Run CI on P1 branch
+- `620cbd9` — Add P1 state and package list foundation
+- `51ca81e` — Start P1 state and UI branch
 - `ba43b98` — Mark P0 self-update complete
-- `30a441b` — Request v0.1.1 release
-- `05c41f6` — Automate release creation from version request
-- `7181942` — Plan automated release requests
-- `d995b24` — Record successful v0.1.1 build
-- `66266f8` — Bump version to v0.1.1
-- `5cea4cc` — Record v0.1.0 release lookup validation
 
 ## Completed
 
@@ -50,8 +48,31 @@
   - `TocPilot.exe.sha256`
 - First Windows x64 CI build succeeded for commit `20c3ad5`.
 - CI artifact `TocPilot-windows-x64` was uploaded successfully.
+- P1 branch `p1-state-ui` created from the completed P0 line.
+- Added native `src/state.h` / `src/state.cpp` state module.
+- Missing `TocPilot.json` is created beside the EXE with schema 1 defaults.
+- State writes use `TocPilot.json.tmp`, flush to disk, then replace/move atomically.
+- Existing package-array JSON is preserved verbatim while package editing is not yet implemented.
+- Persisted settings currently include `text_scale` and `check_app_updates`.
+- Invalid/unsupported state is surfaced read-only rather than overwritten.
+- Main window now uses a resizable native ListView package table with Name, Source / Track, Installed, Latest, and Status columns.
+- Package-action buttons are present but intentionally disabled until the package engine exists.
+- Text-size selector persists to `TocPilot.json` and reapplies the native UI font.
+- Existing application self-update status and action remain in the main window; updater implementation files were not changed.
 
 ## CI validation
+
+Latest P1 Windows build: Actions run `35446732391` for commit `698b984` completed successfully.
+
+- CMake configure: success;
+- x64 Release compile/link: success;
+- executable artifact upload: success;
+- artifact ID: `10584424934`;
+- artifact name: `TocPilot-windows-x64`;
+- artifact ZIP size: 175,045 bytes;
+- artifact SHA-256: `1e3ccad4e611b9611552b7fbb839e808aa2f1a6b69089c4d20996fb3d2b9026e`.
+
+The first P1 CI attempt failed only on Win32 helper macro/type issues in `main.cpp`; commit `698b984` corrected them and the next run passed.
 
 The `v0.1.1` branch build also succeeded in Actions run `35445252119`; artifact `TocPilot-windows-x64` was uploaded successfully.
 
@@ -99,9 +120,20 @@ Routine releases no longer require manually drafting a GitHub release. The repos
 
 This was validated with `v0.1.1`: release workflow run `35445498170` created tag `v0.1.1` at commit `30a441b`, published the release, and attached `TocPilot.exe` (217,088 bytes; SHA-256 `e8f0dfe81c7d13b63982dbfacbbe33f33d33603c191329e6bad302ff7a70a120`) plus `TocPilot.exe.sha256`.
 
-## Untested / remaining P0 work
+## Untested / remaining validation
 
-The following require real Windows/WoW-directory validation:
+P1 runtime testing still required:
+
+- first startup creates `TocPilot.json` beside the EXE;
+- generated JSON contains schema 1, settings, and an empty packages array;
+- reopening loads the existing state without rewriting it;
+- text-size selection persists across restart;
+- package ListView renders/resizes correctly at supported text sizes;
+- application update check still reports `v0.1.1` current on this branch build;
+- malformed/unsupported `TocPilot.json` leaves the file unchanged and shows the state error in the UI.
+
+P0 edge/failure paths not yet deliberately forced:
+
 
 - missing-`WoW.exe` error path;
 - `Interface\AddOns` creation;
@@ -116,10 +148,10 @@ The following require real Windows/WoW-directory validation:
 - paths containing spaces;
 - non-system drive such as `D:\Games\WoW`;
 
-Everything after P0 remains deferred until the self-update test succeeds:
+Deferred beyond the current P1 slice:
 
-- local JSON state;
-- package engine;
+- package editing/installation engine;
+- full package-record JSON parsing/writing;
 - ZIP extraction;
 - GitHub branch/release package support;
 - GitLab support;
@@ -127,7 +159,7 @@ Everything after P0 remains deferred until the self-update test succeeds:
 - DLL/direct-file installation;
 - remove/update file ownership;
 - import/export;
-- text-size and column/layout preferences.
+- persisted column order/width and layout locking.
 
 ## Important design decisions
 
@@ -197,7 +229,8 @@ Complete. A real `v0.1.0 -> v0.1.1` in-app self-update succeeded on Windows besi
 
 ## Exact next step
 
-1. Add a small native state module for versioned `TocPilot.json` with atomic writes and sensible defaults.
-2. Add persisted `text_scale` and an empty `packages` array without changing the proven self-update path.
-3. Replace the P0-only status layout with the first package-list table foundation while retaining the updater status area.
-4. Add provider/URL normalization after the state/UI slice compiles and smoke-tests.
+1. Download the `TocPilot-windows-x64` artifact from successful Actions run `35446732391` and extract it.
+2. Replace the local test `TocPilot.exe` beside `WoW.exe` with this unreleased P1 branch build and launch it.
+3. Confirm `TocPilot.json` is created, the package table appears, `State: TocPilot.json ready` is shown, and app update status remains healthy.
+4. Change Text size (for example 100% -> 125%), close/reopen, and confirm the selection persists.
+5. After that smoke test, implement provider/URL normalization as the next P1 code slice.
