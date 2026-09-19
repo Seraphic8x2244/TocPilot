@@ -28,7 +28,9 @@ struct AddonInstallPlan {
 };
 
 struct AddonInstallOptions {
-    // Test hook. Production callers leave this at the default.
+    // Test hooks. Production callers leave these at the defaults.
+    std::size_t failAfterRootBackups =
+        std::numeric_limits<std::size_t>::max();
     std::size_t failAfterNewRootCommits =
         std::numeric_limits<std::size_t>::max();
 };
@@ -47,6 +49,14 @@ bool BuildAddonInstallPlan(
     const std::filesystem::path& extractedRoot,
     const std::vector<AddonCandidate>& candidates,
     const std::vector<std::wstring>& priorInstalledFiles,
+    const std::vector<std::wstring>& otherInstalledFiles,
+    AddonInstallPlan& plan,
+    std::wstring& error);
+
+bool BuildAddonRemovalPlan(
+    const std::filesystem::path& wowRoot,
+    std::wstring_view packageId,
+    const std::vector<std::wstring>& installedFiles,
     const std::vector<std::wstring>& otherInstalledFiles,
     AddonInstallPlan& plan,
     std::wstring& error);
