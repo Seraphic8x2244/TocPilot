@@ -1411,6 +1411,31 @@ bool AppendPackage(
     return true;
 }
 
+bool RemovePackageRecord(
+    AppState& state,
+    std::wstring_view packageId,
+    std::wstring& error) {
+    error.clear();
+
+    const auto it = std::find_if(
+        state.packages.begin(),
+        state.packages.end(),
+        [&](const PackageRecord& package) {
+            return EqualsInsensitive(
+                package.id,
+                packageId);
+        });
+
+    if (it == state.packages.end()) {
+        error =
+            L"The selected package record no longer exists.";
+        return false;
+    }
+
+    state.packages.erase(it);
+    return true;
+}
+
 bool SetPackageBranch(
     PackageRecord& package,
     std::wstring branch,
