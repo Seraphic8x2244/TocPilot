@@ -1285,14 +1285,28 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             GetModuleHandleW(nullptr),
             nullptr);
 
+        g_installPackageButton = CreateWindowExW(
+            0,
+            L"BUTTON",
+            L"Install",
+            WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON,
+            405,
+            145,
+            80,
+            32,
+            hwnd,
+            reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_INSTALL_PACKAGE)),
+            GetModuleHandleW(nullptr),
+            nullptr);
+
         g_addPackageButton = CreateWindowExW(
             0,
             L"BUTTON",
             L"Add Package",
             WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON,
-            325,
+            490,
             145,
-            105,
+            100,
             32,
             hwnd,
             reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_ADD_PACKAGE)),
@@ -1303,6 +1317,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
         EnableWindow(g_refreshPackagesButton, FALSE);
         EnableWindow(g_setBranchButton, FALSE);
         EnableWindow(g_inspectPackageButton, FALSE);
+        EnableWindow(g_installPackageButton, FALSE);
         EnableWindow(
             g_addPackageButton,
             g_stateReady ? TRUE : FALSE);
