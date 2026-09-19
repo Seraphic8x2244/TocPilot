@@ -2,6 +2,7 @@
 
 #include <filesystem>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace tp {
@@ -46,6 +47,11 @@ PackageRecord MakeRepositoryPackage(
 bool AppendPackage(
     AppState& state,
     PackageRecord package,
+    std::wstring& error);
+
+bool RemovePackageRecord(
+    AppState& state,
+    std::wstring_view packageId,
     std::wstring& error);
 
 bool SetPackageBranch(
