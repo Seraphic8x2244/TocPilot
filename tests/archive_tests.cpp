@@ -203,7 +203,7 @@ int main() {
             }
 
             if (std::filesystem::exists(
-                    temp.parent_path() /
+                    temp /
                     L"escape.txt")) {
                 Fail("unsafe ZIP escaped extraction root");
             }
