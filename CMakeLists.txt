@@ -27,6 +27,7 @@ add_executable(TocPilot WIN32
     src/archive.cpp
     src/branch_dialog.cpp
     src/github_api.cpp
+    src/install.cpp
     src/main.cpp
     src/provider.cpp
     src/state.cpp
@@ -129,4 +130,23 @@ if(BUILD_TESTING)
     endif()
 
     add_test(NAME archive-inspection COMMAND TocPilotArchiveTests)
+
+    add_executable(TocPilotInstallTests
+        tests/install_tests.cpp
+        src/install.cpp
+    )
+    target_compile_features(TocPilotInstallTests PRIVATE cxx_std_20)
+    target_compile_definitions(TocPilotInstallTests PRIVATE
+        UNICODE
+        _UNICODE
+        WIN32_LEAN_AND_MEAN
+        NOMINMAX
+    )
+    target_include_directories(TocPilotInstallTests PRIVATE src)
+
+    if(MSVC)
+        target_compile_options(TocPilotInstallTests PRIVATE /W4 /permissive- /utf-8)
+    endif()
+
+    add_test(NAME addon-install-transaction COMMAND TocPilotInstallTests)
 endif()
