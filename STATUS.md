@@ -4,7 +4,7 @@
 
 - Repository: `Seraphic8x2244/TocPilot`
 - Branch: `p0-self-update`
-- Product stage: P0 self-update bootstrap implemented; automated v0.1.1 release publishing validated; end-to-end v0.1.0 -> v0.1.1 self-update is next
+- Product stage: P0 self-update validated end-to-end; ready to begin P1
 - License: MIT
 - Intended platform: Windows x64
 - Implementation: native C++20 / Win32 / CMake
@@ -80,6 +80,18 @@ This validates compilation and CI packaging only. It does not validate runtime u
 - A one-off repair workflow checked out the exact `v0.1.0` tag and successfully attached `TocPilot.exe` plus `TocPilot.exe.sha256` to the existing release.
 - The one-off repair workflow was then removed.
 
+## P0 end-to-end validation
+
+User confirmed the production-style self-update flow succeeded:
+
+- local client was `v0.1.0`;
+- it detected `v0.1.1` as available;
+- clicking `Update now` closed TocPilot;
+- TocPilot replaced itself and reopened automatically;
+- the update completed successfully with no reported error dialog.
+
+This proves the core P0 self-update path end-to-end.
+
 ## Release automation direction
 
 Routine releases no longer require manually drafting a GitHub release. The repository uses `.github/release-version`; changing it to a new validated version triggers Actions to validate source/version consistency, build, create or verify the tag, create/update the release, and publish the direct EXE plus checksum. Manual dispatch remains a fallback once the workflow is on the default branch.
@@ -102,7 +114,6 @@ The following require real Windows/WoW-directory validation:
 - successful restart and cleanup;
 - paths containing spaces;
 - non-system drive such as `D:\Games\WoW`;
-- end-to-end `v0.1.0 -> v0.1.1` self-update.
 
 Everything after P0 remains deferred until the self-update test succeeds:
 
@@ -135,7 +146,7 @@ Everything after P0 remains deferred until the self-update test succeeds:
 
 ### P0 — Self-update bootstrap
 
-Implementation is present and compiles. P0 is not complete until a real `v0.1.0 -> v0.1.1` in-app update succeeds.
+Complete. A real `v0.1.0 -> v0.1.1` in-app self-update succeeded on Windows beside a real `WoW.exe`: update detected, downloaded, verified, old process closed, executable replaced, and new version restarted successfully.
 
 ### P1 — State and basic UI
 
@@ -185,8 +196,6 @@ Implementation is present and compiles. P0 is not complete until a real `v0.1.0 
 
 ## Exact next step
 
-1. Keep the existing local `v0.1.0` copy in the WoW folder; do not replace it manually.
-2. Re-open it or click `Check again` and verify it reports `Release: Update available - v0.1.1`.
-3. Click `Update now` and verify TocPilot closes, replaces itself, restarts as `v0.1.1`, and then reports `Release: Current - v0.1.1`.
-4. Check the WoW folder for leftover `.new` or `.update-backup` files and report any updater error dialog.
-5. Do not start P1 until that end-to-end replacement/restart test succeeds.
+1. Treat P0 self-update as complete.
+2. Begin P1: portable local state (`TocPilot.json`), package list, text-size preference, and provider/URL parsing.
+3. Preserve the proven self-update path unchanged while P1 functionality is added.
