@@ -282,6 +282,14 @@ std::wstring OwnedFilePath(
         .generic_wstring();
 }
 
+std::wstring ErrorMessage(
+    const std::error_code& ec) {
+    const std::string message = ec.message();
+    return std::wstring(
+        message.begin(),
+        message.end());
+}
+
 bool RemoveAllWithRetries(
     const std::filesystem::path& path,
     std::wstring& error) {
@@ -311,9 +319,7 @@ bool RemoveAllWithRetries(
         L"Could not remove " +
         path.wstring() +
         L": " +
-        std::wstring(
-            last.message().begin(),
-            last.message().end());
+        ErrorMessage(last);
     return false;
 }
 
@@ -344,9 +350,7 @@ bool RenameWithRetries(
         L" to " +
         to.wstring() +
         L": " +
-        std::wstring(
-            last.message().begin(),
-            last.message().end());
+        ErrorMessage(last);
     return false;
 }
 
