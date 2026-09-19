@@ -9,15 +9,15 @@
 - Intended platform: Windows x64
 - Implementation: native C++20 / Win32 / CMake
 - Highest priority: publish and runtime-validate the P2 tracked-branch Refresh slice without installing addon files
-- Current source version: `v0.1.6` prepared for the tracked-branch Refresh test release; latest published/runtime-validated version is `v0.1.5`
+- Current application version: `v0.1.6`; published successfully and awaiting runtime validation through the installed `v0.1.5` self-updater
 
 ## Latest commits
 
+- `45b87a1` — Request v0.1.6 release
+- `e081fd3` — Prepare v0.1.6 branch refresh test release
 - `b6a6793` — Add tracked branch refresh
 - `5df5630` — Record v0.1.5 runtime validation
 - `9476cb7` — Record automated v0.1.5 branch release
-- `6d8fcbf` — Request v0.1.5 release
-- `28332d7` — Prepare v0.1.5 GitHub branch test release
 
 ## Completed
 
@@ -206,6 +206,8 @@ Persistent-package test release `v0.1.4` was published automatically. Release wo
 
 First P2 GitHub branch-tracking test release `v0.1.5` was published automatically. Release workflow run `35451120184` validated source/version consistency, built Release x64, passed provider URL, state/package, and GitHub API parser CTests, created tag `v0.1.5` at commit `6d8fcbf`, and published `TocPilot.exe` (433,152 bytes; SHA-256 `0449a725ef0ca2b1226c3e54c987d65923d1451906523b7086b80f32fe92b0a9`) plus `TocPilot.exe.sha256`.
 
+Tracked-branch Refresh test release `v0.1.6` was published automatically. Release workflow run `35453833168` validated source/version consistency, built Release x64, passed provider URL, state/package Refresh, and GitHub API/tracked-branch CTests, created tag `v0.1.6` at commit `45b87a1`, and published `TocPilot.exe` (444,928 bytes; SHA-256 `80b6c33368a3287a95b9725c61532f92d64d2e3fa64ded42c2c12b4ec1e78ece`) plus `TocPilot.exe.sha256`.
+
 ## Untested / remaining validation
 
 P1 runtime testing still required:
@@ -313,11 +315,11 @@ Complete. A real `v0.1.0 -> v0.1.1` in-app self-update succeeded on Windows besi
 
 ## Exact next step
 
-1. Publish `v0.1.6` through the automated release workflow after the versioned-source CI passes.
-2. Keep the installed `v0.1.5` and self-update normally to `v0.1.6`.
-3. Select the configured pfUI branch package and click Refresh.
-4. Confirm the row briefly shows `Checking...`, then returns to `Not installed`; Installed must remain a dash and Latest should remain or update to the current seven-character remote SHA.
-5. Confirm the hint reports the tracked branch and refreshed short SHA and explicitly says no addon files were changed.
-6. Close/reopen TocPilot and confirm the refreshed Latest SHA persists.
-7. Confirm Set Branch remains separate and still works, and no files/folders under `Interface\\AddOns` were created/modified by Refresh.
-8. If this passes, the next P2 slice can begin archive download-to-temp and inspection only; live addon installation should remain gated until archive/path/layout validation is proven.
+1. Keep the user's installed `v0.1.5` and let TocPilot self-update normally to `v0.1.6`; do not manually replace the EXE.
+2. Select the configured pfUI package and click Refresh.
+3. Confirm the row briefly shows `Checking...`, then returns to `Not installed`; Installed must remain a dash and Latest should remain or update to the current seven-character remote SHA.
+4. Confirm the hint reports the tracked branch and refreshed short SHA and says no addon files were changed.
+5. Close/reopen TocPilot and confirm the refreshed Latest SHA persists.
+6. Confirm Set Branch remains a separate action and still works.
+7. Confirm no files/folders under `Interface\\AddOns` were created or modified by Refresh.
+8. If this passes, record runtime validation. The next P2 slice should download a selected branch archive to Windows temp and inspect it only; live addon installation remains gated until secure archive/path/layout validation is proven.
