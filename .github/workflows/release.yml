@@ -52,7 +52,7 @@ jobs:
           $version = $tag.Substring(1)
           $cmake = Get-Content "CMakeLists.txt" -Raw
           $header = Get-Content "src/version.h" -Raw
-          $versionPattern = 'project\\s*\\(\\s*TocPilot\\s+VERSION\\s+' + [regex]::Escape($version) + '(?:\\s|\\))'
+          $versionPattern = 'project\s*\(\s*TocPilot\s+VERSION\s+' + [regex]::Escape($version) + '(?:\s|\))'
           $expectedTag = '#define TOCPILOT_VERSION_TAG_W L"' + $tag + '"'
 
           if ($cmake -notmatch $versionPattern) {
