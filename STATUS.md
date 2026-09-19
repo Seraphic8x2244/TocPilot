@@ -9,10 +9,12 @@
 - Intended platform: Windows x64
 - Implementation: native C++20 / Win32 / CMake
 - Highest priority: prove self-update end-to-end before addon-management features
-- Current application version: `v0.1.0` (compiled and smoke-tested successfully; not yet published as a GitHub release)
+- Current application version: `v0.1.1` on branch; `v0.1.0` is published and validated as current by the local v0.1.0 client
 
 ## Latest commits
 
+- `66266f8` — Bump version to v0.1.1
+- `5cea4cc` — Record v0.1.0 release lookup validation
 - `8c44868` — Record successful v0.1.0 release repair
 - `a2e32f4` — Remove one-off v0.1.0 release repair
 - `7f76222` — Add one-off v0.1.0 release repair
@@ -50,6 +52,8 @@
 - CI artifact `TocPilot-windows-x64` was uploaded successfully.
 
 ## CI validation
+
+The `v0.1.1` branch build also succeeded in Actions run `35445252119`; artifact `TocPilot-windows-x64` was uploaded successfully.
 
 GitHub Actions run `35443134276` completed the important build steps successfully:
 
@@ -180,8 +184,7 @@ Implementation is present and compiles. P0 is not complete until a real `v0.1.0 
 
 ## Exact next step
 
-1. Change only the compiled application version from `v0.1.0` to `v0.1.1`.
-2. Build `v0.1.1` in CI.
-3. Publish/tag `v0.1.1` and verify the release contains `TocPilot.exe` plus `TocPilot.exe.sha256`.
-4. Keep the existing local `v0.1.0` running copy in the WoW folder, let it detect `v0.1.1`, click `Update now`, and verify replacement/restart/cleanup.
-5. Do not start P1 until that end-to-end replacement/restart test succeeds.
+1. Publish/tag `v0.1.1` from the current `p0-self-update` branch.
+2. Verify the Release workflow attaches `TocPilot.exe` plus `TocPilot.exe.sha256` automatically.
+3. Keep the existing local `v0.1.0` copy in the WoW folder, let it detect `v0.1.1`, click `Update now`, and verify replacement/restart/cleanup.
+4. Do not start P1 until that end-to-end replacement/restart test succeeds.
