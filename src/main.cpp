@@ -1984,6 +1984,220 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
         return 0;
     }
 
+    case WM_TP_PACKAGE_INSTALL_COMPLETE: {
+        std::unique_ptr<PackageInstallResult> result(
+            reinterpret_cast<PackageInstallResult*>(
+                lParam));
+
+        g_packageInstallInProgress = false;
+
+        if (result->index >=
+                g_state.packages.size() ||
+            g_state.packages[result->index].id !=
+                result->packageId ||
+            g_state.packages[result->index].ref !=
+                result->branch) {
+            if (g_packageHint) {
+                SetWindowTextW(
+                    g_packageHint,
+                    L"Install result was discarded because package tracking changed. Live addons were not committed.");
+            }
+            UpdatePackageButtons();
+            return 0;
+        }
+
+        const auto index = result->index;
+        const std::wstring packageName =
+            g_state.packages[index].name;
+
+        if (!result->ok) {
+            SetPackageRowStatus(
+                index,
+                L"Install failed");
+
+            if (g_packageHint) {
+                const std::wstring message =
+                    packageName +
+                    L": install preparation failed - " +
+                    result->error;
+
+                SetWindowTextW(
+                    g_packageHint,
+                    message.c_str());
+            }
+
+            SelectPackageRow(index);
+            UpdatePackageButtons();
+            return 0;
+        }
+
+        SetPackageRowStatus(
+            index,
+            L"Committing...");
+
+        std::wstring error;
+        if (!tp::CommitAddonInstallTransaction(
+                result->transaction,
+                error)) {
+            SetPackageRowStatus(
+                index,
+                L"Install failed");
+
+            if (g_packageHint) {
+                const std::wstring message =
+                    packageName +
+                    L": live commit failed and was rolled back - " +
+                    error;
+
+                SetWindowTextW(
+                    g_packageHint,
+                    message.c_str());
+            }
+
+            SelectPackageRow(index);
+            UpdatePackageButtons();
+            return 0;
+        }
+
+        tp::AppState updatedState = g_state;
+        if (!tp::SetPackageInstalledState(
+                updatedState.packages[index],
+                result->remoteSha,
+                result->transaction.plan.desiredInstalledFiles,
+                error) ||
+            !tp::SaveState(
+                g_root,
+                updatedState,
+                error)) {
+            const std::wstring saveError = error;
+            std::wstring rollbackError;
+            const bool rolledBack =
+                tp::RollbackAddonInstallTransaction(
+                    result->transaction,
+                    rollbackError);
+
+            SetPackageRowStatus(
+                index,
+                rolledBack
+                    ? L"Install rolled back"
+                    : L"Rollback failed");
+
+            if (g_packageHint) {
+                std::wstring message =
+                    packageName +
+                    L": package state could not be saved - " +
+                    saveError;
+
+                if (rolledBack) {
+                    message +=
+                        L". The previous live addon state was restored.";
+                } else {
+                    message +=
+                        L". Filesystem rollback also failed: " +
+                        rollbackError;
+                }
+
+                SetWindowTextW(
+                    g_packageHint,
+                    message.c_str());
+            }
+
+            if (!rolledBack) {
+                MessageBoxW(
+                    hwnd,
+                    rollbackError.c_str(),
+                    L"TocPilot - Rollback Failed",
+                    MB_OK | MB_ICONERROR);
+            }
+
+            SelectPackageRow(index);
+            UpdatePackageButtons();
+            return 0;
+        }
+
+        g_state = std::move(updatedState);
+        g_stateCreated = false;
+        g_stateError.clear();
+
+        std::wstring cleanupError;
+        const bool cleanupOk =
+            tp::FinalizeAddonInstallTransaction(
+                result->transaction,
+                cleanupError);
+
+        RefreshPackageStateUi();
+        SelectPackageRow(index);
+        UpdatePackageButtons();
+
+        const auto& installedPackage =
+            g_state.packages[index];
+        const std::wstring shortSha =
+            installedPackage.installedRevision.substr(
+                0,
+                std::min<std::size_t>(
+                    7,
+                    installedPackage.installedRevision.size()));
+
+        std::wstring hint =
+            installedPackage.name +
+            L": installed " +
+            std::to_wstring(
+                result->transaction.plan.desiredInstalledFiles.size()) +
+            L" file(s) across " +
+            std::to_wstring(
+                result->transaction.plan.roots.size()) +
+            L" addon root(s) at " +
+            shortSha +
+            L".";
+
+        if (!cleanupOk) {
+            hint +=
+                L" Install succeeded, but transaction cleanup needs attention: " +
+                cleanupError;
+        }
+
+        if (g_packageHint) {
+            SetWindowTextW(
+                g_packageHint,
+                hint.c_str());
+        }
+
+        std::wstring summary =
+            installedPackage.name +
+            L" installed successfully.\r\n\r\nRevision: " +
+            shortSha +
+            L"\r\nAddon roots: " +
+            std::to_wstring(
+                result->transaction.plan.roots.size()) +
+            L"\r\nOwned files: " +
+            std::to_wstring(
+                result->transaction.plan.desiredInstalledFiles.size());
+
+        if (!result->transaction.plan.obsoleteInstallFolders.empty()) {
+            summary +=
+                L"\r\nObsolete roots removed: " +
+                std::to_wstring(
+                    result->transaction.plan.obsoleteInstallFolders.size());
+        }
+
+        if (!cleanupOk) {
+            summary +=
+                L"\r\n\r\nThe install and state save succeeded, but old transaction backup cleanup failed:\r\n" +
+                cleanupError;
+        }
+
+        MessageBoxW(
+            hwnd,
+            summary.c_str(),
+            L"TocPilot - Package Installed",
+            MB_OK |
+                (cleanupOk
+                    ? MB_ICONINFORMATION
+                    : MB_ICONWARNING));
+
+        return 0;
+    }
+
     case WM_TP_UPDATE_COMPLETE: {
         std::unique_ptr<UpdateResult> result(
             reinterpret_cast<UpdateResult*>(lParam));
@@ -2001,6 +2215,17 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
         PostMessageW(hwnd, WM_CLOSE, 0, 0);
         return 0;
     }
+
+    case WM_CLOSE:
+        if (g_packageInstallInProgress) {
+            MessageBoxW(
+                hwnd,
+                L"A package install is currently being prepared. TocPilot will stay open until the install transaction reaches a safe completion point.",
+                L"TocPilot - Install In Progress",
+                MB_OK | MB_ICONINFORMATION);
+            return 0;
+        }
+        break;
 
     case WM_DESTROY:
         if (g_uiFont) {
