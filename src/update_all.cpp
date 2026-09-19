@@ -1,5 +1,7 @@
 #include "update_all.h"
 
+#include <utility>
+
 namespace tp {
 
 bool IsUpdateAllCandidate(const PackageRecord& package) {
