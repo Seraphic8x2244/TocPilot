@@ -595,6 +595,70 @@ bool GetNullableStringMember(
     return DecodeJsonString(token, value);
 }
 
+bool GetStringArrayMember(
+    std::string_view json,
+    std::size_t objectStart,
+    std::size_t objectEnd,
+    std::string_view key,
+    std::vector<std::wstring>& values) {
+    values.clear();
+
+    std::size_t start = 0;
+    std::size_t end = 0;
+    if (!FindObjectMember(
+            json,
+            objectStart,
+            objectEnd,
+            key,
+            start,
+            end)) {
+        return true;
+    }
+
+    if (start >= end || json[start] != '[') {
+        return false;
+    }
+
+    std::size_t pos = start + 1;
+    SkipWhitespace(json, pos);
+    if (pos < end && json[pos] == ']') {
+        return true;
+    }
+
+    while (pos < end) {
+        std::size_t itemEnd = 0;
+        if (!ParseStringRange(json, pos, itemEnd)) {
+            return false;
+        }
+
+        std::wstring value;
+        if (!DecodeJsonString(
+                json.substr(pos, itemEnd - pos),
+                value)) {
+            return false;
+        }
+
+        values.push_back(std::move(value));
+        pos = itemEnd;
+        SkipWhitespace(json, pos);
+
+        if (pos >= end) {
+            return false;
+        }
+        if (json[pos] == ']') {
+            return true;
+        }
+        if (json[pos] != ',') {
+            return false;
+        }
+
+        ++pos;
+        SkipWhitespace(json, pos);
+    }
+
+    return false;
+}
+
 bool ParseIntegerToken(
     std::string_view token,
     int& value) {
@@ -708,6 +772,20 @@ std::string JsonStringOrNull(std::wstring_view value) {
     return value.empty() ? "null" : EscapeJson(value);
 }
 
+std::string JsonStringArray(
+    const std::vector<std::wstring>& values) {
+    std::ostringstream stream;
+    stream << "[";
+    for (std::size_t i = 0; i < values.size(); ++i) {
+        if (i != 0) {
+            stream << ",";
+        }
+        stream << EscapeJson(values[i]);
+    }
+    stream << "]";
+    return stream.str();
+}
+
 bool SetObjectMemberJson(
     std::string& json,
     std::string_view key,
@@ -767,7 +845,8 @@ std::string SerializePackage(const PackageRecord& package) {
         << JsonStringOrNull(package.installedRevision) << ","
         << "\"latest_revision\":"
         << JsonStringOrNull(package.latestRevision) << ","
-        << "\"installed_files\":[]"
+        << "\"installed_files\":"
+        << JsonStringArray(package.installedFiles)
         << "}";
     return stream.str();
 }
@@ -778,7 +857,7 @@ std::string MergePackageJson(const PackageRecord& package) {
     }
 
     std::string json = package.sourceJson;
-    const std::array<std::pair<std::string_view, std::string>, 8> values{{
+    const std::array<std::pair<std::string_view, std::string>, 10> values{{
         {"id", EscapeJson(package.id)},
         {"name", EscapeJson(package.name)},
         {"provider", EscapeJson(package.provider)},
@@ -786,7 +865,9 @@ std::string MergePackageJson(const PackageRecord& package) {
         {"mode", EscapeJson(package.mode)},
         {"ref", JsonStringOrNull(package.ref)},
         {"target", EscapeJson(package.target)},
-        {"latest_revision", JsonStringOrNull(package.latestRevision)}
+        {"installed_revision", JsonStringOrNull(package.installedRevision)},
+        {"latest_revision", JsonStringOrNull(package.latestRevision)},
+        {"installed_files", JsonStringArray(package.installedFiles)}
     }};
 
     for (const auto& [key, value] : values) {
@@ -1009,7 +1090,13 @@ bool ParsePackages(
                 objectStart,
                 objectEnd,
                 "latest_revision",
-                package.latestRevision)) {
+                package.latestRevision) ||
+            !GetStringArrayMember(
+                json,
+                objectStart,
+                objectEnd,
+                "installed_files",
+                package.installedFiles)) {
             error =
                 L"TocPilot.json contains an invalid package tracking field.";
             return false;
@@ -1369,6 +1456,42 @@ bool SetPackageLatestRevision(
     }
 
     package.latestRevision = std::move(remoteSha);
+    return true;
+}
+
+bool SetPackageInstalledState(
+    PackageRecord& package,
+    std::wstring installedRevision,
+    std::vector<std::wstring> installedFiles,
+    std::wstring& error) {
+    error.clear();
+
+    if (package.provider != L"github" ||
+        package.mode != L"branch" ||
+        package.ref.empty()) {
+        error =
+            L"Only configured GitHub branch packages can be installed.";
+        return false;
+    }
+
+    if (installedRevision.empty() ||
+        installedFiles.empty()) {
+        error =
+            L"Installed package state requires a revision and owned files.";
+        return false;
+    }
+
+    for (const auto& path : installedFiles) {
+        if (path.empty()) {
+            error =
+                L"Installed package ownership contains an empty file path.";
+            return false;
+        }
+    }
+
+    package.installedRevision = installedRevision;
+    package.latestRevision = std::move(installedRevision);
+    package.installedFiles = std::move(installedFiles);
     return true;
 }
 
