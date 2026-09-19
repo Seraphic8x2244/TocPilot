@@ -334,27 +334,31 @@ void LayoutControls(HWND hwnd) {
     const int buttonY = 145;
 
     if (g_updateAllButton) {
-        MoveWindow(g_updateAllButton, x, buttonY, 90, 32, TRUE);
-        x += 95;
+        MoveWindow(g_updateAllButton, x, buttonY, 80, 32, TRUE);
+        x += 85;
     }
     if (g_refreshPackagesButton) {
-        MoveWindow(g_refreshPackagesButton, x, buttonY, 70, 32, TRUE);
-        x += 75;
+        MoveWindow(g_refreshPackagesButton, x, buttonY, 65, 32, TRUE);
+        x += 70;
     }
     if (g_setBranchButton) {
-        MoveWindow(g_setBranchButton, x, buttonY, 90, 32, TRUE);
-        x += 95;
+        MoveWindow(g_setBranchButton, x, buttonY, 80, 32, TRUE);
+        x += 85;
     }
     if (g_inspectPackageButton) {
-        MoveWindow(g_inspectPackageButton, x, buttonY, 75, 32, TRUE);
+        MoveWindow(g_inspectPackageButton, x, buttonY, 65, 32, TRUE);
+        x += 70;
+    }
+    if (g_installPackageButton) {
+        MoveWindow(g_installPackageButton, x, buttonY, 75, 32, TRUE);
         x += 80;
     }
     if (g_addPackageButton) {
-        MoveWindow(g_addPackageButton, x, buttonY, 95, 32, TRUE);
-        x += 100;
+        MoveWindow(g_addPackageButton, x, buttonY, 90, 32, TRUE);
+        x += 95;
     }
     if (g_updateButton) {
-        MoveWindow(g_updateButton, x, buttonY, 130, 32, TRUE);
+        MoveWindow(g_updateButton, x, buttonY, 115, 32, TRUE);
     }
 
     if (g_textScaleLabel) {
