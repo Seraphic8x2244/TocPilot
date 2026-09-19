@@ -884,4 +884,68 @@ bool DetectAddonCandidates(
     return true;
 }
 
+bool DetectGitHubAddonCandidates(
+    const std::filesystem::path& extractedRoot,
+    std::wstring_view repository,
+    std::vector<AddonCandidate>& candidates,
+    std::wstring& error) {
+    if (!DetectAddonCandidates(
+            extractedRoot,
+            candidates,
+            error)) {
+        return false;
+    }
+
+    const std::size_t slash =
+        repository.find_last_of(L'/');
+    const std::wstring repositoryName =
+        slash == std::wstring_view::npos
+            ? std::wstring(repository)
+            : std::wstring(repository.substr(slash + 1));
+
+    if (repositoryName.empty()) {
+        error =
+            L"GitHub repository name is empty.";
+        return false;
+    }
+
+    for (auto& candidate : candidates) {
+        const auto parent =
+            candidate.sourceRelativePath.parent_path();
+
+        // GitHub zipball archives always add a generated top-level wrapper
+        // such as Shagu-pfUI-b2f6df8. If .toc files live directly in the
+        // repository root, generic detection sees that wrapper as the addon
+        // folder. Never install that generated name. For the safe automatic
+        // case, require a root-level .toc whose stem matches the repository
+        // name and use that repository name as the real install folder.
+        if (!parent.empty()) {
+            continue;
+        }
+
+        bool matchingToc = false;
+        for (const auto& toc : candidate.tocFiles) {
+            if (Lower(toc.stem().wstring()) ==
+                Lower(repositoryName)) {
+                matchingToc = true;
+                break;
+            }
+        }
+
+        if (!matchingToc) {
+            error =
+                L"GitHub repository-root addon layout is ambiguous. "
+                L"TocPilot will not install the generated archive wrapper "
+                L"folder automatically.";
+            candidates.clear();
+            return false;
+        }
+
+        candidate.installFolder =
+            repositoryName;
+    }
+
+    return true;
+}
+
 } // namespace tp
