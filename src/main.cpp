@@ -1074,8 +1074,12 @@ bool IsUpdateAllCurrentPackage(
 }
 
 void FinishUpdateAll(HWND hwnd) {
-    const std::size_t checked =
+    const std::size_t queued =
         g_updateAllProgress.packageIds.size();
+    const std::size_t processed =
+        g_updateAllProgress.current +
+        g_updateAllProgress.updated +
+        g_updateAllProgress.failed;
 
     g_updateAllInProgress = false;
     SetWindowTextW(
@@ -1085,14 +1089,22 @@ void FinishUpdateAll(HWND hwnd) {
     RefreshPackageStateUi();
 
     std::wstring summary =
-        L"Update All finished.\r\n\r\nChecked: " +
-        std::to_wstring(checked) +
+        L"Update All finished.\r\n\r\nQueued: " +
+        std::to_wstring(queued) +
+        L"\r\nProcessed: " +
+        std::to_wstring(processed) +
         L"\r\nUpdated: " +
         std::to_wstring(g_updateAllProgress.updated) +
         L"\r\nAlready current: " +
         std::to_wstring(g_updateAllProgress.current) +
         L"\r\nFailed: " +
         std::to_wstring(g_updateAllProgress.failed);
+
+    if (processed < queued) {
+        summary +=
+            L"\r\nRemaining untouched: " +
+            std::to_wstring(queued - processed);
+    }
 
     if (!g_updateAllProgress.failures.empty()) {
         summary += L"\r\n\r\nFailures:";
@@ -1193,7 +1205,8 @@ void ContinueUpdateAll(HWND hwnd) {
 void CompleteUpdateAllStep(
     HWND hwnd,
     tp::UpdateAllOutcome outcome,
-    std::wstring detail) {
+    std::wstring detail,
+    bool stopBatch = false) {
     std::wstring error;
     if (!tp::CompleteUpdateAllItem(
             g_updateAllProgress,
@@ -1212,6 +1225,11 @@ void CompleteUpdateAllStep(
             L"TocPilot - Update All",
             MB_OK | MB_ICONERROR);
         return;
+    }
+
+    if (stopBatch) {
+        g_updateAllProgress.position =
+            g_updateAllProgress.packageIds.size();
     }
 
     ContinueUpdateAll(hwnd);
@@ -1519,8 +1537,8 @@ void StartUpdate(HWND hwnd) {
         g_packageInstallInProgress) {
         MessageBoxW(
             hwnd,
-            L"Finish the active package filesystem transaction before replacing TocPilot itself.",
-            L"TocPilot - Package Transaction Active",
+            L"Finish the active package operation before replacing TocPilot itself.",
+            L"TocPilot - Package Operation Active",
             MB_OK | MB_ICONINFORMATION);
         return;
     }
@@ -2762,10 +2780,16 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             }
 
             if (updateAllStep) {
+                const bool rollbackFailed =
+                    error.find(
+                        L"Rollback also failed") !=
+                    std::wstring::npos;
+
                 CompleteUpdateAllStep(
                     hwnd,
                     tp::UpdateAllOutcome::Failed,
-                    message);
+                    message,
+                    rollbackFailed);
             } else {
                 MessageBoxW(
                     hwnd,
@@ -2826,7 +2850,8 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                 CompleteUpdateAllStep(
                     hwnd,
                     tp::UpdateAllOutcome::Failed,
-                    message);
+                    message,
+                    !rolledBack);
             } else {
                 std::wstring dialog =
                     packageName +
@@ -2992,8 +3017,8 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             g_packageInstallInProgress) {
             MessageBoxW(
                 hwnd,
-                L"A package filesystem transaction is currently active. TocPilot will stay open until it reaches a safe completion point.",
-                L"TocPilot - Package Transaction Active",
+                L"A package operation is currently active. TocPilot will stay open until it reaches a safe completion point.",
+                L"TocPilot - Package Operation Active",
                 MB_OK | MB_ICONINFORMATION);
             return 0;
         }
