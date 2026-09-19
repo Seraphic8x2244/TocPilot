@@ -1,4 +1,5 @@
 #include "add_package_dialog.h"
+#include "archive.h"
 #include "branch_dialog.h"
 #include "github_api.h"
 #include "state.h"
@@ -27,6 +28,7 @@ constexpr wchar_t kWindowClass[] = L"TocPilotMainWindow";
 constexpr UINT WM_TP_CHECK_COMPLETE = WM_APP + 1;
 constexpr UINT WM_TP_UPDATE_COMPLETE = WM_APP + 2;
 constexpr UINT WM_TP_PACKAGE_REFRESH_COMPLETE = WM_APP + 3;
+constexpr UINT WM_TP_PACKAGE_INSPECT_COMPLETE = WM_APP + 4;
 
 constexpr int IDC_UPDATE = 1001;
 constexpr int IDC_WOW_STATUS = 1002;
@@ -39,6 +41,7 @@ constexpr int IDC_UPDATE_ALL = 1008;
 constexpr int IDC_REFRESH_PACKAGES = 1009;
 constexpr int IDC_ADD_PACKAGE = 1010;
 constexpr int IDC_SET_BRANCH = 1011;
+constexpr int IDC_INSPECT_PACKAGE = 1012;
 
 constexpr std::array<double, 5> kTextScales{
     0.90,
@@ -64,6 +67,7 @@ HWND g_updateButton = nullptr;
 HWND g_updateAllButton = nullptr;
 HWND g_refreshPackagesButton = nullptr;
 HWND g_setBranchButton = nullptr;
+HWND g_inspectPackageButton = nullptr;
 HWND g_addPackageButton = nullptr;
 HWND g_packageList = nullptr;
 HWND g_packageHint = nullptr;
@@ -80,6 +84,7 @@ std::filesystem::path g_root;
 bool g_stateReady = false;
 bool g_stateCreated = false;
 bool g_packageRefreshInProgress = false;
+bool g_packageInspectInProgress = false;
 std::wstring g_stateError;
 
 struct CheckResult {
@@ -100,6 +105,17 @@ struct PackageRefreshResult {
     std::wstring packageId;
     std::wstring branch;
     std::wstring remoteSha;
+    std::wstring error;
+};
+
+struct PackageInspectResult {
+    bool ok = false;
+    std::size_t index = 0;
+    std::wstring packageId;
+    std::wstring branch;
+    std::wstring remoteSha;
+    std::uint64_t downloadedBytes = 0;
+    tp::ArchiveInspection inspection;
     std::wstring error;
 };
 
@@ -142,7 +158,8 @@ std::wstring PackageHintText() {
     return
         std::to_wstring(g_state.packages.size()) +
         L" package record(s). Set Branch changes tracking; Refresh checks "
-        L"the saved branch head. Installation remains disabled.";
+        L"the saved branch head; Inspect stages and previews the exact remote "
+        L"archive. Installation remains disabled.";
 }
 
 BOOL CALLBACK ApplyFontToChild(HWND child, LPARAM fontValue) {
@@ -290,23 +307,27 @@ void LayoutControls(HWND hwnd) {
     const int buttonY = 145;
 
     if (g_updateAllButton) {
-        MoveWindow(g_updateAllButton, x, buttonY, 105, 32, TRUE);
-        x += 110;
+        MoveWindow(g_updateAllButton, x, buttonY, 90, 32, TRUE);
+        x += 95;
     }
     if (g_refreshPackagesButton) {
-        MoveWindow(g_refreshPackagesButton, x, buttonY, 85, 32, TRUE);
-        x += 90;
+        MoveWindow(g_refreshPackagesButton, x, buttonY, 70, 32, TRUE);
+        x += 75;
     }
     if (g_setBranchButton) {
-        MoveWindow(g_setBranchButton, x, buttonY, 100, 32, TRUE);
-        x += 105;
+        MoveWindow(g_setBranchButton, x, buttonY, 90, 32, TRUE);
+        x += 95;
+    }
+    if (g_inspectPackageButton) {
+        MoveWindow(g_inspectPackageButton, x, buttonY, 75, 32, TRUE);
+        x += 80;
     }
     if (g_addPackageButton) {
-        MoveWindow(g_addPackageButton, x, buttonY, 105, 32, TRUE);
-        x += 110;
+        MoveWindow(g_addPackageButton, x, buttonY, 95, 32, TRUE);
+        x += 100;
     }
     if (g_updateButton) {
-        MoveWindow(g_updateButton, x, buttonY, 145, 32, TRUE);
+        MoveWindow(g_updateButton, x, buttonY, 130, 32, TRUE);
     }
 
     if (g_textScaleLabel) {
@@ -497,6 +518,7 @@ void UpdatePackageButtons() {
 
     bool canSetBranch = false;
     bool canRefresh = false;
+    bool canInspect = false;
 
     if (validSelection) {
         const auto& package =
@@ -510,13 +532,26 @@ void UpdatePackageButtons() {
             canSetBranch &&
             package.mode == L"branch" &&
             !package.ref.empty();
+
+        canInspect = canRefresh;
     }
+
+    const bool packageBusy =
+        g_packageRefreshInProgress ||
+        g_packageInspectInProgress;
 
     if (g_refreshPackagesButton) {
         EnableWindow(
             g_refreshPackagesButton,
-            canRefresh &&
-                    !g_packageRefreshInProgress
+            canRefresh && !packageBusy
+                ? TRUE
+                : FALSE);
+    }
+
+    if (g_inspectPackageButton) {
+        EnableWindow(
+            g_inspectPackageButton,
+            canInspect && !packageBusy
                 ? TRUE
                 : FALSE);
     }
@@ -524,8 +559,7 @@ void UpdatePackageButtons() {
     if (g_setBranchButton) {
         EnableWindow(
             g_setBranchButton,
-            canSetBranch &&
-                    !g_packageRefreshInProgress
+            canSetBranch && !packageBusy
                 ? TRUE
                 : FALSE);
     }
@@ -533,8 +567,7 @@ void UpdatePackageButtons() {
     if (g_addPackageButton) {
         EnableWindow(
             g_addPackageButton,
-            g_stateReady &&
-                    !g_packageRefreshInProgress
+            g_stateReady && !packageBusy
                 ? TRUE
                 : FALSE);
     }
@@ -640,6 +673,110 @@ void StartPackageRefresh(
             if (!PostMessageW(
                     hwnd,
                     WM_TP_PACKAGE_REFRESH_COMPLETE,
+                    0,
+                    reinterpret_cast<LPARAM>(
+                        result.get()))) {
+                return;
+            }
+
+            result.release();
+        })
+        .detach();
+}
+
+void StartPackageInspection(
+    HWND hwnd,
+    std::size_t index) {
+    if (index >= g_state.packages.size()) {
+        return;
+    }
+
+    const auto package =
+        g_state.packages[index];
+
+    if (package.provider != L"github" ||
+        package.mode != L"branch" ||
+        package.ref.empty()) {
+        return;
+    }
+
+    g_packageInspectInProgress = true;
+    UpdatePackageButtons();
+    SetPackageRowStatus(
+        index,
+        L"Inspecting...");
+
+    if (g_packageHint) {
+        const std::wstring message =
+            package.name +
+            L": resolving and staging " +
+            package.ref +
+            L". Interface\\AddOns will not be changed.";
+
+        SetWindowTextW(
+            g_packageHint,
+            message.c_str());
+    }
+
+    const auto wowRoot = g_root;
+
+    std::thread(
+        [hwnd, index, package, wowRoot]() {
+            auto result =
+                std::make_unique<PackageInspectResult>();
+
+            result->index = index;
+            result->packageId = package.id;
+            result->branch = package.ref;
+
+            if (!tp::ResolveGitHubBranchHead(
+                    package.repository,
+                    package.ref,
+                    result->remoteSha,
+                    result->error)) {
+                result->ok = false;
+            } else if (!tp::ResetGitHubPackageStaging(
+                    wowRoot,
+                    package.repository,
+                    result->inspection.stagingDirectory,
+                    result->error)) {
+                result->ok = false;
+            } else {
+                result->inspection.archivePath =
+                    result->inspection.stagingDirectory /
+                    L"archive.zip";
+
+                result->inspection.extractedRoot =
+                    result->inspection.stagingDirectory /
+                    L"extracted";
+
+                if (!tp::DownloadGitHubArchive(
+                        package.repository,
+                        result->remoteSha,
+                        result->inspection.archivePath,
+                        result->downloadedBytes,
+                        result->error)) {
+                    result->ok = false;
+                } else if (!tp::ExtractZipSecure(
+                        result->inspection.archivePath,
+                        result->inspection.extractedRoot,
+                        result->inspection.entryCount,
+                        result->inspection.totalUncompressedBytes,
+                        result->error)) {
+                    result->ok = false;
+                } else if (!tp::DetectAddonCandidates(
+                        result->inspection.extractedRoot,
+                        result->inspection.candidates,
+                        result->error)) {
+                    result->ok = false;
+                } else {
+                    result->ok = true;
+                }
+            }
+
+            if (!PostMessageW(
+                    hwnd,
+                    WM_TP_PACKAGE_INSPECT_COMPLETE,
                     0,
                     reinterpret_cast<LPARAM>(
                         result.get()))) {
@@ -936,6 +1073,20 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             GetModuleHandleW(nullptr),
             nullptr);
 
+        g_inspectPackageButton = CreateWindowExW(
+            0,
+            L"BUTTON",
+            L"Inspect",
+            WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON,
+            325,
+            145,
+            75,
+            32,
+            hwnd,
+            reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_INSPECT_PACKAGE)),
+            GetModuleHandleW(nullptr),
+            nullptr);
+
         g_addPackageButton = CreateWindowExW(
             0,
             L"BUTTON",
@@ -953,6 +1104,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
         EnableWindow(g_updateAllButton, FALSE);
         EnableWindow(g_refreshPackagesButton, FALSE);
         EnableWindow(g_setBranchButton, FALSE);
+        EnableWindow(g_inspectPackageButton, FALSE);
         EnableWindow(
             g_addPackageButton,
             g_stateReady ? TRUE : FALSE);
@@ -1106,6 +1258,20 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                 row < static_cast<int>(
                     g_state.packages.size())) {
                 StartPackageRefresh(
+                    hwnd,
+                    static_cast<std::size_t>(row));
+            }
+            return 0;
+        }
+
+        if (LOWORD(wParam) == IDC_INSPECT_PACKAGE &&
+            HIWORD(wParam) == BN_CLICKED) {
+            const int row = SelectedPackageRow();
+
+            if (row >= 0 &&
+                row < static_cast<int>(
+                    g_state.packages.size())) {
+                StartPackageInspection(
                     hwnd,
                     static_cast<std::size_t>(row));
             }
@@ -1378,6 +1544,176 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                 g_packageHint,
                 message.c_str());
         }
+
+        return 0;
+    }
+
+    case WM_TP_PACKAGE_INSPECT_COMPLETE: {
+        std::unique_ptr<PackageInspectResult> result(
+            reinterpret_cast<PackageInspectResult*>(
+                lParam));
+
+        g_packageInspectInProgress = false;
+
+        if (result->index >=
+                g_state.packages.size() ||
+            g_state.packages[result->index].id !=
+                result->packageId ||
+            g_state.packages[result->index].ref !=
+                result->branch) {
+            if (g_packageHint) {
+                SetWindowTextW(
+                    g_packageHint,
+                    L"Inspection result was ignored because the package tracking changed.");
+            }
+            UpdatePackageButtons();
+            return 0;
+        }
+
+        const auto index = result->index;
+        const auto& package =
+            g_state.packages[index];
+
+        if (!result->ok) {
+            SetPackageRowStatus(
+                index,
+                L"Inspect failed");
+
+            if (g_packageHint) {
+                const std::wstring message =
+                    package.name +
+                    L": inspection failed - " +
+                    result->error;
+
+                SetWindowTextW(
+                    g_packageHint,
+                    message.c_str());
+            }
+
+            SelectPackageRow(index);
+            UpdatePackageButtons();
+            return 0;
+        }
+
+        RefreshPackageStateUi();
+        SelectPackageRow(index);
+        UpdatePackageButtons();
+
+        const std::wstring shortSha =
+            result->remoteSha.substr(
+                0,
+                std::min<std::size_t>(
+                    7,
+                    result->remoteSha.size()));
+
+        std::wstring hint =
+            package.name +
+            L": staged " +
+            std::to_wstring(
+                result->inspection.entryCount) +
+            L" ZIP entries at " +
+            shortSha +
+            L"; detected " +
+            std::to_wstring(
+                result->inspection.candidates.size()) +
+            L" addon root(s). Interface\\AddOns was not changed.";
+
+        if (g_packageHint) {
+            SetWindowTextW(
+                g_packageHint,
+                hint.c_str());
+        }
+
+        std::wstring summary =
+            package.name +
+            L" / " +
+            package.ref +
+            L" @ " +
+            shortSha +
+            L"\r\n\r\nStaging: " +
+            result->inspection.stagingDirectory.wstring() +
+            L"\r\nDownloaded: " +
+            std::to_wstring(
+                result->downloadedBytes) +
+            L" bytes\r\nArchive entries: " +
+            std::to_wstring(
+                result->inspection.entryCount) +
+            L"\r\nExtracted bytes: " +
+            std::to_wstring(
+                result->inspection.totalUncompressedBytes) +
+            L"\r\n\r\n";
+
+        if (result->inspection.candidates.empty()) {
+            summary +=
+                L"No addon roots containing .toc files were detected.";
+        } else {
+            summary +=
+                L"Candidate addon folders (preview only):\r\n";
+
+            constexpr std::size_t maxShown = 30;
+            const std::size_t shown =
+                std::min<std::size_t>(
+                    maxShown,
+                    result->inspection.candidates.size());
+
+            for (std::size_t i = 0;
+                 i < shown;
+                 ++i) {
+                const auto& candidate =
+                    result->inspection.candidates[i];
+
+                summary +=
+                    L"\r\n- " +
+                    candidate.installFolder +
+                    L"  <-  " +
+                    candidate.sourceRelativePath
+                        .generic_wstring();
+
+                if (!candidate.tocFiles.empty()) {
+                    summary += L"  [";
+                    for (std::size_t toc = 0;
+                         toc < candidate.tocFiles.size();
+                         ++toc) {
+                        if (toc != 0) {
+                            summary += L", ";
+                        }
+
+                        summary +=
+                            candidate.tocFiles[toc]
+                                .filename()
+                                .wstring();
+                    }
+                    summary += L"]";
+                }
+            }
+
+            if (shown <
+                result->inspection.candidates.size()) {
+                summary +=
+                    L"\r\n\r\n...and " +
+                    std::to_wstring(
+                        result->inspection.candidates.size() -
+                        shown) +
+                    L" more.";
+            }
+        }
+
+        summary +=
+            L"\r\n\r\nNothing was copied, moved, deleted, or overwritten under Interface\\AddOns.";
+
+        if (!package.latestRevision.empty() &&
+            package.latestRevision !=
+                result->remoteSha) {
+            summary +=
+                L"\r\n\r\nThe branch moved since the saved Refresh result. "
+                L"Use Refresh to persist this newer remote head.";
+        }
+
+        MessageBoxW(
+            hwnd,
+            summary.c_str(),
+            L"TocPilot - Archive Inspection",
+            MB_OK | MB_ICONINFORMATION);
 
         return 0;
     }
