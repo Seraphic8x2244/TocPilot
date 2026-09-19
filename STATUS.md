@@ -10,6 +10,7 @@
 - Exact implementation head CI passed on Windows x64: Actions run `35460533602` built Release, passed the full CTest suite, and uploaded the executable artifact.
 - Runtime gates are cleared through `v0.1.7`; `v0.1.8` transactional install is published and awaiting runtime validation.
 - Deferred beyond this slice: package removal, Update All orchestration, explicit adoption of pre-existing unmanaged addon roots, crash-recovery journaling for unexpected process/power loss during live commit, GitHub release assets, GitLab support, import/export, column persistence, and modification detection/backups.
+- Minimal package-record removal is now required for the `v0.1.9` test workflow so obsolete/mistaken source records can be forgotten without touching live addon files.
 - Exact next step: self-update to `v0.1.8` and runtime-test first install/update safety, including refusal to overwrite pre-existing unowned addon roots.
 - Delivery rule: publish runtime-test builds only after their exact source version passes Windows CI.
 
