@@ -822,8 +822,9 @@ void StartPackageInspection(
                         result->inspection.totalUncompressedBytes,
                         result->error)) {
                     result->ok = false;
-                } else if (!tp::DetectAddonCandidates(
+                } else if (!tp::DetectGitHubAddonCandidates(
                         result->inspection.extractedRoot,
+                        package.repository,
                         result->inspection.candidates,
                         result->error)) {
                     result->ok = false;
@@ -950,8 +951,9 @@ void StartPackageInstall(
                         result->inspection.totalUncompressedBytes,
                         result->error)) {
                     result->ok = false;
-                } else if (!tp::DetectAddonCandidates(
+                } else if (!tp::DetectGitHubAddonCandidates(
                         result->inspection.extractedRoot,
+                        package.repository,
                         result->inspection.candidates,
                         result->error)) {
                     result->ok = false;
