@@ -888,6 +888,75 @@ bool BuildAddonInstallPlan(
     return true;
 }
 
+bool BuildAddonRemovalPlan(
+    const std::filesystem::path& wowRoot,
+    std::wstring_view packageId,
+    const std::vector<std::wstring>& installedFiles,
+    const std::vector<std::wstring>& otherInstalledFiles,
+    AddonInstallPlan& plan,
+    std::wstring& error) {
+    plan = {};
+    error.clear();
+
+    if (wowRoot.empty() || packageId.empty()) {
+        error =
+            L"Removal planning requires WoW root and package id.";
+        return false;
+    }
+
+    if (installedFiles.empty()) {
+        error =
+            L"The selected package has no recorded installed files to remove.";
+        return false;
+    }
+
+    std::set<std::wstring, InsensitiveLess> ownedRoots;
+    std::set<std::wstring, InsensitiveLess> otherRoots;
+    if (!CollectOwnedRoots(
+            installedFiles,
+            ownedRoots,
+            error) ||
+        !CollectOwnedRoots(
+            otherInstalledFiles,
+            otherRoots,
+            error)) {
+        return false;
+    }
+
+    if (ownedRoots.empty()) {
+        error =
+            L"The selected package has no owned addon roots to remove.";
+        return false;
+    }
+
+    for (const auto& root : ownedRoots) {
+        if (otherRoots.contains(root)) {
+            error =
+                L"Refusing to remove addon root " +
+                root +
+                L" because another TocPilot package also records ownership there.";
+            return false;
+        }
+    }
+
+    plan.wowRoot = wowRoot;
+    plan.addOnsRoot =
+        wowRoot /
+        L"Interface" /
+        L"AddOns";
+    plan.transactionRoot =
+        wowRoot /
+        L"Interface" /
+        L"TocPilot" /
+        L"transactions" /
+        TransactionKey(packageId);
+    plan.obsoleteInstallFolders.assign(
+        ownedRoots.begin(),
+        ownedRoots.end());
+
+    return true;
+}
+
 bool PrepareAddonInstallTransaction(
     const AddonInstallPlan& plan,
     AddonInstallTransaction& transaction,
@@ -895,8 +964,14 @@ bool PrepareAddonInstallTransaction(
     transaction = {};
     error.clear();
 
-    if (plan.roots.empty() ||
-        plan.desiredInstalledFiles.empty() ||
+    const bool hasInstallRoots =
+        !plan.roots.empty();
+    const bool hasRemovalRoots =
+        !plan.obsoleteInstallFolders.empty();
+
+    if ((!hasInstallRoots && !hasRemovalRoots) ||
+        (hasInstallRoots &&
+         plan.desiredInstalledFiles.empty()) ||
         plan.transactionRoot.empty()) {
         error =
             L"Install transaction plan is incomplete.";
@@ -974,7 +1049,8 @@ bool CommitAddonInstallTransaction(
 
     if (!transaction.prepared ||
         transaction.active ||
-        transaction.plan.roots.empty()) {
+        (transaction.plan.roots.empty() &&
+         transaction.plan.obsoleteInstallFolders.empty())) {
         error =
             L"Install transaction is not ready to commit.";
         return false;
@@ -1095,6 +1171,24 @@ bool CommitAddonInstallTransaction(
 
         transaction.backedUpRoots.push_back(
             folder);
+
+        if (transaction.backedUpRoots.size() >=
+                options.failAfterRootBackups) {
+            const std::wstring commitError =
+                L"Injected install failure after live root backup.";
+            std::wstring rollbackError;
+            if (!RollbackAddonInstallTransaction(
+                    transaction,
+                    rollbackError)) {
+                error =
+                    commitError +
+                    L" Rollback also failed: " +
+                    rollbackError;
+            } else {
+                error = commitError;
+            }
+            return false;
+        }
     }
 
     for (const auto& root : plan.roots) {
