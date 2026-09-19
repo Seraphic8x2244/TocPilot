@@ -1,9 +1,30 @@
 cmake_minimum_required(VERSION 3.24)
 
-project(TocPilot VERSION 0.1.6 LANGUAGES CXX)
+project(TocPilot VERSION 0.1.6 LANGUAGES C CXX)
+
+# miniz 3.1.2, pinned from richgel999/miniz commit
+# 77d0dce8627735138c51770d1799a1ef48f2117d.
+add_library(TocPilotMiniz STATIC
+    third_party/miniz/miniz.c
+    third_party/miniz/miniz_tdef.c
+    third_party/miniz/miniz_tinfl.c
+    third_party/miniz/miniz_zip.c
+)
+target_include_directories(TocPilotMiniz PUBLIC third_party/miniz)
+target_compile_definitions(TocPilotMiniz PRIVATE
+    MINIZ_NO_ZLIB_COMPATIBLE_NAMES
+)
+
+if(MSVC)
+    set_property(TARGET TocPilotMiniz PROPERTY
+        MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>"
+    )
+    target_compile_options(TocPilotMiniz PRIVATE /W3 /utf-8)
+endif()
 
 add_executable(TocPilot WIN32
     src/add_package_dialog.cpp
+    src/archive.cpp
     src/branch_dialog.cpp
     src/github_api.cpp
     src/main.cpp
@@ -28,7 +49,7 @@ if(MSVC)
 endif()
 
 target_include_directories(TocPilot PRIVATE src)
-target_link_libraries(TocPilot PRIVATE winhttp bcrypt shell32 comctl32)
+target_link_libraries(TocPilot PRIVATE TocPilotMiniz winhttp bcrypt shell32 comctl32)
 
 set_target_properties(TocPilot PROPERTIES
     OUTPUT_NAME "TocPilot"
@@ -88,4 +109,24 @@ if(BUILD_TESTING)
     endif()
 
     add_test(NAME github-api-parsing COMMAND TocPilotGitHubApiTests)
+
+    add_executable(TocPilotArchiveTests
+        tests/archive_tests.cpp
+        src/archive.cpp
+    )
+    target_compile_features(TocPilotArchiveTests PRIVATE cxx_std_20)
+    target_compile_definitions(TocPilotArchiveTests PRIVATE
+        UNICODE
+        _UNICODE
+        WIN32_LEAN_AND_MEAN
+        NOMINMAX
+    )
+    target_include_directories(TocPilotArchiveTests PRIVATE src)
+    target_link_libraries(TocPilotArchiveTests PRIVATE TocPilotMiniz)
+
+    if(MSVC)
+        target_compile_options(TocPilotArchiveTests PRIVATE /W4 /permissive- /utf-8)
+    endif()
+
+    add_test(NAME archive-inspection COMMAND TocPilotArchiveTests)
 endif()
