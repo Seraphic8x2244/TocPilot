@@ -3,7 +3,7 @@
 ## Continuation checkpoint — 2026-09-19
 
 - Active branch: `p2-github-branches`.
-- Current application version: `v0.1.10`; transactional uninstall implementation head `4a6fb84` has now been confirmed green by the user in GitHub Actions. Preparing the `v0.1.11` release.
+- Current source version: `v0.1.11`; transactional uninstall implementation head `4a6fb84` was confirmed green by the user in GitHub Actions. Release publication is being requested through the automated workflow.
 - Latest implementation commit: `9dd56e4` — Polish uninstall development controls.
 - New uninstall implementation commits:
   - `f75f286` — Add transactional package uninstall UI.
@@ -31,7 +31,7 @@
 - Intended platform: Windows x64
 - Implementation: native C++20 / Win32 / CMake
 - Highest priority: publish `v0.1.11` and runtime-validate transactional uninstall before starting Update All orchestration
-- Current application version: `v0.1.10`; published and runtime-validated. The uninstall implementation head is CI-green and is being prepared for `v0.1.11`.
+- Current source version: `v0.1.11`; `v0.1.10` remains the last runtime-validated release until the automated `v0.1.11` release completes and is tested.
 
 ## Latest commits
 
@@ -435,7 +435,7 @@ Complete. A real `v0.1.0 -> v0.1.1` in-app self-update succeeded on Windows besi
 ## Exact next step
 
 1. The user confirmed the matching GitHub Actions run for implementation head `4a6fb84` is green.
-2. Bump the application to `v0.1.11` and update the automated release request; the release workflow must pass Windows x64 build + full CTest before publication.
+2. Source has been bumped to `v0.1.11`; update `.github/release-version` to request publication. The release workflow must pass Windows x64 build + full CTest before publication.
 3. Self-update the installed `v0.1.10` client to `v0.1.11`.
 4. Runtime-test **Uninstall** on a TocPilot-managed addon: owned addon roots disappear, unrelated addons remain untouched, the package row remains configured but becomes **Not installed**, and restart preserves that state.
 5. Use **Reinstall** on the same retained package record and confirm the addon returns cleanly.
