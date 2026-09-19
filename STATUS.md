@@ -8,16 +8,16 @@
 - License: MIT
 - Intended platform: Windows x64
 - Implementation: native C++20 / Win32 / CMake
-- Highest priority: validate each user-facing development build through TocPilot self-update, then continue P1 provider/URL parsing
-- Current application version: `v0.1.2`; published as the first P1 user-test build, with v0.1.1 -> v0.1.2 self-update testing next
+- Highest priority: publish and validate `v0.1.3` through TocPilot self-update, then continue P1 package-record/add-package work
+- Current source version: `v0.1.3` prepared for the next user-test build; latest published and runtime-validated version is `v0.1.2`
 
 ## Latest commits
 
+- `a7f5aba` — Fix Add Package dialog coordinate types
+- `d699bd0` — Add provider URL normalization
+- `a49b98a` — Record automated v0.1.2 P1 release
 - `95deab4` — Request v0.1.2 release
 - `701a2ce` — Prepare v0.1.2 P1 test release
-- `7edef4e` — Require self-update for user test builds
-- `9ee1229` — Record P1 state UI build status
-- `698b984` — Fix P1 Win32 compile errors
 
 ## Completed
 
@@ -59,8 +59,26 @@
 - Package-action buttons are present but intentionally disabled until the package engine exists.
 - Text-size selector persists to `TocPilot.json` and reapplies the native UI font.
 - Existing application self-update status and action remain in the main window; updater implementation files were not changed.
+- User confirmed the installed `v0.1.1` client detected, applied, and restarted into `v0.1.2` through TocPilot self-update.
+- Added provider/repository URL normalization for public `github.com` and `gitlab.com` repositories.
+- URL normalization accepts normal HTTPS URLs, scheme-less URLs, common SSH/scp-style clone URLs, `.git` suffixes, GitHub repository subpages, and GitLab nested groups/`/-/` routes.
+- Unsupported hosts, incomplete repository paths, and unsafe path segments are rejected with a user-facing reason.
+- Added a minimal Add Package source-check dialog. It validates and normalizes a repository URL but deliberately does not install or save a package yet.
+- Added automated provider URL tests through CTest and required them in both normal Windows CI and release CI.
 
 ## CI validation
+
+Latest provider/parser Windows build: Actions run `35447864601` for commit `a7f5aba` completed successfully.
+
+- x64 Release compile/link: success;
+- provider URL normalization CTest: success;
+- executable artifact upload: success;
+- artifact ID: `10586536172`;
+- artifact name: `TocPilot-windows-x64`;
+- artifact ZIP size: 183,149 bytes;
+- artifact SHA-256: `0d686da42841fdf3cf7879b9ef8f6e4ad2ee65ed728c8e87464122e044a88130`.
+
+The first provider/dialog build attempt failed only on a Win32 `LONG`/integer type mismatch in dialog centering; commit `a7f5aba` corrected it and the next build/test run passed.
 
 Latest P1 Windows build: Actions run `35446732391` for commit `698b984` completed successfully.
 
@@ -133,7 +151,6 @@ P1 runtime testing still required:
 - reopening loads the existing state without rewriting it;
 - text-size selection persists across restart;
 - package ListView renders/resizes correctly at supported text sizes;
-- v0.1.1 detects `v0.1.2`, self-updates successfully, and the restarted v0.1.2 reports itself current;
 - malformed/unsupported `TocPilot.json` leaves the file unchanged and shows the state error in the UI.
 
 P0 edge/failure paths not yet deliberately forced:
@@ -233,8 +250,9 @@ Complete. A real `v0.1.0 -> v0.1.1` in-app self-update succeeded on Windows besi
 
 ## Exact next step
 
-1. Keep the user's installed `v0.1.1` and let TocPilot detect `v0.1.2`.
-2. Use `Update app` to self-update to v0.1.2; do not manually replace the EXE.
-3. Confirm `TocPilot.json` is created, the package table appears, `State: TocPilot.json ready` is shown, and app update status remains healthy.
-4. Change Text size (for example 100% -> 125%), close/reopen, and confirm the selection persists.
-5. After that smoke test, implement provider/URL normalization and publish the next user-testable version through self-update again.
+1. Publish `v0.1.3` through the automated release workflow.
+2. Keep the user's installed `v0.1.2` and let TocPilot detect `v0.1.3`; use `Update app` rather than manually replacing the EXE.
+3. In `v0.1.3`, click `Add Package` and confirm a GitHub repository URL is recognized and normalized without installing anything.
+4. Repeat with a public GitLab repository URL; verify an unsupported/non-GitHub/GitLab URL is rejected cleanly.
+5. Also recheck that the existing package table/state UI and text-size persistence remain healthy.
+6. After that smoke test, continue P1 with real package-record parsing/writing and turn Add Package from source validation into the first persistent package-definition flow.

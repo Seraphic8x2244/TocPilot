@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.24)
 
-project(TocPilot VERSION 0.1.2 LANGUAGES CXX)
+project(TocPilot VERSION 0.1.3 LANGUAGES CXX)
 
 add_executable(TocPilot WIN32
     src/add_package_dialog.cpp
