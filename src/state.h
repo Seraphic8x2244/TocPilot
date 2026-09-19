@@ -71,6 +71,10 @@ bool SetPackageInstalledState(
     std::vector<std::wstring> installedFiles,
     std::wstring& error);
 
+bool ClearPackageInstalledState(
+    PackageRecord& package,
+    std::wstring& error);
+
 bool LoadOrCreateState(
     const std::filesystem::path& wowRoot,
     AppState& state,
