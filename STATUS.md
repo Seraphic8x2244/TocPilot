@@ -4,7 +4,7 @@
 
 - Repository: `Seraphic8x2244/TocPilot`
 - Branch: `p0-self-update`
-- Product stage: P0 self-update bootstrap implemented; initial Windows smoke test passed; first v0.1.0 release-asset publish attempt failed at attachment step
+- Product stage: P0 self-update bootstrap implemented; initial Windows smoke test passed; v0.1.0 release assets published successfully
 - License: MIT
 - Intended platform: Windows x64
 - Implementation: native C++20 / Win32 / CMake
@@ -13,11 +13,11 @@
 
 ## Latest commits
 
-- `20c3ad5` — Implement P0 self-update bootstrap
-- `ce21df8` — Start P0 self-update implementation
-- `49c8e0b` — Add TocPilot implementation handoff
-- `3d5c9f2` — Expand TocPilot project overview
-- `63c1910` — Add TocPilot development plan
+- `a2e32f4` — Remove one-off v0.1.0 release repair
+- `7f76222` — Add one-off v0.1.0 release repair
+- `10442c5` — Fix release asset publishing
+- `d4b2ab6` — Record v0.1.0 release publish failure
+- `1386f41` — Record successful v0.1.0 smoke test
 
 ## Completed
 
@@ -73,8 +73,9 @@ This validates compilation and CI packaging only. It does not validate runtime u
 - Tag `v0.1.0` points to commit `1386f41`.
 - Release workflow run `35444784363` built `TocPilot.exe` successfully and wrote the SHA-256 sidecar successfully.
 - The workflow failed only at the final publish step because it used `gh release create` even though the release already existed.
-- The release page therefore currently shows only GitHub's automatic source archives.
-- Fix direction: make the workflow upload assets to an existing release and add a safe manual-dispatch path that builds the exact requested tag.
+- The permanent release workflow now uploads to an existing release when present and can create one when absent.
+- A one-off repair workflow checked out the exact `v0.1.0` tag and successfully attached `TocPilot.exe` plus `TocPilot.exe.sha256` to the existing release.
+- The one-off repair workflow was then removed.
 
 ## Untested / remaining P0 work
 
@@ -179,8 +180,6 @@ Implementation is present and compiles. P0 is not complete until a real `v0.1.0 
 
 ## Exact next step
 
-1. Fix `.github/workflows/release.yml` so it uploads to an existing release and supports manual dispatch for an explicit tag.
-2. Manually run the fixed Release workflow for `v0.1.0`, building the exact existing tag, and verify `TocPilot.exe` plus `TocPilot.exe.sha256` appear on the release.
-3. Run the existing local v0.1.0 build and verify it changes from `Release: Not found` to `Release: Current - v0.1.0`.
-4. Change only the compiled version/build text to `v0.1.1`, build/publish that tag, and use the local v0.1.0 UI to update itself.
-5. Do not start P1 until that end-to-end replacement/restart test succeeds.
+1. Run the existing local v0.1.0 build and verify it changes from `Release: Not found` to `Release: Current - v0.1.0`.
+2. Change only the compiled version/build text to `v0.1.1`, build/publish that tag, and use the local v0.1.0 UI to update itself.
+3. Do not start P1 until that end-to-end replacement/restart test succeeds.
