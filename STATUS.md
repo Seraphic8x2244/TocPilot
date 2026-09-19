@@ -9,15 +9,15 @@
 - Intended platform: Windows x64
 - Implementation: native C++20 / Win32 / CMake
 - Highest priority: publish and validate `v0.1.3` through TocPilot self-update, then continue P1 package-record/add-package work
-- Current source version: `v0.1.3` prepared for the next user-test build; latest published and runtime-validated version is `v0.1.2`
+- Current application version: `v0.1.3`; published successfully and awaiting user runtime validation through the installed `v0.1.2` self-updater
 
 ## Latest commits
 
+- `dd5d77d` — Request v0.1.3 release
+- `ba7adc6` — Prepare v0.1.3 provider URL test release
 - `a7f5aba` — Fix Add Package dialog coordinate types
 - `d699bd0` — Add provider URL normalization
 - `a49b98a` — Record automated v0.1.2 P1 release
-- `95deab4` — Request v0.1.2 release
-- `701a2ce` — Prepare v0.1.2 P1 test release
 
 ## Completed
 
@@ -142,6 +142,8 @@ Routine releases no longer require manually drafting a GitHub release. The repos
 
 This was validated with `v0.1.1`, and again with the first P1 test release `v0.1.2`. Release workflow run `35447238830` created tag `v0.1.2` at commit `95deab4`, published the release, and attached `TocPilot.exe` (358,400 bytes; SHA-256 `1517ff2a81d26689d6c7764c6ca196251e9f480a7866b6c6960acf5e7dbf49d7`) plus `TocPilot.exe.sha256`.
 
+Provider-normalization test release `v0.1.3` was also published automatically. Release workflow run `35448024199` validated source/version consistency, built Release x64, passed the provider URL CTest, created tag `v0.1.3` at commit `dd5d77d`, and published `TocPilot.exe` (373,248 bytes; SHA-256 `bb1eb5dea85fdf208542155eaaeecff9be339bd3e4de9dc0d65f6aa3fd5942df`) plus `TocPilot.exe.sha256`.
+
 ## Untested / remaining validation
 
 P1 runtime testing still required:
@@ -250,9 +252,9 @@ Complete. A real `v0.1.0 -> v0.1.1` in-app self-update succeeded on Windows besi
 
 ## Exact next step
 
-1. Publish `v0.1.3` through the automated release workflow.
-2. Keep the user's installed `v0.1.2` and let TocPilot detect `v0.1.3`; use `Update app` rather than manually replacing the EXE.
-3. In `v0.1.3`, click `Add Package` and confirm a GitHub repository URL is recognized and normalized without installing anything.
-4. Repeat with a public GitLab repository URL; verify an unsupported/non-GitHub/GitLab URL is rejected cleanly.
-5. Also recheck that the existing package table/state UI and text-size persistence remain healthy.
-6. After that smoke test, continue P1 with real package-record parsing/writing and turn Add Package from source validation into the first persistent package-definition flow.
+1. Keep the user's installed `v0.1.2` and let TocPilot detect `v0.1.3`; use `Update app` rather than manually replacing the EXE.
+2. Confirm TocPilot closes, replaces itself, reopens as `v0.1.3`, and then reports the app release as current.
+3. Click `Add Package` and test `https://github.com/Shagu/pfUI`; it should report GitHub, repository `Shagu/pfUI`, and normalized URL `https://github.com/Shagu/pfUI` without installing or saving anything.
+4. Repeat with `https://gitlab.com/gitlab-org/gitlab`; then try an unsupported URL such as `https://bitbucket.org/example/example` and confirm it is rejected cleanly.
+5. Also recheck that the package table/state UI appears and that the Text size selection still persists across a close/reopen.
+6. If this smoke test passes, continue P1 with real package-record parsing/writing and turn Add Package from source validation into the first persistent package-definition flow.
