@@ -3,7 +3,7 @@
 ## Continuation checkpoint — 2026-09-19
 
 - Active branch: `p2-github-branches`.
-- Current application version: `v0.1.10`; published successfully and awaiting runtime validation. Latest fully runtime-validated version is `v0.1.7`; `v0.1.8` exposed the GitHub wrapper-layout bug fixed in `v0.1.9`, and `v0.1.9` exposed missing user-facing install failure dialogs fixed in `v0.1.10`.
+- Current application version: `v0.1.10`; published and runtime-validated for unmanaged-collision refusal plus successful transactional install/restart/reinstall. `v0.1.8` exposed the GitHub wrapper-layout bug fixed in `v0.1.9`, and `v0.1.9` exposed missing user-facing install failure dialogs fixed in `v0.1.10`.
 - Latest live-install implementation head: `6c75c40` — Clean package staging after commit.
 - Key live-install commits: `11aa63d` (installed revision/file ownership persistence), `80146e3` (off-thread prepare/live commit split), `974bea7` + `5bf973e` (transaction/rollback and prepare-only tests), `ab64793` (UI commit + state-save rollback), and `6c75c40` (post-success staging cleanup).
 - Completed through this checkpoint: P0 self-update, P1 state/UI/provider foundation, GitHub branch selection/Refresh/Inspect, plus the first source-complete P2 transactional single-package install/update slice.
@@ -24,7 +24,7 @@
 - License: MIT
 - Intended platform: Windows x64
 - Implementation: native C++20 / Win32 / CMake
-- Highest priority: runtime-validate the published `v0.1.8` transactional live-install/update slice for GitHub branch packages
+- Highest priority: move beyond the now-runtime-validated single-package install/reinstall slice into real package uninstall/removal and Update All orchestration
 - Current application version: `v0.1.8`; published successfully and awaiting runtime validation.
 
 ## Latest commits
@@ -310,6 +310,8 @@ Tracked-branch Refresh test release `v0.1.6` was published automatically. Releas
 
 ## Untested / remaining validation
 
+- `v0.1.10` successful-path runtime validation passed with `Shellyoung/AdvancedTradeSkillWindow2` on its default `main` branch: first install succeeded, TocPilot still showed the package as Current after restart, and Reinstall completed successfully. This validates the normal transactional install/reinstall path and persisted ownership/state at runtime.
+
 - `v0.1.10` unmanaged pfUI collision runtime test passed: `brues-code/pfUI` / `master` correctly refused to replace the existing unmanaged `Interface\AddOns\pfUI`, showed the failure popup, and created no generated GitHub wrapper folder.
 - Runtime finding on `v0.1.9`: expected unmanaged pfUI collision reached `Install failed`, but no popup was shown. Diagnosis: the install-complete handler only wrote preparation/commit errors to the row/hint and returned; it did not show a MessageBox for ordinary install failures. Add explicit user-facing failure dialogs before further runtime testing.
 - Runtime finding on `v0.1.8`: Shagu/pfUI reported a successful install while the pre-existing `Interface\\AddOns\\pfUI` remained unchanged. Root cause identified: GitHub ZIPs wrap repository contents in a generated top-level directory, and root-level addon repositories such as Shagu/pfUI (`pfUI.toc` at repo root) were incorrectly mapped to that generated wrapper name instead of the real addon folder name. Exact runtime confirmation: `Interface\\AddOns\\shagu-pfUI-b2f6df8` was created. The unowned-root collision guard itself is intact, but it was checking the wrong destination. Pause live-install testing until this archive-layout bug is fixed and released.
@@ -427,9 +429,9 @@ Complete. A real `v0.1.0 -> v0.1.1` in-app self-update succeeded on Windows besi
 
 ## Exact next step
 
-1. Choose a small GitHub addon whose target addon folder does not already exist under `Interface\AddOns`.
-2. Add it to TocPilot, select its branch, Inspect, then Install.
-3. Confirm the correct addon root appears, Installed equals Latest, Status becomes Current, and no generated GitHub wrapper folder appears.
-4. Restart TocPilot and confirm the installed/current state survives.
-5. Reinstall the same package once to validate replacement of a TocPilot-owned root.
-6. If that passes, record the transactional install slice as runtime-validated and continue to real uninstall/removal and Update All orchestration.
+1. Treat the single-package GitHub branch install/reinstall transaction as runtime-validated in `v0.1.10`.
+2. Implement real transactional package uninstall/removal for TocPilot-owned addon roots, distinct from the existing safe **Forget** action.
+3. Reuse the same ownership/transaction primitives rather than introducing a separate deletion path.
+4. Add deterministic tests for owned-root uninstall, shared/foreign ownership refusal, rollback on failure, and state-save rollback.
+5. After uninstall is validated, implement Update All orchestration over the same central single-package operations.
+6. Then simplify the temporary development UI toward Add Git Link + branch dropdown + automatic refresh/status + compact per-package actions.
