@@ -9,15 +9,15 @@
 - Intended platform: Windows x64
 - Implementation: native C++20 / Win32 / CMake
 - Highest priority: validate each user-facing development build through TocPilot self-update, then continue P1 provider/URL parsing
-- Current application version: `v0.1.1`; published `v0.1.1` self-update is validated, while P1 development remains on an unreleased branch build
+- Current application version: `v0.1.2`; published as the first P1 user-test build, with v0.1.1 -> v0.1.2 self-update testing next
 
 ## Latest commits
 
+- `95deab4` — Request v0.1.2 release
+- `701a2ce` — Prepare v0.1.2 P1 test release
+- `7edef4e` — Require self-update for user test builds
+- `9ee1229` — Record P1 state UI build status
 - `698b984` — Fix P1 Win32 compile errors
-- `54263ea` — Run CI on P1 branch
-- `620cbd9` — Add P1 state and package list foundation
-- `51ca81e` — Start P1 state and UI branch
-- `ba43b98` — Mark P0 self-update complete
 
 ## Completed
 
@@ -122,7 +122,7 @@ This proves the core P0 self-update path end-to-end.
 
 Routine releases no longer require manually drafting a GitHub release. The repository uses `.github/release-version`; changing it to a new validated version triggers Actions to validate source/version consistency, build, create or verify the tag, create/update the release, and publish the direct EXE plus checksum. Manual dispatch remains a fallback once the workflow is on the default branch.
 
-This was validated with `v0.1.1`: release workflow run `35445498170` created tag `v0.1.1` at commit `30a441b`, published the release, and attached `TocPilot.exe` (217,088 bytes; SHA-256 `e8f0dfe81c7d13b63982dbfacbbe33f33d33603c191329e6bad302ff7a70a120`) plus `TocPilot.exe.sha256`.
+This was validated with `v0.1.1`, and again with the first P1 test release `v0.1.2`. Release workflow run `35447238830` created tag `v0.1.2` at commit `95deab4`, published the release, and attached `TocPilot.exe` (358,400 bytes; SHA-256 `1517ff2a81d26689d6c7764c6ca196251e9f480a7866b6c6960acf5e7dbf49d7`) plus `TocPilot.exe.sha256`.
 
 ## Untested / remaining validation
 
@@ -133,7 +133,7 @@ P1 runtime testing still required:
 - reopening loads the existing state without rewriting it;
 - text-size selection persists across restart;
 - package ListView renders/resizes correctly at supported text sizes;
-- application update check still reports `v0.1.1` current on this branch build;
+- v0.1.1 detects `v0.1.2`, self-updates successfully, and the restarted v0.1.2 reports itself current;
 - malformed/unsupported `TocPilot.json` leaves the file unchanged and shows the state error in the UI.
 
 P0 edge/failure paths not yet deliberately forced:
@@ -233,8 +233,8 @@ Complete. A real `v0.1.0 -> v0.1.1` in-app self-update succeeded on Windows besi
 
 ## Exact next step
 
-1. Publish the current P1 state/UI slice as `v0.1.2` using the automated release pipeline.
-2. Keep the user's installed `v0.1.1`; let TocPilot detect `v0.1.2` and update itself normally.
+1. Keep the user's installed `v0.1.1` and let TocPilot detect `v0.1.2`.
+2. Use `Update app` to self-update to v0.1.2; do not manually replace the EXE.
 3. Confirm `TocPilot.json` is created, the package table appears, `State: TocPilot.json ready` is shown, and app update status remains healthy.
 4. Change Text size (for example 100% -> 125%), close/reopen, and confirm the selection persists.
 5. After that smoke test, implement provider/URL normalization and publish the next user-testable version through self-update again.
