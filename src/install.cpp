@@ -555,12 +555,36 @@ bool RestoreBackups(
             std::filesystem::exists(
                 backup,
                 existsError);
-        if (existsError || !backupExists) {
+        if (existsError) {
             if (firstError.empty()) {
                 firstError =
-                    L"Rollback backup is missing for " +
+                    L"Could not inspect rollback backup for " +
                     *it +
                     L".";
+            }
+            ok = false;
+            continue;
+        }
+
+        if (!backupExists) {
+            bool liveExists = false;
+            std::wstring liveError;
+            if (RootExists(
+                    live,
+                    liveExists,
+                    liveError) &&
+                liveExists) {
+                // A prior rollback attempt already restored this root.
+                continue;
+            }
+
+            if (firstError.empty()) {
+                firstError =
+                    liveError.empty()
+                        ? L"Rollback backup is missing for " +
+                            *it +
+                            L"."
+                        : std::move(liveError);
             }
             ok = false;
             continue;
