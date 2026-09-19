@@ -8,7 +8,7 @@
 - License: MIT
 - Intended platform: Windows x64
 - Implementation: native C++20 / Win32 / CMake
-- Highest priority: validate the first P1 state/UI slice, then add provider/URL parsing
+- Highest priority: validate each user-facing development build through TocPilot self-update, then continue P1 provider/URL parsing
 - Current application version: `v0.1.1`; published `v0.1.1` self-update is validated, while P1 development remains on an unreleased branch build
 
 ## Latest commits
@@ -101,6 +101,10 @@ This validates compilation and CI packaging only. It does not validate runtime u
 - The permanent release workflow now uploads to an existing release when present and can create one when absent.
 - A one-off repair workflow checked out the exact `v0.1.0` tag and successfully attached `TocPilot.exe` plus `TocPilot.exe.sha256` to the existing release.
 - The one-off repair workflow was then removed.
+
+## Development delivery rule
+
+During active development, CI artifacts are for compile validation only. Any build handed to the user for runtime testing should be version-bumped and published through the automated GitHub release path so the installed TocPilot exercises self-update on every test cycle. Manual EXE replacement is a fallback only when the updater itself is under repair.
 
 ## P0 end-to-end validation
 
@@ -229,8 +233,8 @@ Complete. A real `v0.1.0 -> v0.1.1` in-app self-update succeeded on Windows besi
 
 ## Exact next step
 
-1. Download the `TocPilot-windows-x64` artifact from successful Actions run `35446732391` and extract it.
-2. Replace the local test `TocPilot.exe` beside `WoW.exe` with this unreleased P1 branch build and launch it.
+1. Publish the current P1 state/UI slice as `v0.1.2` using the automated release pipeline.
+2. Keep the user's installed `v0.1.1`; let TocPilot detect `v0.1.2` and update itself normally.
 3. Confirm `TocPilot.json` is created, the package table appears, `State: TocPilot.json ready` is shown, and app update status remains healthy.
 4. Change Text size (for example 100% -> 125%), close/reopen, and confirm the selection persists.
-5. After that smoke test, implement provider/URL normalization as the next P1 code slice.
+5. After that smoke test, implement provider/URL normalization and publish the next user-testable version through self-update again.
