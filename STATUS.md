@@ -309,6 +309,8 @@ First P2 GitHub branch-tracking test release `v0.1.5` was published automaticall
 Tracked-branch Refresh test release `v0.1.6` was published automatically. Release workflow run `35453833168` validated source/version consistency, built Release x64, passed provider URL, state/package Refresh, and GitHub API/tracked-branch CTests, created tag `v0.1.6` at commit `45b87a1`, and published `TocPilot.exe` (444,928 bytes; SHA-256 `80b6c33368a3287a95b9725c61532f92d64d2e3fa64ded42c2c12b4ec1e78ece`) plus `TocPilot.exe.sha256`.
 
 ## Untested / remaining validation
+
+- `v0.1.10` unmanaged pfUI collision runtime test passed: `brues-code/pfUI` / `master` correctly refused to replace the existing unmanaged `Interface\AddOns\pfUI`, showed the failure popup, and created no generated GitHub wrapper folder.
 - Runtime finding on `v0.1.9`: expected unmanaged pfUI collision reached `Install failed`, but no popup was shown. Diagnosis: the install-complete handler only wrote preparation/commit errors to the row/hint and returned; it did not show a MessageBox for ordinary install failures. Add explicit user-facing failure dialogs before further runtime testing.
 - Runtime finding on `v0.1.8`: Shagu/pfUI reported a successful install while the pre-existing `Interface\\AddOns\\pfUI` remained unchanged. Root cause identified: GitHub ZIPs wrap repository contents in a generated top-level directory, and root-level addon repositories such as Shagu/pfUI (`pfUI.toc` at repo root) were incorrectly mapped to that generated wrapper name instead of the real addon folder name. Exact runtime confirmation: `Interface\\AddOns\\shagu-pfUI-b2f6df8` was created. The unowned-root collision guard itself is intact, but it was checking the wrong destination. Pause live-install testing until this archive-layout bug is fixed and released.
 
@@ -425,9 +427,9 @@ Complete. A real `v0.1.0 -> v0.1.1` in-app self-update succeeded on Windows besi
 
 ## Exact next step
 
-1. Self-update to published `v0.1.10`.
-2. With `brues-code/pfUI` / `master` selected and the existing unmanaged `Interface\AddOns\pfUI` still present, click **Install** once.
-3. Expected result: Install is refused with a visible popup whose reason includes `Refusing to replace existing unowned addon folder pfUI`; the popup states no live addon files were changed.
-4. Confirm no generated GitHub wrapper folder is created.
-5. If this passes, use a clean addon/folder for the first successful transactional install/reinstall test.
-6. Then record runtime validation and continue to real uninstall/removal and Update All orchestration.
+1. Choose a small GitHub addon whose target addon folder does not already exist under `Interface\AddOns`.
+2. Add it to TocPilot, select its branch, Inspect, then Install.
+3. Confirm the correct addon root appears, Installed equals Latest, Status becomes Current, and no generated GitHub wrapper folder appears.
+4. Restart TocPilot and confirm the installed/current state survives.
+5. Reinstall the same package once to validate replacement of a TocPilot-owned root.
+6. If that passes, record the transactional install slice as runtime-validated and continue to real uninstall/removal and Update All orchestration.
