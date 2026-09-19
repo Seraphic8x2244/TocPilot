@@ -4,7 +4,7 @@
 
 - Repository: `Seraphic8x2244/TocPilot`
 - Branch: `p0-self-update`
-- Product stage: P0 self-update bootstrap implemented; v0.1.0 local/release lookup path validated; release publishing automation being added before v0.1.1 self-update proof
+- Product stage: P0 self-update bootstrap implemented; automated v0.1.1 release publishing validated; end-to-end v0.1.0 -> v0.1.1 self-update is next
 - License: MIT
 - Intended platform: Windows x64
 - Implementation: native C++20 / Win32 / CMake
@@ -13,13 +13,12 @@
 
 ## Latest commits
 
+- `30a441b` — Request v0.1.1 release
+- `05c41f6` — Automate release creation from version request
+- `7181942` — Plan automated release requests
+- `d995b24` — Record successful v0.1.1 build
 - `66266f8` — Bump version to v0.1.1
 - `5cea4cc` — Record v0.1.0 release lookup validation
-- `8c44868` — Record successful v0.1.0 release repair
-- `a2e32f4` — Remove one-off v0.1.0 release repair
-- `7f76222` — Add one-off v0.1.0 release repair
-- `10442c5` — Fix release asset publishing
-- `1386f41` — Record successful v0.1.0 smoke test
 
 ## Completed
 
@@ -83,17 +82,16 @@ This validates compilation and CI packaging only. It does not validate runtime u
 
 ## Release automation direction
 
-Routine releases should not require manually drafting a GitHub release. The repository will use a small `.github/release-version` request file. Changing it to a new validated version will trigger Actions to create the matching tag/release and publish the direct EXE plus checksum. Manual dispatch remains a fallback once the workflow is on the default branch.
+Routine releases no longer require manually drafting a GitHub release. The repository uses `.github/release-version`; changing it to a new validated version triggers Actions to validate source/version consistency, build, create or verify the tag, create/update the release, and publish the direct EXE plus checksum. Manual dispatch remains a fallback once the workflow is on the default branch.
+
+This was validated with `v0.1.1`: release workflow run `35445498170` created tag `v0.1.1` at commit `30a441b`, published the release, and attached `TocPilot.exe` (217,088 bytes; SHA-256 `e8f0dfe81c7d13b63982dbfacbbe33f33d33603c191329e6bad302ff7a70a120`) plus `TocPilot.exe.sha256`.
 
 ## Untested / remaining P0 work
 
 The following require real Windows/WoW-directory validation:
 
-- launch beside a real `WoW.exe`;
 - missing-`WoW.exe` error path;
 - `Interface\AddOns` creation;
-- GitHub latest-release parsing against a published TocPilot release;
-- current-version == latest behaviour;
 - direct release EXE download;
 - SHA-256 metadata-digest path;
 - SHA-256 sidecar fallback path;
@@ -104,7 +102,6 @@ The following require real Windows/WoW-directory validation:
 - successful restart and cleanup;
 - paths containing spaces;
 - non-system drive such as `D:\Games\WoW`;
-- tag-triggered release workflow;
 - end-to-end `v0.1.0 -> v0.1.1` self-update.
 
 Everything after P0 remains deferred until the self-update test succeeds:
@@ -188,8 +185,8 @@ Implementation is present and compiles. P0 is not complete until a real `v0.1.0 
 
 ## Exact next step
 
-1. Replace the manual tag/release step with a controlled release-request workflow triggered by `.github/release-version`.
-2. Set the release request to `v0.1.1`; Actions must validate the source version, create the tag if absent, build, create/update the release, and attach `TocPilot.exe` plus `TocPilot.exe.sha256`.
-3. Verify the published `v0.1.1` assets.
-4. Keep the existing local `v0.1.0` copy in the WoW folder, let it detect `v0.1.1`, click `Update now`, and verify replacement/restart/cleanup.
+1. Keep the existing local `v0.1.0` copy in the WoW folder; do not replace it manually.
+2. Re-open it or click `Check again` and verify it reports `Release: Update available - v0.1.1`.
+3. Click `Update now` and verify TocPilot closes, replaces itself, restarts as `v0.1.1`, and then reports `Release: Current - v0.1.1`.
+4. Check the WoW folder for leftover `.new` or `.update-backup` files and report any updater error dialog.
 5. Do not start P1 until that end-to-end replacement/restart test succeeds.
