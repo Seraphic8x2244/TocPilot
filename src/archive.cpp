@@ -297,6 +297,32 @@ bool ResetGitHubPackageStaging(
     return true;
 }
 
+bool CleanupGitHubPackageStaging(
+    const std::filesystem::path& wowRoot,
+    std::wstring_view repository,
+    std::wstring& error) {
+    error.clear();
+
+    const auto stagingDirectory =
+        GitHubPackageStagingDirectory(
+            wowRoot,
+            repository);
+
+    std::error_code ec;
+    std::filesystem::remove_all(
+        stagingDirectory,
+        ec);
+
+    if (ec) {
+        error =
+            L"Could not remove package staging directory: " +
+            std::to_wstring(ec.value());
+        return false;
+    }
+
+    return true;
+}
+
 bool SafeArchiveRelativePath(
     std::string_view archiveName,
     std::filesystem::path& relativePath,
