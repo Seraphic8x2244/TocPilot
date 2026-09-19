@@ -45,6 +45,7 @@ constexpr int IDC_ADD_PACKAGE = 1010;
 constexpr int IDC_SET_BRANCH = 1011;
 constexpr int IDC_INSPECT_PACKAGE = 1012;
 constexpr int IDC_INSTALL_PACKAGE = 1013;
+constexpr int IDC_REMOVE_PACKAGE = 1014;
 
 constexpr std::array<double, 5> kTextScales{
     0.90,
@@ -72,6 +73,7 @@ HWND g_refreshPackagesButton = nullptr;
 HWND g_setBranchButton = nullptr;
 HWND g_inspectPackageButton = nullptr;
 HWND g_installPackageButton = nullptr;
+HWND g_removePackageButton = nullptr;
 HWND g_addPackageButton = nullptr;
 HWND g_packageList = nullptr;
 HWND g_packageHint = nullptr;
@@ -355,11 +357,15 @@ void LayoutControls(HWND hwnd) {
         x += 80;
     }
     if (g_addPackageButton) {
-        MoveWindow(g_addPackageButton, x, buttonY, 90, 32, TRUE);
-        x += 95;
+        MoveWindow(g_addPackageButton, x, buttonY, 80, 32, TRUE);
+        x += 85;
+    }
+    if (g_removePackageButton) {
+        MoveWindow(g_removePackageButton, x, buttonY, 55, 32, TRUE);
+        x += 60;
     }
     if (g_updateButton) {
-        MoveWindow(g_updateButton, x, buttonY, 115, 32, TRUE);
+        MoveWindow(g_updateButton, x, buttonY, 100, 32, TRUE);
     }
 
     if (g_textScaleLabel) {
@@ -618,6 +624,14 @@ void UpdatePackageButtons() {
         EnableWindow(
             g_setBranchButton,
             canSetBranch && !packageBusy
+                ? TRUE
+                : FALSE);
+    }
+
+    if (g_removePackageButton) {
+        EnableWindow(
+            g_removePackageButton,
+            validSelection && !packageBusy
                 ? TRUE
                 : FALSE);
     }
@@ -1332,11 +1346,26 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             GetModuleHandleW(nullptr),
             nullptr);
 
+        g_removePackageButton = CreateWindowExW(
+            0,
+            L"BUTTON",
+            L"Forget",
+            WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON,
+            595,
+            145,
+            65,
+            32,
+            hwnd,
+            reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_REMOVE_PACKAGE)),
+            GetModuleHandleW(nullptr),
+            nullptr);
+
         EnableWindow(g_updateAllButton, FALSE);
         EnableWindow(g_refreshPackagesButton, FALSE);
         EnableWindow(g_setBranchButton, FALSE);
         EnableWindow(g_inspectPackageButton, FALSE);
         EnableWindow(g_installPackageButton, FALSE);
+        EnableWindow(g_removePackageButton, FALSE);
         EnableWindow(
             g_addPackageButton,
             g_stateReady ? TRUE : FALSE);
@@ -1618,6 +1647,69 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             RefreshPackageStateUi();
             SelectPackageRow(index);
             UpdatePackageButtons();
+            return 0;
+        }
+
+        if (LOWORD(wParam) == IDC_REMOVE_PACKAGE &&
+            HIWORD(wParam) == BN_CLICKED) {
+            const int row = SelectedPackageRow();
+
+            if (row < 0 ||
+                row >= static_cast<int>(
+                    g_state.packages.size())) {
+                return 0;
+            }
+
+            const auto index =
+                static_cast<std::size_t>(row);
+            const auto package =
+                g_state.packages[index];
+
+            std::wstring prompt =
+                L"Forget " +
+                package.name +
+                L" from TocPilot?\r\n\r\n"
+                L"This removes only the TocPilot package record. "
+                L"No files or folders under Interface\\AddOns will be deleted.";
+
+            if (!package.installedFiles.empty()) {
+                prompt +=
+                    L"\r\n\r\nTocPilot will also forget its recorded ownership "
+                    L"of this package's installed files.";
+            }
+
+            if (MessageBoxW(
+                    hwnd,
+                    prompt.c_str(),
+                    L"TocPilot - Forget Package",
+                    MB_YESNO |
+                        MB_ICONWARNING |
+                        MB_DEFBUTTON2) != IDYES) {
+                return 0;
+            }
+
+            tp::AppState updatedState = g_state;
+            std::wstring error;
+            if (!tp::RemovePackageRecord(
+                    updatedState,
+                    package.id,
+                    error) ||
+                !tp::SaveState(
+                    g_root,
+                    updatedState,
+                    error)) {
+                MessageBoxW(
+                    hwnd,
+                    error.c_str(),
+                    L"TocPilot - Forget Package",
+                    MB_OK | MB_ICONERROR);
+                return 0;
+            }
+
+            g_state = std::move(updatedState);
+            g_stateCreated = false;
+            g_stateError.clear();
+            RefreshPackageStateUi();
             return 0;
         }
 
