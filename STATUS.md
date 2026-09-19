@@ -3,14 +3,14 @@
 ## Continuation checkpoint — 2026-09-19
 
 - Active branch: `p2-github-branches`.
-- Current source version: `v0.1.8`; latest published/runtime-validated version is `v0.1.7`.
+- Current application version: `v0.1.8`; published successfully and awaiting runtime validation. Latest runtime-validated version is `v0.1.7`.
 - Latest live-install implementation head: `6c75c40` — Clean package staging after commit.
 - Key live-install commits: `11aa63d` (installed revision/file ownership persistence), `80146e3` (off-thread prepare/live commit split), `974bea7` + `5bf973e` (transaction/rollback and prepare-only tests), `ab64793` (UI commit + state-save rollback), and `6c75c40` (post-success staging cleanup).
 - Completed through this checkpoint: P0 self-update, P1 state/UI/provider foundation, GitHub branch selection/Refresh/Inspect, plus the first source-complete P2 transactional single-package install/update slice.
 - Exact implementation head CI passed on Windows x64: Actions run `35460533602` built Release, passed the full CTest suite, and uploaded the executable artifact.
-- Runtime gates are cleared through `v0.1.7`; the transactional install slice is not yet published/runtime-tested.
+- Runtime gates are cleared through `v0.1.7`; `v0.1.8` transactional install is published and awaiting runtime validation.
 - Deferred beyond this slice: package removal, Update All orchestration, explicit adoption of pre-existing unmanaged addon roots, crash-recovery journaling for unexpected process/power loss during live commit, GitHub release assets, GitLab support, import/export, column persistence, and modification detection/backups.
-- Exact next step: let the versioned `v0.1.8` source pass Windows CI, then publish it through normal self-update and runtime-test first install/update safety.
+- Exact next step: self-update to `v0.1.8` and runtime-test first install/update safety, including refusal to overwrite pre-existing unowned addon roots.
 - Delivery rule: publish runtime-test builds only after their exact source version passes Windows CI.
 
 ## Current state
@@ -21,8 +21,8 @@
 - License: MIT
 - Intended platform: Windows x64
 - Implementation: native C++20 / Win32 / CMake
-- Highest priority: publish and runtime-validate the first transactional live-install/update slice for GitHub branch packages
-- Current source version: `v0.1.8`; latest published/runtime-validated version is `v0.1.7`.
+- Highest priority: runtime-validate the published `v0.1.8` transactional live-install/update slice for GitHub branch packages
+- Current application version: `v0.1.8`; published successfully and awaiting runtime validation.
 
 ## Latest commits
 
@@ -134,6 +134,16 @@
 - Core install transaction CI run `35460118275` passed; prepare-only safety run `35460454903` passed; exact implementation run `35460533602` passed Release build, full CTest, and artifact upload.
 
 ## CI validation
+
+Published transactional-install release: Actions release run `35460888124` completed successfully for commit `0ef5a0a93490ba5bdf6348b4e0ef08cb3d141532`.
+
+- source/version validation: success;
+- x64 Release configure/build: success;
+- complete Release CTest suite: success;
+- SHA-256 sidecar generation: success;
+- tag `v0.1.8` creation: success;
+- release asset publication: success;
+- `TocPilot.exe`: 699,904 bytes; SHA-256 `284bfda3628ddf09f8e9d3f29facda16dda81fba1d924116c4fdcc5ffa67ce7e`.
 
 Published archive-inspection release: Actions release run `35459015449` completed successfully at commit `2112d04`.
 
@@ -392,10 +402,11 @@ Complete. A real `v0.1.0 -> v0.1.1` in-app self-update succeeded on Windows besi
 
 ## Exact next step
 
-1. Let the exact versioned `v0.1.8` source pass Windows Release build and the full CTest suite.
-2. Update `.github/release-version` to `v0.1.8` and verify the normal automated release creates the tag, direct EXE, and SHA-256 sidecar.
-3. Self-update the installed `v0.1.7` through TocPilot.
-4. Runtime-test **Install** with a configured GitHub branch package whose detected addon root is not already present as an unmanaged folder. Confirm files appear under `Interface\AddOns`, Installed becomes the exact short SHA, Latest matches it, Status becomes Current, ownership persists in `TocPilot.json`, and restart preserves the state.
-5. Reinstall/update the same TocPilot-owned package and confirm replacement succeeds without touching unrelated addon roots.
-6. Confirm an attempted install onto a pre-existing unmanaged addon root is refused rather than overwritten.
-7. After this runtime gate passes, implement package removal, then Update All. Keep unmanaged-root adoption and crash-recovery journaling as separately designed safety work.
+1. Self-update normally from `v0.1.7` to published `v0.1.8`.
+2. Confirm an existing unmanaged addon such as an already-present pfUI is refused rather than overwritten.
+3. For the actual install test, use a GitHub addon whose target addon folder is not already present under `Interface\AddOns`.
+4. Add the repository, select its branch, and click **Install**.
+5. Confirm the addon folder appears under `Interface\AddOns`, Installed becomes the short installed SHA, Status becomes Current, and TocPilot.json persists `installed_revision` plus `installed_files`.
+6. Restart TocPilot and confirm the installed/current state survives.
+7. Click **Reinstall** once to exercise replacement of an addon root already owned by TocPilot.
+8. If this passes, record `v0.1.8` runtime validation and move next to package removal / broader update orchestration.
