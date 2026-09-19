@@ -3,16 +3,17 @@
 ## Current state
 
 - Repository: `Seraphic8x2244/TocPilot`
-- Branch: `main`
-- Product stage: design complete, implementation not yet started
+- Branch: `p0-self-update`
+- Product stage: P0 implementation started
 - License: MIT
 - Intended platform: Windows x64
-- Planned implementation: native C++20 / Win32 / CMake
+- Implementation: native C++20 / Win32 / CMake
 - Highest priority: self-update bootstrap before addon-management features
-- Current application version: none yet
+- Current application version: `v0.1.0` (implementation target; not yet released/tested)
 
 ## Latest commits
 
+- `49c8e0b` — Add TocPilot implementation handoff
 - `3d5c9f2` — Expand TocPilot project overview
 - `63c1910` — Add TocPilot development plan
 
@@ -30,21 +31,43 @@
 - Native Windows implementation selected to avoid the large Qt deployment used by GitAddonsManager.
 - Self-update architecture designed around a direct `TocPilot.exe` release asset and a two-process Windows-safe replacement flow.
 - Development milestones and test strategy documented.
+- P0 implementation branch `p0-self-update` created.
+
+## In progress — P0 self-update bootstrap
+
+This branch is implementing only the P0 milestone:
+
+- native Win32 application skeleton;
+- own-directory / `WoW.exe` validation;
+- visible compile-time version `v0.1.0`;
+- asynchronous GitHub latest-release discovery;
+- direct `TocPilot.exe` download;
+- SHA-256 validation;
+- updater-helper mode using the downloaded executable;
+- wait-for-parent-exit plus bounded replacement retries;
+- rollback-safe executable replacement and restart;
+- GitHub Actions x64 Release build/release workflow.
 
 ## Untested / unimplemented
 
-Everything below still requires implementation:
+P0 is not yet compiled or run on Windows. The following still require validation after the first implementation commit:
 
-- native application skeleton;
-- WoW-directory detection;
-- UI;
-- HTTP/API layer;
-- self-update discovery/download/replacement;
-- GitHub Actions Windows build;
+- MSVC/CMake compile;
+- real WoW-directory startup validation;
+- GitHub API/release parsing against an actual TocPilot release;
+- download and SHA-256 verification;
+- updater wait/retry behaviour with a live locked executable;
+- rollback behaviour on replacement failure;
+- restart into the installed version;
+- GitHub Actions build artifacts;
+- end-to-end `v0.1.0 -> v0.1.1` update.
+
+Everything after P0 also remains unimplemented:
+
 - local JSON state;
 - package engine;
 - ZIP extraction;
-- GitHub branch/release support;
+- GitHub branch/release package support;
 - GitLab support;
 - addon layout detection;
 - DLL/direct-file installation;
@@ -61,8 +84,8 @@ Everything below still requires implementation:
 5. Use provider APIs to follow branch commit SHAs and releases.
 6. A managed **package** may install addon folders, multiple addon folders, a release ZIP, a DLL, or another safe relative file.
 7. Self-update comes before addon management so later builds can be tested without manual copy-over.
-8. Self-update should publish/download a direct `TocPilot.exe`, not a ZIP.
-9. The updater must wait for the old process to fully terminate before replacing the EXE and must use retries/rollback rather than reproducing GitAddonsManager's Windows file-lock false failure.
+8. Self-update publishes/downloads a direct `TocPilot.exe` asset.
+9. The updater waits for the old process to fully terminate before replacing the EXE and uses retries/rollback rather than reproducing GitAddonsManager's Windows file-lock false failure.
 10. Local state is portable with the WoW install, initially planned as `TocPilot.json`.
 
 ## Priority roadmap
@@ -134,21 +157,6 @@ Then publish a minimal `v0.1.1` and prove `v0.1.0 -> v0.1.1` through the in-app 
 - scheduled/background updating;
 - multi-directory profile management.
 
-## Exact next step for the next chat
+## Exact next step
 
-Read `DEVELOPMENT.md` and this file first.
-
-Then implement **P0 only**:
-
-1. scaffold `CMakeLists.txt` and native C++ source layout;
-2. create a small Win32 `TocPilot.exe`;
-3. add compile-time version `v0.1.0`;
-4. validate that `WoW.exe` is beside TocPilot;
-5. add GitHub latest-release checking for `Seraphic8x2244/TocPilot`;
-6. implement direct-EXE download and SHA-256 validation;
-7. implement the Windows-safe two-process replacement flow;
-8. add GitHub Actions Windows x64 build;
-9. produce/test `v0.1.0`;
-10. create `v0.1.1` solely to validate self-update end-to-end.
-
-Do not spend the first implementation session on addon management or UI polish beyond what is necessary to test the updater.
+Scaffold the P0 CMake/native source tree on `p0-self-update`, implement the `v0.1.0` application and updater state machine, add Windows CI/release workflows, then validate the branch with GitHub Actions before preparing the `v0.1.0` release test.
