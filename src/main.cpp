@@ -2122,16 +2122,26 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                 index,
                 L"Install failed");
 
-            if (g_packageHint) {
-                const std::wstring message =
-                    packageName +
-                    L": install preparation failed - " +
-                    result->error;
+            const std::wstring message =
+                packageName +
+                L": install preparation failed - " +
+                result->error;
 
+            if (g_packageHint) {
                 SetWindowTextW(
                     g_packageHint,
                     message.c_str());
             }
+
+            const std::wstring dialog =
+                message +
+                L"\r\n\r\nNo live addon files were changed.";
+
+            MessageBoxW(
+                hwnd,
+                dialog.c_str(),
+                L"TocPilot - Install Failed",
+                MB_OK | MB_ICONWARNING);
 
             SelectPackageRow(index);
             UpdatePackageButtons();
@@ -2150,16 +2160,22 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                 index,
                 L"Install failed");
 
-            if (g_packageHint) {
-                const std::wstring message =
-                    packageName +
-                    L": live commit failed and was rolled back - " +
-                    error;
+            const std::wstring message =
+                packageName +
+                L": live commit failed and was rolled back - " +
+                error;
 
+            if (g_packageHint) {
                 SetWindowTextW(
                     g_packageHint,
                     message.c_str());
             }
+
+            MessageBoxW(
+                hwnd,
+                message.c_str(),
+                L"TocPilot - Install Failed",
+                MB_OK | MB_ICONERROR);
 
             SelectPackageRow(index);
             UpdatePackageButtons();
@@ -2209,13 +2225,30 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                     message.c_str());
             }
 
-            if (!rolledBack) {
-                MessageBoxW(
-                    hwnd,
-                    rollbackError.c_str(),
-                    L"TocPilot - Rollback Failed",
-                    MB_OK | MB_ICONERROR);
+            std::wstring dialog =
+                packageName +
+                L": package state could not be saved - " +
+                saveError;
+
+            if (rolledBack) {
+                dialog +=
+                    L"\r\n\r\nThe previous live addon state was restored.";
+            } else {
+                dialog +=
+                    L"\r\n\r\nFilesystem rollback also failed: " +
+                    rollbackError;
             }
+
+            MessageBoxW(
+                hwnd,
+                dialog.c_str(),
+                rolledBack
+                    ? L"TocPilot - Install Rolled Back"
+                    : L"TocPilot - Rollback Failed",
+                MB_OK |
+                    (rolledBack
+                        ? MB_ICONWARNING
+                        : MB_ICONERROR));
 
             SelectPackageRow(index);
             UpdatePackageButtons();
