@@ -1348,6 +1348,30 @@ bool SetPackageBranch(
     return true;
 }
 
+bool SetPackageLatestRevision(
+    PackageRecord& package,
+    std::wstring remoteSha,
+    std::wstring& error) {
+    error.clear();
+
+    if (package.provider != L"github" ||
+        package.mode != L"branch" ||
+        package.ref.empty()) {
+        error =
+            L"Only configured GitHub branch packages can be refreshed.";
+        return false;
+    }
+
+    if (remoteSha.empty()) {
+        error =
+            L"GitHub did not provide a valid branch commit SHA.";
+        return false;
+    }
+
+    package.latestRevision = std::move(remoteSha);
+    return true;
+}
+
 bool LoadOrCreateState(
     const std::filesystem::path& wowRoot,
     AppState& state,

@@ -53,6 +53,11 @@ bool SetPackageBranch(
     std::wstring remoteSha,
     std::wstring& error);
 
+bool SetPackageLatestRevision(
+    PackageRecord& package,
+    std::wstring remoteSha,
+    std::wstring& error);
+
 bool LoadOrCreateState(
     const std::filesystem::path& wowRoot,
     AppState& state,

@@ -527,6 +527,38 @@ bool ParseGitHubBranchesJson(
     }
 }
 
+bool FindGitHubBranchHead(
+    const std::vector<GitHubBranch>& branches,
+    std::wstring_view branch,
+    std::wstring& remoteSha,
+    std::wstring& error) {
+    remoteSha.clear();
+    error.clear();
+
+    if (branch.empty()) {
+        error = L"Tracked GitHub branch name is empty.";
+        return false;
+    }
+
+    for (const auto& item : branches) {
+        if (item.name == branch) {
+            if (item.sha.empty()) {
+                error =
+                    L"GitHub returned an empty commit SHA for the tracked branch.";
+                return false;
+            }
+
+            remoteSha = item.sha;
+            return true;
+        }
+    }
+
+    error =
+        L"Tracked GitHub branch was not found: " +
+        std::wstring(branch);
+    return false;
+}
+
 bool FetchGitHubRepositoryInfo(
     std::wstring_view repository,
     GitHubRepositoryInfo& info,
@@ -621,6 +653,92 @@ bool FetchGitHubRepositoryInfo(
     }
 
     return true;
+}
+
+bool ResolveGitHubBranchHead(
+    std::wstring_view repository,
+    std::wstring_view branch,
+    std::wstring& remoteSha,
+    std::wstring& error) {
+    remoteSha.clear();
+    error.clear();
+
+    const std::size_t slash =
+        repository.find(L'/');
+
+    if (slash == std::wstring_view::npos ||
+        slash == 0 ||
+        slash + 1 >= repository.size() ||
+        repository.find(
+            L'/',
+            slash + 1) != std::wstring_view::npos) {
+        error =
+            L"GitHub repository identity is invalid.";
+        return false;
+    }
+
+    if (branch.empty()) {
+        error =
+            L"Tracked GitHub branch name is empty.";
+        return false;
+    }
+
+    const std::wstring base =
+        L"/repos/" +
+        std::wstring(repository);
+
+    constexpr int pageSize = 100;
+
+    for (int page = 1; page <= 10; ++page) {
+        const std::wstring path =
+            base +
+            L"/branches?per_page=" +
+            std::to_wstring(pageSize) +
+            L"&page=" +
+            std::to_wstring(page);
+
+        std::string body;
+        DWORD status = 0;
+
+        if (!HttpGet(
+                path,
+                body,
+                status,
+                error) ||
+            !CheckStatus(status, error)) {
+            return false;
+        }
+
+        std::vector<GitHubBranch> pageBranches;
+        if (!ParseGitHubBranchesJson(
+                body,
+                pageBranches,
+                error)) {
+            return false;
+        }
+
+        std::wstring findError;
+        if (FindGitHubBranchHead(
+                pageBranches,
+                branch,
+                remoteSha,
+                findError)) {
+            return true;
+        }
+
+        if (pageBranches.size() <
+            static_cast<std::size_t>(pageSize)) {
+            error =
+                L"Tracked GitHub branch was not found: " +
+                std::wstring(branch);
+            return false;
+        }
+    }
+
+    error =
+        L"Tracked GitHub branch was not found within the first 1000 branches: " +
+        std::wstring(branch);
+    return false;
 }
 
 } // namespace tp

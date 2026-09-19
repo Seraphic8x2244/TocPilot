@@ -76,6 +76,41 @@ int main() {
         }
     }
 
+    {
+        std::vector<tp::GitHubBranch> branches{
+            {L"master", L"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},
+            {L"vanillaplus", L"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}
+        };
+        std::wstring remoteSha;
+        std::wstring error;
+
+        if (!tp::FindGitHubBranchHead(
+                branches,
+                L"vanillaplus",
+                remoteSha,
+                error) ||
+            remoteSha !=
+                L"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb") {
+            Fail("tracked branch head lookup failed");
+        }
+    }
+
+    {
+        std::vector<tp::GitHubBranch> branches{
+            {L"master", L"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}
+        };
+        std::wstring remoteSha;
+        std::wstring error;
+
+        if (tp::FindGitHubBranchHead(
+                branches,
+                L"Master",
+                remoteSha,
+                error)) {
+            Fail("branch lookup incorrectly ignored case");
+        }
+    }
+
     if (failures != 0) {
         std::cerr
             << failures

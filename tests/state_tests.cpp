@@ -109,6 +109,16 @@ void TestCreateAddRoundTrip(
         return;
     }
 
+    if (!tp::SetPackageLatestRevision(
+            state.packages[0],
+            L"89abcdef0123456789abcdef0123456789abcdef",
+            error) ||
+        state.packages[0].ref != L"master" ||
+        !state.packages[0].installedRevision.empty()) {
+        Fail("SetPackageLatestRevision failed or changed installed tracking");
+        return;
+    }
+
     state.settings.textScale = 1.25;
     if (!tp::SaveState(root, state, error)) {
         Fail("SaveState failed");
@@ -134,7 +144,7 @@ void TestCreateAddRoundTrip(
         loaded.packages[0].mode != L"branch" ||
         loaded.packages[0].ref != L"master" ||
         loaded.packages[0].latestRevision !=
-            L"0123456789abcdef0123456789abcdef01234567" ||
+            L"89abcdef0123456789abcdef0123456789abcdef" ||
         loaded.settings.textScale != 1.25) {
         Fail("round-trip state values did not match");
     }

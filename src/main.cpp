@@ -1,5 +1,6 @@
 #include "add_package_dialog.h"
 #include "branch_dialog.h"
+#include "github_api.h"
 #include "state.h"
 #include "update.h"
 #include "version.h"
@@ -25,6 +26,7 @@ namespace {
 constexpr wchar_t kWindowClass[] = L"TocPilotMainWindow";
 constexpr UINT WM_TP_CHECK_COMPLETE = WM_APP + 1;
 constexpr UINT WM_TP_UPDATE_COMPLETE = WM_APP + 2;
+constexpr UINT WM_TP_PACKAGE_REFRESH_COMPLETE = WM_APP + 3;
 
 constexpr int IDC_UPDATE = 1001;
 constexpr int IDC_WOW_STATUS = 1002;
@@ -36,6 +38,7 @@ constexpr int IDC_TEXT_SCALE = 1007;
 constexpr int IDC_UPDATE_ALL = 1008;
 constexpr int IDC_REFRESH_PACKAGES = 1009;
 constexpr int IDC_ADD_PACKAGE = 1010;
+constexpr int IDC_SET_BRANCH = 1011;
 
 constexpr std::array<double, 5> kTextScales{
     0.90,
@@ -60,6 +63,7 @@ HWND g_stateStatus = nullptr;
 HWND g_updateButton = nullptr;
 HWND g_updateAllButton = nullptr;
 HWND g_refreshPackagesButton = nullptr;
+HWND g_setBranchButton = nullptr;
 HWND g_addPackageButton = nullptr;
 HWND g_packageList = nullptr;
 HWND g_packageHint = nullptr;
@@ -75,6 +79,7 @@ tp::AppState g_state;
 std::filesystem::path g_root;
 bool g_stateReady = false;
 bool g_stateCreated = false;
+bool g_packageRefreshInProgress = false;
 std::wstring g_stateError;
 
 struct CheckResult {
@@ -86,6 +91,15 @@ struct CheckResult {
 
 struct UpdateResult {
     bool ok = false;
+    std::wstring error;
+};
+
+struct PackageRefreshResult {
+    bool ok = false;
+    std::size_t index = 0;
+    std::wstring packageId;
+    std::wstring branch;
+    std::wstring remoteSha;
     std::wstring error;
 };
 
@@ -127,8 +141,8 @@ std::wstring PackageHintText() {
 
     return
         std::to_wstring(g_state.packages.size()) +
-        L" package record(s). Select a GitHub row and Set Branch to save "
-        L"remote tracking; installation remains disabled.";
+        L" package record(s). Set Branch changes tracking; Refresh checks "
+        L"the saved branch head. Installation remains disabled.";
 }
 
 BOOL CALLBACK ApplyFontToChild(HWND child, LPARAM fontValue) {
@@ -277,18 +291,22 @@ void LayoutControls(HWND hwnd) {
 
     if (g_updateAllButton) {
         MoveWindow(g_updateAllButton, x, buttonY, 105, 32, TRUE);
-        x += 115;
+        x += 110;
     }
     if (g_refreshPackagesButton) {
-        MoveWindow(g_refreshPackagesButton, x, buttonY, 120, 32, TRUE);
-        x += 130;
+        MoveWindow(g_refreshPackagesButton, x, buttonY, 85, 32, TRUE);
+        x += 90;
+    }
+    if (g_setBranchButton) {
+        MoveWindow(g_setBranchButton, x, buttonY, 100, 32, TRUE);
+        x += 105;
     }
     if (g_addPackageButton) {
-        MoveWindow(g_addPackageButton, x, buttonY, 115, 32, TRUE);
-        x += 125;
+        MoveWindow(g_addPackageButton, x, buttonY, 105, 32, TRUE);
+        x += 110;
     }
     if (g_updateButton) {
-        MoveWindow(g_updateButton, x, buttonY, 150, 32, TRUE);
+        MoveWindow(g_updateButton, x, buttonY, 145, 32, TRUE);
     }
 
     if (g_textScaleLabel) {
@@ -458,23 +476,179 @@ void PopulatePackageList() {
     }
 }
 
+int SelectedPackageRow() {
+    if (!g_packageList) {
+        return -1;
+    }
+
+    return ListView_GetNextItem(
+        g_packageList,
+        -1,
+        LVNI_SELECTED);
+}
+
+void UpdatePackageButtons() {
+    const int row = SelectedPackageRow();
+    const bool validSelection =
+        g_stateReady &&
+        row >= 0 &&
+        row < static_cast<int>(
+            g_state.packages.size());
+
+    bool canSetBranch = false;
+    bool canRefresh = false;
+
+    if (validSelection) {
+        const auto& package =
+            g_state.packages[
+                static_cast<std::size_t>(row)];
+
+        canSetBranch =
+            package.provider == L"github";
+
+        canRefresh =
+            canSetBranch &&
+            package.mode == L"branch" &&
+            !package.ref.empty();
+    }
+
+    if (g_refreshPackagesButton) {
+        EnableWindow(
+            g_refreshPackagesButton,
+            canRefresh &&
+                    !g_packageRefreshInProgress
+                ? TRUE
+                : FALSE);
+    }
+
+    if (g_setBranchButton) {
+        EnableWindow(
+            g_setBranchButton,
+            canSetBranch &&
+                    !g_packageRefreshInProgress
+                ? TRUE
+                : FALSE);
+    }
+
+    if (g_addPackageButton) {
+        EnableWindow(
+            g_addPackageButton,
+            g_stateReady &&
+                    !g_packageRefreshInProgress
+                ? TRUE
+                : FALSE);
+    }
+}
+
+void SelectPackageRow(std::size_t index) {
+    if (!g_packageList ||
+        index >= g_state.packages.size()) {
+        return;
+    }
+
+    ListView_SetItemState(
+        g_packageList,
+        static_cast<int>(index),
+        LVIS_SELECTED | LVIS_FOCUSED,
+        LVIS_SELECTED | LVIS_FOCUSED);
+
+    ListView_EnsureVisible(
+        g_packageList,
+        static_cast<int>(index),
+        FALSE);
+}
+
+void SetPackageRowStatus(
+    std::size_t index,
+    const std::wstring& text) {
+    if (!g_packageList ||
+        index >= g_state.packages.size()) {
+        return;
+    }
+
+    ListView_SetItemText(
+        g_packageList,
+        static_cast<int>(index),
+        4,
+        const_cast<LPWSTR>(text.c_str()));
+}
+
 void RefreshPackageStateUi() {
-    SetIndicator(g_stateStatus, StateStatusText());
+    SetIndicator(
+        g_stateStatus,
+        StateStatusText());
+
     if (g_packageHint) {
         SetWindowTextW(
             g_packageHint,
             PackageHintText().c_str());
     }
-    PopulatePackageList();
 
-    if (g_refreshPackagesButton) {
-        EnableWindow(
-            g_refreshPackagesButton,
-            g_stateReady &&
-                    !g_state.packages.empty()
-                ? TRUE
-                : FALSE);
+    PopulatePackageList();
+    UpdatePackageButtons();
+}
+
+void StartPackageRefresh(
+    HWND hwnd,
+    std::size_t index) {
+    if (index >= g_state.packages.size()) {
+        return;
     }
+
+    const auto package =
+        g_state.packages[index];
+
+    if (package.provider != L"github" ||
+        package.mode != L"branch" ||
+        package.ref.empty()) {
+        return;
+    }
+
+    g_packageRefreshInProgress = true;
+    UpdatePackageButtons();
+    SetPackageRowStatus(
+        index,
+        L"Checking...");
+
+    if (g_packageHint) {
+        const std::wstring message =
+            package.name +
+            L": checking " +
+            package.ref +
+            L" on GitHub. No addon files will be changed.";
+
+        SetWindowTextW(
+            g_packageHint,
+            message.c_str());
+    }
+
+    std::thread(
+        [hwnd, index, package]() {
+            auto result =
+                std::make_unique<PackageRefreshResult>();
+
+            result->index = index;
+            result->packageId = package.id;
+            result->branch = package.ref;
+            result->ok =
+                tp::ResolveGitHubBranchHead(
+                    package.repository,
+                    package.ref,
+                    result->remoteSha,
+                    result->error);
+
+            if (!PostMessageW(
+                    hwnd,
+                    WM_TP_PACKAGE_REFRESH_COMPLETE,
+                    0,
+                    reinterpret_cast<LPARAM>(
+                        result.get()))) {
+                return;
+            }
+
+            result.release();
+        })
+        .detach();
 }
 
 void StartUpdateCheck(HWND hwnd) {
@@ -737,14 +911,28 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
         g_refreshPackagesButton = CreateWindowExW(
             0,
             L"BUTTON",
-            L"Set Branch",
+            L"Refresh",
             WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON,
-            135,
+            130,
             145,
-            120,
+            85,
             32,
             hwnd,
             reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_REFRESH_PACKAGES)),
+            GetModuleHandleW(nullptr),
+            nullptr);
+
+        g_setBranchButton = CreateWindowExW(
+            0,
+            L"BUTTON",
+            L"Set Branch",
+            WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON,
+            220,
+            145,
+            100,
+            32,
+            hwnd,
+            reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_SET_BRANCH)),
             GetModuleHandleW(nullptr),
             nullptr);
 
@@ -753,9 +941,9 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             L"BUTTON",
             L"Add Package",
             WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON,
-            265,
+            325,
             145,
-            115,
+            105,
             32,
             hwnd,
             reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_ADD_PACKAGE)),
@@ -763,22 +951,20 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             nullptr);
 
         EnableWindow(g_updateAllButton, FALSE);
+        EnableWindow(g_refreshPackagesButton, FALSE);
+        EnableWindow(g_setBranchButton, FALSE);
         EnableWindow(
-            g_refreshPackagesButton,
-            g_stateReady &&
-                    !g_state.packages.empty()
-                ? TRUE
-                : FALSE);
-        EnableWindow(g_addPackageButton, g_stateReady ? TRUE : FALSE);
+            g_addPackageButton,
+            g_stateReady ? TRUE : FALSE);
 
         g_updateButton = CreateWindowExW(
             0,
             L"BUTTON",
             L"Check app update",
             WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON,
-            390,
+            435,
             145,
-            150,
+            145,
             32,
             hwnd,
             reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_UPDATE)),
@@ -857,6 +1043,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
 
         AddPackageListColumns();
         PopulatePackageList();
+        UpdatePackageButtons();
         ApplyUiFont(hwnd);
         LayoutControls(hwnd);
 
@@ -888,6 +1075,19 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
         break;
     }
 
+    case WM_NOTIFY: {
+        const auto* header =
+            reinterpret_cast<NMHDR*>(lParam);
+
+        if (header &&
+            header->idFrom == IDC_PACKAGE_LIST &&
+            header->code == LVN_ITEMCHANGED) {
+            UpdatePackageButtons();
+            return 0;
+        }
+        break;
+    }
+
     case WM_COMMAND:
         if (LOWORD(wParam) == IDC_UPDATE && HIWORD(wParam) == BN_CLICKED) {
             if (!g_release.assetUrl.empty()) {
@@ -900,10 +1100,21 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
 
         if (LOWORD(wParam) == IDC_REFRESH_PACKAGES &&
             HIWORD(wParam) == BN_CLICKED) {
-            const int row = ListView_GetNextItem(
-                g_packageList,
-                -1,
-                LVNI_SELECTED);
+            const int row = SelectedPackageRow();
+
+            if (row >= 0 &&
+                row < static_cast<int>(
+                    g_state.packages.size())) {
+                StartPackageRefresh(
+                    hwnd,
+                    static_cast<std::size_t>(row));
+            }
+            return 0;
+        }
+
+        if (LOWORD(wParam) == IDC_SET_BRANCH &&
+            HIWORD(wParam) == BN_CLICKED) {
+            const int row = SelectedPackageRow();
 
             if (row < 0 ||
                 row >= static_cast<int>(
@@ -958,6 +1169,8 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             g_stateError.clear();
 
             RefreshPackageStateUi();
+            SelectPackageRow(index);
+            UpdatePackageButtons();
             return 0;
         }
 
@@ -1051,6 +1264,119 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             SetWindowTextW(g_updateButton, L"Check app update");
             EnableWindow(g_updateButton, TRUE);
             break;
+        }
+
+        return 0;
+    }
+
+    case WM_TP_PACKAGE_REFRESH_COMPLETE: {
+        std::unique_ptr<PackageRefreshResult> result(
+            reinterpret_cast<PackageRefreshResult*>(
+                lParam));
+
+        g_packageRefreshInProgress = false;
+
+        if (result->index >=
+                g_state.packages.size() ||
+            g_state.packages[result->index].id !=
+                result->packageId ||
+            g_state.packages[result->index].ref !=
+                result->branch) {
+            if (g_packageHint) {
+                SetWindowTextW(
+                    g_packageHint,
+                    L"Refresh result was ignored because the package tracking changed.");
+            }
+            UpdatePackageButtons();
+            return 0;
+        }
+
+        const auto index = result->index;
+        const std::wstring packageName =
+            g_state.packages[index].name;
+
+        if (!result->ok) {
+            SetPackageRowStatus(
+                index,
+                L"Refresh failed");
+
+            if (g_packageHint) {
+                const std::wstring message =
+                    packageName +
+                    L": refresh failed - " +
+                    result->error;
+
+                SetWindowTextW(
+                    g_packageHint,
+                    message.c_str());
+            }
+
+            SelectPackageRow(index);
+            UpdatePackageButtons();
+            return 0;
+        }
+
+        tp::AppState updatedState = g_state;
+        std::wstring error;
+
+        if (!tp::SetPackageLatestRevision(
+                updatedState.packages[index],
+                std::move(result->remoteSha),
+                error) ||
+            !tp::SaveState(
+                g_root,
+                updatedState,
+                error)) {
+            SetPackageRowStatus(
+                index,
+                L"Save failed");
+
+            if (g_packageHint) {
+                const std::wstring message =
+                    packageName +
+                    L": refresh result could not be saved - " +
+                    error;
+
+                SetWindowTextW(
+                    g_packageHint,
+                    message.c_str());
+            }
+
+            SelectPackageRow(index);
+            UpdatePackageButtons();
+            return 0;
+        }
+
+        g_state = std::move(updatedState);
+        g_stateCreated = false;
+        g_stateError.clear();
+
+        RefreshPackageStateUi();
+        SelectPackageRow(index);
+        UpdatePackageButtons();
+
+        if (g_packageHint) {
+            const auto& package =
+                g_state.packages[index];
+
+            const std::wstring shortSha =
+                package.latestRevision.substr(
+                    0,
+                    std::min<std::size_t>(
+                        7,
+                        package.latestRevision.size()));
+
+            const std::wstring message =
+                package.name +
+                L": " +
+                package.ref +
+                L" remote head is " +
+                shortSha +
+                L". No addon files were changed.";
+
+            SetWindowTextW(
+                g_packageHint,
+                message.c_str());
         }
 
         return 0;
