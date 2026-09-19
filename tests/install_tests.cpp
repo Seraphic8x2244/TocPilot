@@ -74,6 +74,189 @@ int main() {
         L"TocPilotInstallTests";
 
     std::error_code ec;
+
+    {
+        const auto removalRoot =
+            temp / L"RemovalWoW";
+        const auto addOns =
+            removalRoot /
+            L"Interface" /
+            L"AddOns";
+
+        WriteText(
+            addOns /
+                L"Owned/Owned.toc",
+            "owned toc");
+        WriteText(
+            addOns /
+                L"Owned/main.lua",
+            "owned main");
+        WriteText(
+            addOns /
+                L"Unrelated/Unrelated.toc",
+            "unrelated");
+
+        const std::vector<std::wstring> installedFiles{
+            L"Interface/AddOns/Owned/Owned.toc",
+            L"Interface/AddOns/Owned/main.lua"
+        };
+
+        tp::AddonInstallPlan plan;
+        std::wstring error;
+        if (!tp::BuildAddonRemovalPlan(
+                removalRoot,
+                L"github:Owner/Removal",
+                installedFiles,
+                {},
+                plan,
+                error)) {
+            Fail("owned-root removal plan failed");
+        } else if (
+            plan.obsoleteInstallFolders.size() != 1 ||
+            plan.obsoleteInstallFolders[0] !=
+                L"Owned") {
+            Fail("owned-root removal plan selected wrong roots");
+        } else {
+            tp::AddonInstallTransaction transaction;
+            if (!tp::BeginAddonInstallTransaction(
+                    plan,
+                    transaction,
+                    error)) {
+                Fail("owned-root removal transaction failed");
+            } else {
+                if (Exists(
+                        addOns /
+                        L"Owned") ||
+                    !Exists(
+                        addOns /
+                        L"Unrelated/Unrelated.toc")) {
+                    Fail("owned-root removal touched the wrong live addon state");
+                }
+
+                // Simulate a state-save failure after the filesystem commit.
+                if (!tp::RollbackAddonInstallTransaction(
+                        transaction,
+                        error) ||
+                    !Exists(
+                        addOns /
+                        L"Owned/Owned.toc") ||
+                    !Exists(
+                        addOns /
+                        L"Owned/main.lua")) {
+                    Fail("state-save rollback did not restore removed addon roots");
+                }
+            }
+
+            tp::AddonInstallTransaction committedRemoval;
+            if (!tp::BeginAddonInstallTransaction(
+                    plan,
+                    committedRemoval,
+                    error) ||
+                !tp::FinalizeAddonInstallTransaction(
+                    committedRemoval,
+                    error)) {
+                Fail("committed owned-root removal failed");
+            } else if (
+                Exists(
+                    addOns /
+                    L"Owned") ||
+                !Exists(
+                    addOns /
+                    L"Unrelated/Unrelated.toc")) {
+                Fail("committed removal did not preserve unrelated addons");
+            }
+        }
+    }
+
+    {
+        const auto sharedRoot =
+            temp / L"SharedRemovalWoW";
+        const auto addOns =
+            sharedRoot /
+            L"Interface" /
+            L"AddOns";
+
+        WriteText(
+            addOns /
+                L"Shared/Shared.toc",
+            "shared");
+
+        tp::AddonInstallPlan plan;
+        std::wstring error;
+        if (tp::BuildAddonRemovalPlan(
+                sharedRoot,
+                L"github:Owner/SharedRemoval",
+                {L"Interface/AddOns/Shared/Shared.toc"},
+                {L"Interface/AddOns/Shared/Other.toc"},
+                plan,
+                error)) {
+            Fail("shared ownership removal was accepted");
+        }
+
+        if (!Exists(
+                addOns /
+                L"Shared/Shared.toc")) {
+            Fail("shared ownership refusal changed live files");
+        }
+    }
+
+    {
+        const auto rollbackRemovalRoot =
+            temp / L"RemovalRollbackWoW";
+        const auto addOns =
+            rollbackRemovalRoot /
+            L"Interface" /
+            L"AddOns";
+
+        WriteText(
+            addOns /
+                L"A/A.toc",
+            "A");
+        WriteText(
+            addOns /
+                L"B/B.toc",
+            "B");
+
+        const std::vector<std::wstring> installedFiles{
+            L"Interface/AddOns/A/A.toc",
+            L"Interface/AddOns/B/B.toc"
+        };
+
+        tp::AddonInstallPlan plan;
+        std::wstring error;
+        if (!tp::BuildAddonRemovalPlan(
+                rollbackRemovalRoot,
+                L"github:Owner/RemovalRollback",
+                installedFiles,
+                {},
+                plan,
+                error)) {
+            Fail("removal rollback fixture plan failed");
+        } else {
+            tp::AddonInstallOptions options;
+            options.failAfterRootBackups = 1;
+
+            tp::AddonInstallTransaction transaction;
+            if (tp::BeginAddonInstallTransaction(
+                    plan,
+                    transaction,
+                    error,
+                    options)) {
+                Fail("injected removal failure did not fail");
+            }
+
+            if (!Exists(
+                    addOns /
+                    L"A/A.toc") ||
+                !Exists(
+                    addOns /
+                    L"B/B.toc") ||
+                Exists(plan.transactionRoot)) {
+                Fail("injected removal failure did not restore live roots");
+            }
+        }
+    }
+
     std::filesystem::remove_all(temp, ec);
     std::filesystem::create_directories(temp, ec);
     if (ec) {
