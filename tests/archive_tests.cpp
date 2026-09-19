@@ -177,6 +177,89 @@ int main() {
             }
         }
 
+        const auto rootAddonZipPath =
+            temp / L"root-addon.zip";
+        const auto rootAddonExtracted =
+            temp / L"root-addon-extracted";
+
+        if (!WriteFixtureZip(
+                rootAddonZipPath,
+                {
+                    {"Shagu-pfUI-b2f6df8/pfUI.toc",
+                     "## Interface: 11200\n## Title: pfUI\n"},
+                    {"Shagu-pfUI-b2f6df8/pfUI-tbc.toc",
+                     "## Interface: 20400\n## Title: pfUI TBC\n"},
+                    {"Shagu-pfUI-b2f6df8/pfUI.lua",
+                     "print('pfUI')\n"}
+                })) {
+            Fail("could not create GitHub root-addon ZIP fixture");
+        } else {
+            std::size_t entries = 0;
+            std::uint64_t bytes = 0;
+            std::wstring error;
+
+            if (!tp::ExtractZipSecure(
+                    rootAddonZipPath,
+                    rootAddonExtracted,
+                    entries,
+                    bytes,
+                    error)) {
+                Fail("GitHub root-addon ZIP extraction failed");
+            } else {
+                std::vector<tp::AddonCandidate> candidates;
+                if (!tp::DetectGitHubAddonCandidates(
+                        rootAddonExtracted,
+                        L"Shagu/pfUI",
+                        candidates,
+                        error)) {
+                    Fail("GitHub root-addon mapping failed");
+                } else if (
+                    candidates.size() != 1 ||
+                    candidates[0].installFolder != L"pfUI" ||
+                    candidates[0].sourceRelativePath !=
+                        std::filesystem::path(L"Shagu-pfUI-b2f6df8") ||
+                    candidates[0].tocFiles.size() != 2) {
+                    Fail("GitHub root-addon mapping returned the wrapper name");
+                }
+            }
+        }
+
+        const auto ambiguousZipPath =
+            temp / L"ambiguous-root-addon.zip";
+        const auto ambiguousExtracted =
+            temp / L"ambiguous-root-addon-extracted";
+
+        if (!WriteFixtureZip(
+                ambiguousZipPath,
+                {
+                    {"Owner-Repo-deadbeef/Different.toc",
+                     "## Interface: 11200\n## Title: Different\n"}
+                })) {
+            Fail("could not create ambiguous root-addon ZIP fixture");
+        } else {
+            std::size_t entries = 0;
+            std::uint64_t bytes = 0;
+            std::wstring error;
+
+            if (!tp::ExtractZipSecure(
+                    ambiguousZipPath,
+                    ambiguousExtracted,
+                    entries,
+                    bytes,
+                    error)) {
+                Fail("ambiguous root-addon ZIP extraction failed");
+            } else {
+                std::vector<tp::AddonCandidate> candidates;
+                if (tp::DetectGitHubAddonCandidates(
+                        ambiguousExtracted,
+                        L"Owner/Repo",
+                        candidates,
+                        error)) {
+                    Fail("ambiguous GitHub root-addon layout was accepted");
+                }
+            }
+        }
+
         const auto badZipPath =
             temp / L"unsafe.zip";
 
