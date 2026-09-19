@@ -5,6 +5,7 @@ on:
     branches:
       - "main"
       - "p0-self-update"
+      - "p1-state-ui"
     paths:
       - ".github/release-version"
   workflow_dispatch:
