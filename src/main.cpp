@@ -46,6 +46,7 @@ constexpr int IDC_SET_BRANCH = 1011;
 constexpr int IDC_INSPECT_PACKAGE = 1012;
 constexpr int IDC_INSTALL_PACKAGE = 1013;
 constexpr int IDC_REMOVE_PACKAGE = 1014;
+constexpr int IDC_UNINSTALL_PACKAGE = 1015;
 
 constexpr std::array<double, 5> kTextScales{
     0.90,
@@ -73,6 +74,7 @@ HWND g_refreshPackagesButton = nullptr;
 HWND g_setBranchButton = nullptr;
 HWND g_inspectPackageButton = nullptr;
 HWND g_installPackageButton = nullptr;
+HWND g_uninstallPackageButton = nullptr;
 HWND g_removePackageButton = nullptr;
 HWND g_addPackageButton = nullptr;
 HWND g_packageList = nullptr;
@@ -356,6 +358,10 @@ void LayoutControls(HWND hwnd) {
         MoveWindow(g_installPackageButton, x, buttonY, 75, 32, TRUE);
         x += 80;
     }
+    if (g_uninstallPackageButton) {
+        MoveWindow(g_uninstallPackageButton, x, buttonY, 75, 32, TRUE);
+        x += 80;
+    }
     if (g_addPackageButton) {
         MoveWindow(g_addPackageButton, x, buttonY, 80, 32, TRUE);
         x += 85;
@@ -558,6 +564,7 @@ void UpdatePackageButtons() {
     bool canRefresh = false;
     bool canInspect = false;
     bool canInstall = false;
+    bool canUninstall = false;
     const tp::PackageRecord* selectedPackage = nullptr;
 
     if (validSelection) {
@@ -575,6 +582,10 @@ void UpdatePackageButtons() {
 
         canInspect = canRefresh;
         canInstall = canRefresh;
+        canUninstall =
+            selectedPackage->target == L"addons" &&
+            !selectedPackage->installedRevision.empty() &&
+            !selectedPackage->installedFiles.empty();
     }
 
     const bool packageBusy =
@@ -616,6 +627,14 @@ void UpdatePackageButtons() {
         EnableWindow(
             g_installPackageButton,
             canInstall && !packageBusy
+                ? TRUE
+                : FALSE);
+    }
+
+    if (g_uninstallPackageButton) {
+        EnableWindow(
+            g_uninstallPackageButton,
+            canUninstall && !packageBusy
                 ? TRUE
                 : FALSE);
     }
@@ -1008,6 +1027,228 @@ void StartPackageInstall(
         .detach();
 }
 
+void UninstallPackage(
+    HWND hwnd,
+    std::size_t index) {
+    if (index >= g_state.packages.size()) {
+        return;
+    }
+
+    const auto package =
+        g_state.packages[index];
+
+    if (package.target != L"addons" ||
+        package.installedRevision.empty() ||
+        package.installedFiles.empty()) {
+        MessageBoxW(
+            hwnd,
+            L"The selected package has no TocPilot-owned addon installation to uninstall.",
+            L"TocPilot - Uninstall Package",
+            MB_OK | MB_ICONINFORMATION);
+        return;
+    }
+
+    std::vector<std::wstring> otherInstalledFiles;
+    for (std::size_t i = 0;
+         i < g_state.packages.size();
+         ++i) {
+        if (i == index ||
+            g_state.packages[i].target != L"addons") {
+            continue;
+        }
+
+        const auto& files =
+            g_state.packages[i].installedFiles;
+        otherInstalledFiles.insert(
+            otherInstalledFiles.end(),
+            files.begin(),
+            files.end());
+    }
+
+    tp::AddonInstallPlan plan;
+    std::wstring error;
+    if (!tp::BuildAddonRemovalPlan(
+            g_root,
+            package.id,
+            package.installedFiles,
+            otherInstalledFiles,
+            plan,
+            error)) {
+        MessageBoxW(
+            hwnd,
+            error.c_str(),
+            L"TocPilot - Uninstall Package",
+            MB_OK | MB_ICONWARNING);
+        return;
+    }
+
+    std::wstring prompt =
+        L"Uninstall " +
+        package.name +
+        L"?\r\n\r\nTocPilot will remove " +
+        std::to_wstring(
+            plan.obsoleteInstallFolders.size()) +
+        L" owned addon root(s) containing " +
+        std::to_wstring(
+            package.installedFiles.size()) +
+        L" recorded file(s).\r\n\r\n"
+        L"The package record and branch tracking will remain in TocPilot. "
+        L"The separate Forget action stays non-destructive.";
+
+    if (MessageBoxW(
+            hwnd,
+            prompt.c_str(),
+            L"TocPilot - Uninstall Package",
+            MB_YESNO |
+                MB_ICONWARNING |
+                MB_DEFBUTTON2) != IDYES) {
+        return;
+    }
+
+    g_packageInstallInProgress = true;
+    UpdatePackageButtons();
+    SetPackageRowStatus(
+        index,
+        L"Uninstalling...");
+
+    if (g_packageHint) {
+        const std::wstring message =
+            package.name +
+            L": moving owned addon roots into rollback backup before state is changed.";
+        SetWindowTextW(
+            g_packageHint,
+            message.c_str());
+    }
+
+    tp::AddonInstallTransaction transaction;
+    if (!tp::BeginAddonInstallTransaction(
+            plan,
+            transaction,
+            error)) {
+        g_packageInstallInProgress = false;
+        SetPackageRowStatus(
+            index,
+            L"Uninstall failed");
+
+        if (g_packageHint) {
+            const std::wstring message =
+                package.name +
+                L": uninstall failed - " +
+                error;
+            SetWindowTextW(
+                g_packageHint,
+                message.c_str());
+        }
+
+        MessageBoxW(
+            hwnd,
+            error.c_str(),
+            L"TocPilot - Uninstall Failed",
+            MB_OK | MB_ICONERROR);
+        SelectPackageRow(index);
+        UpdatePackageButtons();
+        return;
+    }
+
+    tp::AppState updatedState = g_state;
+    if (!tp::ClearPackageInstalledState(
+            updatedState.packages[index],
+            error) ||
+        !tp::SaveState(
+            g_root,
+            updatedState,
+            error)) {
+        const std::wstring saveError = error;
+        std::wstring rollbackError;
+        const bool rolledBack =
+            tp::RollbackAddonInstallTransaction(
+                transaction,
+                rollbackError);
+
+        g_packageInstallInProgress = false;
+        SetPackageRowStatus(
+            index,
+            rolledBack
+                ? L"Uninstall rolled back"
+                : L"Rollback failed");
+
+        std::wstring message =
+            package.name +
+            L": package state could not be saved - " +
+            saveError;
+
+        if (rolledBack) {
+            message +=
+                L"\r\n\r\nThe removed addon roots were restored.";
+        } else {
+            message +=
+                L"\r\n\r\nFilesystem rollback also failed: " +
+                rollbackError;
+        }
+
+        if (g_packageHint) {
+            SetWindowTextW(
+                g_packageHint,
+                message.c_str());
+        }
+
+        MessageBoxW(
+            hwnd,
+            message.c_str(),
+            rolledBack
+                ? L"TocPilot - Uninstall Rolled Back"
+                : L"TocPilot - Rollback Failed",
+            MB_OK |
+                (rolledBack
+                    ? MB_ICONWARNING
+                    : MB_ICONERROR));
+
+        SelectPackageRow(index);
+        UpdatePackageButtons();
+        return;
+    }
+
+    g_state = std::move(updatedState);
+    g_stateCreated = false;
+    g_stateError.clear();
+
+    std::wstring cleanupError;
+    const bool cleanupOk =
+        tp::FinalizeAddonInstallTransaction(
+            transaction,
+            cleanupError);
+
+    g_packageInstallInProgress = false;
+    RefreshPackageStateUi();
+    SelectPackageRow(index);
+    UpdatePackageButtons();
+
+    std::wstring message =
+        package.name +
+        L" was uninstalled. The package record remains available for reinstall.";
+
+    if (!cleanupOk) {
+        message +=
+            L"\r\n\r\nThe uninstall and state save succeeded, but transaction backup cleanup failed: " +
+            cleanupError;
+    }
+
+    if (g_packageHint) {
+        SetWindowTextW(
+            g_packageHint,
+            message.c_str());
+    }
+
+    MessageBoxW(
+        hwnd,
+        message.c_str(),
+        L"TocPilot - Package Uninstalled",
+        MB_OK |
+            (cleanupOk
+                ? MB_ICONINFORMATION
+                : MB_ICONWARNING));
+}
+
 void StartUpdateCheck(HWND hwnd) {
     EnableWindow(g_updateButton, FALSE);
     SetWindowTextW(g_updateButton, L"Checking app...");
@@ -1332,6 +1573,20 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             GetModuleHandleW(nullptr),
             nullptr);
 
+        g_uninstallPackageButton = CreateWindowExW(
+            0,
+            L"BUTTON",
+            L"Uninstall",
+            WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON,
+            490,
+            145,
+            80,
+            32,
+            hwnd,
+            reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_UNINSTALL_PACKAGE)),
+            GetModuleHandleW(nullptr),
+            nullptr);
+
         g_addPackageButton = CreateWindowExW(
             0,
             L"BUTTON",
@@ -1365,6 +1620,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
         EnableWindow(g_setBranchButton, FALSE);
         EnableWindow(g_inspectPackageButton, FALSE);
         EnableWindow(g_installPackageButton, FALSE);
+        EnableWindow(g_uninstallPackageButton, FALSE);
         EnableWindow(g_removePackageButton, FALSE);
         EnableWindow(
             g_addPackageButton,
@@ -1475,7 +1731,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
 
     case WM_GETMINMAXINFO: {
         auto* info = reinterpret_cast<MINMAXINFO*>(lParam);
-        info->ptMinTrackSize.x = 820;
+        info->ptMinTrackSize.x = 980;
         info->ptMinTrackSize.y = 500;
         return 0;
     }
@@ -1584,6 +1840,20 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                         hwnd,
                         index);
                 }
+            }
+            return 0;
+        }
+
+        if (LOWORD(wParam) == IDC_UNINSTALL_PACKAGE &&
+            HIWORD(wParam) == BN_CLICKED) {
+            const int row = SelectedPackageRow();
+
+            if (row >= 0 &&
+                row < static_cast<int>(
+                    g_state.packages.size())) {
+                UninstallPackage(
+                    hwnd,
+                    static_cast<std::size_t>(row));
             }
             return 0;
         }
@@ -2379,8 +2649,8 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
         if (g_packageInstallInProgress) {
             MessageBoxW(
                 hwnd,
-                L"A package install is currently being prepared. TocPilot will stay open until the install transaction reaches a safe completion point.",
-                L"TocPilot - Install In Progress",
+                L"A package filesystem transaction is currently active. TocPilot will stay open until it reaches a safe completion point.",
+                L"TocPilot - Package Transaction Active",
                 MB_OK | MB_ICONINFORMATION);
             return 0;
         }
@@ -2483,7 +2753,7 @@ int RunMainWindow(HINSTANCE instance) {
         WS_OVERLAPPEDWINDOW,
         CW_USEDEFAULT,
         CW_USEDEFAULT,
-        900,
+        1040,
         560,
         nullptr,
         nullptr,
