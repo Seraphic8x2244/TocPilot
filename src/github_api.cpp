@@ -4,6 +4,7 @@
 #include <windows.h>
 #include <winhttp.h>
 
+#include <algorithm>
 #include <array>
 #include <cctype>
 #include <cstdint>
