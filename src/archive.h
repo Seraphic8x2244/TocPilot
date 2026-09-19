@@ -33,6 +33,11 @@ bool ResetGitHubPackageStaging(
     std::filesystem::path& stagingDirectory,
     std::wstring& error);
 
+bool CleanupGitHubPackageStaging(
+    const std::filesystem::path& wowRoot,
+    std::wstring_view repository,
+    std::wstring& error);
+
 bool SafeArchiveRelativePath(
     std::string_view archiveName,
     std::filesystem::path& relativePath,
