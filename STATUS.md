@@ -3,7 +3,7 @@
 ## Continuation checkpoint — 2026-09-19
 
 - Active branch: `p2-github-branches`.
-- Current application version: `v0.1.9`; published successfully and awaiting runtime validation. Latest fully runtime-validated version is `v0.1.7`; `v0.1.8` exposed the GitHub wrapper-layout bug now fixed in `v0.1.9`.
+- Current application version: `v0.1.10`; published successfully and awaiting runtime validation. Latest fully runtime-validated version is `v0.1.7`; `v0.1.8` exposed the GitHub wrapper-layout bug fixed in `v0.1.9`, and `v0.1.9` exposed missing user-facing install failure dialogs fixed in `v0.1.10`.
 - Latest live-install implementation head: `6c75c40` — Clean package staging after commit.
 - Key live-install commits: `11aa63d` (installed revision/file ownership persistence), `80146e3` (off-thread prepare/live commit split), `974bea7` + `5bf973e` (transaction/rollback and prepare-only tests), `ab64793` (UI commit + state-save rollback), and `6c75c40` (post-success staging cleanup).
 - Completed through this checkpoint: P0 self-update, P1 state/UI/provider foundation, GitHub branch selection/Refresh/Inspect, plus the first source-complete P2 transactional single-package install/update slice.
@@ -137,6 +137,14 @@
 - Core install transaction CI run `35460118275` passed; prepare-only safety run `35460454903` passed; exact implementation run `35460533602` passed Release build, full CTest, and artifact upload.
 
 ## CI validation
+
+Published `v0.1.10` install-failure-dialog release: Actions release run `35468630162` completed successfully for commit `fdb5f75d1e3b11ff62d281b3d3c6b05bd420fcb9`.
+
+- x64 Release configure/build: success;
+- complete Release CTest suite: success;
+- release publication: success;
+- preparation failures now show the exact error in a MessageBox and state that no live addon files changed;
+- commit failures and state-save rollback outcomes also show explicit dialogs.
 
 Published `v0.1.9` wrapper-layout/Forget release: Actions release run `35463284080` completed successfully for commit `1d337c6bc2903bf3341ef2dfe2c0750eade88a80`.
 
@@ -417,11 +425,9 @@ Complete. A real `v0.1.0 -> v0.1.1` in-app self-update succeeded on Windows besi
 
 ## Exact next step
 
-1. Self-update normally to published `v0.1.9`.
-2. Delete the erroneous `Interface\AddOns\shagu-pfUI-b2f6df8` folder if it still exists; leave the real `Interface\AddOns\pfUI` untouched.
-3. Select the old Shagu/pfUI TocPilot row and click **Forget**. Confirm the row disappears and no addon files are changed.
-4. Add `https://github.com/brues-code/pfUI`, select its default `master` branch, and Inspect first.
-5. Confirm the detected/install destination is `pfUI`, never a generated `owner-repo-sha` wrapper name.
-6. Because a real unmanaged `Interface\AddOns\pfUI` already exists, click Install and confirm TocPilot now refuses to overwrite that unowned folder.
-7. After that refusal passes, choose a clean addon/folder for the first successful transactional install/reinstall test.
-8. Only then mark the live-install slice runtime-validated and continue to real uninstall/removal and Update All orchestration.
+1. Self-update to published `v0.1.10`.
+2. With `brues-code/pfUI` / `master` selected and the existing unmanaged `Interface\AddOns\pfUI` still present, click **Install** once.
+3. Expected result: Install is refused with a visible popup whose reason includes `Refusing to replace existing unowned addon folder pfUI`; the popup states no live addon files were changed.
+4. Confirm no generated GitHub wrapper folder is created.
+5. If this passes, use a clean addon/folder for the first successful transactional install/reinstall test.
+6. Then record runtime validation and continue to real uninstall/removal and Update All orchestration.
