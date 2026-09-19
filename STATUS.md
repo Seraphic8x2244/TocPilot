@@ -3,7 +3,7 @@
 ## Continuation checkpoint — 2026-09-19
 
 - Active branch: `p2-github-branches`.
-- Current application version: `v0.1.10`; no release/version bump has been made for the uninstall work yet.
+- Current application version: `v0.1.10`; transactional uninstall implementation head `4a6fb84` has now been confirmed green by the user in GitHub Actions. Preparing the `v0.1.11` release.
 - Latest implementation commit: `9dd56e4` — Polish uninstall development controls.
 - New uninstall implementation commits:
   - `f75f286` — Add transactional package uninstall UI.
@@ -15,9 +15,9 @@
   - `7a194fb` — Add removal transaction planning API.
 - Completed in source: transactional uninstall for TocPilot-owned addon roots now reuses the existing install transaction/backup/rollback engine; shared ownership is refused; failed filesystem commits roll back; failed state saves restore removed roots; successful uninstall clears installed revision/file ownership while retaining repository/branch tracking; the existing **Forget** action remains explicitly non-destructive; deterministic install/state tests cover removal, shared ownership refusal, injected rollback, and installed-state clearing.
 - Previously completed and runtime-validated: P0 self-update; P1 state/UI/provider foundation; GitHub branch selection/Refresh/Inspect; transactional single-package install/reinstall; unmanaged addon-root collision refusal, through `v0.1.10`.
-- Untested for the new slice: the exact uninstall implementation head has not yet been confirmed by Windows CI through the currently available connector, and no `v0.1.11` runtime release has been published. Runtime uninstall/restart/reinstall and unrelated-addon preservation still need validation.
+- CI gate cleared for the new slice: the user confirmed the matching `p2-github-branches` Actions run for `4a6fb84` completed with a green tick. `v0.1.11` has not yet been runtime-tested. Runtime uninstall/restart/reinstall and unrelated-addon preservation still need validation.
 - Deferred beyond this slice: Update All orchestration, explicit adoption of pre-existing unmanaged addon roots, crash-recovery journaling for unexpected process/power loss during live commit, GitHub release assets, GitLab support, DLL/direct-file installation, import/export, column persistence, and modification detection/backups.
-- Exact next step: confirm the exact uninstall source head passes Windows x64 build + full CTest; only then bump/request `v0.1.11`, self-update from `v0.1.10`, runtime-test Uninstall (owned roots removed, package retained as Not installed, restart stable, unrelated addons preserved), then Reinstall. Do not begin Update All until this runtime gate passes.
+- Exact next step: bump/request `v0.1.11`; the release workflow will re-run Windows x64 build + full CTest before publishing. Then self-update from `v0.1.10`, runtime-test Uninstall (owned roots removed, package retained as Not installed, restart stable, unrelated addons preserved), then Reinstall. Do not begin Update All until this runtime gate passes.
 - Delivery rule: publish runtime-test builds only after their exact source version passes Windows CI.
 
 ## Current state
@@ -30,8 +30,8 @@
 - License: MIT
 - Intended platform: Windows x64
 - Implementation: native C++20 / Win32 / CMake
-- Highest priority: CI- and runtime-validate transactional uninstall before starting Update All orchestration
-- Current application version: `v0.1.10`; published and runtime-validated. Uninstall changes remain unreleased until their exact source head is CI-green.
+- Highest priority: publish `v0.1.11` and runtime-validate transactional uninstall before starting Update All orchestration
+- Current application version: `v0.1.10`; published and runtime-validated. The uninstall implementation head is CI-green and is being prepared for `v0.1.11`.
 
 ## Latest commits
 
@@ -434,8 +434,8 @@ Complete. A real `v0.1.0 -> v0.1.1` in-app self-update succeeded on Windows besi
 
 ## Exact next step
 
-1. Confirm implementation commit `9dd56e4` (plus the uninstall test/state commits beneath it) passes the Windows x64 build and full CTest suite.
-2. If CI is green, bump the application to `v0.1.11` and update the automated release request; do not hand out an unvalidated CI artifact.
+1. The user confirmed the matching GitHub Actions run for implementation head `4a6fb84` is green.
+2. Bump the application to `v0.1.11` and update the automated release request; the release workflow must pass Windows x64 build + full CTest before publication.
 3. Self-update the installed `v0.1.10` client to `v0.1.11`.
 4. Runtime-test **Uninstall** on a TocPilot-managed addon: owned addon roots disappear, unrelated addons remain untouched, the package row remains configured but becomes **Not installed**, and restart preserves that state.
 5. Use **Reinstall** on the same retained package record and confirm the addon returns cleanly.
