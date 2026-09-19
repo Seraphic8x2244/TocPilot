@@ -15,6 +15,8 @@
 
 ## Current state
 
+- pfUI test source direction: use `brues-code/pfUI` for future runtime testing, not `Shagu/pfUI`. The brues fork also stores `pfUI.toc` at repository root, so it exercises the same GitHub wrapper mapping fix.
+
 - Repository: `Seraphic8x2244/TocPilot`
 - Branch: `p2-github-branches`
 - Product stage: P0 self-update and P1 core state/UI/provider foundation validated; P2 GitHub branch tracking in progress
