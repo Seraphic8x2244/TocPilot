@@ -5,6 +5,7 @@
 #include "install.h"
 #include "state.h"
 #include "update.h"
+#include "update_all.h"
 #include "version.h"
 
 #include <windows.h>
@@ -94,7 +95,9 @@ bool g_stateCreated = false;
 bool g_packageRefreshInProgress = false;
 bool g_packageInspectInProgress = false;
 bool g_packageInstallInProgress = false;
+bool g_updateAllInProgress = false;
 bool g_appUpdateInProgress = false;
+tp::UpdateAllProgress g_updateAllProgress;
 std::wstring g_stateError;
 
 struct CheckResult {
@@ -192,6 +195,7 @@ std::wstring PackageHintText() {
         L" package record(s). Set Branch changes tracking; Refresh checks "
         L"the saved branch head; Inspect previews without live changes; "
         L"Install/Update and Uninstall use staged rollback transactions; "
+        L"Update All checks installed tracked packages and updates only changed branches; "
         L"Forget removes only the TocPilot record.";
 }
 
@@ -566,6 +570,7 @@ void UpdatePackageButtons() {
     bool canInspect = false;
     bool canInstall = false;
     bool canUninstall = false;
+    bool canUpdateAll = false;
     const tp::PackageRecord* selectedPackage = nullptr;
 
     if (validSelection) {
@@ -589,11 +594,29 @@ void UpdatePackageButtons() {
             !selectedPackage->installedFiles.empty();
     }
 
+    if (g_stateReady) {
+        for (const auto& package : g_state.packages) {
+            if (tp::IsUpdateAllCandidate(package)) {
+                canUpdateAll = true;
+                break;
+            }
+        }
+    }
+
     const bool packageBusy =
         g_packageRefreshInProgress ||
         g_packageInspectInProgress ||
         g_packageInstallInProgress ||
+        g_updateAllInProgress ||
         g_appUpdateInProgress;
+
+    if (g_updateAllButton) {
+        EnableWindow(
+            g_updateAllButton,
+            canUpdateAll && !packageBusy
+                ? TRUE
+                : FALSE);
+    }
 
     if (g_refreshPackagesButton) {
         EnableWindow(
@@ -1028,6 +1051,221 @@ void StartPackageInstall(
         .detach();
 }
 
+std::size_t FindPackageIndexById(
+    std::wstring_view packageId) {
+    for (std::size_t i = 0;
+         i < g_state.packages.size();
+         ++i) {
+        if (g_state.packages[i].id == packageId) {
+            return i;
+        }
+    }
+
+    return g_state.packages.size();
+}
+
+bool IsUpdateAllCurrentPackage(
+    std::wstring_view packageId) {
+    return
+        g_updateAllInProgress &&
+        tp::UpdateAllHasCurrent(g_updateAllProgress) &&
+        tp::UpdateAllCurrentPackageId(g_updateAllProgress) ==
+            packageId;
+}
+
+void FinishUpdateAll(HWND hwnd) {
+    const std::size_t checked =
+        g_updateAllProgress.packageIds.size();
+
+    g_updateAllInProgress = false;
+    SetWindowTextW(
+        g_updateAllButton,
+        L"Update All");
+
+    RefreshPackageStateUi();
+
+    std::wstring summary =
+        L"Update All finished.\r\n\r\nChecked: " +
+        std::to_wstring(checked) +
+        L"\r\nUpdated: " +
+        std::to_wstring(g_updateAllProgress.updated) +
+        L"\r\nAlready current: " +
+        std::to_wstring(g_updateAllProgress.current) +
+        L"\r\nFailed: " +
+        std::to_wstring(g_updateAllProgress.failed);
+
+    if (!g_updateAllProgress.failures.empty()) {
+        summary += L"\r\n\r\nFailures:";
+        constexpr std::size_t maxFailuresShown = 10;
+        const std::size_t shown =
+            std::min<std::size_t>(
+                maxFailuresShown,
+                g_updateAllProgress.failures.size());
+
+        for (std::size_t i = 0; i < shown; ++i) {
+            summary +=
+                L"\r\n- " +
+                g_updateAllProgress.failures[i];
+        }
+
+        if (shown < g_updateAllProgress.failures.size()) {
+            summary +=
+                L"\r\n- ...and " +
+                std::to_wstring(
+                    g_updateAllProgress.failures.size() -
+                    shown) +
+                L" more.";
+        }
+    }
+
+    if (g_packageHint) {
+        SetWindowTextW(
+            g_packageHint,
+            summary.c_str());
+    }
+
+    MessageBoxW(
+        hwnd,
+        summary.c_str(),
+        L"TocPilot - Update All",
+        MB_OK |
+            (g_updateAllProgress.failed == 0
+                ? MB_ICONINFORMATION
+                : MB_ICONWARNING));
+}
+
+void ContinueUpdateAll(HWND hwnd) {
+    while (tp::UpdateAllHasCurrent(
+            g_updateAllProgress)) {
+        const std::wstring packageId(
+            tp::UpdateAllCurrentPackageId(
+                g_updateAllProgress));
+
+        const std::size_t index =
+            FindPackageIndexById(packageId);
+
+        if (index >= g_state.packages.size() ||
+            !tp::IsUpdateAllCandidate(
+                g_state.packages[index])) {
+            std::wstring ignored;
+            tp::CompleteUpdateAllItem(
+                g_updateAllProgress,
+                tp::UpdateAllOutcome::Failed,
+                packageId +
+                    L": package is no longer eligible for Update All.",
+                ignored);
+            continue;
+        }
+
+        const auto& package =
+            g_state.packages[index];
+
+        SelectPackageRow(index);
+        SetPackageRowStatus(
+            index,
+            L"Checking...");
+
+        if (g_packageHint) {
+            const std::wstring message =
+                L"Update All: checking " +
+                std::to_wstring(
+                    g_updateAllProgress.position + 1) +
+                L" of " +
+                std::to_wstring(
+                    g_updateAllProgress.packageIds.size()) +
+                L" - " +
+                package.name +
+                L".";
+            SetWindowTextW(
+                g_packageHint,
+                message.c_str());
+        }
+
+        StartPackageRefresh(
+            hwnd,
+            index);
+        return;
+    }
+
+    FinishUpdateAll(hwnd);
+}
+
+void CompleteUpdateAllStep(
+    HWND hwnd,
+    tp::UpdateAllOutcome outcome,
+    std::wstring detail) {
+    std::wstring error;
+    if (!tp::CompleteUpdateAllItem(
+            g_updateAllProgress,
+            outcome,
+            std::move(detail),
+            error)) {
+        g_updateAllInProgress = false;
+        SetWindowTextW(
+            g_updateAllButton,
+            L"Update All");
+        UpdatePackageButtons();
+
+        MessageBoxW(
+            hwnd,
+            error.c_str(),
+            L"TocPilot - Update All",
+            MB_OK | MB_ICONERROR);
+        return;
+    }
+
+    ContinueUpdateAll(hwnd);
+}
+
+void StartUpdateAll(HWND hwnd) {
+    if (g_updateAllInProgress ||
+        g_packageRefreshInProgress ||
+        g_packageInspectInProgress ||
+        g_packageInstallInProgress ||
+        g_appUpdateInProgress) {
+        return;
+    }
+
+    auto progress =
+        tp::MakeUpdateAllProgress(g_state);
+
+    if (progress.packageIds.empty()) {
+        MessageBoxW(
+            hwnd,
+            L"There are no installed GitHub branch packages eligible for Update All.",
+            L"TocPilot - Update All",
+            MB_OK | MB_ICONINFORMATION);
+        return;
+    }
+
+    std::wstring prompt =
+        L"Check " +
+        std::to_wstring(progress.packageIds.size()) +
+        L" installed package(s) and update any whose tracked branch has changed?\r\n\r\n"
+        L"Packages that are already current will not be reinstalled. "
+        L"Packages that are not installed are ignored. "
+        L"If one package fails, TocPilot will continue with the remaining packages.";
+
+    if (MessageBoxW(
+            hwnd,
+            prompt.c_str(),
+            L"TocPilot - Update All",
+            MB_YESNO |
+                MB_ICONQUESTION |
+                MB_DEFBUTTON2) != IDYES) {
+        return;
+    }
+
+    g_updateAllProgress = std::move(progress);
+    g_updateAllInProgress = true;
+    SetWindowTextW(
+        g_updateAllButton,
+        L"Updating...");
+    UpdatePackageButtons();
+
+    ContinueUpdateAll(hwnd);
+}
+
 void UninstallPackage(
     HWND hwnd,
     std::size_t index) {
@@ -1275,7 +1513,10 @@ void StartUpdateCheck(HWND hwnd) {
 }
 
 void StartUpdate(HWND hwnd) {
-    if (g_packageInstallInProgress) {
+    if (g_updateAllInProgress ||
+        g_packageRefreshInProgress ||
+        g_packageInspectInProgress ||
+        g_packageInstallInProgress) {
         MessageBoxW(
             hwnd,
             L"Finish the active package filesystem transaction before replacing TocPilot itself.",
@@ -1768,6 +2009,12 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             return 0;
         }
 
+        if (LOWORD(wParam) == IDC_UPDATE_ALL &&
+            HIWORD(wParam) == BN_CLICKED) {
+            StartUpdateAll(hwnd);
+            return 0;
+        }
+
         if (LOWORD(wParam) == IDC_REFRESH_PACKAGES &&
             HIWORD(wParam) == BN_CLICKED) {
             const int row = SelectedPackageRow();
@@ -2086,6 +2333,10 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
 
         g_packageRefreshInProgress = false;
 
+        const bool updateAllStep =
+            IsUpdateAllCurrentPackage(
+                result->packageId);
+
         if (result->index >=
                 g_state.packages.size() ||
             g_state.packages[result->index].id !=
@@ -2097,7 +2348,16 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                     g_packageHint,
                     L"Refresh result was ignored because the package tracking changed.");
             }
-            UpdatePackageButtons();
+
+            if (updateAllStep) {
+                CompleteUpdateAllStep(
+                    hwnd,
+                    tp::UpdateAllOutcome::Failed,
+                    result->packageId +
+                        L": package tracking changed during refresh.");
+            } else {
+                UpdatePackageButtons();
+            }
             return 0;
         }
 
@@ -2110,19 +2370,26 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                 index,
                 L"Refresh failed");
 
-            if (g_packageHint) {
-                const std::wstring message =
-                    packageName +
-                    L": refresh failed - " +
-                    result->error;
+            const std::wstring message =
+                packageName +
+                L": refresh failed - " +
+                result->error;
 
+            if (g_packageHint) {
                 SetWindowTextW(
                     g_packageHint,
                     message.c_str());
             }
 
-            SelectPackageRow(index);
-            UpdatePackageButtons();
+            if (updateAllStep) {
+                CompleteUpdateAllStep(
+                    hwnd,
+                    tp::UpdateAllOutcome::Failed,
+                    message);
+            } else {
+                SelectPackageRow(index);
+                UpdatePackageButtons();
+            }
             return 0;
         }
 
@@ -2141,19 +2408,26 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                 index,
                 L"Save failed");
 
-            if (g_packageHint) {
-                const std::wstring message =
-                    packageName +
-                    L": refresh result could not be saved - " +
-                    error;
+            const std::wstring message =
+                packageName +
+                L": refresh result could not be saved - " +
+                error;
 
+            if (g_packageHint) {
                 SetWindowTextW(
                     g_packageHint,
                     message.c_str());
             }
 
-            SelectPackageRow(index);
-            UpdatePackageButtons();
+            if (updateAllStep) {
+                CompleteUpdateAllStep(
+                    hwnd,
+                    tp::UpdateAllOutcome::Failed,
+                    message);
+            } else {
+                SelectPackageRow(index);
+                UpdatePackageButtons();
+            }
             return 0;
         }
 
@@ -2164,6 +2438,28 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
         RefreshPackageStateUi();
         SelectPackageRow(index);
         UpdatePackageButtons();
+
+        if (updateAllStep) {
+            const auto& package =
+                g_state.packages[index];
+
+            if (package.installedRevision !=
+                package.latestRevision) {
+                SetPackageRowStatus(
+                    index,
+                    L"Update available");
+                StartPackageInstall(
+                    hwnd,
+                    index);
+                return 0;
+            }
+
+            CompleteUpdateAllStep(
+                hwnd,
+                tp::UpdateAllOutcome::Current,
+                {});
+            return 0;
+        }
 
         if (g_packageHint) {
             const auto& package =
@@ -2369,18 +2665,34 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
 
         g_packageInstallInProgress = false;
 
+        const bool updateAllStep =
+            IsUpdateAllCurrentPackage(
+                result->packageId);
+
         if (result->index >=
                 g_state.packages.size() ||
             g_state.packages[result->index].id !=
                 result->packageId ||
             g_state.packages[result->index].ref !=
                 result->branch) {
+            const std::wstring message =
+                result->packageId +
+                L": install result was discarded because package tracking changed.";
+
             if (g_packageHint) {
                 SetWindowTextW(
                     g_packageHint,
                     L"Install result was discarded because package tracking changed. Live addons were not committed.");
             }
-            UpdatePackageButtons();
+
+            if (updateAllStep) {
+                CompleteUpdateAllStep(
+                    hwnd,
+                    tp::UpdateAllOutcome::Failed,
+                    message);
+            } else {
+                UpdatePackageButtons();
+            }
             return 0;
         }
 
@@ -2404,18 +2716,25 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                     message.c_str());
             }
 
-            const std::wstring dialog =
-                message +
-                L"\r\n\r\nNo live addon files were changed.";
+            if (updateAllStep) {
+                CompleteUpdateAllStep(
+                    hwnd,
+                    tp::UpdateAllOutcome::Failed,
+                    message);
+            } else {
+                const std::wstring dialog =
+                    message +
+                    L"\r\n\r\nNo live addon files were changed.";
 
-            MessageBoxW(
-                hwnd,
-                dialog.c_str(),
-                L"TocPilot - Install Failed",
-                MB_OK | MB_ICONWARNING);
+                MessageBoxW(
+                    hwnd,
+                    dialog.c_str(),
+                    L"TocPilot - Install Failed",
+                    MB_OK | MB_ICONWARNING);
 
-            SelectPackageRow(index);
-            UpdatePackageButtons();
+                SelectPackageRow(index);
+                UpdatePackageButtons();
+            }
             return 0;
         }
 
@@ -2442,14 +2761,21 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                     message.c_str());
             }
 
-            MessageBoxW(
-                hwnd,
-                message.c_str(),
-                L"TocPilot - Install Failed",
-                MB_OK | MB_ICONERROR);
+            if (updateAllStep) {
+                CompleteUpdateAllStep(
+                    hwnd,
+                    tp::UpdateAllOutcome::Failed,
+                    message);
+            } else {
+                MessageBoxW(
+                    hwnd,
+                    message.c_str(),
+                    L"TocPilot - Install Failed",
+                    MB_OK | MB_ICONERROR);
 
-            SelectPackageRow(index);
-            UpdatePackageButtons();
+                SelectPackageRow(index);
+                UpdatePackageButtons();
+            }
             return 0;
         }
 
@@ -2476,53 +2802,60 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                     ? L"Install rolled back"
                     : L"Rollback failed");
 
-            if (g_packageHint) {
-                std::wstring message =
-                    packageName +
-                    L": package state could not be saved - " +
-                    saveError;
-
-                if (rolledBack) {
-                    message +=
-                        L". The previous live addon state was restored.";
-                } else {
-                    message +=
-                        L". Filesystem rollback also failed: " +
-                        rollbackError;
-                }
-
-                SetWindowTextW(
-                    g_packageHint,
-                    message.c_str());
-            }
-
-            std::wstring dialog =
+            std::wstring message =
                 packageName +
                 L": package state could not be saved - " +
                 saveError;
 
             if (rolledBack) {
-                dialog +=
-                    L"\r\n\r\nThe previous live addon state was restored.";
+                message +=
+                    L". The previous live addon state was restored.";
             } else {
-                dialog +=
-                    L"\r\n\r\nFilesystem rollback also failed: " +
+                message +=
+                    L". Filesystem rollback also failed: " +
                     rollbackError;
             }
 
-            MessageBoxW(
-                hwnd,
-                dialog.c_str(),
-                rolledBack
-                    ? L"TocPilot - Install Rolled Back"
-                    : L"TocPilot - Rollback Failed",
-                MB_OK |
-                    (rolledBack
-                        ? MB_ICONWARNING
-                        : MB_ICONERROR));
+            if (g_packageHint) {
+                SetWindowTextW(
+                    g_packageHint,
+                    message.c_str());
+            }
 
-            SelectPackageRow(index);
-            UpdatePackageButtons();
+            if (updateAllStep) {
+                CompleteUpdateAllStep(
+                    hwnd,
+                    tp::UpdateAllOutcome::Failed,
+                    message);
+            } else {
+                std::wstring dialog =
+                    packageName +
+                    L": package state could not be saved - " +
+                    saveError;
+
+                if (rolledBack) {
+                    dialog +=
+                        L"\r\n\r\nThe previous live addon state was restored.";
+                } else {
+                    dialog +=
+                        L"\r\n\r\nFilesystem rollback also failed: " +
+                        rollbackError;
+                }
+
+                MessageBoxW(
+                    hwnd,
+                    dialog.c_str(),
+                    rolledBack
+                        ? L"TocPilot - Install Rolled Back"
+                        : L"TocPilot - Rollback Failed",
+                    MB_OK |
+                        (rolledBack
+                            ? MB_ICONWARNING
+                            : MB_ICONERROR));
+
+                SelectPackageRow(index);
+                UpdatePackageButtons();
+            }
             return 0;
         }
 
@@ -2583,6 +2916,14 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             SetWindowTextW(
                 g_packageHint,
                 hint.c_str());
+        }
+
+        if (updateAllStep) {
+            CompleteUpdateAllStep(
+                hwnd,
+                tp::UpdateAllOutcome::Updated,
+                {});
+            return 0;
         }
 
         std::wstring summary =
@@ -2647,7 +2988,8 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
     }
 
     case WM_CLOSE:
-        if (g_packageInstallInProgress) {
+        if (g_updateAllInProgress ||
+            g_packageInstallInProgress) {
             MessageBoxW(
                 hwnd,
                 L"A package filesystem transaction is currently active. TocPilot will stay open until it reaches a safe completion point.",
