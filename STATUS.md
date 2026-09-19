@@ -8,16 +8,16 @@
 - License: MIT
 - Intended platform: Windows x64
 - Implementation: native C++20 / Win32 / CMake
-- Highest priority: publish and validate `v0.1.3` through TocPilot self-update, then continue P1 package-record/add-package work
-- Current application version: `v0.1.3`; published and runtime-validated successfully through the installed `v0.1.2` self-updater
+- Highest priority: publish and runtime-validate `v0.1.4` through TocPilot self-update; this build introduces persistent repository package sources
+- Current source version: `v0.1.4` prepared for the next user-test build; latest published/runtime-validated version is `v0.1.3`
 
 ## Latest commits
 
+- `413b8c4` — Persist repository package sources
+- `ff78443` — Record v0.1.3 runtime validation
+- `4bf21f8` — Record automated v0.1.3 provider release
 - `dd5d77d` — Request v0.1.3 release
 - `ba7adc6` — Prepare v0.1.3 provider URL test release
-- `a7f5aba` — Fix Add Package dialog coordinate types
-- `d699bd0` — Add provider URL normalization
-- `a49b98a` — Record automated v0.1.2 P1 release
 
 ## Completed
 
@@ -52,7 +52,7 @@
 - Added native `src/state.h` / `src/state.cpp` state module.
 - Missing `TocPilot.json` is created beside the EXE with schema 1 defaults.
 - State writes use `TocPilot.json.tmp`, flush to disk, then replace/move atomically.
-- Existing package-array JSON is preserved verbatim while package editing is not yet implemented.
+- Schema-1 package records are parsed into structured in-memory records while each raw package object is retained so unknown/future fields survive unrelated saves.
 - Persisted settings currently include `text_scale` and `check_app_updates`.
 - Invalid/unsupported state is surfaced read-only rather than overwritten.
 - Main window now uses a resizable native ListView package table with Name, Source / Track, Installed, Latest, and Status columns.
@@ -63,11 +63,27 @@
 - Added provider/repository URL normalization for public `github.com` and `gitlab.com` repositories.
 - URL normalization accepts normal HTTPS URLs, scheme-less URLs, common SSH/scp-style clone URLs, `.git` suffixes, GitHub repository subpages, and GitLab nested groups/`/-/` routes.
 - Unsupported hosts, incomplete repository paths, and unsafe path segments are rejected with a user-facing reason.
-- Added a minimal Add Package source-check dialog. It validates and normalizes a repository URL but deliberately does not install or save a package yet.
+- Add Package now validates/normalizes a repository URL and can persist it as a source-only package record; it deliberately does not download or install anything yet.
 - User runtime-validated `v0.1.3`: self-update from `v0.1.2` succeeded, GitHub and GitLab repository normalization behaved as expected, unsupported hosts were rejected cleanly, and existing state/text-size UI remained healthy.
 - Added automated provider URL tests through CTest and required them in both normal Windows CI and release CI.
+- Source-only package records use stable `provider:repository` IDs, default the visible name from the repository path, and begin with `mode: unconfigured` / `target: addons`.
+- Duplicate repository sources are rejected before disk state is changed.
+- Package saves remain atomic: the updated state is staged in memory, written through `TocPilot.json.tmp`, flushed, and only then replaces the live file.
+- Persisted package records render in the main ListView immediately after save and after application restart; rows show Source only / Not configured until P2 tracking/install support exists.
+- Added state/package CTest coverage for default creation, package add/save/reload, duplicate rejection, setting persistence, and preservation of unknown top-level/package JSON fields.
 
 ## CI validation
+
+Latest persistent-package Windows build: Actions run `35449693734` for commit `413b8c4` completed successfully.
+
+- x64 Release compile/link: success;
+- provider URL normalization CTest: success;
+- state/package round-trip and unknown-field preservation CTest: success;
+- executable artifact upload: success;
+- artifact ID: `10585779366`;
+- artifact name: `TocPilot-windows-x64`;
+- artifact ZIP size: 194,444 bytes;
+- artifact SHA-256: `832c3cb24518a765a05304796a1832b0eaba6fcfb0bd4c0c4107cd7f653d5b5d`.
 
 Latest provider/parser Windows build: Actions run `35447864601` for commit `a7f5aba` completed successfully.
 
@@ -175,7 +191,6 @@ P0 edge/failure paths not yet deliberately forced:
 Deferred beyond the current P1 slice:
 
 - package editing/installation engine;
-- full package-record JSON parsing/writing;
 - ZIP extraction;
 - GitHub branch/release package support;
 - GitLab support;
@@ -253,9 +268,11 @@ Complete. A real `v0.1.0 -> v0.1.1` in-app self-update succeeded on Windows besi
 
 ## Exact next step
 
-1. Implement schema-1 package-record parsing/writing instead of only preserving/counting the raw packages array.
-2. Extend Add Package so a normalized GitHub/GitLab repository can be saved as a persistent package definition without installing files yet.
-3. Render persisted package records in the main ListView after save/restart.
-4. Keep package install/update/remove actions disabled until branch/release selection and install transactions exist.
-5. Add automated state/package round-trip tests and retain provider URL tests in CI.
-6. Publish the next user-testable version through self-update only after Windows CI passes.
+1. Publish `v0.1.4` through the automated release workflow after the version-bump CI passes.
+2. Keep the user's installed `v0.1.3` and self-update normally to `v0.1.4`.
+3. In `v0.1.4`, use Add Package -> Save source with `https://github.com/Shagu/pfUI`.
+4. Confirm a pfUI row immediately appears as `GitHub / source only`, Installed/Latest are blank dashes, and Status is `Not configured`.
+5. Close/reopen TocPilot and confirm the pfUI row remains; `TocPilot.json` should contain one package record.
+6. Try adding the same pfUI URL again and confirm TocPilot rejects it as already managed without adding a second row.
+7. Optionally add the previously tested GitLab repository and confirm it also survives restart.
+8. If this passes, P1's core state/UI/provider foundation is effectively complete; next development can begin the P2 GitHub branch-selection/remote-SHA flow without installing files yet.
