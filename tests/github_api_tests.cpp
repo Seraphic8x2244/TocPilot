@@ -111,6 +111,40 @@ int main() {
         }
     }
 
+
+    {
+        std::wstring path;
+        std::wstring error;
+
+        if (!tp::BuildGitHubArchiveApiPath(
+                L"Owner/Repo",
+                L"feature/test branch",
+                path,
+                error) ||
+            path !=
+                L"/repos/Owner/Repo/zipball/feature%2Ftest%20branch") {
+            Fail("GitHub archive API path encoding failed");
+        }
+    }
+
+    {
+        std::wstring path;
+        std::wstring error;
+
+        if (tp::BuildGitHubArchiveApiPath(
+                L"Owner/Repo/Extra",
+                L"main",
+                path,
+                error) ||
+            tp::BuildGitHubArchiveApiPath(
+                L"Owner/Repo",
+                L"",
+                path,
+                error)) {
+            Fail("invalid GitHub archive identity/ref was accepted");
+        }
+    }
+
     if (failures != 0) {
         std::cerr
             << failures
