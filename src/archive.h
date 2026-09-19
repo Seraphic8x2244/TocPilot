@@ -55,4 +55,10 @@ bool DetectAddonCandidates(
     std::vector<AddonCandidate>& candidates,
     std::wstring& error);
 
+bool DetectGitHubAddonCandidates(
+    const std::filesystem::path& extractedRoot,
+    std::wstring_view repository,
+    std::vector<AddonCandidate>& candidates,
+    std::wstring& error);
+
 } // namespace tp
