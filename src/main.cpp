@@ -1505,6 +1505,7 @@ void PopulatePackageList() {
 
 void SelectPackageRow(std::size_t index);
 void RefreshPackageStateUi();
+void UpdatePackageButtons();
 
 int SelectedPackageRow() {
     if (!g_packageList) {
