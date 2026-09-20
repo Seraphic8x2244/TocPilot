@@ -2,7 +2,9 @@
 
 #include "state.h"
 
+#include <cstddef>
 #include <filesystem>
+#include <optional>
 #include <string>
 
 namespace tp {
@@ -10,6 +12,7 @@ namespace tp {
 struct GitAddonAdoptionPlan {
     std::filesystem::path addonRoot;
     PackageRecord package;
+    std::optional<std::size_t> existingPackageIndex;
 };
 
 bool PlanGitAddonAdoption(
