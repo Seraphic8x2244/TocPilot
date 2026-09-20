@@ -58,7 +58,7 @@
 - License: MIT
 - Intended platform: Windows x64
 - Implementation: native C++20 / Win32 / CMake
-- Highest priority: self-update to v0.1.16 and rerun Update All; confirm `pfUI-VendorTweaks` preserves its existing owned folder and the batch finishes with 0 failures
+- Highest priority: runtime-validate v0.1.17 rate-limit handling, then replace routine public branch-head REST polling with a lightweight Git-over-HTTPS ref-discovery path that does not require libgit2, git.exe, or user credentials
 - Current adoption runtime result: 21 managed packages completed Update All with 1 updated / 20 current / 0 failed after existing Git installs were adopted.
 
 ## Latest commits
@@ -425,6 +425,8 @@ Tracked-branch Refresh test release `v0.1.6` was published automatically. Releas
 - v0.1.15 runtime finding: Update All after the automatic status pass reported Queued 21 / Processed 21 / Updated 2 / Already current 18 / Failed 1. The sole failure was `pfUI-VendorTweaks`: install preparation refused the GitHub root-addon archive as ambiguous. Repository `Seraphic8x2244/pfUI-VendorTweaks` has a root-level `pfUI_VendorTweaks.toc`, while the adopted/owned live folder remains `pfUI-VendorTweaks`. The current root-addon safety rule requires the root TOC stem to match the repository name, so the normalized underscore TOC stem trips the guard. Update All correctly continued and no live files were changed for the failed package.
 - v0.1.16 runtime finding: after the automatic startup status refresh, an immediate Update All queued/processed 22 packages and failed all 22 during GitHub refresh with `GitHub API access was refused or rate-limited. Try again later.` This demonstrates the new startup sweep plus Update All performs redundant remote-head requests and can exhaust GitHub's unauthenticated API budget. Fix direction: track when each package's `latest_revision` was refreshed in-process and let Update All reuse a sufficiently fresh startup result instead of immediately requerying GitHub; still refresh when metadata is stale or unknown. Do not hide real rate-limit/network errors.
 - v0.1.17 release workflow run `35518021515` completed successfully end-to-end: source-version validation, Windows x64 Release build, full CTest suite, checksum generation, tag creation, and release asset publication all passed. Tag `v0.1.17` resolves correctly. The fix uses a 5-minute in-process freshness cache for successful branch-head checks, lets Update All reuse those results, passes the already-known exact SHA into install preparation to avoid a second branch lookup, and stops automatic status/Update All batches early when GitHub reports rate limiting instead of generating one failure per package.
+- Architecture decision after the v0.1.16/v0.1.17 rate-limit finding: the 5-minute cache is an immediate mitigation, not the final transport design. TocPilot should stop spending one unauthenticated provider REST request per public addon branch check. The planned replacement is a very small Git-over-HTTPS ref-discovery implementation over WinHTTP, sufficient only to resolve tracked branch SHAs. **Do not add libgit2 or git.exe at this stage.** The design target is to keep TocPilot in roughly the current small standalone-EXE class rather than importing a multi-megabyte Git backend.
+- The transport change does **not** remove staging. Exact-SHA archives still go through `Interface\\TocPilot\\staging`, secure ZIP validation/extraction, addon-root mapping, ownership/collision checks, rollback preparation, then the existing transactional live commit.
 - v0.1.15 remaining runtime checks: column sorting/action targeting and Add Git folder diagnostics still need user validation. Startup refresh clearly discovered multiple changed packages because Update All immediately attempted three changed installs; a focused confirmation of the startup summary/status display is still useful.
 - The adoption pass intentionally does not yet claim GitLab repositories, detached HEADs, linked worktrees/submodules, or Git repository containers without a root-level `.toc`. GitAddonsManager has no unique ownership marker, so the UI explicitly warns that an eligible normal Git clone is indistinguishable from a GitAddonsManager-created clone.
 - Runtime/repository investigation identified the GAM container layout for the two remaining refusals. `satan666/_LP` tracks the loadable addon under `_LazyPig/_LazyPig.toc`, while the user's live `_LP` folder contains only `.git` plus repository metadata; GAM has therefore separated the tracked addon root into a sibling live folder while retaining the Git container. `Cabro/Atlas` similarly tracks three loadable roots: `Atlas/Atlas.toc`, `AtlasLoot/AtlasLoot.toc`, and `AtlasQuest/AtlasQuest.toc`. Future complex-GAM adoption should resolve the container's exact local SHA/origin, inspect that exact repository revision using the existing archive-inspection path, map detected addon roots to sibling live `Interface\\AddOns` folders, and adopt those roots as one TocPilot package without touching the Git container.
@@ -471,8 +473,8 @@ P0 edge/failure paths not yet deliberately forced:
 
 Deferred beyond the current adoption slice:
 - crash-recovery journal/reconciliation after unexpected process or power loss during live commit;
-- GitHub release package/assets support;
-- GitLab support;
+- GitHub/GitLab/Gitea release package/assets support beyond branch archives;
+- private-repository authentication/credential storage;
 - DLL/direct-file installation;
 - import/export;
 - persisted column order/width and layout locking.
@@ -481,16 +483,19 @@ Deferred beyond the current adoption slice:
 
 1. Put `TocPilot.exe` beside `WoW.exe`.
 2. If another WoW install needs management, copy TocPilot there too.
-3. No local `.git` repositories.
-4. No Qt/libgit2/Git runtime dependency.
-5. Use provider APIs to follow branch commit SHAs and releases.
-6. A managed **package** may install addon folders, multiple addon folders, a release ZIP, a DLL, or another safe relative file.
-7. Self-update comes before addon management so later builds can be tested without manual copy-over.
-8. Self-update publishes/downloads a direct `TocPilot.exe` asset.
-9. The updater waits for the old process to fully terminate before replacing the EXE and uses retries/rollback rather than reproducing GitAddonsManager's Windows file-lock false failure.
-10. Local state is portable with the WoW install, initially planned as `TocPilot.json`.
-11. P0 release builds also publish a small `TocPilot.exe.sha256` sidecar as a fallback if GitHub does not expose an asset digest.
-12. P2 Inspect remains non-destructive under `Interface\\TocPilot\\staging`; Install may touch `Interface\\AddOns` only after the exact revision is fully downloaded, securely extracted, mapped, collision-checked, and copied into transaction preparation.
+3. No local `.git` repositories for TocPilot-managed packages.
+4. Keep TocPilot lightweight: **do not add Qt, libgit2, a bundled Git runtime, or a required `git.exe` dependency** unless the lightweight transport approach is proven insufficient.
+5. For routine **public branch-head discovery**, move away from provider REST APIs and use the repository's public Git-over-HTTPS ref-discovery endpoint through the existing WinHTTP stack. TocPilot only needs to learn the exact commit SHA of a tracked branch; it does not need checkout, index, merge, rebase, local object storage, or a working Git repository.
+6. Public branch tracking should require **no user credentials** on normal GitHub, GitLab, OctoWoW/Gitea-style, and comparable public HTTPS Git hosts. Private repositories/authentication remain deferred and may require provider-specific credentials later.
+7. Provider APIs may still be used where they are actually appropriate, such as TocPilot self-update/release metadata and future provider release-asset browsing. They should not be the default mechanism for polling every public addon branch.
+8. For changed addons, resolve an **exact SHA first**, then download that exact revision. Prefer direct public archive-download URLs that do not consume a low REST API quota when the provider offers them.
+9. **Keep the staging area and transactional install/rollback model.** The transport redesign changes only how TocPilot learns/fetches a revision. Archives must still be downloaded, securely validated, extracted, addon-root mapped, ownership/collision checked, and transaction-prepared under `Interface\\TocPilot\\staging` before live `Interface\\AddOns` is changed.
+10. A managed **package** may install addon folders, multiple addon folders, a release ZIP, a DLL, or another safe relative file.
+11. Self-update comes before addon management so later builds can be tested without manual copy-over.
+12. Self-update publishes/downloads a direct `TocPilot.exe` asset.
+13. The updater waits for the old process to fully terminate before replacing the EXE and uses retries/rollback rather than reproducing GitAddonsManager's Windows file-lock false failure.
+14. Local state is portable with the WoW install, initially planned as `TocPilot.json`.
+15. P0 release builds also publish a small `TocPilot.exe.sha256` sidecar as a fallback if GitHub does not expose an asset digest.
 
 ## Priority roadmap
 
@@ -505,14 +510,16 @@ Complete. A real `v0.1.0 -> v0.1.1` in-app self-update succeeded on Windows besi
 - text-size preference;
 - URL/provider parsing.
 
-### P2 — GitHub branch packages
+### P2 — Public Git branch packages
 
-- list branches;
-- follow selected branch SHA;
-- download archive;
-- extract securely;
-- detect `.toc` addon roots;
-- install/update/remove without `.git`.
+- keep the existing exact-SHA, archive, staging, ownership, transactional install/update/remove model;
+- replace routine GitHub REST branch polling with lightweight public Git-over-HTTPS ref discovery using WinHTTP;
+- first transport spike must validate branch-head lookup against **GitHub, GitLab, and OctoWoW/Gitea-style hosting** without credentials;
+- parse only the minimum Git ref-advertisement data required to resolve the selected branch SHA; do not implement a general Git client;
+- prefer direct public archive downloads by exact SHA so normal addon management does not depend on low REST API request quotas;
+- retain provider-specific URL construction only where needed for archive/release endpoints;
+- no local TocPilot `.git` checkout and no libgit2/git.exe dependency in the first implementation;
+- private repository authentication remains out of scope.
 
 ### P3 — GitHub releases/direct assets
 
@@ -521,9 +528,10 @@ Complete. A real `v0.1.0 -> v0.1.1` in-app self-update succeeded on Windows besi
 - ZIP assets;
 - direct DLL/file assets.
 
-### P4 — GitLab
+### P4 — Cross-provider release support
 
-- equivalent public branch/release support.
+- public GitLab and Gitea-style branch tracking should already be covered by the provider-neutral Git-over-HTTPS ref path from P2;
+- add provider-specific release browsing/assets only where Git transport alone cannot provide the required release metadata.
 
 ### P5 — UX/safety refinement
 
@@ -564,8 +572,10 @@ Complete. A real `v0.1.0 -> v0.1.1` in-app self-update succeeded on Windows besi
 
 ## Exact next step
 
-1. Let the installed client self-update to `v0.1.17` once the release asset is visible.
-2. If GitHub is still rate-limiting, confirm the startup sweep stops after the first rate-limit response and leaves the remaining saved statuses intact; do not expect a full Update All validation until the GitHub limit resets.
-3. After the limit resets, let startup status refresh finish and immediately run Update All. It should reuse the fresh branch-head results rather than issuing another 22 branch requests, and changed packages should install from the already-known exact SHA without another branch lookup.
-4. Confirm `pfUI-VendorTweaks` updates in place using the existing `pfUI-VendorTweaks` owned root despite the `pfUI_VendorTweaks.toc` stem.
-5. Finish the v0.1.15 UI checks: sortable columns/action targeting and **Adopt Git → Show details** folder diagnostics. Then continue multi-root GAM adoption/Yes-No-per-root work in a fresh chat.
+1. In a fresh chat, first finish the **v0.1.17 runtime gate** after GitHub's current limit resets: startup status refresh followed immediately by Update All must reuse fresh SHAs, avoid the former 22-request duplicate sweep, and confirm the `pfUI-VendorTweaks` owned-root update fix.
+2. Then make a **small isolated transport spike**, not a full updater rewrite: use WinHTTP to query a public repository's Git-over-HTTPS ref advertisement and resolve one named branch to its exact SHA.
+3. Prove that spike against one public repository on each target host class: **GitHub, GitLab, and OctoWoW/Gitea-style hosting**. Record exact HTTP/protocol differences and reject unsupported responses safely.
+4. If the spike is reliable, add deterministic parser tests and a provider-neutral branch-head interface, then replace routine public REST branch refresh calls incrementally. Keep the v0.1.17 freshness cache as an additional optimization.
+5. Only after branch discovery is stable, switch changed-package archive fetching to direct public exact-SHA archive URLs where available, while leaving the existing staging/security/transaction pipeline unchanged.
+6. Do **not** add libgit2, bundle Git, require `git.exe`, or add public-repo credentials unless the lightweight Git-over-HTTPS approach fails a concrete compatibility requirement.
+7. After that transport migration is runtime-stable, return to the deferred multi-root GAM adoption / Yes-No-per-root work and remaining compact-UI checks.
