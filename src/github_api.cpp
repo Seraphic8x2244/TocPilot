@@ -929,76 +929,25 @@ bool FetchGitHubRepositoryInfo(
         return false;
     }
 
-    const std::wstring base =
-        L"/repos/" +
-        std::wstring(repository);
-
-    std::string metadata;
-    DWORD status = 0;
-
-    if (!HttpGet(
-            base,
-            metadata,
-            status,
-            error) ||
-        !CheckStatus(status, error) ||
-        !ParseGitHubRepositoryJson(
-            metadata,
-            info.defaultBranch,
+    GitRemoteRepositoryInfo remote;
+    if (!FetchPublicGitRepositoryInfo(
+            L"github.com",
+            repository,
+            remote,
             error)) {
         return false;
     }
 
-    constexpr int pageSize = 100;
+    info.defaultBranch =
+        std::move(remote.defaultBranch);
+    info.branches.reserve(
+        remote.branches.size());
 
-    for (int page = 1; page <= 10; ++page) {
-        const std::wstring path =
-            base +
-            L"/branches?per_page=" +
-            std::to_wstring(pageSize) +
-            L"&page=" +
-            std::to_wstring(page);
-
-        std::string body;
-        status = 0;
-
-        if (!HttpGet(
-                path,
-                body,
-                status,
-                error) ||
-            !CheckStatus(status, error)) {
-            return false;
-        }
-
-        std::vector<GitHubBranch> pageBranches;
-        if (!ParseGitHubBranchesJson(
-                body,
-                pageBranches,
-                error)) {
-            return false;
-        }
-
-        const std::size_t count =
-            pageBranches.size();
-
-        info.branches.insert(
-            info.branches.end(),
-            std::make_move_iterator(
-                pageBranches.begin()),
-            std::make_move_iterator(
-                pageBranches.end()));
-
-        if (count <
-            static_cast<std::size_t>(pageSize)) {
-            break;
-        }
-    }
-
-    if (info.branches.empty()) {
-        error =
-            L"GitHub repository has no visible branches.";
-        return false;
+    for (auto& branch : remote.branches) {
+        info.branches.push_back(
+            GitHubBranch{
+                std::move(branch.name),
+                std::move(branch.sha)});
     }
 
     return true;
