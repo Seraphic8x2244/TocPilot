@@ -1,3 +1,4 @@
+#include "adoption.h"
 #include "add_package_dialog.h"
 #include "archive.h"
 #include "branch_dialog.h"
@@ -23,6 +24,7 @@
 #include <string_view>
 #include <system_error>
 #include <thread>
+#include <vector>
 
 namespace {
 
@@ -48,6 +50,7 @@ constexpr int IDC_INSPECT_PACKAGE = 1012;
 constexpr int IDC_INSTALL_PACKAGE = 1013;
 constexpr int IDC_REMOVE_PACKAGE = 1014;
 constexpr int IDC_UNINSTALL_PACKAGE = 1015;
+constexpr int IDC_ADOPT_GIT = 1016;
 
 constexpr std::array<double, 5> kTextScales{
     0.90,
@@ -78,6 +81,7 @@ HWND g_installPackageButton = nullptr;
 HWND g_uninstallPackageButton = nullptr;
 HWND g_removePackageButton = nullptr;
 HWND g_addPackageButton = nullptr;
+HWND g_adoptGitButton = nullptr;
 HWND g_packageList = nullptr;
 HWND g_packageHint = nullptr;
 HWND g_textScaleLabel = nullptr;
@@ -374,6 +378,10 @@ void LayoutControls(HWND hwnd) {
     if (g_removePackageButton) {
         MoveWindow(g_removePackageButton, x, buttonY, 55, 32, TRUE);
         x += 60;
+    }
+    if (g_adoptGitButton) {
+        MoveWindow(g_adoptGitButton, x, buttonY, 75, 32, TRUE);
+        x += 80;
     }
     if (g_updateButton) {
         MoveWindow(g_updateButton, x, buttonY, 100, 32, TRUE);
@@ -682,6 +690,14 @@ void UpdatePackageButtons() {
     if (g_addPackageButton) {
         EnableWindow(
             g_addPackageButton,
+            g_stateReady && !packageBusy
+                ? TRUE
+                : FALSE);
+    }
+
+    if (g_adoptGitButton) {
+        EnableWindow(
+            g_adoptGitButton,
             g_stateReady && !packageBusy
                 ? TRUE
                 : FALSE);
@@ -1506,6 +1522,265 @@ void UninstallPackage(
                 : MB_ICONWARNING));
 }
 
+void AdoptGitAddons(HWND hwnd) {
+    if (!g_stateReady ||
+        g_updateAllInProgress ||
+        g_packageRefreshInProgress ||
+        g_packageInspectInProgress ||
+        g_packageInstallInProgress ||
+        g_appUpdateInProgress) {
+        return;
+    }
+
+    const auto addOnsRoot =
+        g_root /
+        L"Interface" /
+        L"AddOns";
+
+    tp::AppState stagedState =
+        g_state;
+
+    std::vector<tp::GitAddonAdoptionPlan>
+        plans;
+
+    std::vector<std::wstring>
+        refusals;
+
+    std::error_code ec;
+
+    for (std::filesystem::directory_iterator it(
+             addOnsRoot,
+             ec),
+         end;
+         !ec &&
+         it != end;
+         it.increment(ec)) {
+        const auto status =
+            it->symlink_status(ec);
+
+        if (ec) {
+            break;
+        }
+
+        if (!std::filesystem::is_directory(
+                status) ||
+            std::filesystem::is_symlink(
+                status)) {
+            continue;
+        }
+
+        const auto gitPath =
+            it->path() /
+            L".git";
+
+        std::error_code gitError;
+        if (!std::filesystem::exists(
+                gitPath,
+                gitError) ||
+            gitError) {
+            continue;
+        }
+
+        tp::GitAddonAdoptionPlan plan;
+        std::wstring error;
+
+        if (!tp::PlanGitAddonAdoption(
+                g_root,
+                it->path(),
+                stagedState,
+                plan,
+                error)) {
+            refusals.push_back(
+                it->path()
+                    .filename()
+                    .wstring() +
+                L": " +
+                error);
+            continue;
+        }
+
+        stagedState.packages.push_back(
+            plan.package);
+
+        plans.push_back(
+            std::move(plan));
+    }
+
+    if (ec) {
+        const std::wstring message =
+            L"Could not finish scanning Interface\\AddOns for Git-managed addons.";
+
+        MessageBoxW(
+            hwnd,
+            message.c_str(),
+            L"TocPilot - Adopt Git Addons",
+            MB_OK | MB_ICONERROR);
+        return;
+    }
+
+    if (plans.empty()) {
+        std::wstring message =
+            L"No safe GitHub branch installs were found to adopt.\r\n\r\n"
+            L"TocPilot currently adopts only direct addon folders that contain "
+            L"a normal .git directory, a root-level .toc file, an origin GitHub "
+            L"URL, an attached branch with matching upstream metadata, and no "
+            L"existing TocPilot ownership.";
+
+        if (!refusals.empty()) {
+            message +=
+                L"\r\n\r\nRefused candidates:";
+
+            constexpr std::size_t maxShown = 10;
+            const std::size_t shown =
+                std::min<std::size_t>(
+                    maxShown,
+                    refusals.size());
+
+            for (std::size_t i = 0;
+                 i < shown;
+                 ++i) {
+                message +=
+                    L"\r\n- " +
+                    refusals[i];
+            }
+
+            if (shown <
+                refusals.size()) {
+                message +=
+                    L"\r\n- ...and " +
+                    std::to_wstring(
+                        refusals.size() -
+                        shown) +
+                    L" more.";
+            }
+        }
+
+        MessageBoxW(
+            hwnd,
+            message.c_str(),
+            L"TocPilot - Adopt Git Addons",
+            MB_OK | MB_ICONINFORMATION);
+        return;
+    }
+
+    std::wstring prompt =
+        L"TocPilot found " +
+        std::to_wstring(
+            plans.size()) +
+        L" safe GitHub branch install(s) that can be adopted without "
+        L"reinstalling or changing live addon files.\r\n\r\n";
+
+    constexpr std::size_t maxPlansShown = 20;
+    const std::size_t shownPlans =
+        std::min<std::size_t>(
+            maxPlansShown,
+            plans.size());
+
+    for (std::size_t i = 0;
+         i < shownPlans;
+         ++i) {
+        const auto& package =
+            plans[i].package;
+
+        const std::wstring shortSha =
+            package.installedRevision.substr(
+                0,
+                std::min<std::size_t>(
+                    7,
+                    package.installedRevision.size()));
+
+        prompt +=
+            L"- " +
+            package.name +
+            L" <- " +
+            package.repository +
+            L" / " +
+            package.ref +
+            L" @ " +
+            shortSha +
+            L"\r\n";
+    }
+
+    if (shownPlans <
+        plans.size()) {
+        prompt +=
+            L"- ...and " +
+            std::to_wstring(
+                plans.size() -
+                shownPlans) +
+            L" more.\r\n";
+    }
+
+    if (!refusals.empty()) {
+        prompt +=
+            L"\r\n" +
+            std::to_wstring(
+                refusals.size()) +
+            L" other Git folder(s) were refused by the conservative safety checks.";
+    }
+
+    prompt +=
+        L"\r\n\r\nAdoption records the current branch SHA and complete addon "
+        L"file ownership in TocPilot.json. Existing .git metadata is left in "
+        L"place and no addon file is deleted or overwritten. GitAddonsManager "
+        L"does not leave a unique ownership marker, so this list may also include "
+        L"normal Git clones; review it before continuing.\r\n\r\nAdopt these installs?";
+
+    if (MessageBoxW(
+            hwnd,
+            prompt.c_str(),
+            L"TocPilot - Adopt Git Addons",
+            MB_YESNO |
+                MB_ICONQUESTION |
+                MB_DEFBUTTON2) != IDYES) {
+        return;
+    }
+
+    std::wstring error;
+    if (!tp::SaveState(
+            g_root,
+            stagedState,
+            error)) {
+        SetIndicator(
+            g_stateStatus,
+            L"State: Save failed - " +
+                error);
+
+        MessageBoxW(
+            hwnd,
+            error.c_str(),
+            L"TocPilot - Adoption Save Failed",
+            MB_OK | MB_ICONERROR);
+        return;
+    }
+
+    g_state =
+        std::move(stagedState);
+    g_stateCreated = false;
+    g_stateError.clear();
+
+    RefreshPackageStateUi();
+    UpdatePackageButtons();
+
+    const std::wstring message =
+        L"Adopted " +
+        std::to_wstring(
+            plans.size()) +
+        L" Git-managed addon install(s). No live addon files were changed.";
+
+    if (g_packageHint) {
+        SetWindowTextW(
+            g_packageHint,
+            message.c_str());
+    }
+
+    MessageBoxW(
+        hwnd,
+        message.c_str(),
+        L"TocPilot - Adoption Complete",
+        MB_OK | MB_ICONINFORMATION);
+}
+
 void StartUpdateCheck(HWND hwnd) {
     EnableWindow(g_updateButton, FALSE);
     SetWindowTextW(g_updateButton, L"Checking app...");
@@ -1875,6 +2150,20 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             GetModuleHandleW(nullptr),
             nullptr);
 
+        g_adoptGitButton = CreateWindowExW(
+            0,
+            L"BUTTON",
+            L"Adopt Git",
+            WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON,
+            750,
+            145,
+            85,
+            32,
+            hwnd,
+            reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_ADOPT_GIT)),
+            GetModuleHandleW(nullptr),
+            nullptr);
+
         EnableWindow(g_updateAllButton, FALSE);
         EnableWindow(g_refreshPackagesButton, FALSE);
         EnableWindow(g_setBranchButton, FALSE);
@@ -1884,6 +2173,9 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
         EnableWindow(g_removePackageButton, FALSE);
         EnableWindow(
             g_addPackageButton,
+            g_stateReady ? TRUE : FALSE);
+        EnableWindow(
+            g_adoptGitButton,
             g_stateReady ? TRUE : FALSE);
 
         g_updateButton = CreateWindowExW(
@@ -2030,6 +2322,12 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
         if (LOWORD(wParam) == IDC_UPDATE_ALL &&
             HIWORD(wParam) == BN_CLICKED) {
             StartUpdateAll(hwnd);
+            return 0;
+        }
+
+        if (LOWORD(wParam) == IDC_ADOPT_GIT &&
+            HIWORD(wParam) == BN_CLICKED) {
+            AdoptGitAddons(hwnd);
             return 0;
         }
 
