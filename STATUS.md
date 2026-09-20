@@ -1,5 +1,39 @@
 # TocPilot status / handoff
 
+## Splash implementation checkpoint — 2026-09-21
+
+- Active branch: `p2-github-branches`.
+- Published baseline: `v0.1.25`.
+- Current branch head entering this slice: `a3cab59` — **Record v0.1.25 behavior refinement release**.
+- Splash design now locked for implementation:
+  - use the approved transparent TocPilot logo cutout unchanged;
+  - use the approved blank wood/brass plaque as a separate asset beneath the logo;
+  - overlap the logo over the plaque so the plaque's top ornament is hidden;
+  - render one centered gold status line at runtime on the wooden panel;
+  - animate only trailing dots as `. -> .. -> ... -> .`;
+  - startup status sequence is **Checking for TocPilot Update** then **Scanning for Addon Updates**;
+  - temporary tuning state after the addon scan is **Click to continue!** with no animation;
+  - while tuning, the splash remains open indefinitely at **Click to continue!** and any click closes it/reveals the main TocPilot window;
+  - no artificial delay during update checking or addon scanning.
+- Completed before this slice:
+  - v0.1.25 published successfully;
+  - normal startup checks TocPilot release, then scans addon status;
+  - smart launch, popup branch menu, and known-update-only Update All are implemented.
+- Untested/deferred:
+  - v0.1.25 runtime interaction validation remains useful, but splash work is now the active slice;
+  - human-readable Installed/Latest versions remain deferred;
+  - provider expansion remains frozen.
+
+## Exact next step
+
+1. Add the approved logo and blank plaque as embedded executable resources.
+2. Implement a borderless transparent Win32 splash with per-pixel artwork composition and runtime gold status text.
+3. Wire splash state transitions to the existing app-update check and startup addon-status scan.
+4. Keep the main window hidden until the temporary **Click to continue!** state is clicked.
+5. Add timer-driven trailing-dot animation with no fake startup delay.
+6. Build Windows x64 Release and run the complete CTest suite before preparing a tuning release.
+7. Do not remove the temporary click gate until runtime screenshots/layout feedback are complete.
+
 ## Release checkpoint — 2026-09-20 v0.1.25 published
 
 - Active branch: `p2-github-branches`.
