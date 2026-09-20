@@ -3,9 +3,15 @@
 ## Continuation checkpoint — 2026-09-19
 
 - Active branch: `p2-github-branches`.
-- Current application version: `v0.1.12`; release tag exists and the user confirmed the installed `v0.1.11` client successfully self-updated to `v0.1.12`. The user has now also runtime-tested Update All, including the changed-branch path, so the v0.1.12 Update All runtime gate is cleared.
-- Latest implementation commit: `45e4603` — Refuse incomplete adoption scans.
-- New GitAddonsManager-adoption implementation commits:
+- Current published/runtime-tested application version: `v0.1.12`. Source is now versioned as `v0.1.13` for conservative GitAddonsManager/Git-clone adoption; release trigger commit `57d9f3d` updates `.github/release-version` to `v0.1.13`. No v0.1.13 Actions run is visible through the GitHub connector yet, so build/CTest/release status remains unverified.
+- Latest branch commit: `57d9f3d` — Request v0.1.13 adoption release. Latest adoption implementation/test commit: `dad2495` — Cover damaged Git adoption metadata.
+- New GitAddonsManager-adoption implementation/release commits:
+  - `57d9f3d` — Request v0.1.13 adoption release.
+  - `248012a` — Set v0.1.13 application version.
+  - `24f06ef` — Bump TocPilot to v0.1.13.
+  - `dad2495` — Cover damaged Git adoption metadata.
+  - `353c001` — Harden adoption test includes.
+  - `d76d346` — Harden adoption standard includes.
   - `45e4603` — Refuse incomplete adoption scans.
   - `1fb09dd` — Add conservative Git install adoption UI.
   - `09b2848` — Wire Git addon adoption tests.
@@ -40,11 +46,17 @@
 - License: MIT
 - Intended platform: Windows x64
 - Implementation: native C++20 / Win32 / CMake
-- Highest priority: Windows-CI validate the new conservative Git adoption planner/UI, then publish a v0.1.13 runtime-test build
-- Current application version: `v0.1.11`; published and runtime-validated for transactional uninstall/reinstall.
+- Highest priority: confirm the v0.1.13 release workflow appears and passes Windows x64 build + full CTest; only then runtime-test Adopt Git
+- Current published/runtime-tested application version: `v0.1.12`; source/release request version: `v0.1.13` pending Windows workflow validation.
 
 ## Latest commits
 
+- `57d9f3d` — Request v0.1.13 adoption release
+- `248012a` — Set v0.1.13 application version
+- `24f06ef` — Bump TocPilot to v0.1.13
+- `dad2495` — Cover damaged Git adoption metadata
+- `353c001` — Harden adoption test includes
+- `d76d346` — Harden adoption standard includes
 - `45e4603` — Refuse incomplete adoption scans
 - `1fb09dd` — Add conservative Git install adoption UI
 - `09b2848` — Wire Git addon adoption tests
@@ -341,7 +353,7 @@ Tracked-branch Refresh test release `v0.1.6` was published automatically. Releas
 
 ## Untested / remaining validation
 
-- New adoption slice is not yet Windows-CI or runtime validated. Required checks: planner/test target compiles under MSVC; valid GitHub simple-root clone is detected; candidate preview is correct; confirming adoption changes only `TocPilot.json`; live addon files and `.git` remain unchanged; restart shows Current with installed/latest SHA preserved; subsequent Refresh and Update All work from the adopted state; already-managed roots/repositories and complex GitAddonsManager layouts are refused safely.
+- New adoption slice is not yet Windows-CI or runtime validated. Source/release version is v0.1.13 and `.github/release-version` has been advanced, but no corresponding Actions run is currently visible through the connector. Required runtime checks after a green release: valid GitHub simple-root clone is detected; candidate preview is correct; confirming adoption changes only `TocPilot.json`; live addon files and `.git` remain unchanged; restart shows Current with installed/latest SHA preserved; subsequent Refresh and Update All work from the adopted state; already-managed roots/repositories and complex GitAddonsManager layouts are refused safely.
 - The adoption pass intentionally does not claim GitLab repositories, detached HEADs, linked worktrees/submodules, or repositories without a root-level `.toc`. GitAddonsManager has no unique ownership marker, so the UI explicitly warns that an eligible normal Git clone is indistinguishable from a GitAddonsManager-created clone.
 
 - `v0.1.10` successful-path runtime validation passed with `Shellyoung/AdvancedTradeSkillWindow2` on its default `main` branch: first install succeeded, TocPilot still showed the package as Current after restart, and Reinstall completed successfully. This validates the normal transactional install/reinstall path and persisted ownership/state at runtime.
@@ -459,8 +471,8 @@ Complete. A real `v0.1.0 -> v0.1.1` in-app self-update succeeded on Windows besi
 
 ## Exact next step
 
-1. Get Windows x64 CI/CTest green for adoption implementation head `45e4603`, including the new `git-addon-adoption` test target.
-2. Fix any MSVC/CTest issues before versioning; do not publish a runtime build from a failing source head.
-3. Bump source/release version to `v0.1.13` and publish through the automated release workflow.
-4. Runtime-test **Adopt Git** against real existing GitAddonsManager installs: preview candidates/refusals, adopt at least one simple GitHub root-addon clone, verify no live addon or `.git` file changed, restart, Refresh, and Update All.
-5. After that gate passes, decide whether to extend adoption to GitAddonsManager's complex/unpacked multi-root layout; do not guess ownership for those roots in the current slice.
+1. Check the automated workflows for release-trigger commit `57d9f3d`. The v0.1.13 release must not be treated as available until Windows x64 build and the complete CTest suite, including `git-addon-adoption`, pass.
+2. If CI fails, fix the exact MSVC/CTest issue and re-request v0.1.13 only from a green source head.
+3. Once v0.1.13 is published, self-update from v0.1.12 and runtime-test **Adopt Git** against real existing GitAddonsManager installs: preview candidates/refusals, adopt at least one simple GitHub root-addon clone, verify no live addon or `.git` file changed, restart, Refresh, and Update All.
+4. Confirm unsafe candidates are refused: damaged upstream metadata, already-managed repository/root, detached HEAD, GitLab, worktree/submodule `.git` file, and complex/no-root-`.toc` layouts.
+5. After that runtime gate passes, decide whether to extend adoption to GitAddonsManager's complex/unpacked multi-root layout; do not guess ownership for those roots in the current slice.
