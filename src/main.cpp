@@ -1002,20 +1002,24 @@ LRESULT HandlePackageListCustomDraw(
 
         const int suffixWidth =
             std::min(
-                suffixSize.cx,
+                static_cast<int>(
+                    suffixSize.cx),
                 std::max(
                     0,
-                    (textRect.right -
-                     textRect.left) /
+                    static_cast<int>(
+                        textRect.right -
+                        textRect.left) /
                         2));
 
         RECT baseRect =
             textRect;
         baseRect.right =
             std::max(
-                baseRect.left,
-                textRect.right -
-                    suffixWidth);
+                static_cast<LONG>(
+                    baseRect.left),
+                static_cast<LONG>(
+                    textRect.right -
+                    suffixWidth));
 
         SelectObject(
             draw->nmcd.hdc,
@@ -3790,21 +3794,25 @@ void ShowTocPilotWindow(
     constexpr int windowWidth = 390;
     constexpr int windowHeight = 245;
     const int x =
-        ownerRect.left +
+        static_cast<int>(
+            ownerRect.left) +
         std::max(
             0,
-            (ownerRect.right -
-             ownerRect.left -
-             windowWidth) /
-                2);
+            static_cast<int>(
+                ownerRect.right -
+                ownerRect.left) -
+                windowWidth) /
+                2;
     const int y =
-        ownerRect.top +
+        static_cast<int>(
+            ownerRect.top) +
         std::max(
             0,
-            (ownerRect.bottom -
-             ownerRect.top -
-             windowHeight) /
-                2);
+            static_cast<int>(
+                ownerRect.bottom -
+                ownerRect.top) -
+                windowHeight) /
+                2;
 
     g_tocPilotWindow =
         CreateWindowExW(
