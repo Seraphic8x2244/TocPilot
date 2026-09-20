@@ -929,6 +929,12 @@ std::string DefaultJson(const AppState& state) {
         << ",\n"
         << "    \"check_app_updates\": "
         << (state.settings.checkAppUpdates ? "true" : "false")
+        << ",\n"
+        << "    \"package_sort_column\": "
+        << state.settings.packageSortColumn
+        << ",\n"
+        << "    \"package_sort_ascending\": "
+        << (state.settings.packageSortAscending ? "true" : "false")
         << "\n"
         << "  },\n"
         << "  \"packages\": "
@@ -983,6 +989,41 @@ bool ReplaceSettingsMember(
         valueStart,
         valueEnd,
         replacement);
+}
+
+bool SetSettingsMemberJson(
+    std::string& json,
+    std::string_view key,
+    std::string_view replacement) {
+    std::size_t settingsStart = 0;
+    std::size_t settingsEnd = 0;
+    if (!GetRootMember(
+            json,
+            "settings",
+            settingsStart,
+            settingsEnd) ||
+        settingsStart >= json.size() ||
+        json[settingsStart] != '{') {
+        return false;
+    }
+
+    std::string settings =
+        json.substr(
+            settingsStart,
+            settingsEnd - settingsStart);
+
+    if (!SetObjectMemberJson(
+            settings,
+            key,
+            replacement)) {
+        return false;
+    }
+
+    return ReplaceRange(
+        json,
+        settingsStart,
+        settingsEnd,
+        settings);
 }
 
 bool ReplacePackages(
@@ -1661,6 +1702,54 @@ bool LoadOrCreateState(
         return false;
     }
 
+    int packageSortColumn = -1;
+    bool packageSortAscending = true;
+
+    std::size_t sortColumnStart = 0;
+    std::size_t sortColumnEnd = 0;
+    if (FindObjectMember(
+            json,
+            settingsStart,
+            settingsEnd,
+            "package_sort_column",
+            sortColumnStart,
+            sortColumnEnd) &&
+        !ParseIntegerToken(
+            std::string_view(json).substr(
+                sortColumnStart,
+                sortColumnEnd - sortColumnStart),
+            packageSortColumn)) {
+        error =
+            L"TocPilot.json has an invalid "
+            L"settings.package_sort_column value.";
+        return false;
+    }
+
+    std::size_t sortAscendingStart = 0;
+    std::size_t sortAscendingEnd = 0;
+    if (FindObjectMember(
+            json,
+            settingsStart,
+            settingsEnd,
+            "package_sort_ascending",
+            sortAscendingStart,
+            sortAscendingEnd) &&
+        !ParseBoolToken(
+            std::string_view(json).substr(
+                sortAscendingStart,
+                sortAscendingEnd - sortAscendingStart),
+            packageSortAscending)) {
+        error =
+            L"TocPilot.json has an invalid "
+            L"settings.package_sort_ascending value.";
+        return false;
+    }
+
+    if (packageSortColumn < -1 ||
+        packageSortColumn > 4) {
+        packageSortColumn = -1;
+    }
+
     std::size_t packagesStart = 0;
     std::size_t packagesEnd = 0;
     if (!GetRootMember(
@@ -1689,6 +1778,8 @@ bool LoadOrCreateState(
     state.settings.textScale =
         std::clamp(textScale, 0.75, 2.0);
     state.settings.checkAppUpdates = checkUpdates;
+    state.settings.packageSortColumn = packageSortColumn;
+    state.settings.packageSortAscending = packageSortAscending;
     state.packages = std::move(packages);
     state.sourceJson = std::move(json);
     return true;
@@ -1712,6 +1803,17 @@ bool SaveState(
             json,
             "check_app_updates",
             state.settings.checkAppUpdates
+                ? "true"
+                : "false") ||
+        !SetSettingsMemberJson(
+            json,
+            "package_sort_column",
+            std::to_string(
+                state.settings.packageSortColumn)) ||
+        !SetSettingsMemberJson(
+            json,
+            "package_sort_ascending",
+            state.settings.packageSortAscending
                 ? "true"
                 : "false") ||
         !ReplacePackages(json, state)) {
