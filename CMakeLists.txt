@@ -29,6 +29,7 @@ add_executable(TocPilot WIN32
     src/archive.cpp
     src/branch_dialog.cpp
     src/github_api.cpp
+    src/git_refs.cpp
     src/install.cpp
     src/main.cpp
     src/provider.cpp
@@ -115,6 +116,26 @@ if(BUILD_TESTING)
     endif()
 
     add_test(NAME github-api-parsing COMMAND TocPilotGitHubApiTests)
+
+    add_executable(TocPilotGitRefsTests
+        tests/git_refs_tests.cpp
+        src/git_refs.cpp
+    )
+    target_compile_features(TocPilotGitRefsTests PRIVATE cxx_std_20)
+    target_compile_definitions(TocPilotGitRefsTests PRIVATE
+        UNICODE
+        _UNICODE
+        WIN32_LEAN_AND_MEAN
+        NOMINMAX
+    )
+    target_include_directories(TocPilotGitRefsTests PRIVATE src)
+    target_link_libraries(TocPilotGitRefsTests PRIVATE winhttp)
+
+    if(MSVC)
+        target_compile_options(TocPilotGitRefsTests PRIVATE /W4 /permissive- /utf-8)
+    endif()
+
+    add_test(NAME git-smart-http-ref-parsing COMMAND TocPilotGitRefsTests)
 
     add_executable(TocPilotArchiveTests
         tests/archive_tests.cpp
