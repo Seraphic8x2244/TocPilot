@@ -139,6 +139,7 @@ bool g_packageInstallInProgress = false;
 bool g_updateAllInProgress = false;
 bool g_appUpdateInProgress = false;
 bool g_appUpdateCheckInProgress = false;
+bool g_refreshAddonsAfterAppCheck = false;
 bool g_autoStatusRefreshInProgress = false;
 bool g_advancedVisible = false;
 bool g_hasVanillaFixes = false;
@@ -332,6 +333,21 @@ void ApplyUiFont(HWND hwnd) {
     }
     g_uiFont = font;
     g_boldUiFont = boldFont;
+
+    if (g_tocPilotWindow &&
+        IsWindow(g_tocPilotWindow)) {
+        SendMessageW(
+            g_tocPilotWindow,
+            WM_SETFONT,
+            reinterpret_cast<WPARAM>(
+                g_uiFont),
+            TRUE);
+        EnumChildWindows(
+            g_tocPilotWindow,
+            ApplyFontToChild,
+            reinterpret_cast<LPARAM>(
+                g_uiFont));
+    }
 }
 
 void SetTextScaleSelection() {
@@ -2028,6 +2044,12 @@ void CompleteAutoStatusRefreshStep(
 void FinishAutoStatusRefresh(HWND hwnd) {
     g_autoStatusRefreshInProgress = false;
 
+    if (g_refreshPackagesButton) {
+        SetWindowTextW(
+            g_refreshPackagesButton,
+            L"Refresh All");
+    }
+
     RefreshPackageStateUi();
 
     std::wstring message =
@@ -2149,6 +2171,12 @@ void StartAutoStatusRefresh(HWND hwnd) {
     g_autoStatusFailed = 0;
     g_autoStatusRateLimited = false;
     g_autoStatusRefreshInProgress = true;
+
+    if (g_refreshPackagesButton) {
+        SetWindowTextW(
+            g_refreshPackagesButton,
+            L"Refreshing...");
+    }
 
     UpdatePackageButtons();
     ContinueAutoStatusRefresh(hwnd);
@@ -2973,7 +3001,7 @@ void AdoptGitAddons(HWND hwnd) {
     if (ec) {
         tp::ShowExpandableDialog(
             hwnd,
-            L"TocPilot - Adopt Git Addons",
+            L"TocPilot - Scan Existing Addons",
             L"Git addon scan failed",
             L"TocPilot could not finish scanning Interface\\AddOns.",
             {},
@@ -3158,7 +3186,7 @@ void AdoptGitAddons(HWND hwnd) {
 
         tp::ShowExpandableDialog(
             hwnd,
-            L"TocPilot - Adopt Git Addons",
+            L"TocPilot - Scan Existing Addons",
             L"No new Git installs to adopt",
             content,
             details,
@@ -3254,7 +3282,9 @@ void AdoptGitAddons(HWND hwnd) {
         tp::DialogButtons::Ok);
 }
 
-void StartUpdateCheck(HWND hwnd) {
+void StartUpdateCheck(
+    HWND hwnd,
+    bool refreshAddonsAfter = false) {
     if (g_appUpdateCheckInProgress ||
         g_appUpdateInProgress) {
         if (g_updateButton) {
@@ -3269,6 +3299,8 @@ void StartUpdateCheck(HWND hwnd) {
     }
 
     g_appUpdateCheckInProgress = true;
+    g_refreshAddonsAfterAppCheck =
+        refreshAddonsAfter;
 
     if (g_updateButton) {
         EnableWindow(g_updateButton, FALSE);
@@ -4258,7 +4290,9 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
         LayoutControls(hwnd);
 
         if (!g_stateReady || g_state.settings.checkAppUpdates) {
-            StartUpdateCheck(hwnd);
+            StartUpdateCheck(
+                hwnd,
+                true);
         } else {
             EnableWindow(g_updateButton, TRUE);
             StartAutoStatusRefresh(hwnd);
@@ -4415,7 +4449,9 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
 
         if (LOWORD(wParam) == IDC_REFRESH_PACKAGES &&
             HIWORD(wParam) == BN_CLICKED) {
-            StartAutoStatusRefresh(hwnd);
+            if (refreshAddonsAfter) {
+                StartAutoStatusRefresh(hwnd);
+            }
             return 0;
         }
 
@@ -4587,7 +4623,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                 MessageBoxW(
                     hwnd,
                     L"This layout pass is currently limited to GitHub repositories.",
-                    L"TocPilot - Add",
+                    L"TocPilot - Add Git",
                     MB_OK | MB_ICONINFORMATION);
                 return 0;
             }
@@ -4603,7 +4639,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                 MessageBoxW(
                     hwnd,
                     error.c_str(),
-                    L"TocPilot - Add",
+                    L"TocPilot - Add Git",
                     MB_OK | MB_ICONWARNING);
                 return 0;
             }
@@ -4631,7 +4667,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                 MessageBoxW(
                     hwnd,
                     error.c_str(),
-                    L"TocPilot - Add",
+                    L"TocPilot - Add Git",
                     MB_OK | MB_ICONERROR);
                 return 0;
             }
@@ -4663,6 +4699,10 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             reinterpret_cast<CheckResult*>(lParam));
 
         g_appUpdateCheckInProgress = false;
+        const bool refreshAddonsAfter =
+            g_refreshAddonsAfterAppCheck;
+        g_refreshAddonsAfterAppCheck =
+            false;
 
         if (!result->ok) {
             g_release = {};
@@ -4726,7 +4766,9 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             break;
         }
 
-        StartAutoStatusRefresh(hwnd);
+        if (refreshAddonsAfter) {
+            StartAutoStatusRefresh(hwnd);
+        }
         return 0;
     }
 
