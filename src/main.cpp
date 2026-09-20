@@ -3989,12 +3989,25 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
         if (LOWORD(wParam) == IDC_ADD_PACKAGE &&
             HIWORD(wParam) == BN_CLICKED) {
             tp::PackageRecord package;
-            if (!tp::ShowAddPackageDialog(hwnd, package)) {
+            if (!tp::ShowAddPackageDialog(
+                    hwnd,
+                    package)) {
                 return 0;
             }
 
-            tp::AppState updatedState = g_state;
+            if (package.provider != L"github") {
+                MessageBoxW(
+                    hwnd,
+                    L"This layout pass is currently limited to GitHub repositories.",
+                    L"TocPilot - Add",
+                    MB_OK | MB_ICONINFORMATION);
+                return 0;
+            }
+
+            tp::AppState updatedState =
+                g_state;
             std::wstring error;
+
             if (!tp::AppendPackage(
                     updatedState,
                     std::move(package),
@@ -4002,30 +4015,51 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                 MessageBoxW(
                     hwnd,
                     error.c_str(),
-                    L"TocPilot - Add Package",
+                    L"TocPilot - Add",
                     MB_OK | MB_ICONWARNING);
                 return 0;
             }
 
-            if (!tp::SaveState(
+            const std::size_t index =
+                updatedState.packages.size() - 1;
+
+            tp::BranchSelection selection;
+            if (!tp::ShowBranchDialog(
+                    hwnd,
+                    updatedState.packages[index],
+                    selection)) {
+                return 0;
+            }
+
+            if (!tp::SetPackageBranch(
+                    updatedState.packages[index],
+                    std::move(selection.name),
+                    std::move(selection.sha),
+                    error) ||
+                !tp::SaveState(
                     g_root,
                     updatedState,
                     error)) {
-                SetIndicator(
-                    g_stateStatus,
-                    L"State: Save failed - " + error);
                 MessageBoxW(
                     hwnd,
                     error.c_str(),
-                    L"TocPilot - Add Package",
+                    L"TocPilot - Add",
                     MB_OK | MB_ICONERROR);
                 return 0;
             }
 
-            g_state = std::move(updatedState);
+            g_state =
+                std::move(updatedState);
             g_stateCreated = false;
             g_stateError.clear();
+
             RefreshPackageStateUi();
+            SelectPackageRow(index);
+            UpdatePackageButtons();
+
+            StartPackageInstall(
+                hwnd,
+                index);
             return 0;
         }
 
