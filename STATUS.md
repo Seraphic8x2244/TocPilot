@@ -1,5 +1,30 @@
 # TocPilot status / handoff
 
+## Continuation checkpoint — 2026-09-20 v0.1.24 branch-cell UX refinement
+
+- Active branch: `p2-github-branches`.
+- Published baseline: `v0.1.23`.
+- Current branch head entering this slice: `282d656` — **Record v0.1.23 branch selector release**.
+- Requested UI changes:
+  - rename **Remove** -> **Remove Addon**;
+  - rename **Reinstall** -> **Reinstall Addon** (and use **Install Addon** when the selected package is not installed);
+  - rename Advanced list column **Source / Track** -> **Branch**;
+  - give Advanced toolbar the same equal-width, minimum-width, auto-fill behaviour as compact instead of fixed per-button widths;
+  - show a branch dropdown affordance on every GitHub addon row that can select a branch;
+  - make the Branch cell one-click: first click selects the addon and opens its dropdown; if branches are still loading, auto-open when loading completes rather than requiring a second click.
+- Keep compact toolbar as **Update All / Add Git / Remove Addon / Advanced**.
+- Keep Advanced button order as **Update All / Add Git / Refresh All / Reinstall Addon / Remove Addon / Scan Existing Addons / TocPilot / Advanced**.
+- Provider expansion remains frozen.
+
+## Exact next step
+
+1. Rework toolbar sizing helpers so compact and Advanced both distribute equal-width buttons and enforce the widest-label minimum.
+2. Rename requested labels/column.
+3. Custom-draw a dropdown arrow in every branch-capable Advanced Branch cell.
+4. Handle a click on any GitHub Branch cell as select + open, with deferred auto-open after async branch discovery.
+5. Build/test on Windows before preparing v0.1.24.
+6. Runtime-test branch affordance/alignment and toolbar geometry.
+
 ## Release checkpoint — 2026-09-20 v0.1.23 published
 
 - Active branch: `p2-github-branches`.
