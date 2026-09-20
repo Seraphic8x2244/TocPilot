@@ -3,11 +3,17 @@
 ## Continuation checkpoint — 2026-09-20 smart-HTTP transport
 
 - Active branch: `p2-github-branches`.
-- Current published version: `v0.1.18`; runtime gate pending.
-- Last fully runtime-tested version before the transport change: `v0.1.17`.
-- Current source/release version: `v0.1.18`; tag `v0.1.18` points to release request commit `71d49ed`.
-- v0.1.18 runtime blocker discovered before the addon-transport gate: the installed v0.1.17 client cannot self-update while the user's unauthenticated GitHub REST quota is exhausted because `CheckLatestRelease` still calls `api.github.com/repos/Seraphic8x2244/TocPilot/releases/latest`. Direct GitHub release-asset downloads themselves are not REST-quota-bound. Active priority is therefore to remove the self-update check's REST dependency, publish the next version, and use one manual direct-asset replacement to cross this bootstrap gap.
+- Current published version: `v0.1.19`; runtime gate pending.
+- Last fully runtime-tested version before the transport/self-update changes: `v0.1.17`.
+- Current source/release version: `v0.1.19`; tag `v0.1.19` points to release request commit `fd71e9e`.
+- v0.1.18 exposed a bootstrap blocker: v0.1.17 self-update discovery still depended on GitHub REST and could not discover v0.1.18 after the user's quota was exhausted. v0.1.19 fixes this by resolving the normal `github.com/.../releases/latest` redirect, parsing the final `/releases/tag/vX.Y.Z` URL, and constructing direct asset/checksum URLs. One manual direct-asset replacement is still required to cross from an older REST-dependent build while quota is exhausted.
 - Latest commits:
+  - `fd71e9e` — Request v0.1.19 API-free self-update release.
+  - `3a06113` — Set CMake version to 0.1.19.
+  - `4a7d084` — Bump version to v0.1.19.
+  - `bdc0304` — Run self-update discovery tests.
+  - `c7e900b` — Test API-free self-update discovery.
+  - `c4d8163` — Remove REST dependency from self-update discovery.
   - `71d49ed` — Request v0.1.18 smart HTTP transport release.
   - `e967923` — Set CMake version to 0.1.18.
   - `0012898` — Bump version to v0.1.18.
@@ -25,6 +31,12 @@
   - live CI probe added against public GitHub smart HTTP;
   - exact-SHA GitHub archive downloads now target `codeload.github.com/<owner>/<repo>/zip/<sha>` directly, removing the remaining REST zipball hop while preserving existing ZIP validation, staging, ownership, rollback, and transaction code.
 - Runtime result immediately before this slice: `v0.1.17` self-update succeeded and `pfUI-VendorTweaks` updated successfully, but the startup/update sweep exhausted the user's unauthenticated GitHub REST allowance and produced one rate-limit error. This made the transport replacement urgent.
+- v0.1.19 release validation:
+  - release workflow passed source/version validation, Windows x64 Release build, all 13 CTest tests, SHA-256 generation, tag creation, and asset publication;
+  - deterministic self-update redirect parsing passed;
+  - live `github.com/.../releases/latest` redirect resolution passed without the GitHub REST API;
+  - tag `v0.1.19` points exactly to `fd71e9e585f8e5186390e5c129bad089b0c3ccee`;
+  - published `TocPilot.exe` is 834,560 bytes with SHA-256 `acd935d3f097a0ec585202521808d4212ae17adc9a2ed7ddb10fa39cc0ec9264`.
 - Release validation:
   - release workflow run `35521952232` passed source/version validation, Windows x64 Release build, the full 11-test CTest suite, SHA-256 generation, tag creation, and release asset publication;
   - the live GitHub smart-HTTP WinHTTP probe passed in CI;
@@ -616,11 +628,11 @@ Complete. A real `v0.1.0 -> v0.1.1` in-app self-update succeeded on Windows besi
 
 ## Exact next step
 
-1. Fix self-update discovery before further runtime testing: replace the GitHub REST `/releases/latest` lookup with a normal `https://github.com/Seraphic8x2244/TocPilot/releases/latest` request, follow GitHub's redirect, derive the version tag from the final `/releases/tag/vX.Y.Z` URL, and construct direct release asset/checksum URLs.
-2. Preserve the existing SHA-256 verification and updater replacement flow; only release discovery should change.
-3. Add deterministic parsing tests plus a live CI probe that resolves the public GitHub latest-release redirect without REST.
-4. Version and publish the next release only after the full Windows build/CTest/live probe passes.
-5. Because v0.1.17 cannot discover that release while the user's REST quota is burned, bootstrap once by manually replacing TocPilot.exe from the direct GitHub release asset.
-6. Then runtime-test the new version: startup managed-addon sweep + immediate Update All must work despite the exhausted REST quota, and at least one changed package should complete through smart-HTTP SHA discovery + direct codeload archive download.
-7. After the GitHub runtime gate passes, validate provider-neutral smart HTTP against GitLab and OctoWoW/Gitea-style hosts.
-8. Do not alter staging/security/transaction semantics and do not add libgit2, bundled Git, required `git.exe`, or public-repo credentials.
+1. Bootstrap once by manually downloading published `v0.1.19` directly from `https://github.com/Seraphic8x2244/TocPilot/releases/download/v0.1.19/TocPilot.exe`, closing TocPilot, and replacing the old executable. Older REST-dependent builds cannot discover this release while the user's GitHub API quota is exhausted.
+2. Launch `v0.1.19` and confirm it starts normally.
+3. Let the automatic managed-addon sweep finish, then immediately run **Update All** while the GitHub REST quota is still exhausted/low.
+4. Confirm the managed-addon sweep no longer reports REST rate-limit failures; branch heads should resolve through Git smart HTTP.
+5. If any addon is changed, confirm it downloads and installs through direct exact-SHA `codeload.github.com` while the existing staging, ZIP validation, ownership, rollback, and transaction path remains intact.
+6. The next TocPilot release after v0.1.19 should be discoverable/updatable in-app without GitHub REST quota because self-update now uses the normal latest-release redirect plus direct assets.
+7. After the GitHub runtime gate passes, validate provider-neutral smart HTTP against public GitLab and OctoWoW/Gitea-style repositories.
+8. Do not add libgit2, bundled Git, required `git.exe`, or public-repository credentials.
