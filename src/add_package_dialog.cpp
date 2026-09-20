@@ -118,7 +118,7 @@ LRESULT CALLBACK DialogProc(
         HWND intro = CreateWindowExW(
             0,
             L"STATIC",
-            L"Paste a public GitHub or GitLab repository URL.",
+            L"Paste a public GitHub repository URL.",
             WS_CHILD | WS_VISIBLE,
             20,
             18,
@@ -149,7 +149,7 @@ LRESULT CALLBACK DialogProc(
         HWND add = CreateWindowExW(
             0,
             L"BUTTON",
-            L"Save source",
+            L"Continue",
             WS_CHILD | WS_VISIBLE | WS_TABSTOP |
                 BS_DEFPUSHBUTTON,
             20,
@@ -183,8 +183,8 @@ LRESULT CALLBACK DialogProc(
         HWND result = CreateWindowExW(
             0,
             L"STATIC",
-            L"This saves the package source only. "
-            L"Nothing will be downloaded or installed yet.",
+            L"Next, choose the branch to track. TocPilot will then stage, "
+            L"validate, and install the addon.",
             WS_CHILD | WS_VISIBLE | SS_LEFT,
             20,
             128,
@@ -297,7 +297,7 @@ bool ShowAddPackageDialog(
     HWND dialog = CreateWindowExW(
         WS_EX_DLGMODALFRAME | WS_EX_CONTROLPARENT,
         kClassName,
-        L"Add Package - Save Repository Source",
+        L"Add Addon",
         WS_CAPTION | WS_SYSMENU | WS_POPUP,
         x,
         y,
