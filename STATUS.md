@@ -1,5 +1,51 @@
 # TocPilot status / handoff
 
+## Implementation checkpoint — 2026-09-20 post-v0.1.24 runtime-feedback slice
+
+- Active branch: `p2-github-branches`.
+- Published baseline: `v0.1.24`.
+- Source version remains `v0.1.24` until release preparation.
+- Current branch head entering release preparation: `67ad8a2` — **Replace branch combo overlay with popup menu**.
+- Latest implementation commits:
+  - `67ad8a2` — **Replace branch combo overlay with popup menu**.
+  - `87a0c05` — **Refine startup updates and smart launch behavior**.
+  - `d7e80c1` — **Test known-update Update All filtering**.
+  - `dca126e` — **Queue only known addon updates**.
+  - `450de7e` — **Checkpoint post-v0.1.24 runtime feedback**.
+- Completed in source:
+  - normal startup always checks the latest TocPilot release, then continues into addon status refresh;
+  - **Update All** now queues only installed packages already known to have `installedRevision != latestRevision` and applies the saved latest revision without scanning Current addons;
+  - startup/**Refresh All** remain the discovery path for new addon branch heads;
+  - the two WoW/VanillaFixes launch controls are collapsed into one smart launch button that prefers `VanillaFixes.exe` and its icon when present, otherwise `WoW.exe` and its icon;
+  - Branch selection no longer opens the overlaid Win32 combobox; clicking a Branch cell uses a transient popup menu anchored to the cell;
+  - repositories with zero/one discovered branch do not open a pointless branch menu, and the selected one-branch row drops the arrow after discovery.
+- Validation:
+  - build run `35535889855` for `67ad8a2` completed successfully with Windows x64 Release compile + full CTest suite;
+  - implementation-only Update All commit `dca126e` failed the previous test expectation as expected;
+  - corrected test commit `d7e80c1` then passed the Windows build/test workflow;
+  - `87a0c05` also passed Windows build + full CTest.
+- Installed/Latest version display:
+  - still shows abbreviated commit SHAs in this slice;
+  - Git Smart HTTP can expose refs/tags but cannot read a remote addon TOC `## Version`;
+  - a later refinement can opportunistically map exact SHAs to Git tags, while true TOC versions require remote content inspection.
+- Runtime testing still required:
+  - startup app-update indication and handoff into addon status refresh;
+  - smart launch target/icon with and without VanillaFixes;
+  - popup-menu branch interaction, including one-branch repositories;
+  - Update All applying only rows already marked **Update available**.
+- Deferred:
+  - human-readable version/tag display;
+  - GitLab/Gitea/OctoWoW provider expansion;
+  - complex multi-root adoption.
+
+## Exact next step
+
+1. Prepare source version `v0.1.25`.
+2. Require a clean Windows x64 Release build + full CTest on the versioned source.
+3. Trigger the normal release workflow only by updating `.github/release-version` to `v0.1.25`.
+4. Require the release workflow to pass source-version validation, build, tests, checksum generation, tag creation and asset publication.
+5. Self-update a runtime `v0.1.24` install to `v0.1.25` and test the four runtime behaviours above before starting another feature slice.
+
 ## Continuation checkpoint — 2026-09-20 post-v0.1.24 runtime feedback
 
 - Active branch: `p2-github-branches`.
