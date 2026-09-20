@@ -19,7 +19,8 @@
 namespace tp {
 namespace {
 
-constexpr wchar_t kHost[] = L"api.github.com";
+constexpr wchar_t kApiHost[] = L"api.github.com";
+constexpr wchar_t kCodeloadHost[] = L"codeload.github.com";
 constexpr wchar_t kUserAgent[] = L"TocPilot/" TOCPILOT_VERSION_W;
 constexpr std::size_t kMaxResponseBytes = 4 * 1024 * 1024;
 
@@ -380,7 +381,7 @@ bool HttpGet(
 
     handles.connection = WinHttpConnect(
         handles.session,
-        kHost,
+        kApiHost,
         INTERNET_DEFAULT_HTTPS_PORT,
         0);
 
@@ -511,6 +512,7 @@ bool CheckStatus(
 
 
 bool HttpDownload(
+    std::wstring_view host,
     const std::wstring& path,
     const std::filesystem::path& destination,
     std::uint64_t& downloadedBytes,
@@ -545,9 +547,10 @@ bool HttpDownload(
         30000,
         30000);
 
+    const std::wstring hostString(host);
     handles.connection = WinHttpConnect(
         handles.session,
-        kHost,
+        hostString.c_str(),
         INTERNET_DEFAULT_HTTPS_PORT,
         0);
 
@@ -575,8 +578,7 @@ bool HttpDownload(
     }
 
     const wchar_t headers[] =
-        L"Accept: application/vnd.github+json\r\n"
-        L"X-GitHub-Api-Version: 2022-11-28\r\n";
+        L"Accept: application/zip\r\n";
 
     if (!WinHttpAddRequestHeaders(
             handles.request,
@@ -621,7 +623,22 @@ bool HttpDownload(
         return false;
     }
 
-    if (!CheckStatus(status, error)) {
+    if (status < 200 || status >= 300) {
+        if (status == 404) {
+            error =
+                L"GitHub archive was not found for the requested revision.";
+        } else if (status == 400) {
+            error =
+                L"GitHub codeload rejected the requested archive revision.";
+        } else if (status == 403 || status == 429) {
+            error =
+                L"GitHub archive download was refused or temporarily limited.";
+        } else {
+            error =
+                L"GitHub archive host returned status " +
+                std::to_wstring(status) +
+                L".";
+        }
         return false;
     }
 
@@ -1058,6 +1075,64 @@ bool BuildGitHubArchiveApiPath(
     return true;
 }
 
+bool BuildGitHubCodeloadPath(
+    std::wstring_view repository,
+    std::wstring_view ref,
+    std::wstring& path,
+    std::wstring& error) {
+    path.clear();
+    error.clear();
+
+    const std::size_t slash =
+        repository.find(L'/');
+
+    if (slash == std::wstring_view::npos ||
+        slash == 0 ||
+        slash + 1 >= repository.size() ||
+        repository.find(
+            L'/',
+            slash + 1) !=
+            std::wstring_view::npos) {
+        error =
+            L"GitHub repository identity is invalid.";
+        return false;
+    }
+
+    if (ref.empty()) {
+        error =
+            L"GitHub archive ref is empty.";
+        return false;
+    }
+
+    std::wstring owner;
+    std::wstring name;
+    std::wstring encodedRef;
+
+    if (!EncodeGitHubPathSegment(
+            repository.substr(0, slash),
+            owner) ||
+        !EncodeGitHubPathSegment(
+            repository.substr(slash + 1),
+            name) ||
+        !EncodeGitHubPathSegment(
+            ref,
+            encodedRef)) {
+        error =
+            L"GitHub repository or ref contains invalid Unicode.";
+        return false;
+    }
+
+    path =
+        L"/" +
+        owner +
+        L"/" +
+        name +
+        L"/zip/" +
+        encodedRef;
+
+    return true;
+}
+
 bool DownloadGitHubArchive(
     std::wstring_view repository,
     std::wstring_view ref,
@@ -1068,7 +1143,7 @@ bool DownloadGitHubArchive(
     error.clear();
 
     std::wstring path;
-    if (!BuildGitHubArchiveApiPath(
+    if (!BuildGitHubCodeloadPath(
             repository,
             ref,
             path,
@@ -1078,6 +1153,7 @@ bool DownloadGitHubArchive(
 
     DWORD status = 0;
     return HttpDownload(
+        kCodeloadHost,
         path,
         destination,
         downloadedBytes,
