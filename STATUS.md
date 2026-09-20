@@ -1,5 +1,46 @@
 # TocPilot status / handoff
 
+## Release checkpoint — 2026-09-20 v0.1.23 published
+
+- Active branch: `p2-github-branches`.
+- Published version: `v0.1.23`.
+- Release tag `v0.1.23` points exactly to `395bb2a752077834f31f73c548b880f5c8e12346` — **Request v0.1.23 branch selector release**.
+- Release workflow run `35530425508` completed successfully:
+  - source/version validation passed;
+  - Windows x64 Release configure/build passed;
+  - complete CTest suite passed;
+  - SHA-256 sidecar generation passed;
+  - tag creation passed;
+  - release asset publication passed.
+- Published `TocPilot.exe`: 896,000 bytes; SHA-256 `d10771039a13f42766f095da1202f7b8126186ab1fbefc86aae794a5ba3ccece`.
+- v0.1.23 UI changes:
+  - compact toolbar: **Update All / Add Git / Remove / Advanced**;
+  - **TocPilot** is Advanced-only;
+  - Advanced order: **Update All / Add Git / Refresh All / Reinstall / Remove / Scan Existing Addons / TocPilot / Advanced**;
+  - selected GitHub rows in Advanced mode get an inline branch dropdown over **Source / Track**;
+  - dropdown branch discovery is asynchronous and generation-guarded;
+  - choosing a branch saves tracking + latest fetched SHA only; addon files are unchanged until an explicit update/reinstall action;
+  - selector tracks scrolling, sorting, column sizing and window resizing;
+  - branch lookup failure can retry by reopening the dropdown;
+  - Add Git still uses the existing initial branch-selection dialog.
+- Validation history:
+  - intermediate `7627fff` build failed from a missing forward declaration;
+  - fix `7853ba4` passed Windows build + full CTest;
+  - v0.1.23 version builds `911fe54` and `4af5fbc` also passed;
+  - final release workflow passed.
+- Runtime testing still required.
+
+## Exact next runtime step
+
+1. Self-update TocPilot to `v0.1.23`.
+2. Confirm compact has **Update All / Add Git / Remove / Advanced** only.
+3. Open Advanced and confirm **Remove / Scan Existing Addons / TocPilot** appear consecutively in that order.
+4. Select several GitHub addons and confirm the branch dropdown appears in the selected row's **Source / Track** cell.
+5. Scroll, resize and sort while a row is selected; confirm the dropdown remains aligned.
+6. Change a test addon from `main` to `dev` (or another known branch); confirm the saved tracking/status changes without modifying addon files.
+7. Run **Update All** only if you want to test applying the new branch to disk.
+8. Report runtime/UI observations in a fresh chat; this conversation is now tool-heavy and the repo handoff is current.
+
 ## Release-prep checkpoint — 2026-09-20 v0.1.23 Advanced branch selector
 
 - Active branch: `p2-github-branches`.
