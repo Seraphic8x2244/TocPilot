@@ -1,5 +1,41 @@
 # TocPilot status / handoff
 
+## Continuation checkpoint — 2026-09-20 post-v0.1.24 runtime feedback
+
+- Active branch: `p2-github-branches`.
+- Published baseline: `v0.1.24`.
+- Current branch head entering this slice: `9a4d118` — **Record v0.1.24 branch-cell UX release**.
+- Latest release tag: `v0.1.24` -> `ffdc961e323f6ec276ca1562a86cc59342f4e003`.
+- Runtime feedback to address:
+  - TocPilot should always check its own published release on startup rather than depending on the saved `checkAppUpdates` setting.
+  - the overlaid native Win32 branch combobox feels visually janky; reduce unnecessary dropdown interaction, especially for one-branch repositories.
+  - **Installed / Latest** currently display abbreviated commit SHAs; investigate human-readable addon versions and document Smart-HTTP limits.
+  - replace the two launch buttons with one smart launch button: prefer `VanillaFixes.exe` + its icon when present, otherwise `WoW.exe` + its icon.
+  - **Update All** should apply only addons already known to need an update; status discovery belongs to startup/**Refresh All**, not the Update All action.
+- Completed before this slice:
+  - v0.1.24 published successfully with Windows x64 Release build + complete CTest pass.
+  - startup already performs app-release checking when `checkAppUpdates` is enabled, then runs addon status refresh.
+  - startup/manual addon status refresh already populates saved latest branch SHAs without changing addon files.
+- Untested work from v0.1.24 remains:
+  - branch-cell visual alignment while scrolling/sorting/resizing;
+  - branch one-click/deferred-open feel;
+  - Advanced toolbar geometry;
+  - runtime branch switching.
+- Deferred unless naturally solved in this slice:
+  - human-readable remote addon versions when they require downloading/inspecting addon content rather than Smart-HTTP refs;
+  - GitLab/Gitea/OctoWoW provider expansion;
+  - complex multi-root adoption.
+
+## Exact next step
+
+1. Make the app-release check unconditional at normal startup, then continue into addon status refresh.
+2. Change Update All to queue/apply only packages whose saved `installedRevision != latestRevision`; do not use Update All as a discovery scan.
+3. Collapse WoW/VanillaFixes into one smart launch button with the executable's icon.
+4. Suppress branch dropdown opening/affordance when the repository exposes no alternative branch.
+5. Evaluate whether a less janky branch-picker interaction is warranted beyond the native overlaid Win32 combobox.
+6. Run/adjust unit tests and Windows CI before preparing a new release.
+7. Keep the version at v0.1.24 until this slice is validated; bump only for release preparation.
+
 ## Release checkpoint — 2026-09-20 v0.1.24 published
 
 - Active branch: `p2-github-branches`.
