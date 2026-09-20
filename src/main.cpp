@@ -789,6 +789,8 @@ void PopulatePackageList() {
     }
 }
 
+void SelectPackageRow(std::size_t index);
+
 int SelectedPackageRow() {
     if (!g_packageList) {
         return -1;
