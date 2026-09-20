@@ -1611,8 +1611,27 @@ void AdoptGitAddons(HWND hwnd) {
             continue;
         }
 
-        stagedState.packages.push_back(
-            plan.package);
+        if (plan.existingPackageIndex) {
+            const std::size_t packageIndex =
+                *plan.existingPackageIndex;
+
+            if (packageIndex >=
+                stagedState.packages.size()) {
+                refusals.push_back(
+                    it->path()
+                        .filename()
+                        .wstring() +
+                    L": matching TocPilot package changed during adoption scan.");
+                continue;
+            }
+
+            stagedState.packages[
+                packageIndex] =
+                plan.package;
+        } else {
+            stagedState.packages.push_back(
+                plan.package);
+        }
 
         plans.push_back(
             std::move(plan));
