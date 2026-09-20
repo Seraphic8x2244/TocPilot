@@ -4100,6 +4100,17 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                 L"Release: Update available - " + result->release.tag);
             SetWindowTextW(g_updateButton, L"Update app");
             EnableWindow(g_updateButton, TRUE);
+
+            if (MessageBoxW(
+                    hwnd,
+                    (L"TocPilot " +
+                     result->release.tag +
+                     L" is available. Update now?").c_str(),
+                    L"TocPilot Update",
+                    MB_YESNO |
+                        MB_ICONINFORMATION) == IDYES) {
+                StartUpdate(hwnd);
+            }
             break;
 
         case tp::ReleaseCheckState::UpToDate:
