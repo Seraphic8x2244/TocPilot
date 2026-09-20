@@ -137,6 +137,10 @@ if(BUILD_TESTING)
     endif()
 
     add_test(NAME git-smart-http-ref-parsing COMMAND TocPilotGitRefsTests)
+    add_test(
+        NAME git-smart-http-live-github
+        COMMAND TocPilotGitRefsTests --live-github
+    )
 
     add_executable(TocPilotArchiveTests
         tests/archive_tests.cpp
