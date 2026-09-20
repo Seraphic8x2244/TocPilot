@@ -1087,17 +1087,27 @@ LRESULT HandlePackageListCustomDraw(
                 arrowRect.right -
                     arrowWidth);
 
-        DrawFrameControl(
-            draw->nmcd.hdc,
-            &arrowRect,
-            DFC_SCROLL,
-            DFCS_SCROLLCOMBOBOX);
+        const bool showArrow =
+            !g_branchSelectorLoaded ||
+            package.id !=
+                g_branchSelectorPackageId ||
+            g_branchSelectorBranches.size() > 1;
+
+        if (showArrow) {
+            DrawFrameControl(
+                draw->nmcd.hdc,
+                &arrowRect,
+                DFC_SCROLL,
+                DFCS_SCROLLCOMBOBOX);
+        }
 
         RECT textRect =
             rect;
         textRect.left += 6;
         textRect.right =
-            arrowRect.left - 4;
+            showArrow
+                ? arrowRect.left - 4
+                : rect.right - 5;
 
         const std::wstring branchText =
             PackageSourceText(
@@ -1689,122 +1699,11 @@ void PopulateBranchSelectorLoaded(
 }
 
 void PositionBranchSelector() {
-    if (!g_branchSelector ||
-        !g_packageList ||
-        !g_advancedVisible) {
-        if (g_branchSelector) {
-            ShowWindow(
-                g_branchSelector,
-                SW_HIDE);
-        }
-        return;
-    }
-
-    const int packageRow =
-        SelectedPackageRow();
-
-    if (packageRow < 0 ||
-        packageRow >=
-            static_cast<int>(
-                g_state.packages.size()) ||
-        g_state.packages[
-            static_cast<std::size_t>(
-                packageRow)].provider !=
-            L"github") {
+    if (g_branchSelector) {
         ShowWindow(
             g_branchSelector,
             SW_HIDE);
-        return;
     }
-
-    const int displayRow =
-        PackageDisplayRow(
-            static_cast<std::size_t>(
-                packageRow));
-
-    if (displayRow < 0) {
-        ShowWindow(
-            g_branchSelector,
-            SW_HIDE);
-        return;
-    }
-
-    RECT cell{};
-    if (!ListView_GetSubItemRect(
-            g_packageList,
-            displayRow,
-            1,
-            LVIR_BOUNDS,
-            &cell)) {
-        ShowWindow(
-            g_branchSelector,
-            SW_HIDE);
-        return;
-    }
-
-    RECT listClient{};
-    GetClientRect(
-        g_packageList,
-        &listClient);
-
-    int headerHeight = 0;
-    if (const HWND header =
-            ListView_GetHeader(
-                g_packageList)) {
-        RECT headerRect{};
-        if (GetWindowRect(
-                header,
-                &headerRect)) {
-            headerHeight =
-                static_cast<int>(
-                    headerRect.bottom -
-                    headerRect.top);
-        }
-    }
-
-    if (cell.bottom <=
-            headerHeight ||
-        cell.top >=
-            listClient.bottom) {
-        ShowWindow(
-            g_branchSelector,
-            SW_HIDE);
-        return;
-    }
-
-    HWND parent =
-        GetParent(
-            g_packageList);
-
-    MapWindowPoints(
-        g_packageList,
-        parent,
-        reinterpret_cast<POINT*>(
-            &cell),
-        2);
-
-    const int width =
-        std::max(
-            80,
-            static_cast<int>(
-                cell.right -
-                cell.left -
-                2));
-
-    SetWindowPos(
-        g_branchSelector,
-        HWND_TOP,
-        static_cast<int>(
-            cell.left) + 1,
-        static_cast<int>(
-            cell.top) + 1,
-        width,
-        220,
-        SWP_NOACTIVATE);
-
-    ShowWindow(
-        g_branchSelector,
-        SW_SHOW);
 }
 
 void StartBranchSelectorLoad(
@@ -1949,10 +1848,13 @@ void UpdateBranchSelector(
             : FALSE);
 }
 
+void ApplyBranchChoice(
+    HWND hwnd,
+    std::size_t branchIndex);
+
 void OpenBranchSelectorIfReady(
     HWND hwnd) {
-    if (!g_branchSelector ||
-        g_branchSelectorOpenPackageId.empty() ||
+    if (g_branchSelectorOpenPackageId.empty() ||
         !g_branchSelectorLoaded ||
         g_branchSelectorLoadInProgress ||
         PackageOperationBusy()) {
@@ -1981,20 +1883,109 @@ void OpenBranchSelectorIfReady(
         return;
     }
 
-    PositionBranchSelector();
-    EnableWindow(
-        g_branchSelector,
-        TRUE);
-
     g_branchSelectorOpenPackageId.clear();
 
-    SetFocus(
-        g_branchSelector);
-    SendMessageW(
-        g_branchSelector,
-        CB_SHOWDROPDOWN,
-        TRUE,
-        0);
+    if (g_branchSelectorBranches.size() <= 1) {
+        if (g_packageHint) {
+            const std::wstring message =
+                package.name +
+                L" has no alternative branches.";
+            SetWindowTextW(
+                g_packageHint,
+                message.c_str());
+        }
+
+        if (g_packageList) {
+            InvalidateRect(
+                g_packageList,
+                nullptr,
+                FALSE);
+        }
+        return;
+    }
+
+    const int displayRow =
+        PackageDisplayRow(
+            static_cast<std::size_t>(
+                selected));
+
+    if (displayRow < 0 ||
+        !g_packageList) {
+        return;
+    }
+
+    RECT cell{};
+    if (!ListView_GetSubItemRect(
+            g_packageList,
+            displayRow,
+            1,
+            LVIR_BOUNDS,
+            &cell)) {
+        return;
+    }
+
+    POINT anchor{
+        cell.left,
+        cell.bottom
+    };
+
+    MapWindowPoints(
+        g_packageList,
+        nullptr,
+        &anchor,
+        1);
+
+    HMENU menu =
+        CreatePopupMenu();
+
+    if (!menu) {
+        return;
+    }
+
+    for (std::size_t i = 0;
+         i < g_branchSelectorBranches.size();
+         ++i) {
+        const auto& branch =
+            g_branchSelectorBranches[i];
+
+        UINT flags =
+            MF_STRING;
+
+        if (branch.name == package.ref) {
+            flags |= MF_CHECKED;
+        }
+
+        AppendMenuW(
+            menu,
+            flags,
+            static_cast<UINT_PTR>(i + 1),
+            branch.name.c_str());
+    }
+
+    const UINT command =
+        TrackPopupMenu(
+            menu,
+            TPM_RETURNCMD |
+                TPM_NONOTIFY |
+                TPM_RIGHTBUTTON |
+                TPM_LEFTALIGN |
+                TPM_TOPALIGN,
+            anchor.x,
+            anchor.y,
+            0,
+            hwnd,
+            nullptr);
+
+    DestroyMenu(menu);
+
+    if (command > 0 &&
+        command <=
+            g_branchSelectorBranches.size()) {
+        ApplyBranchChoice(
+            hwnd,
+            static_cast<std::size_t>(
+                command - 1));
+    }
 }
 
 void RequestBranchSelector(
@@ -2060,13 +2051,14 @@ void RequestBranchSelector(
         hwnd);
 }
 
-void ApplyBranchSelectorChoice(
-    HWND hwnd) {
+void ApplyBranchChoice(
+    HWND hwnd,
+    std::size_t branchIndex) {
     g_branchSelectorOpenPackageId.clear();
 
-    if (g_branchSelectorUpdating ||
-        !g_branchSelectorLoaded ||
-        !g_branchSelector) {
+    if (!g_branchSelectorLoaded ||
+        branchIndex >=
+            g_branchSelectorBranches.size()) {
         return;
     }
 
@@ -2090,38 +2082,9 @@ void ApplyBranchSelectorChoice(
         return;
     }
 
-    const LRESULT selected =
-        SendMessageW(
-            g_branchSelector,
-            CB_GETCURSEL,
-            0,
-            0);
-
-    if (selected == CB_ERR ||
-        selected < 0) {
-        return;
-    }
-
-    const LRESULT data =
-        SendMessageW(
-            g_branchSelector,
-            CB_GETITEMDATA,
-            static_cast<WPARAM>(
-                selected),
-            0);
-
-    if (data == CB_ERR ||
-        data < 0 ||
-        static_cast<std::size_t>(
-            data) >=
-            g_branchSelectorBranches.size()) {
-        return;
-    }
-
     const auto& branch =
         g_branchSelectorBranches[
-            static_cast<std::size_t>(
-                data)];
+            branchIndex];
 
     if (branch.name ==
         g_state.packages[
@@ -5271,41 +5234,6 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
     }
 
     case WM_COMMAND:
-        if (LOWORD(wParam) ==
-                IDC_BRANCH_SELECTOR) {
-            if (HIWORD(wParam) ==
-                CBN_SELCHANGE) {
-                ApplyBranchSelectorChoice(
-                    hwnd);
-                return 0;
-            }
-
-            if (HIWORD(wParam) ==
-                    CBN_DROPDOWN &&
-                g_branchSelectorLoadFailed &&
-                !g_branchSelectorLoadInProgress) {
-                const int selected =
-                    SelectedPackageRow();
-
-                if (selected >= 0 &&
-                    selected <
-                        static_cast<int>(
-                            g_state.packages.size())) {
-                    g_branchSelectorOpenPackageId =
-                        g_state.packages[
-                            static_cast<std::size_t>(
-                                selected)].id;
-                    g_branchSelectorLoadFailed =
-                        false;
-                    StartBranchSelectorLoad(
-                        hwnd,
-                        static_cast<std::size_t>(
-                            selected));
-                }
-                return 0;
-            }
-        }
-
         if (LOWORD(wParam) == IDC_ADVANCED &&
             HIWORD(wParam) == BN_CLICKED) {
             ToggleAdvanced(hwnd);
