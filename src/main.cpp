@@ -154,7 +154,7 @@ bool g_branchSelectorUpdating = false;
 bool g_branchSelectorLoadInProgress = false;
 bool g_branchSelectorLoaded = false;
 bool g_branchSelectorLoadFailed = false;
-bool g_branchSelectorOpenWhenReady = false;
+std::wstring g_branchSelectorOpenPackageId;
 std::uint64_t g_branchSelectorGeneration = 0;
 std::wstring g_branchSelectorPackageId;
 std::wstring g_branchSelectorDefaultBranch;
@@ -973,7 +973,6 @@ LRESULT HandlePackageListCustomDraw(
     if (draw->nmcd.dwDrawStage !=
             (CDDS_ITEMPREPAINT |
              CDDS_SUBITEM) ||
-        draw->iSubItem != 0 ||
         !g_packageList) {
         return CDRF_DODEFAULT;
     }
@@ -999,21 +998,49 @@ LRESULT HandlePackageListCustomDraw(
         return CDRF_DODEFAULT;
     }
 
-    RECT rowRect{};
-    if (!ListView_GetItemRect(
-            g_packageList,
-            displayRow,
-            &rowRect,
-            LVIR_BOUNDS)) {
+    const auto& package =
+        g_state.packages[
+            packageIndex];
+
+    const bool drawName =
+        draw->iSubItem == 0;
+    const bool drawBranch =
+        g_advancedVisible &&
+        draw->iSubItem == 1 &&
+        package.provider ==
+            L"github";
+
+    if (!drawName &&
+        !drawBranch) {
         return CDRF_DODEFAULT;
     }
 
-    RECT rect = rowRect;
-    rect.right =
-        rect.left +
-        ListView_GetColumnWidth(
-            g_packageList,
-            0);
+    RECT rect{};
+
+    if (drawName) {
+        if (!ListView_GetItemRect(
+                g_packageList,
+                displayRow,
+                &rect,
+                LVIR_BOUNDS)) {
+            return CDRF_DODEFAULT;
+        }
+
+        rect.right =
+            rect.left +
+            ListView_GetColumnWidth(
+                g_packageList,
+                0);
+    } else {
+        if (!ListView_GetSubItemRect(
+                g_packageList,
+                displayRow,
+                1,
+                LVIR_BOUNDS,
+                &rect)) {
+            return CDRF_DODEFAULT;
+        }
+    }
 
     const bool selected =
         (ListView_GetItemState(
@@ -1049,17 +1076,6 @@ LRESULT HandlePackageListCustomDraw(
         draw->nmcd.hdc,
         GetSysColor(textIndex));
 
-    RECT textRect = rect;
-    textRect.left += 8;
-    textRect.right -= 5;
-
-    const auto& package =
-        g_state.packages[
-            packageIndex];
-    const std::wstring suffix =
-        PackageBranchSuffix(
-            package);
-
     HFONT normal =
         g_uiFont
             ? g_uiFont
@@ -1070,6 +1086,72 @@ LRESULT HandlePackageListCustomDraw(
         g_boldUiFont
             ? g_boldUiFont
             : normal;
+
+    if (drawBranch) {
+        const HGDIOBJ oldFont =
+            SelectObject(
+                draw->nmcd.hdc,
+                normal);
+
+        RECT arrowRect =
+            rect;
+        const int arrowWidth =
+            std::max(
+                16,
+                std::min(
+                    GetSystemMetrics(
+                        SM_CXVSCROLL),
+                    static_cast<int>(
+                        rect.right -
+                        rect.left) /
+                        3));
+
+        arrowRect.left =
+            std::max(
+                arrowRect.left,
+                arrowRect.right -
+                    arrowWidth);
+
+        DrawFrameControl(
+            draw->nmcd.hdc,
+            &arrowRect,
+            DFC_SCROLL,
+            DFCS_SCROLLCOMBOBOX);
+
+        RECT textRect =
+            rect;
+        textRect.left += 6;
+        textRect.right =
+            arrowRect.left - 4;
+
+        const std::wstring branchText =
+            PackageSourceText(
+                package);
+
+        DrawTextW(
+            draw->nmcd.hdc,
+            branchText.c_str(),
+            -1,
+            &textRect,
+            DT_SINGLELINE |
+                DT_VCENTER |
+                DT_END_ELLIPSIS |
+                DT_NOPREFIX);
+
+        SelectObject(
+            draw->nmcd.hdc,
+            oldFont);
+
+        return CDRF_SKIPDEFAULT;
+    }
+
+    RECT textRect = rect;
+    textRect.left += 8;
+    textRect.right -= 5;
+
+    const std::wstring suffix =
+        PackageBranchSuffix(
+            package);
 
     const HGDIOBJ oldFont =
         SelectObject(
@@ -1851,6 +1933,12 @@ void UpdateBranchSelector(
 
     if (g_branchSelectorPackageId !=
         package.id) {
+        if (!g_branchSelectorOpenPackageId.empty() &&
+            g_branchSelectorOpenPackageId !=
+                package.id) {
+            g_branchSelectorOpenPackageId.clear();
+        }
+
         ++g_branchSelectorGeneration;
         g_branchSelectorPackageId =
             package.id;
@@ -1885,8 +1973,121 @@ void UpdateBranchSelector(
             : FALSE);
 }
 
+void OpenBranchSelectorIfReady(
+    HWND hwnd) {
+    if (!g_branchSelector ||
+        g_branchSelectorOpenPackageId.empty() ||
+        !g_branchSelectorLoaded ||
+        g_branchSelectorLoadInProgress ||
+        PackageOperationBusy()) {
+        return;
+    }
+
+    const int selected =
+        SelectedPackageRow();
+
+    if (selected < 0 ||
+        selected >=
+            static_cast<int>(
+                g_state.packages.size())) {
+        return;
+    }
+
+    const auto& package =
+        g_state.packages[
+            static_cast<std::size_t>(
+                selected)];
+
+    if (package.id !=
+            g_branchSelectorOpenPackageId ||
+        package.id !=
+            g_branchSelectorPackageId) {
+        return;
+    }
+
+    PositionBranchSelector();
+    EnableWindow(
+        g_branchSelector,
+        TRUE);
+
+    g_branchSelectorOpenPackageId.clear();
+
+    SetFocus(
+        g_branchSelector);
+    SendMessageW(
+        g_branchSelector,
+        CB_SHOWDROPDOWN,
+        TRUE,
+        0);
+}
+
+void RequestBranchSelector(
+    HWND hwnd,
+    int displayRow) {
+    if (!g_advancedVisible ||
+        !g_packageList ||
+        displayRow < 0 ||
+        displayRow >=
+            static_cast<int>(
+                g_packageViewOrder.size())) {
+        return;
+    }
+
+    const std::size_t packageIndex =
+        g_packageViewOrder[
+            static_cast<std::size_t>(
+                displayRow)];
+
+    if (packageIndex >=
+            g_state.packages.size() ||
+        g_state.packages[
+            packageIndex].provider !=
+            L"github") {
+        return;
+    }
+
+    const std::wstring packageId =
+        g_state.packages[
+            packageIndex].id;
+
+    g_branchSelectorOpenPackageId =
+        packageId;
+
+    ListView_SetItemState(
+        g_packageList,
+        -1,
+        0,
+        LVIS_SELECTED |
+            LVIS_FOCUSED);
+    ListView_SetItemState(
+        g_packageList,
+        displayRow,
+        LVIS_SELECTED |
+            LVIS_FOCUSED,
+        LVIS_SELECTED |
+            LVIS_FOCUSED);
+
+    UpdatePackageButtons();
+
+    if (g_branchSelectorPackageId ==
+            packageId &&
+        g_branchSelectorLoadFailed &&
+        !g_branchSelectorLoadInProgress) {
+        g_branchSelectorLoadFailed =
+            false;
+        StartBranchSelectorLoad(
+            hwnd,
+            packageIndex);
+    }
+
+    OpenBranchSelectorIfReady(
+        hwnd);
+}
+
 void ApplyBranchSelectorChoice(
     HWND hwnd) {
+    g_branchSelectorOpenPackageId.clear();
+
     if (g_branchSelectorUpdating ||
         !g_branchSelectorLoaded ||
         !g_branchSelector) {
@@ -4549,6 +4750,10 @@ void ToggleAdvanced(HWND hwnd) {
     g_advancedVisible =
         !g_advancedVisible;
 
+    if (!g_advancedVisible) {
+        g_branchSelectorOpenPackageId.clear();
+    }
+
     if (g_advancedButton) {
         SetWindowTextW(
             g_advancedButton,
@@ -5116,6 +5321,24 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             }
 
             if (header->code ==
+                    NM_CLICK &&
+                g_advancedVisible) {
+                const auto* activate =
+                    reinterpret_cast<
+                        NMITEMACTIVATE*>(
+                        lParam);
+
+                if (activate &&
+                    activate->iItem >= 0 &&
+                    activate->iSubItem == 1) {
+                    RequestBranchSelector(
+                        hwnd,
+                        activate->iItem);
+                    return 0;
+                }
+            }
+
+            if (header->code ==
                 LVN_ITEMCHANGED) {
                 UpdatePackageButtons();
                 return 0;
@@ -5157,6 +5380,10 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                     selected <
                         static_cast<int>(
                             g_state.packages.size())) {
+                    g_branchSelectorOpenPackageId =
+                        g_state.packages[
+                            static_cast<std::size_t>(
+                                selected)].id;
                     g_branchSelectorLoadFailed =
                         false;
                     StartBranchSelectorLoad(
@@ -5505,6 +5732,11 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             g_branchSelectorLoadFailed =
                 true;
 
+            if (g_branchSelectorOpenPackageId ==
+                result->packageId) {
+                g_branchSelectorOpenPackageId.clear();
+            }
+
             if (packageIndex <
                 g_state.packages.size()) {
                 PopulateBranchSelectorCurrent(
@@ -5543,6 +5775,8 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
         }
 
         UpdateBranchSelector(
+            hwnd);
+        OpenBranchSelectorIfReady(
             hwnd);
         return 0;
     }
