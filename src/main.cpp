@@ -48,7 +48,6 @@ constexpr UINT WM_TP_PACKAGE_REFRESH_COMPLETE = WM_APP + 3;
 constexpr UINT WM_TP_PACKAGE_INSPECT_COMPLETE = WM_APP + 4;
 constexpr UINT WM_TP_PACKAGE_INSTALL_COMPLETE = WM_APP + 5;
 
-constexpr int IDC_UPDATE = 1001;
 constexpr int IDC_WOW_STATUS = 1002;
 constexpr int IDC_GITHUB_STATUS = 1003;
 constexpr int IDC_RELEASE_STATUS = 1004;
@@ -122,7 +121,6 @@ HWND g_packageHint = nullptr;
 HWND g_textScaleLabel = nullptr;
 HWND g_textScaleCombo = nullptr;
 HWND g_rootLabel = nullptr;
-HWND g_versionLabel = nullptr;
 
 HFONT g_uiFont = nullptr;
 HFONT g_boldUiFont = nullptr;
@@ -495,19 +493,12 @@ void LayoutControls(HWND hwnd) {
     if (g_uninstallPackageButton) {
         ShowWindow(g_uninstallPackageButton, SW_HIDE);
     }
-    if (g_updateButton && GetParent(g_updateButton) == hwnd) {
-        ShowWindow(g_updateButton, SW_HIDE);
-    }
     if (g_textScaleLabel) {
         ShowWindow(g_textScaleLabel, SW_HIDE);
     }
     if (g_textScaleCombo) {
         ShowWindow(g_textScaleCombo, SW_HIDE);
     }
-    if (g_versionLabel) {
-        ShowWindow(g_versionLabel, SW_HIDE);
-    }
-
     const int buttonY = 16;
 
     if (!g_advancedVisible) {
@@ -3218,7 +3209,7 @@ void AdoptGitAddons(HWND hwnd) {
     const int response =
         tp::ShowExpandableDialog(
             hwnd,
-            L"TocPilot - Adopt Git Addons",
+            L"TocPilot - Scan Existing Addons",
             std::to_wstring(
                 plans.size()) +
                 L" Git install(s) ready to adopt",
@@ -4302,7 +4293,6 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                 hwnd,
                 true);
         } else {
-            EnableWindow(g_updateButton, TRUE);
             StartAutoStatusRefresh(hwnd);
         }
 
@@ -4431,15 +4421,6 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             LaunchSiblingExecutable(
                 hwnd,
                 L"VanillaFixes.exe");
-            return 0;
-        }
-
-        if (LOWORD(wParam) == IDC_UPDATE && HIWORD(wParam) == BN_CLICKED) {
-            if (!g_release.assetUrl.empty()) {
-                StartUpdate(hwnd);
-            } else {
-                StartUpdateCheck(hwnd);
-            }
             return 0;
         }
 
