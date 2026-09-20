@@ -3,7 +3,7 @@
 ## Continuation checkpoint — 2026-09-19
 
 - Active branch: `p2-github-branches`.
-- Current application version: `v0.1.11`; published and runtime-validated for transactional uninstall/reinstall. Update All source head `58b29e1` is being promoted to `v0.1.12` at the user's direction; the push-triggered CI result is not observable through the current connector, so do not describe that pre-release run as independently verified. Update All is implemented in source and remains unreleased pending Windows CI.
+- Current source version: `v0.1.12`; `v0.1.11` remains the last runtime-validated release. Update All source head `58b29e1` is being promoted at the user's direction; the push-triggered CI result was not independently observable through the current connector. The `v0.1.12` release workflow must pass its own Windows x64 build + full CTest gate before publication. Update All is implemented in source and remains unreleased pending Windows CI.
 - Latest implementation commit: `9dd56e4` — Polish uninstall development controls.
 - New uninstall implementation commits:
   - `f75f286` — Add transactional package uninstall UI.
