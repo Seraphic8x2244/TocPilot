@@ -3647,7 +3647,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
         g_launchWowButton = CreateWindowExW(
             0,
             L"BUTTON",
-            L"",
+            L"Launch WoW",
             WS_CHILD | WS_VISIBLE | WS_TABSTOP |
                 BS_PUSHBUTTON | BS_ICON,
             0,
@@ -3664,7 +3664,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
         g_launchVanillaFixesButton = CreateWindowExW(
             0,
             L"BUTTON",
-            L"",
+            L"Launch VanillaFixes",
             WS_CHILD | WS_VISIBLE | WS_TABSTOP |
                 BS_PUSHBUTTON | BS_ICON,
             0,
@@ -4944,6 +4944,14 @@ int RunMainWindow(HINSTANCE instance) {
         g_state,
         g_stateCreated,
         g_stateError);
+
+    if (!g_stateReady) {
+        MessageBoxW(
+            nullptr,
+            g_stateError.c_str(),
+            L"TocPilot - State Error",
+            MB_OK | MB_ICONERROR);
+    }
 
     if (g_stateReady) {
         g_packageSortColumn =
