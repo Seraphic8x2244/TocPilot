@@ -47,6 +47,8 @@ constexpr UINT WM_TP_UPDATE_COMPLETE = WM_APP + 2;
 constexpr UINT WM_TP_PACKAGE_REFRESH_COMPLETE = WM_APP + 3;
 constexpr UINT WM_TP_PACKAGE_INSPECT_COMPLETE = WM_APP + 4;
 constexpr UINT WM_TP_PACKAGE_INSTALL_COMPLETE = WM_APP + 5;
+constexpr UINT WM_TP_BRANCHES_READY = WM_APP + 6;
+constexpr UINT WM_TP_POSITION_BRANCH_SELECTOR = WM_APP + 7;
 
 constexpr int IDC_WOW_STATUS = 1002;
 constexpr int IDC_GITHUB_STATUS = 1003;
@@ -57,7 +59,6 @@ constexpr int IDC_TEXT_SCALE = 1007;
 constexpr int IDC_UPDATE_ALL = 1008;
 constexpr int IDC_REFRESH_PACKAGES = 1009;
 constexpr int IDC_ADD_PACKAGE = 1010;
-constexpr int IDC_SET_BRANCH = 1011;
 constexpr int IDC_INSPECT_PACKAGE = 1012;
 constexpr int IDC_INSTALL_PACKAGE = 1013;
 constexpr int IDC_REMOVE_PACKAGE = 1014;
@@ -70,13 +71,14 @@ constexpr int IDC_TOCPILOT = 1020;
 constexpr int IDC_TOCPILOT_UPDATE = 1021;
 constexpr int IDC_TOCPILOT_GITHUB = 1022;
 constexpr int IDC_TOCPILOT_RELEASES = 1023;
+constexpr int IDC_BRANCH_SELECTOR = 1024;
 
 constexpr int kCompactWindowWidth = 590;
 constexpr int kAdvancedExtraWidth = 520;
 constexpr int kDefaultWindowHeight = 480;
 constexpr int kCompactButtonMinWidth = 100;
 constexpr int kCompactButtonGap = 6;
-constexpr int kCompactPrimaryButtonCount = 5;
+constexpr int kCompactPrimaryButtonCount = 4;
 constexpr int kCompactNameColumnMinWidth = 220;
 constexpr int kCompactStatusColumnMinWidth = 150;
 
@@ -103,7 +105,6 @@ HWND g_stateStatus = nullptr;
 HWND g_updateButton = nullptr;
 HWND g_updateAllButton = nullptr;
 HWND g_refreshPackagesButton = nullptr;
-HWND g_setBranchButton = nullptr;
 HWND g_inspectPackageButton = nullptr;
 HWND g_installPackageButton = nullptr;
 HWND g_uninstallPackageButton = nullptr;
@@ -117,6 +118,7 @@ HWND g_tocPilotUpdateStatus = nullptr;
 HWND g_launchWowButton = nullptr;
 HWND g_launchVanillaFixesButton = nullptr;
 HWND g_packageList = nullptr;
+HWND g_branchSelector = nullptr;
 HWND g_packageHint = nullptr;
 HWND g_textScaleLabel = nullptr;
 HWND g_textScaleCombo = nullptr;
@@ -142,6 +144,14 @@ bool g_refreshAddonsAfterAppCheck = false;
 bool g_autoStatusRefreshInProgress = false;
 bool g_advancedVisible = false;
 bool g_hasVanillaFixes = false;
+bool g_branchSelectorUpdating = false;
+bool g_branchSelectorLoadInProgress = false;
+bool g_branchSelectorLoaded = false;
+bool g_branchSelectorLoadFailed = false;
+std::uint64_t g_branchSelectorGeneration = 0;
+std::wstring g_branchSelectorPackageId;
+std::wstring g_branchSelectorDefaultBranch;
+std::vector<tp::GitHubBranch> g_branchSelectorBranches;
 tp::UpdateAllProgress g_updateAllProgress;
 std::vector<tp::PackageRefreshStamp> g_packageRefreshStamps;
 std::vector<std::wstring> g_autoStatusPackageIds;
@@ -174,6 +184,14 @@ struct PackageRefreshResult {
     std::wstring packageId;
     std::wstring branch;
     std::wstring remoteSha;
+    std::wstring error;
+};
+
+struct BranchLoadResult {
+    bool ok = false;
+    std::uint64_t generation = 0;
+    std::wstring packageId;
+    tp::GitHubRepositoryInfo info;
     std::wstring error;
 };
 
@@ -248,7 +266,7 @@ std::wstring PackageHintText() {
 
     return
         std::to_wstring(g_state.packages.size()) +
-        L" package record(s). Set Branch changes tracking; Refresh checks "
+        L" package record(s). The Advanced branch dropdown changes tracking; Refresh All checks "
         L"the saved branch head; Inspect previews without live changes; "
         L"Install/Update and Uninstall use staged rollback transactions; "
         L"Update All checks installed tracked packages and updates only changed branches; "
@@ -375,6 +393,8 @@ void SetTextScaleSelection() {
     ComboBox_SetCurSel(g_textScaleCombo, bestIndex);
 }
 
+void PositionBranchSelector();
+
 void ResizeListColumns() {
     if (!g_packageList) {
         return;
@@ -484,9 +504,6 @@ void LayoutControls(HWND hwnd) {
     if (g_packageHint) {
         ShowWindow(g_packageHint, SW_HIDE);
     }
-    if (g_setBranchButton) {
-        ShowWindow(g_setBranchButton, SW_HIDE);
-    }
     if (g_inspectPackageButton) {
         ShowWindow(g_inspectPackageButton, SW_HIDE);
     }
@@ -510,6 +527,9 @@ void LayoutControls(HWND hwnd) {
         }
         if (g_installPackageButton) {
             ShowWindow(g_installPackageButton, SW_HIDE);
+        }
+        if (g_tocPilotButton) {
+            ShowWindow(g_tocPilotButton, SW_HIDE);
         }
 
         const int availableForButtons =
@@ -544,7 +564,6 @@ void LayoutControls(HWND hwnd) {
         placePrimary(g_updateAllButton);
         placePrimary(g_addPackageButton);
         placePrimary(g_removePackageButton);
-        placePrimary(g_tocPilotButton);
         placePrimary(g_advancedButton);
     } else {
         int x = 20;
@@ -567,11 +586,11 @@ void LayoutControls(HWND hwnd) {
             };
 
         placeAdvanced(g_updateAllButton, 92);
-        placeAdvanced(g_adoptGitButton, 150);
         placeAdvanced(g_addPackageButton, 78);
         placeAdvanced(g_refreshPackagesButton, 96);
         placeAdvanced(g_installPackageButton, 88);
         placeAdvanced(g_removePackageButton, 78);
+        placeAdvanced(g_adoptGitButton, 150);
         placeAdvanced(g_tocPilotButton, 88);
         placeAdvanced(g_advancedButton, 102);
     }
@@ -595,6 +614,8 @@ void LayoutControls(HWND hwnd) {
             TRUE);
         ResizeListColumns();
     }
+
+    PositionBranchSelector();
 
     const int iconSize = 40;
     const int iconGap = 10;
@@ -1340,6 +1361,599 @@ int SelectedPackageRow() {
                 displayRow)]);
 }
 
+
+bool PackageOperationBusy() {
+    return
+        g_packageRefreshInProgress ||
+        g_packageInspectInProgress ||
+        g_packageInstallInProgress ||
+        g_updateAllInProgress ||
+        g_autoStatusRefreshInProgress ||
+        g_appUpdateInProgress;
+}
+
+void PopulateBranchSelectorCurrent(
+    const tp::PackageRecord& package) {
+    if (!g_branchSelector) {
+        return;
+    }
+
+    g_branchSelectorUpdating = true;
+
+    SendMessageW(
+        g_branchSelector,
+        CB_RESETCONTENT,
+        0,
+        0);
+
+    std::wstring label =
+        ProviderLabel(package.provider) +
+        L" / " +
+        (package.ref.empty()
+            ? L"Choose branch"
+            : package.ref);
+
+    const LRESULT item =
+        SendMessageW(
+            g_branchSelector,
+            CB_ADDSTRING,
+            0,
+            reinterpret_cast<LPARAM>(
+                label.c_str()));
+
+    if (item >= 0) {
+        SendMessageW(
+            g_branchSelector,
+            CB_SETITEMDATA,
+            static_cast<WPARAM>(item),
+            static_cast<LPARAM>(-1));
+        SendMessageW(
+            g_branchSelector,
+            CB_SETCURSEL,
+            static_cast<WPARAM>(item),
+            0);
+    }
+
+    g_branchSelectorUpdating = false;
+}
+
+void PopulateBranchSelectorLoaded(
+    const tp::PackageRecord& package) {
+    if (!g_branchSelector) {
+        return;
+    }
+
+    g_branchSelectorUpdating = true;
+
+    SendMessageW(
+        g_branchSelector,
+        CB_RESETCONTENT,
+        0,
+        0);
+
+    int selected = -1;
+
+    for (std::size_t i = 0;
+         i < g_branchSelectorBranches.size();
+         ++i) {
+        const auto& branch =
+            g_branchSelectorBranches[i];
+
+        const std::wstring label =
+            ProviderLabel(package.provider) +
+            L" / " +
+            branch.name;
+
+        const LRESULT item =
+            SendMessageW(
+                g_branchSelector,
+                CB_ADDSTRING,
+                0,
+                reinterpret_cast<LPARAM>(
+                    label.c_str()));
+
+        if (item < 0) {
+            continue;
+        }
+
+        SendMessageW(
+            g_branchSelector,
+            CB_SETITEMDATA,
+            static_cast<WPARAM>(item),
+            static_cast<LPARAM>(i));
+
+        if (branch.name ==
+            package.ref) {
+            selected =
+                static_cast<int>(item);
+        }
+    }
+
+    if (selected < 0 &&
+        !package.ref.empty()) {
+        const std::wstring missing =
+            ProviderLabel(package.provider) +
+            L" / " +
+            package.ref +
+            L" (not found)";
+
+        const LRESULT item =
+            SendMessageW(
+                g_branchSelector,
+                CB_INSERTSTRING,
+                0,
+                reinterpret_cast<LPARAM>(
+                    missing.c_str()));
+
+        if (item >= 0) {
+            SendMessageW(
+                g_branchSelector,
+                CB_SETITEMDATA,
+                static_cast<WPARAM>(item),
+                static_cast<LPARAM>(-1));
+            selected =
+                static_cast<int>(item);
+        }
+    }
+
+    if (selected < 0 &&
+        !g_branchSelectorDefaultBranch.empty()) {
+        for (int item = 0;
+             item <
+                static_cast<int>(
+                    SendMessageW(
+                        g_branchSelector,
+                        CB_GETCOUNT,
+                        0,
+                        0));
+             ++item) {
+            const LRESULT data =
+                SendMessageW(
+                    g_branchSelector,
+                    CB_GETITEMDATA,
+                    static_cast<WPARAM>(item),
+                    0);
+
+            if (data == CB_ERR ||
+                data < 0 ||
+                static_cast<std::size_t>(data) >=
+                    g_branchSelectorBranches.size()) {
+                continue;
+            }
+
+            if (g_branchSelectorBranches[
+                    static_cast<std::size_t>(
+                        data)].name ==
+                g_branchSelectorDefaultBranch) {
+                selected = item;
+                break;
+            }
+        }
+    }
+
+    if (selected < 0 &&
+        SendMessageW(
+            g_branchSelector,
+            CB_GETCOUNT,
+            0,
+            0) > 0) {
+        selected = 0;
+    }
+
+    SendMessageW(
+        g_branchSelector,
+        CB_SETCURSEL,
+        static_cast<WPARAM>(selected),
+        0);
+
+    g_branchSelectorUpdating = false;
+}
+
+void PositionBranchSelector() {
+    if (!g_branchSelector ||
+        !g_packageList ||
+        !g_advancedVisible) {
+        if (g_branchSelector) {
+            ShowWindow(
+                g_branchSelector,
+                SW_HIDE);
+        }
+        return;
+    }
+
+    const int packageRow =
+        SelectedPackageRow();
+
+    if (packageRow < 0 ||
+        packageRow >=
+            static_cast<int>(
+                g_state.packages.size()) ||
+        g_state.packages[
+            static_cast<std::size_t>(
+                packageRow)].provider !=
+            L"github") {
+        ShowWindow(
+            g_branchSelector,
+            SW_HIDE);
+        return;
+    }
+
+    const int displayRow =
+        PackageDisplayRow(
+            static_cast<std::size_t>(
+                packageRow));
+
+    if (displayRow < 0) {
+        ShowWindow(
+            g_branchSelector,
+            SW_HIDE);
+        return;
+    }
+
+    RECT cell{};
+    if (!ListView_GetSubItemRect(
+            g_packageList,
+            displayRow,
+            1,
+            LVIR_BOUNDS,
+            &cell)) {
+        ShowWindow(
+            g_branchSelector,
+            SW_HIDE);
+        return;
+    }
+
+    RECT listClient{};
+    GetClientRect(
+        g_packageList,
+        &listClient);
+
+    int headerHeight = 0;
+    if (const HWND header =
+            ListView_GetHeader(
+                g_packageList)) {
+        RECT headerRect{};
+        if (GetWindowRect(
+                header,
+                &headerRect)) {
+            headerHeight =
+                static_cast<int>(
+                    headerRect.bottom -
+                    headerRect.top);
+        }
+    }
+
+    if (cell.bottom <=
+            headerHeight ||
+        cell.top >=
+            listClient.bottom) {
+        ShowWindow(
+            g_branchSelector,
+            SW_HIDE);
+        return;
+    }
+
+    HWND parent =
+        GetParent(
+            g_packageList);
+
+    MapWindowPoints(
+        g_packageList,
+        parent,
+        reinterpret_cast<POINT*>(
+            &cell),
+        2);
+
+    const int width =
+        std::max(
+            80,
+            static_cast<int>(
+                cell.right -
+                cell.left -
+                2));
+
+    SetWindowPos(
+        g_branchSelector,
+        HWND_TOP,
+        static_cast<int>(
+            cell.left) + 1,
+        static_cast<int>(
+            cell.top) + 1,
+        width,
+        220,
+        SWP_NOACTIVATE);
+
+    ShowWindow(
+        g_branchSelector,
+        SW_SHOW);
+}
+
+void StartBranchSelectorLoad(
+    HWND hwnd,
+    std::size_t index) {
+    if (index >=
+            g_state.packages.size() ||
+        g_branchSelectorLoadInProgress) {
+        return;
+    }
+
+    const auto package =
+        g_state.packages[index];
+
+    if (package.provider !=
+        L"github") {
+        return;
+    }
+
+    g_branchSelectorLoadInProgress =
+        true;
+    g_branchSelectorLoaded = false;
+    g_branchSelectorLoadFailed = false;
+
+    const std::uint64_t generation =
+        ++g_branchSelectorGeneration;
+
+    EnableWindow(
+        g_branchSelector,
+        FALSE);
+
+    std::thread(
+        [hwnd,
+         package,
+         generation]() {
+            auto result =
+                std::make_unique<
+                    BranchLoadResult>();
+
+            result->generation =
+                generation;
+            result->packageId =
+                package.id;
+            result->ok =
+                tp::FetchGitHubRepositoryInfo(
+                    package.repository,
+                    result->info,
+                    result->error);
+
+            if (!PostMessageW(
+                    hwnd,
+                    WM_TP_BRANCHES_READY,
+                    0,
+                    reinterpret_cast<LPARAM>(
+                        result.get()))) {
+                return;
+            }
+
+            result.release();
+        })
+        .detach();
+}
+
+void UpdateBranchSelector(
+    HWND hwnd) {
+    if (!g_branchSelector ||
+        !g_advancedVisible ||
+        !g_stateReady) {
+        if (g_branchSelector) {
+            ShowWindow(
+                g_branchSelector,
+                SW_HIDE);
+        }
+        return;
+    }
+
+    const int selected =
+        SelectedPackageRow();
+
+    if (selected < 0 ||
+        selected >=
+            static_cast<int>(
+                g_state.packages.size())) {
+        ShowWindow(
+            g_branchSelector,
+            SW_HIDE);
+        return;
+    }
+
+    const auto& package =
+        g_state.packages[
+            static_cast<std::size_t>(
+                selected)];
+
+    if (package.provider !=
+        L"github") {
+        ShowWindow(
+            g_branchSelector,
+            SW_HIDE);
+        return;
+    }
+
+    if (g_branchSelectorPackageId !=
+        package.id) {
+        ++g_branchSelectorGeneration;
+        g_branchSelectorPackageId =
+            package.id;
+        g_branchSelectorDefaultBranch.clear();
+        g_branchSelectorBranches.clear();
+        g_branchSelectorLoaded = false;
+        g_branchSelectorLoadFailed = false;
+        g_branchSelectorLoadInProgress =
+            false;
+
+        PopulateBranchSelectorCurrent(
+            package);
+
+        StartBranchSelectorLoad(
+            hwnd,
+            static_cast<std::size_t>(
+                selected));
+    }
+
+    PositionBranchSelector();
+
+    const bool canUse =
+        !PackageOperationBusy() &&
+        !g_branchSelectorLoadInProgress &&
+        (g_branchSelectorLoaded ||
+         g_branchSelectorLoadFailed);
+
+    EnableWindow(
+        g_branchSelector,
+        canUse
+            ? TRUE
+            : FALSE);
+}
+
+void ApplyBranchSelectorChoice(
+    HWND hwnd) {
+    if (g_branchSelectorUpdating ||
+        !g_branchSelectorLoaded ||
+        !g_branchSelector) {
+        return;
+    }
+
+    const int selectedPackage =
+        SelectedPackageRow();
+
+    if (selectedPackage < 0 ||
+        selectedPackage >=
+            static_cast<int>(
+                g_state.packages.size())) {
+        return;
+    }
+
+    const std::size_t packageIndex =
+        static_cast<std::size_t>(
+            selectedPackage);
+
+    if (g_state.packages[
+            packageIndex].id !=
+        g_branchSelectorPackageId) {
+        return;
+    }
+
+    const LRESULT selected =
+        SendMessageW(
+            g_branchSelector,
+            CB_GETCURSEL,
+            0,
+            0);
+
+    if (selected == CB_ERR ||
+        selected < 0) {
+        return;
+    }
+
+    const LRESULT data =
+        SendMessageW(
+            g_branchSelector,
+            CB_GETITEMDATA,
+            static_cast<WPARAM>(
+                selected),
+            0);
+
+    if (data == CB_ERR ||
+        data < 0 ||
+        static_cast<std::size_t>(
+            data) >=
+            g_branchSelectorBranches.size()) {
+        return;
+    }
+
+    const auto& branch =
+        g_branchSelectorBranches[
+            static_cast<std::size_t>(
+                data)];
+
+    if (branch.name ==
+        g_state.packages[
+            packageIndex].ref) {
+        return;
+    }
+
+    tp::AppState updatedState =
+        g_state;
+    std::wstring error;
+
+    if (!tp::SetPackageBranch(
+            updatedState.packages[
+                packageIndex],
+            branch.name,
+            branch.sha,
+            error) ||
+        !tp::SaveState(
+            g_root,
+            updatedState,
+            error)) {
+        SetIndicator(
+            g_stateStatus,
+            L"State: Save failed - " +
+                error);
+
+        MessageBoxW(
+            hwnd,
+            error.c_str(),
+            L"TocPilot - Change Branch",
+            MB_OK | MB_ICONERROR);
+
+        PopulateBranchSelectorLoaded(
+            g_state.packages[
+                packageIndex]);
+        return;
+    }
+
+    g_state =
+        std::move(updatedState);
+    g_stateCreated = false;
+    g_stateError.clear();
+
+    tp::RecordPackageRefresh(
+        g_packageRefreshStamps,
+        g_state.packages[
+            packageIndex],
+        GetTickCount64());
+
+    RefreshPackageStateUi();
+    SelectPackageRow(
+        packageIndex);
+    PopulateBranchSelectorLoaded(
+        g_state.packages[
+            packageIndex]);
+    UpdateBranchSelector(
+        hwnd);
+}
+
+LRESULT CALLBACK PackageListSubclassProc(
+    HWND hwnd,
+    UINT message,
+    WPARAM wParam,
+    LPARAM lParam,
+    UINT_PTR,
+    DWORD_PTR) {
+    const LRESULT result =
+        DefSubclassProc(
+            hwnd,
+            message,
+            wParam,
+            lParam);
+
+    if (message == WM_VSCROLL ||
+        message == WM_HSCROLL ||
+        message == WM_MOUSEWHEEL ||
+        message == WM_MOUSEHWHEEL) {
+        if (HWND parent =
+                GetParent(hwnd)) {
+            PostMessageW(
+                parent,
+                WM_TP_POSITION_BRANCH_SELECTOR,
+                0,
+                0);
+        }
+    }
+
+    return result;
+}
+
 void SortPackageListByColumn(
     int column) {
     if (column < 0 ||
@@ -1432,12 +2046,7 @@ void UpdatePackageButtons() {
     }
 
     const bool packageBusy =
-        g_packageRefreshInProgress ||
-        g_packageInspectInProgress ||
-        g_packageInstallInProgress ||
-        g_updateAllInProgress ||
-        g_autoStatusRefreshInProgress ||
-        g_appUpdateInProgress;
+        PackageOperationBusy();
 
     if (g_updateAllButton) {
         EnableWindow(
@@ -1488,14 +2097,6 @@ void UpdatePackageButtons() {
                 : FALSE);
     }
 
-    if (g_setBranchButton) {
-        EnableWindow(
-            g_setBranchButton,
-            canSetBranch && !packageBusy
-                ? TRUE
-                : FALSE);
-    }
-
     if (g_removePackageButton) {
         EnableWindow(
             g_removePackageButton,
@@ -1518,6 +2119,12 @@ void UpdatePackageButtons() {
             g_stateReady && !packageBusy
                 ? TRUE
                 : FALSE);
+    }
+
+    if (g_packageList) {
+        UpdateBranchSelector(
+            GetParent(
+                g_packageList));
     }
 }
 
@@ -3996,20 +4603,6 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             GetModuleHandleW(nullptr),
             nullptr);
 
-        g_setBranchButton = CreateWindowExW(
-            0,
-            L"BUTTON",
-            L"Set Branch",
-            WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON,
-            220,
-            145,
-            100,
-            32,
-            hwnd,
-            reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_SET_BRANCH)),
-            GetModuleHandleW(nullptr),
-            nullptr);
-
         g_inspectPackageButton = CreateWindowExW(
             0,
             L"BUTTON",
@@ -4130,7 +4723,6 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
 
         EnableWindow(g_updateAllButton, FALSE);
         EnableWindow(g_refreshPackagesButton, FALSE);
-        EnableWindow(g_setBranchButton, FALSE);
         EnableWindow(g_inspectPackageButton, FALSE);
         EnableWindow(g_installPackageButton, FALSE);
         EnableWindow(g_uninstallPackageButton, FALSE);
@@ -4211,6 +4803,35 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             LVS_EX_FULLROWSELECT |
                 LVS_EX_DOUBLEBUFFER |
                 LVS_EX_LABELTIP);
+
+        SetWindowSubclass(
+            g_packageList,
+            PackageListSubclassProc,
+            1,
+            0);
+
+        g_branchSelector = CreateWindowExW(
+            0,
+            L"COMBOBOX",
+            nullptr,
+            WS_CHILD |
+                WS_TABSTOP |
+                CBS_DROPDOWNLIST |
+                WS_VSCROLL,
+            0,
+            0,
+            240,
+            220,
+            hwnd,
+            reinterpret_cast<HMENU>(
+                static_cast<INT_PTR>(
+                    IDC_BRANCH_SELECTOR)),
+            GetModuleHandleW(nullptr),
+            nullptr);
+
+        ShowWindow(
+            g_branchSelector,
+            SW_HIDE);
 
         g_launchWowButton = CreateWindowExW(
             0,
@@ -4311,6 +4932,10 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
         LayoutControls(hwnd);
         return 0;
 
+    case WM_TP_POSITION_BRANCH_SELECTOR:
+        PositionBranchSelector();
+        return 0;
+
     case WM_GETMINMAXINFO: {
         auto* info =
             reinterpret_cast<MINMAXINFO*>(
@@ -4373,6 +4998,24 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             reinterpret_cast<NMHDR*>(lParam);
 
         if (header &&
+            g_packageList &&
+            header->hwndFrom ==
+                ListView_GetHeader(
+                    g_packageList) &&
+            (header->code ==
+                 HDN_ITEMCHANGEDW ||
+             header->code ==
+                 HDN_TRACKW ||
+             header->code ==
+                 HDN_ENDTRACKW)) {
+            PostMessageW(
+                hwnd,
+                WM_TP_POSITION_BRANCH_SELECTOR,
+                0,
+                0);
+        }
+
+        if (header &&
             header->idFrom ==
                 IDC_PACKAGE_LIST) {
             if (header->code ==
@@ -4404,6 +5047,37 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
     }
 
     case WM_COMMAND:
+        if (LOWORD(wParam) ==
+                IDC_BRANCH_SELECTOR) {
+            if (HIWORD(wParam) ==
+                CBN_SELCHANGE) {
+                ApplyBranchSelectorChoice(
+                    hwnd);
+                return 0;
+            }
+
+            if (HIWORD(wParam) ==
+                    CBN_DROPDOWN &&
+                g_branchSelectorLoadFailed &&
+                !g_branchSelectorLoadInProgress) {
+                const int selected =
+                    SelectedPackageRow();
+
+                if (selected >= 0 &&
+                    selected <
+                        static_cast<int>(
+                            g_state.packages.size())) {
+                    g_branchSelectorLoadFailed =
+                        false;
+                    StartBranchSelectorLoad(
+                        hwnd,
+                        static_cast<std::size_t>(
+                            selected));
+                }
+                return 0;
+            }
+        }
+
         if (LOWORD(wParam) == IDC_ADVANCED &&
             HIWORD(wParam) == BN_CLICKED) {
             ToggleAdvanced(hwnd);
@@ -4524,68 +5198,6 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                     hwnd,
                     static_cast<std::size_t>(row));
             }
-            return 0;
-        }
-
-        if (LOWORD(wParam) == IDC_SET_BRANCH &&
-            HIWORD(wParam) == BN_CLICKED) {
-            const int row = SelectedPackageRow();
-
-            if (row < 0 ||
-                row >= static_cast<int>(
-                    g_state.packages.size())) {
-                MessageBoxW(
-                    hwnd,
-                    L"Select a package row first.",
-                    L"TocPilot - Set Branch",
-                    MB_OK | MB_ICONINFORMATION);
-                return 0;
-            }
-
-            const auto index =
-                static_cast<std::size_t>(row);
-
-            tp::BranchSelection selection;
-            if (!tp::ShowBranchDialog(
-                    hwnd,
-                    g_state.packages[index],
-                    selection)) {
-                return 0;
-            }
-
-            tp::AppState updatedState = g_state;
-            std::wstring error;
-
-            if (!tp::SetPackageBranch(
-                    updatedState.packages[index],
-                    std::move(selection.name),
-                    std::move(selection.sha),
-                    error) ||
-                !tp::SaveState(
-                    g_root,
-                    updatedState,
-                    error)) {
-                SetIndicator(
-                    g_stateStatus,
-                    L"State: Save failed - " +
-                        error);
-
-                MessageBoxW(
-                    hwnd,
-                    error.c_str(),
-                    L"TocPilot - Set Branch",
-                    MB_OK | MB_ICONERROR);
-                return 0;
-            }
-
-            g_state =
-                std::move(updatedState);
-            g_stateCreated = false;
-            g_stateError.clear();
-
-            RefreshPackageStateUi();
-            SelectPackageRow(index);
-            UpdatePackageButtons();
             return 0;
         }
 
@@ -4766,6 +5378,82 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
         if (refreshAddonsAfter) {
             StartAutoStatusRefresh(hwnd);
         }
+        return 0;
+    }
+
+    case WM_TP_BRANCHES_READY: {
+        std::unique_ptr<BranchLoadResult> result(
+            reinterpret_cast<
+                BranchLoadResult*>(
+                lParam));
+
+        if (result->generation !=
+                g_branchSelectorGeneration ||
+            result->packageId !=
+                g_branchSelectorPackageId) {
+            return 0;
+        }
+
+        g_branchSelectorLoadInProgress =
+            false;
+
+        std::size_t packageIndex =
+            g_state.packages.size();
+
+        for (std::size_t i = 0;
+             i < g_state.packages.size();
+             ++i) {
+            if (g_state.packages[i].id ==
+                result->packageId) {
+                packageIndex = i;
+                break;
+            }
+        }
+
+        if (!result->ok) {
+            g_branchSelectorLoaded = false;
+            g_branchSelectorLoadFailed =
+                true;
+
+            if (packageIndex <
+                g_state.packages.size()) {
+                PopulateBranchSelectorCurrent(
+                    g_state.packages[
+                        packageIndex]);
+                SetPackageRowStatus(
+                    packageIndex,
+                    L"Branch lookup failed");
+            }
+
+            UpdateBranchSelector(
+                hwnd);
+            return 0;
+        }
+
+        g_branchSelectorDefaultBranch =
+            std::move(
+                result->info.defaultBranch);
+        g_branchSelectorBranches =
+            std::move(
+                result->info.branches);
+        g_branchSelectorLoaded = true;
+        g_branchSelectorLoadFailed =
+            false;
+
+        if (packageIndex <
+            g_state.packages.size()) {
+            PopulateBranchSelectorLoaded(
+                g_state.packages[
+                    packageIndex]);
+            SetPackageRowStatus(
+                packageIndex,
+                PackageStatusText(
+                    g_state.packages[
+                        packageIndex]));
+        }
+
+        UpdateBranchSelector(
+            hwnd);
         return 0;
     }
 
@@ -5514,6 +6202,15 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
         break;
 
     case WM_DESTROY:
+        ++g_branchSelectorGeneration;
+
+        if (g_packageList) {
+            RemoveWindowSubclass(
+                g_packageList,
+                PackageListSubclassProc,
+                1);
+        }
+
         if (g_wowIcon) {
             DestroyIcon(g_wowIcon);
             g_wowIcon = nullptr;
