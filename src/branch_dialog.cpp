@@ -230,7 +230,7 @@ LRESULT CALLBACK DialogProc(
         HWND status = CreateWindowExW(
             0,
             L"STATIC",
-            L"Loading GitHub repository metadata and branches...",
+            L"Loading branches via Git smart HTTP...",
             WS_CHILD | WS_VISIBLE |
                 SS_LEFT,
             20,
