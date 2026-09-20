@@ -4,7 +4,7 @@
 
 - Active branch: `p2-github-branches`.
 - Current runtime-tested application version includes the `v0.1.13` adoption slice. The user successfully adopted existing Git-managed addons, then ran Update All across 21 installed packages: Queued 21 / Processed 21 / Updated 1 / Already current 20 / Failed 0. This validates adoption feeding the normal refresh/update transaction path. Restart persistence and continued GitAddonsManager visibility of retained `.git` metadata remain the final adoption runtime checks.
-- v0.1.15 runtime exposed one root-addon update mapping bug in `pfUI-VendorTweaks`. The fix is implemented and versioned as v0.1.16; release trigger commit `b6ae493` updates `.github/release-version` to `v0.1.16`. At the time of this handoff update the v0.1.16 tag has not appeared yet, so Windows build/CTest/release status is still pending.
+- v0.1.15 runtime exposed one root-addon update mapping bug in `pfUI-VendorTweaks`. The fix is versioned as v0.1.16 from release trigger `b6ae493`. Tag `v0.1.16` now exists and resolves to the 0.1.16 source, confirming source/version validation, Windows x64 Release build, and the complete CTest suite passed before tag creation. Runtime validation is pending.
 - Post-v0.1.13 adoption follow-up commits:
   - `5e9d4c8` — Fix expandable dialog labels.
   - `a2a47a4` — Harden task dialog manifest declaration.
@@ -58,7 +58,7 @@
 - License: MIT
 - Intended platform: Windows x64
 - Implementation: native C++20 / Win32 / CMake
-- Highest priority: wait for the v0.1.16 release gate, then rerun Update All and confirm `pfUI-VendorTweaks` updates in place with 0 failures
+- Highest priority: self-update to v0.1.16 and rerun Update All; confirm `pfUI-VendorTweaks` preserves its existing owned folder and the batch finishes with 0 failures
 - Current adoption runtime result: 21 managed packages completed Update All with 1 updated / 20 current / 0 failed after existing Git installs were adopted.
 
 ## Latest commits
@@ -553,8 +553,7 @@ Complete. A real `v0.1.0 -> v0.1.1` in-app self-update succeeded on Windows besi
 
 ## Exact next step
 
-1. Check the automated release triggered by `b6ae493`. Do not treat v0.1.16 as published until its tag appears, which occurs only after source/version validation, Windows x64 Release build, and the complete CTest suite pass.
-2. If the release gate fails, fix the exact MSVC/CTest issue before retrying.
-3. Once v0.1.16 is available, self-update and rerun Update All; `pfUI-VendorTweaks` must preserve the existing owned `pfUI-VendorTweaks` folder despite the normalized `pfUI_VendorTweaks.toc` stem, and the batch should finish with 0 failures.
-4. Finish column sorting/action-target validation and **Adopt Git → Show details** folder diagnostics.
-5. Multi-root GAM adoption/Yes-No per root remains the next planned feature slice.
+1. Self-update to `v0.1.16` once the release asset is visible.
+2. Rerun Update All; `pfUI-VendorTweaks` must preserve the existing owned `pfUI-VendorTweaks` folder despite the normalized `pfUI_VendorTweaks.toc` stem, and the batch should finish with 0 failures.
+3. Finish column sorting/action-target validation and **Adopt Git → Show details** folder diagnostics.
+4. Multi-root GAM adoption/Yes-No per root remains the next planned feature slice.
