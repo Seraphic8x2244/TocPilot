@@ -533,6 +533,12 @@ bool ParseGitSmartHttpBranchAdvertisement(
 
         sawRef = true;
         if (refName == target) {
+            if (!sawService) {
+                error =
+                    L"Server response is not a Git smart-HTTP upload-pack advertisement.";
+                return false;
+            }
+
             remoteSha.assign(objectId);
             return true;
         }
