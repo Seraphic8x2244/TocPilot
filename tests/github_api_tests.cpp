@@ -145,6 +145,36 @@ int main() {
         }
     }
 
+    {
+        std::wstring path;
+        std::wstring error;
+
+        if (!tp::BuildGitHubCodeloadPath(
+                L"Owner/Repo",
+                L"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                path,
+                error) ||
+            path !=
+                L"/Owner/Repo/zip/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa") {
+            Fail("GitHub codeload exact-SHA path failed");
+        }
+    }
+
+    {
+        std::wstring path;
+        std::wstring error;
+
+        if (!tp::BuildGitHubCodeloadPath(
+                L"Owner/Repo",
+                L"feature/test branch",
+                path,
+                error) ||
+            path !=
+                L"/Owner/Repo/zip/feature%2Ftest%20branch") {
+            Fail("GitHub codeload ref encoding failed");
+        }
+    }
+
     if (failures != 0) {
         std::cerr
             << failures
