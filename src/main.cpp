@@ -11,6 +11,7 @@
 #include "update_all.h"
 #include "ui_dialog.h"
 #include "version.h"
+#include "resource.h"
 
 #include <windows.h>
 #include <windowsx.h>
@@ -22,6 +23,7 @@
 #include <cmath>
 #include <cwchar>
 #include <cwctype>
+#include <cstdint>
 #include <filesystem>
 #include <memory>
 #include <optional>
@@ -33,7 +35,12 @@
 
 namespace {
 
-constexpr wchar_t kWindowClass[] = L"TocPilotMainWindow";
+constexpr wchar_t kWindowClassBase[] = L"TocPilotMainWindow";
+constexpr wchar_t kTocPilotWindowClass[] = L"TocPilotToolWindow";
+constexpr wchar_t kTocPilotGitHubUrl[] =
+    L"https://github.com/Seraphic8x2244/TocPilot";
+constexpr wchar_t kTocPilotReleasesUrl[] =
+    L"https://github.com/Seraphic8x2244/TocPilot/releases";
 constexpr UINT WM_TP_CHECK_COMPLETE = WM_APP + 1;
 constexpr UINT WM_TP_UPDATE_COMPLETE = WM_APP + 2;
 constexpr UINT WM_TP_PACKAGE_REFRESH_COMPLETE = WM_APP + 3;
@@ -59,10 +66,19 @@ constexpr int IDC_ADOPT_GIT = 1016;
 constexpr int IDC_ADVANCED = 1017;
 constexpr int IDC_LAUNCH_WOW = 1018;
 constexpr int IDC_LAUNCH_VANILLAFIXES = 1019;
+constexpr int IDC_TOCPILOT = 1020;
+constexpr int IDC_TOCPILOT_UPDATE = 1021;
+constexpr int IDC_TOCPILOT_GITHUB = 1022;
+constexpr int IDC_TOCPILOT_RELEASES = 1023;
 
-constexpr int kCompactWindowWidth = 620;
+constexpr int kCompactWindowWidth = 590;
 constexpr int kAdvancedExtraWidth = 520;
-constexpr int kDefaultWindowHeight = 520;
+constexpr int kDefaultWindowHeight = 480;
+constexpr int kCompactButtonMinWidth = 100;
+constexpr int kCompactButtonGap = 6;
+constexpr int kCompactPrimaryButtonCount = 5;
+constexpr int kCompactNameColumnMinWidth = 220;
+constexpr int kCompactStatusColumnMinWidth = 150;
 
 constexpr std::array<double, 5> kTextScales{
     0.90,
@@ -95,6 +111,9 @@ HWND g_removePackageButton = nullptr;
 HWND g_addPackageButton = nullptr;
 HWND g_adoptGitButton = nullptr;
 HWND g_advancedButton = nullptr;
+HWND g_tocPilotButton = nullptr;
+HWND g_tocPilotWindow = nullptr;
+HWND g_tocPilotUpdateStatus = nullptr;
 HWND g_launchWowButton = nullptr;
 HWND g_launchVanillaFixesButton = nullptr;
 HWND g_packageList = nullptr;
@@ -105,6 +124,7 @@ HWND g_rootLabel = nullptr;
 HWND g_versionLabel = nullptr;
 
 HFONT g_uiFont = nullptr;
+HFONT g_boldUiFont = nullptr;
 HICON g_wowIcon = nullptr;
 HICON g_vanillaFixesIcon = nullptr;
 
@@ -118,8 +138,10 @@ bool g_packageInspectInProgress = false;
 bool g_packageInstallInProgress = false;
 bool g_updateAllInProgress = false;
 bool g_appUpdateInProgress = false;
+bool g_appUpdateCheckInProgress = false;
 bool g_autoStatusRefreshInProgress = false;
 bool g_advancedVisible = false;
+bool g_hasVanillaFixes = false;
 tp::UpdateAllProgress g_updateAllProgress;
 std::vector<tp::PackageRefreshStamp> g_packageRefreshStamps;
 std::vector<std::wstring> g_autoStatusPackageIds;
@@ -132,6 +154,7 @@ std::vector<std::size_t> g_packageViewOrder;
 int g_packageSortColumn = -1;
 bool g_packageSortAscending = true;
 std::wstring g_stateError;
+std::wstring g_windowClassName;
 
 struct CheckResult {
     bool ok = false;
@@ -279,6 +302,22 @@ void ApplyUiFont(HWND hwnd) {
         return;
     }
 
+    HFONT boldFont = CreateFontW(
+        height,
+        0,
+        0,
+        0,
+        FW_BOLD,
+        FALSE,
+        FALSE,
+        FALSE,
+        DEFAULT_CHARSET,
+        OUT_DEFAULT_PRECIS,
+        CLIP_DEFAULT_PRECIS,
+        CLEARTYPE_QUALITY,
+        DEFAULT_PITCH | FF_DONTCARE,
+        L"Segoe UI");
+
     SendMessageW(hwnd, WM_SETFONT, reinterpret_cast<WPARAM>(font), TRUE);
     EnumChildWindows(
         hwnd,
@@ -288,7 +327,11 @@ void ApplyUiFont(HWND hwnd) {
     if (g_uiFont) {
         DeleteObject(g_uiFont);
     }
+    if (g_boldUiFont) {
+        DeleteObject(g_boldUiFont);
+    }
     g_uiFont = font;
+    g_boldUiFont = boldFont;
 }
 
 void SetTextScaleSelection() {
@@ -409,195 +452,124 @@ void LayoutControls(HWND hwnd) {
             width - 40);
 
     if (g_rootLabel) {
-        ShowWindow(
-            g_rootLabel,
-            SW_HIDE);
+        ShowWindow(g_rootLabel, SW_HIDE);
     }
     if (g_wowStatus) {
-        ShowWindow(
-            g_wowStatus,
-            SW_HIDE);
+        ShowWindow(g_wowStatus, SW_HIDE);
     }
     if (g_githubStatus) {
-        ShowWindow(
-            g_githubStatus,
-            SW_HIDE);
+        ShowWindow(g_githubStatus, SW_HIDE);
     }
     if (g_releaseStatus) {
-        ShowWindow(
-            g_releaseStatus,
-            SW_HIDE);
+        ShowWindow(g_releaseStatus, SW_HIDE);
     }
     if (g_stateStatus) {
-        ShowWindow(
-            g_stateStatus,
-            SW_HIDE);
+        ShowWindow(g_stateStatus, SW_HIDE);
     }
     if (g_packageHint) {
-        ShowWindow(
-            g_packageHint,
-            SW_HIDE);
+        ShowWindow(g_packageHint, SW_HIDE);
     }
     if (g_setBranchButton) {
-        ShowWindow(
-            g_setBranchButton,
-            SW_HIDE);
+        ShowWindow(g_setBranchButton, SW_HIDE);
     }
     if (g_inspectPackageButton) {
-        ShowWindow(
-            g_inspectPackageButton,
-            SW_HIDE);
+        ShowWindow(g_inspectPackageButton, SW_HIDE);
     }
     if (g_uninstallPackageButton) {
-        ShowWindow(
-            g_uninstallPackageButton,
-            SW_HIDE);
+        ShowWindow(g_uninstallPackageButton, SW_HIDE);
     }
-    if (g_updateButton) {
-        ShowWindow(
-            g_updateButton,
-            SW_HIDE);
+    if (g_updateButton && GetParent(g_updateButton) == hwnd) {
+        ShowWindow(g_updateButton, SW_HIDE);
     }
     if (g_textScaleLabel) {
-        ShowWindow(
-            g_textScaleLabel,
-            SW_HIDE);
+        ShowWindow(g_textScaleLabel, SW_HIDE);
     }
     if (g_textScaleCombo) {
-        ShowWindow(
-            g_textScaleCombo,
-            SW_HIDE);
+        ShowWindow(g_textScaleCombo, SW_HIDE);
     }
-
     if (g_versionLabel) {
-        MoveWindow(
-            g_versionLabel,
+        ShowWindow(g_versionLabel, SW_HIDE);
+    }
+
+    const int buttonY = 16;
+
+    if (!g_advancedVisible) {
+        if (g_adoptGitButton) {
+            ShowWindow(g_adoptGitButton, SW_HIDE);
+        }
+        if (g_refreshPackagesButton) {
+            ShowWindow(g_refreshPackagesButton, SW_HIDE);
+        }
+        if (g_installPackageButton) {
+            ShowWindow(g_installPackageButton, SW_HIDE);
+        }
+
+        const int availableForButtons =
+            contentWidth -
+            kCompactButtonGap *
+                (kCompactPrimaryButtonCount - 1);
+        const int buttonWidth =
             std::max(
-                360,
-                width - 190),
-            18,
-            170,
-            24,
-            TRUE);
+                kCompactButtonMinWidth,
+                availableForButtons /
+                    kCompactPrimaryButtonCount);
+
+        int x = 20;
+        const auto placePrimary =
+            [&](HWND control) {
+                if (!control) {
+                    return;
+                }
+                ShowWindow(control, SW_SHOW);
+                MoveWindow(
+                    control,
+                    x,
+                    buttonY,
+                    buttonWidth,
+                    32,
+                    TRUE);
+                x +=
+                    buttonWidth +
+                    kCompactButtonGap;
+            };
+
+        placePrimary(g_updateAllButton);
+        placePrimary(g_addPackageButton);
+        placePrimary(g_removePackageButton);
+        placePrimary(g_tocPilotButton);
+        placePrimary(g_advancedButton);
+    } else {
+        int x = 20;
+        const auto placeAdvanced =
+            [&](HWND control, int buttonWidth) {
+                if (!control) {
+                    return;
+                }
+                ShowWindow(control, SW_SHOW);
+                MoveWindow(
+                    control,
+                    x,
+                    buttonY,
+                    buttonWidth,
+                    32,
+                    TRUE);
+                x +=
+                    buttonWidth +
+                    kCompactButtonGap;
+            };
+
+        placeAdvanced(g_updateAllButton, 92);
+        placeAdvanced(g_adoptGitButton, 150);
+        placeAdvanced(g_addPackageButton, 78);
+        placeAdvanced(g_refreshPackagesButton, 96);
+        placeAdvanced(g_installPackageButton, 88);
+        placeAdvanced(g_removePackageButton, 78);
+        placeAdvanced(g_tocPilotButton, 88);
+        placeAdvanced(g_advancedButton, 102);
     }
 
-    const int buttonY = 54;
-    int x = 20;
-
-    if (g_updateAllButton) {
-        ShowWindow(
-            g_updateAllButton,
-            SW_SHOW);
-        MoveWindow(
-            g_updateAllButton,
-            x,
-            buttonY,
-            80,
-            32,
-            TRUE);
-        x += 85;
-    }
-
-    if (g_adoptGitButton) {
-        ShowWindow(
-            g_adoptGitButton,
-            g_advancedVisible
-                ? SW_SHOW
-                : SW_HIDE);
-
-        if (g_advancedVisible) {
-            MoveWindow(
-                g_adoptGitButton,
-                x,
-                buttonY,
-                112,
-                32,
-                TRUE);
-            x += 117;
-        }
-    }
-
-    if (g_addPackageButton) {
-        ShowWindow(
-            g_addPackageButton,
-            SW_SHOW);
-        MoveWindow(
-            g_addPackageButton,
-            x,
-            buttonY,
-            65,
-            32,
-            TRUE);
-        x += 70;
-    }
-
-    if (g_refreshPackagesButton) {
-        ShowWindow(
-            g_refreshPackagesButton,
-            g_advancedVisible
-                ? SW_SHOW
-                : SW_HIDE);
-
-        if (g_advancedVisible) {
-            MoveWindow(
-                g_refreshPackagesButton,
-                x,
-                buttonY,
-                75,
-                32,
-                TRUE);
-            x += 80;
-        }
-    }
-
-    if (g_installPackageButton) {
-        ShowWindow(
-            g_installPackageButton,
-            g_advancedVisible
-                ? SW_SHOW
-                : SW_HIDE);
-
-        if (g_advancedVisible) {
-            MoveWindow(
-                g_installPackageButton,
-                x,
-                buttonY,
-                85,
-                32,
-                TRUE);
-            x += 90;
-        }
-    }
-
-    if (g_removePackageButton) {
-        ShowWindow(
-            g_removePackageButton,
-            SW_SHOW);
-        MoveWindow(
-            g_removePackageButton,
-            x,
-            buttonY,
-            75,
-            32,
-            TRUE);
-        x += 80;
-    }
-
-    if (g_advancedButton) {
-        ShowWindow(
-            g_advancedButton,
-            SW_SHOW);
-        MoveWindow(
-            g_advancedButton,
-            x,
-            buttonY,
-            100,
-            32,
-            TRUE);
-    }
-
-    const int listTop = 100;
-    const int listBottomPadding = 70;
+    const int listTop = 62;
+    const int listBottomPadding = 68;
     const int listHeight =
         std::max(
             220,
@@ -616,33 +588,45 @@ void LayoutControls(HWND hwnd) {
         ResizeListColumns();
     }
 
+    const int iconSize = 40;
+    const int iconGap = 10;
     const int iconY =
         std::max(
             listTop + listHeight + 8,
             height - 54);
 
     int iconX =
-        width - 52;
+        width - 20 - iconSize;
 
     if (g_launchVanillaFixesButton) {
-        MoveWindow(
+        ShowWindow(
             g_launchVanillaFixesButton,
-            iconX,
-            iconY,
-            32,
-            32,
-            TRUE);
+            g_hasVanillaFixes
+                ? SW_SHOW
+                : SW_HIDE);
+
+        if (g_hasVanillaFixes) {
+            MoveWindow(
+                g_launchVanillaFixesButton,
+                iconX,
+                iconY,
+                iconSize,
+                iconSize,
+                TRUE);
+            iconX -=
+                iconSize +
+                iconGap;
+        }
     }
 
-    iconX -= 38;
-
     if (g_launchWowButton) {
+        ShowWindow(g_launchWowButton, SW_SHOW);
         MoveWindow(
             g_launchWowButton,
             iconX,
             iconY,
-            32,
-            32,
+            iconSize,
+            iconSize,
             TRUE);
     }
 }
@@ -834,6 +818,245 @@ std::wstring PackageDisplayName(
         L" (" +
         package.ref +
         L")";
+}
+
+std::wstring PackageBranchSuffix(
+    const tp::PackageRecord& package) {
+    if (!PackageBranchMode(package) ||
+        package.ref.empty() ||
+        CompareInsensitive(package.ref, L"main") == 0 ||
+        CompareInsensitive(package.ref, L"master") == 0) {
+        return {};
+    }
+
+    return
+        L" (" +
+        package.ref +
+        L")";
+}
+
+LRESULT HandlePackageListCustomDraw(
+    LPARAM lParam) {
+    auto* draw =
+        reinterpret_cast<NMLVCUSTOMDRAW*>(
+            lParam);
+
+    if (!draw) {
+        return CDRF_DODEFAULT;
+    }
+
+    if (draw->nmcd.dwDrawStage ==
+        CDDS_PREPAINT) {
+        return CDRF_NOTIFYITEMDRAW;
+    }
+
+    if (draw->nmcd.dwDrawStage ==
+        CDDS_ITEMPREPAINT) {
+        return CDRF_NOTIFYSUBITEMDRAW;
+    }
+
+    if (draw->nmcd.dwDrawStage !=
+            (CDDS_ITEMPREPAINT |
+             CDDS_SUBITEM) ||
+        draw->iSubItem != 0 ||
+        !g_packageList) {
+        return CDRF_DODEFAULT;
+    }
+
+    const int displayRow =
+        static_cast<int>(
+            draw->nmcd.dwItemSpec);
+
+    if (displayRow < 0 ||
+        displayRow >=
+            static_cast<int>(
+                g_packageViewOrder.size())) {
+        return CDRF_DODEFAULT;
+    }
+
+    const std::size_t packageIndex =
+        g_packageViewOrder[
+            static_cast<std::size_t>(
+                displayRow)];
+
+    if (packageIndex >=
+        g_state.packages.size()) {
+        return CDRF_DODEFAULT;
+    }
+
+    RECT rowRect{};
+    if (!ListView_GetItemRect(
+            g_packageList,
+            displayRow,
+            &rowRect,
+            LVIR_BOUNDS)) {
+        return CDRF_DODEFAULT;
+    }
+
+    RECT rect = rowRect;
+    rect.right =
+        rect.left +
+        ListView_GetColumnWidth(
+            g_packageList,
+            0);
+
+    const bool selected =
+        (ListView_GetItemState(
+             g_packageList,
+             displayRow,
+             LVIS_SELECTED) &
+         LVIS_SELECTED) != 0;
+    const bool focused =
+        GetFocus() ==
+        g_packageList;
+
+    const int backgroundIndex =
+        selected
+            ? (focused
+                ? COLOR_HIGHLIGHT
+                : COLOR_BTNFACE)
+            : COLOR_WINDOW;
+    const int textIndex =
+        selected && focused
+            ? COLOR_HIGHLIGHTTEXT
+            : COLOR_WINDOWTEXT;
+
+    FillRect(
+        draw->nmcd.hdc,
+        &rect,
+        GetSysColorBrush(
+            backgroundIndex));
+
+    SetBkMode(
+        draw->nmcd.hdc,
+        TRANSPARENT);
+    SetTextColor(
+        draw->nmcd.hdc,
+        GetSysColor(textIndex));
+
+    RECT textRect = rect;
+    textRect.left += 8;
+    textRect.right -= 5;
+
+    const auto& package =
+        g_state.packages[
+            packageIndex];
+    const std::wstring suffix =
+        PackageBranchSuffix(
+            package);
+
+    HFONT normal =
+        g_uiFont
+            ? g_uiFont
+            : reinterpret_cast<HFONT>(
+                GetStockObject(
+                    DEFAULT_GUI_FONT));
+    HFONT bold =
+        g_boldUiFont
+            ? g_boldUiFont
+            : normal;
+
+    const HGDIOBJ oldFont =
+        SelectObject(
+            draw->nmcd.hdc,
+            bold);
+
+    if (suffix.empty()) {
+        DrawTextW(
+            draw->nmcd.hdc,
+            package.name.c_str(),
+            -1,
+            &textRect,
+            DT_SINGLELINE |
+                DT_VCENTER |
+                DT_END_ELLIPSIS |
+                DT_NOPREFIX);
+    } else {
+        SIZE baseSize{};
+        GetTextExtentPoint32W(
+            draw->nmcd.hdc,
+            package.name.c_str(),
+            static_cast<int>(
+                package.name.size()),
+            &baseSize);
+
+        SelectObject(
+            draw->nmcd.hdc,
+            normal);
+
+        SIZE suffixSize{};
+        GetTextExtentPoint32W(
+            draw->nmcd.hdc,
+            suffix.c_str(),
+            static_cast<int>(
+                suffix.size()),
+            &suffixSize);
+
+        const int suffixWidth =
+            std::min(
+                suffixSize.cx,
+                std::max(
+                    0,
+                    (textRect.right -
+                     textRect.left) /
+                        2));
+
+        RECT baseRect =
+            textRect;
+        baseRect.right =
+            std::max(
+                baseRect.left,
+                textRect.right -
+                    suffixWidth);
+
+        SelectObject(
+            draw->nmcd.hdc,
+            bold);
+        DrawTextW(
+            draw->nmcd.hdc,
+            package.name.c_str(),
+            -1,
+            &baseRect,
+            DT_SINGLELINE |
+                DT_VCENTER |
+                DT_END_ELLIPSIS |
+                DT_NOPREFIX);
+
+        const int suffixX =
+            baseSize.cx <=
+                    (baseRect.right -
+                     baseRect.left)
+                ? std::min(
+                    textRect.right -
+                        suffixWidth,
+                    textRect.left +
+                        baseSize.cx)
+                : baseRect.right;
+
+        RECT suffixRect =
+            textRect;
+        suffixRect.left =
+            suffixX;
+
+        SelectObject(
+            draw->nmcd.hdc,
+            normal);
+        DrawTextW(
+            draw->nmcd.hdc,
+            suffix.c_str(),
+            -1,
+            &suffixRect,
+            DT_SINGLELINE |
+                DT_VCENTER |
+                DT_END_ELLIPSIS |
+                DT_NOPREFIX);
+    }
+
+    SelectObject(
+        draw->nmcd.hdc,
+        oldFont);
+
+    return CDRF_SKIPDEFAULT;
 }
 
 bool PackageNeedsAttention(
@@ -1215,7 +1438,7 @@ void UpdatePackageButtons() {
     if (g_refreshPackagesButton) {
         EnableWindow(
             g_refreshPackagesButton,
-            canRefresh && !packageBusy
+            canUpdateAll && !packageBusy
                 ? TRUE
                 : FALSE);
     }
@@ -1951,7 +2174,7 @@ void FinishUpdateAll(HWND hwnd) {
     g_updateAllInProgress = false;
     SetWindowTextW(
         g_updateAllButton,
-        L"Update");
+        L"Update All");
 
     RefreshPackageStateUi();
 
@@ -2119,7 +2342,7 @@ void CompleteUpdateAllStep(
         g_updateAllInProgress = false;
         SetWindowTextW(
             g_updateAllButton,
-            L"Update");
+            L"Update All");
         UpdatePackageButtons();
 
         MessageBoxW(
@@ -3032,8 +3255,30 @@ void AdoptGitAddons(HWND hwnd) {
 }
 
 void StartUpdateCheck(HWND hwnd) {
-    EnableWindow(g_updateButton, FALSE);
-    SetWindowTextW(g_updateButton, L"Checking app...");
+    if (g_appUpdateCheckInProgress ||
+        g_appUpdateInProgress) {
+        if (g_updateButton) {
+            EnableWindow(g_updateButton, FALSE);
+            SetWindowTextW(
+                g_updateButton,
+                g_appUpdateInProgress
+                    ? L"Updating..."
+                    : L"Checking...");
+        }
+        return;
+    }
+
+    g_appUpdateCheckInProgress = true;
+
+    if (g_updateButton) {
+        EnableWindow(g_updateButton, FALSE);
+        SetWindowTextW(g_updateButton, L"Checking...");
+    }
+    if (g_tocPilotUpdateStatus) {
+        SetWindowTextW(
+            g_tocPilotUpdateStatus,
+            L"Checking GitHub for the latest TocPilot release...");
+    }
     SetIndicator(g_githubStatus, L"GitHub Comms: Checking...");
     SetIndicator(g_releaseStatus, L"Release: Checking...");
 
@@ -3070,8 +3315,15 @@ void StartUpdate(HWND hwnd) {
 
     g_appUpdateInProgress = true;
     UpdatePackageButtons();
-    EnableWindow(g_updateButton, FALSE);
-    SetWindowTextW(g_updateButton, L"Updating app...");
+    if (g_updateButton) {
+        EnableWindow(g_updateButton, FALSE);
+        SetWindowTextW(g_updateButton, L"Updating...");
+    }
+    if (g_tocPilotUpdateStatus) {
+        SetWindowTextW(
+            g_tocPilotUpdateStatus,
+            L"Downloading and verifying the TocPilot update...");
+    }
     SetIndicator(g_releaseStatus, L"Release: Downloading and verifying...");
 
     const auto target = tp::ExecutablePath();
@@ -3184,27 +3436,24 @@ void HandleTextScaleChange(HWND hwnd) {
 }
 
 HICON LoadExecutableIcon(
-    const std::filesystem::path& path) {
-    HICON large = nullptr;
-    HICON small = nullptr;
+    const std::filesystem::path& path,
+    int size) {
+    HICON icon = nullptr;
+    UINT resourceId = 0;
 
-    if (ExtractIconExW(
+    if (PrivateExtractIconsW(
             path.c_str(),
             0,
-            &large,
-            &small,
-            1) == 0) {
+            size,
+            size,
+            &icon,
+            &resourceId,
+            1,
+            0) == 0) {
         return nullptr;
     }
 
-    if (large) {
-        if (small) {
-            DestroyIcon(small);
-        }
-        return large;
-    }
-
-    return small;
+    return icon;
 }
 
 void LaunchSiblingExecutable(
@@ -3251,6 +3500,313 @@ void LaunchSiblingExecutable(
             L"TocPilot",
             MB_OK | MB_ICONERROR);
     }
+}
+
+void OpenWebLink(
+    HWND owner,
+    const wchar_t* url) {
+    const HINSTANCE result =
+        ShellExecuteW(
+            owner,
+            L"open",
+            url,
+            nullptr,
+            nullptr,
+            SW_SHOWNORMAL);
+
+    if (reinterpret_cast<INT_PTR>(
+            result) <= 32) {
+        MessageBoxW(
+            owner,
+            L"Windows could not open the requested link.",
+            L"TocPilot",
+            MB_OK | MB_ICONERROR);
+    }
+}
+
+void SetTocPilotUpdateUi(
+    const std::wstring& status,
+    const wchar_t* buttonText,
+    bool buttonEnabled) {
+    if (g_tocPilotUpdateStatus) {
+        SetWindowTextW(
+            g_tocPilotUpdateStatus,
+            status.c_str());
+    }
+
+    if (g_updateButton) {
+        SetWindowTextW(
+            g_updateButton,
+            buttonText);
+        EnableWindow(
+            g_updateButton,
+            buttonEnabled
+                ? TRUE
+                : FALSE);
+    }
+}
+
+LRESULT CALLBACK TocPilotWindowProc(
+    HWND hwnd,
+    UINT message,
+    WPARAM wParam,
+    LPARAM lParam) {
+    switch (message) {
+    case WM_CREATE: {
+        std::wstring versionText =
+            L"TocPilot ";
+        versionText +=
+            TOCPILOT_VERSION_TAG_W;
+
+        HWND version = CreateWindowExW(
+            0,
+            L"STATIC",
+            versionText.c_str(),
+            WS_CHILD | WS_VISIBLE,
+            18,
+            16,
+            330,
+            24,
+            hwnd,
+            nullptr,
+            GetModuleHandleW(nullptr),
+            nullptr);
+
+        CreateWindowExW(
+            0,
+            WC_LINK,
+            L"<a id=\"github\">GitHub repository</a>",
+            WS_CHILD | WS_VISIBLE | WS_TABSTOP,
+            18,
+            48,
+            150,
+            24,
+            hwnd,
+            reinterpret_cast<HMENU>(
+                static_cast<INT_PTR>(
+                    IDC_TOCPILOT_GITHUB)),
+            GetModuleHandleW(nullptr),
+            nullptr);
+
+        CreateWindowExW(
+            0,
+            WC_LINK,
+            L"<a id=\"releases\">Releases</a>",
+            WS_CHILD | WS_VISIBLE | WS_TABSTOP,
+            182,
+            48,
+            100,
+            24,
+            hwnd,
+            reinterpret_cast<HMENU>(
+                static_cast<INT_PTR>(
+                    IDC_TOCPILOT_RELEASES)),
+            GetModuleHandleW(nullptr),
+            nullptr);
+
+        CreateWindowExW(
+            0,
+            L"BUTTON",
+            L"TocPilot Update",
+            WS_CHILD | WS_VISIBLE |
+                BS_GROUPBOX,
+            14,
+            78,
+            344,
+            112,
+            hwnd,
+            nullptr,
+            GetModuleHandleW(nullptr),
+            nullptr);
+
+        g_tocPilotUpdateStatus =
+            CreateWindowExW(
+                0,
+                L"STATIC",
+                L"Ready to check for updates.",
+                WS_CHILD | WS_VISIBLE |
+                    SS_LEFT,
+                28,
+                102,
+                316,
+                38,
+                hwnd,
+                nullptr,
+                GetModuleHandleW(nullptr),
+                nullptr);
+
+        g_updateButton =
+            CreateWindowExW(
+                0,
+                L"BUTTON",
+                L"Check for Updates",
+                WS_CHILD | WS_VISIBLE |
+                    WS_TABSTOP |
+                    BS_PUSHBUTTON,
+                28,
+                148,
+                316,
+                30,
+                hwnd,
+                reinterpret_cast<HMENU>(
+                    static_cast<INT_PTR>(
+                        IDC_TOCPILOT_UPDATE)),
+                GetModuleHandleW(nullptr),
+                nullptr);
+
+        if (g_uiFont) {
+            SendMessageW(
+                version,
+                WM_SETFONT,
+                reinterpret_cast<WPARAM>(
+                    g_uiFont),
+                TRUE);
+            EnumChildWindows(
+                hwnd,
+                ApplyFontToChild,
+                reinterpret_cast<LPARAM>(
+                    g_uiFont));
+        }
+
+        return 0;
+    }
+
+    case WM_NOTIFY: {
+        const auto* header =
+            reinterpret_cast<NMHDR*>(
+                lParam);
+
+        if (!header ||
+            (header->code != NM_CLICK &&
+             header->code != NM_RETURN)) {
+            break;
+        }
+
+        if (header->idFrom ==
+            IDC_TOCPILOT_GITHUB) {
+            OpenWebLink(
+                hwnd,
+                kTocPilotGitHubUrl);
+            return 0;
+        }
+
+        if (header->idFrom ==
+            IDC_TOCPILOT_RELEASES) {
+            OpenWebLink(
+                hwnd,
+                kTocPilotReleasesUrl);
+            return 0;
+        }
+        break;
+    }
+
+    case WM_COMMAND:
+        if (LOWORD(wParam) ==
+                IDC_TOCPILOT_UPDATE &&
+            HIWORD(wParam) ==
+                BN_CLICKED) {
+            if (!g_release.assetUrl.empty()) {
+                StartUpdate(
+                    GetWindow(
+                        hwnd,
+                        GW_OWNER));
+            } else {
+                StartUpdateCheck(
+                    GetWindow(
+                        hwnd,
+                        GW_OWNER));
+            }
+            return 0;
+        }
+        break;
+
+    case WM_CLOSE:
+        DestroyWindow(hwnd);
+        return 0;
+
+    case WM_DESTROY:
+        g_tocPilotWindow = nullptr;
+        g_tocPilotUpdateStatus = nullptr;
+        g_updateButton = nullptr;
+        return 0;
+    }
+
+    return DefWindowProcW(
+        hwnd,
+        message,
+        wParam,
+        lParam);
+}
+
+void ShowTocPilotWindow(
+    HWND owner) {
+    if (g_tocPilotWindow &&
+        IsWindow(g_tocPilotWindow)) {
+        ShowWindow(
+            g_tocPilotWindow,
+            SW_RESTORE);
+        SetForegroundWindow(
+            g_tocPilotWindow);
+        StartUpdateCheck(owner);
+        return;
+    }
+
+    RECT ownerRect{};
+    GetWindowRect(
+        owner,
+        &ownerRect);
+
+    constexpr int windowWidth = 390;
+    constexpr int windowHeight = 245;
+    const int x =
+        ownerRect.left +
+        std::max(
+            0,
+            (ownerRect.right -
+             ownerRect.left -
+             windowWidth) /
+                2);
+    const int y =
+        ownerRect.top +
+        std::max(
+            0,
+            (ownerRect.bottom -
+             ownerRect.top -
+             windowHeight) /
+                2);
+
+    g_tocPilotWindow =
+        CreateWindowExW(
+            WS_EX_TOOLWINDOW,
+            kTocPilotWindowClass,
+            L"TocPilot",
+            WS_OVERLAPPED |
+                WS_CAPTION |
+                WS_SYSMENU,
+            x,
+            y,
+            windowWidth,
+            windowHeight,
+            owner,
+            nullptr,
+            GetModuleHandleW(nullptr),
+            nullptr);
+
+    if (!g_tocPilotWindow) {
+        MessageBoxW(
+            owner,
+            L"Could not open the TocPilot window.",
+            L"TocPilot",
+            MB_OK | MB_ICONERROR);
+        return;
+    }
+
+    ShowWindow(
+        g_tocPilotWindow,
+        SW_SHOW);
+    UpdateWindow(
+        g_tocPilotWindow);
+    StartUpdateCheck(owner);
 }
 
 void ToggleAdvanced(HWND hwnd) {
@@ -3301,36 +3857,6 @@ void ToggleAdvanced(HWND hwnd) {
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) {
     switch (message) {
     case WM_CREATE: {
-        CreateWindowExW(
-            0,
-            L"STATIC",
-            L"TocPilot",
-            WS_CHILD | WS_VISIBLE,
-            20,
-            16,
-            220,
-            28,
-            hwnd,
-            nullptr,
-            GetModuleHandleW(nullptr),
-            nullptr);
-
-        std::wstring versionText = L"Version ";
-        versionText += TOCPILOT_VERSION_TAG_W;
-        g_versionLabel = CreateWindowExW(
-            0,
-            L"STATIC",
-            versionText.c_str(),
-            WS_CHILD | WS_VISIBLE | SS_RIGHT,
-            620,
-            18,
-            240,
-            24,
-            hwnd,
-            nullptr,
-            GetModuleHandleW(nullptr),
-            nullptr);
-
         std::wstring rootText = L"World of Warcraft: ";
         rootText += g_root.wstring();
         g_rootLabel = CreateWindowExW(
@@ -3406,7 +3932,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
         g_updateAllButton = CreateWindowExW(
             0,
             L"BUTTON",
-            L"Update",
+            L"Update All",
             WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON,
             20,
             145,
@@ -3420,7 +3946,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
         g_refreshPackagesButton = CreateWindowExW(
             0,
             L"BUTTON",
-            L"Refresh",
+            L"Refresh All",
             WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON,
             130,
             145,
@@ -3490,7 +4016,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
         g_addPackageButton = CreateWindowExW(
             0,
             L"BUTTON",
-            L"Add",
+            L"Add Git",
             WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON,
             575,
             145,
@@ -3518,7 +4044,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
         g_adoptGitButton = CreateWindowExW(
             0,
             L"BUTTON",
-            L"Existing Addons",
+            L"Scan Existing Addons",
             WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON,
             750,
             145,
@@ -3526,6 +4052,23 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             32,
             hwnd,
             reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_ADOPT_GIT)),
+            GetModuleHandleW(nullptr),
+            nullptr);
+
+        g_tocPilotButton = CreateWindowExW(
+            0,
+            L"BUTTON",
+            L"TocPilot",
+            WS_CHILD | WS_VISIBLE | WS_TABSTOP |
+                BS_PUSHBUTTON,
+            0,
+            0,
+            100,
+            32,
+            hwnd,
+            reinterpret_cast<HMENU>(
+                static_cast<INT_PTR>(
+                    IDC_TOCPILOT)),
             GetModuleHandleW(nullptr),
             nullptr);
 
@@ -3559,20 +4102,6 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
         EnableWindow(
             g_adoptGitButton,
             g_stateReady ? TRUE : FALSE);
-
-        g_updateButton = CreateWindowExW(
-            0,
-            L"BUTTON",
-            L"Check app update",
-            WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON,
-            750,
-            145,
-            100,
-            32,
-            hwnd,
-            reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_UPDATE)),
-            GetModuleHandleW(nullptr),
-            nullptr);
 
         g_textScaleLabel = CreateWindowExW(
             0,
@@ -3652,8 +4181,8 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                 BS_PUSHBUTTON | BS_ICON,
             0,
             0,
-            32,
-            32,
+            40,
+            40,
             hwnd,
             reinterpret_cast<HMENU>(
                 static_cast<INT_PTR>(
@@ -3669,8 +4198,8 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                 BS_PUSHBUTTON | BS_ICON,
             0,
             0,
-            32,
-            32,
+            40,
+            40,
             hwnd,
             reinterpret_cast<HMENU>(
                 static_cast<INT_PTR>(
@@ -3680,10 +4209,23 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
 
         g_wowIcon =
             LoadExecutableIcon(
-                g_root / L"WoW.exe");
-        g_vanillaFixesIcon =
-            LoadExecutableIcon(
-                g_root / L"VanillaFixes.exe");
+                g_root / L"WoW.exe",
+                36);
+
+        std::error_code vanillaFixesEc;
+        g_hasVanillaFixes =
+            std::filesystem::is_regular_file(
+                g_root /
+                    L"VanillaFixes.exe",
+                vanillaFixesEc);
+
+        if (g_hasVanillaFixes) {
+            g_vanillaFixesIcon =
+                LoadExecutableIcon(
+                    g_root /
+                        L"VanillaFixes.exe",
+                    36);
+        }
 
         if (g_wowIcon) {
             SendMessageW(
@@ -3701,11 +4243,13 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                 IMAGE_ICON,
                 reinterpret_cast<LPARAM>(
                     g_vanillaFixesIcon));
-        } else {
-            EnableWindow(
-                g_launchVanillaFixesButton,
-                FALSE);
         }
+
+        ShowWindow(
+            g_launchVanillaFixesButton,
+            g_hasVanillaFixes
+                ? SW_SHOW
+                : SW_HIDE);
 
         AddPackageListColumns();
         PopulatePackageList();
@@ -3728,13 +4272,51 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
         return 0;
 
     case WM_GETMINMAXINFO: {
-        auto* info = reinterpret_cast<MINMAXINFO*>(lParam);
+        auto* info =
+            reinterpret_cast<MINMAXINFO*>(
+                lParam);
+
+        const int toolbarWidth =
+            kCompactPrimaryButtonCount *
+                kCompactButtonMinWidth +
+            (kCompactPrimaryButtonCount - 1) *
+                kCompactButtonGap;
+        const int columnsWidth =
+            kCompactNameColumnMinWidth +
+            kCompactStatusColumnMinWidth;
+        const int compactClientWidth =
+            40 +
+            std::max(
+                toolbarWidth,
+                columnsWidth);
+
+        RECT minimum{
+            0,
+            0,
+            compactClientWidth +
+                (g_advancedVisible
+                    ? kAdvancedExtraWidth
+                    : 0),
+            400};
+
+        AdjustWindowRectEx(
+            &minimum,
+            static_cast<DWORD>(
+                GetWindowLongPtrW(
+                    hwnd,
+                    GWL_STYLE)),
+            FALSE,
+            static_cast<DWORD>(
+                GetWindowLongPtrW(
+                    hwnd,
+                    GWL_EXSTYLE)));
+
         info->ptMinTrackSize.x =
-            g_advancedVisible
-                ? kCompactWindowWidth +
-                    kAdvancedExtraWidth
-                : 560;
-        info->ptMinTrackSize.y = 440;
+            minimum.right -
+            minimum.left;
+        info->ptMinTrackSize.y =
+            minimum.bottom -
+            minimum.top;
         return 0;
     }
 
@@ -3753,6 +4335,13 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
         if (header &&
             header->idFrom ==
                 IDC_PACKAGE_LIST) {
+            if (header->code ==
+                NM_CUSTOMDRAW) {
+                return
+                    HandlePackageListCustomDraw(
+                        lParam);
+            }
+
             if (header->code ==
                 LVN_ITEMCHANGED) {
                 UpdatePackageButtons();
@@ -3778,6 +4367,12 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
         if (LOWORD(wParam) == IDC_ADVANCED &&
             HIWORD(wParam) == BN_CLICKED) {
             ToggleAdvanced(hwnd);
+            return 0;
+        }
+
+        if (LOWORD(wParam) == IDC_TOCPILOT &&
+            HIWORD(wParam) == BN_CLICKED) {
+            ShowTocPilotWindow(hwnd);
             return 0;
         }
 
@@ -3820,15 +4415,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
 
         if (LOWORD(wParam) == IDC_REFRESH_PACKAGES &&
             HIWORD(wParam) == BN_CLICKED) {
-            const int row = SelectedPackageRow();
-
-            if (row >= 0 &&
-                row < static_cast<int>(
-                    g_state.packages.size())) {
-                StartPackageRefresh(
-                    hwnd,
-                    static_cast<std::size_t>(row));
-            }
+            StartAutoStatusRefresh(hwnd);
             return 0;
         }
 
@@ -4075,60 +4662,71 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
         std::unique_ptr<CheckResult> result(
             reinterpret_cast<CheckResult*>(lParam));
 
+        g_appUpdateCheckInProgress = false;
+
         if (!result->ok) {
             g_release = {};
-            SetIndicator(g_githubStatus, L"GitHub Comms: Failed");
-            SetIndicator(g_releaseStatus, L"Release: Unavailable");
-            SetWindowTextW(g_updateButton, L"Retry app check");
-            EnableWindow(g_updateButton, TRUE);
+            SetIndicator(
+                g_githubStatus,
+                L"GitHub Comms: Failed");
+            SetIndicator(
+                g_releaseStatus,
+                L"Release: Unavailable");
+            SetTocPilotUpdateUi(
+                L"Update check failed. Check your connection and try again.",
+                L"Retry Check",
+                true);
             StartAutoStatusRefresh(hwnd);
             return 0;
         }
 
-        SetIndicator(g_githubStatus, L"GitHub Comms: Good");
+        SetIndicator(
+            g_githubStatus,
+            L"GitHub Comms: Good");
 
         switch (result->state) {
         case tp::ReleaseCheckState::NoRelease:
             g_release = {};
-            SetIndicator(g_releaseStatus, L"Release: Not found");
-            SetWindowTextW(g_updateButton, L"Check app update");
-            EnableWindow(g_updateButton, TRUE);
-            StartAutoStatusRefresh(hwnd);
+            SetIndicator(
+                g_releaseStatus,
+                L"Release: Not found");
+            SetTocPilotUpdateUi(
+                L"No published TocPilot release was found.",
+                L"Retry Check",
+                true);
             break;
 
         case tp::ReleaseCheckState::UpdateAvailable:
-            g_release = result->release;
+            g_release =
+                result->release;
             SetIndicator(
                 g_releaseStatus,
-                L"Release: Update available - " + result->release.tag);
-            SetWindowTextW(g_updateButton, L"Update app");
-            EnableWindow(g_updateButton, TRUE);
-
-            if (MessageBoxW(
-                    hwnd,
-                    (L"TocPilot " +
-                     result->release.tag +
-                     L" is available. Update now?").c_str(),
-                    L"TocPilot Update",
-                    MB_YESNO |
-                        MB_ICONINFORMATION) == IDYES) {
-                StartUpdate(hwnd);
-            } else {
-                StartAutoStatusRefresh(hwnd);
-            }
+                L"Release: Update available - " +
+                    result->release.tag);
+            SetTocPilotUpdateUi(
+                result->release.tag +
+                    L" is available.",
+                L"Update Available",
+                true);
             break;
 
         case tp::ReleaseCheckState::UpToDate:
             g_release = {};
             SetIndicator(
                 g_releaseStatus,
-                L"Release: Current - " + result->release.tag);
-            SetWindowTextW(g_updateButton, L"Check app update");
-            EnableWindow(g_updateButton, TRUE);
-            StartAutoStatusRefresh(hwnd);
+                L"Release: Current - " +
+                    result->release.tag);
+            SetTocPilotUpdateUi(
+                L"Installed " +
+                    std::wstring(
+                        TOCPILOT_VERSION_TAG_W) +
+                    L" is the latest release.",
+                L"Up to date",
+                false);
             break;
         }
 
+        StartAutoStatusRefresh(hwnd);
         return 0;
     }
 
@@ -4851,8 +5449,11 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             SetIndicator(
                 g_releaseStatus,
                 L"Release: Update failed - " + result->error);
-            SetWindowTextW(g_updateButton, L"Retry app update");
-            EnableWindow(g_updateButton, TRUE);
+            SetTocPilotUpdateUi(
+                L"The update could not be applied: " +
+                    result->error,
+                L"Retry Update",
+                true);
             return 0;
         }
 
@@ -4886,11 +5487,114 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             DeleteObject(g_uiFont);
             g_uiFont = nullptr;
         }
+        if (g_boldUiFont) {
+            DeleteObject(g_boldUiFont);
+            g_boldUiFont = nullptr;
+        }
         PostQuitMessage(0);
         return 0;
     }
 
     return DefWindowProcW(hwnd, message, wParam, lParam);
+}
+
+std::wstring InstanceKeyForRoot(
+    const std::filesystem::path& root) {
+    std::error_code ec;
+    std::filesystem::path normalized =
+        std::filesystem::absolute(
+            root,
+            ec);
+
+    if (ec) {
+        normalized = root;
+    }
+
+    normalized =
+        normalized.lexically_normal();
+
+    std::wstring text =
+        normalized.wstring();
+
+    std::transform(
+        text.begin(),
+        text.end(),
+        text.begin(),
+        [](wchar_t value) {
+            return static_cast<wchar_t>(
+                std::towupper(value));
+        });
+
+    std::uint64_t hash =
+        1469598103934665603ULL;
+
+    for (const wchar_t value :
+         text) {
+        hash ^=
+            static_cast<std::uint64_t>(
+                static_cast<std::uint32_t>(
+                    value));
+        hash *=
+            1099511628211ULL;
+    }
+
+    wchar_t buffer[17]{};
+    swprintf_s(
+        buffer,
+        std::size(buffer),
+        L"%016llX",
+        static_cast<unsigned long long>(
+            hash));
+    return buffer;
+}
+
+void ActivateExistingInstance(
+    const std::wstring& className) {
+    HWND existing = nullptr;
+
+    for (int attempt = 0;
+         attempt < 40 &&
+         !existing;
+         ++attempt) {
+        existing =
+            FindWindowW(
+                className.c_str(),
+                nullptr);
+
+        if (!existing) {
+            Sleep(50);
+        }
+    }
+
+    if (!existing) {
+        return;
+    }
+
+    if (IsIconic(existing)) {
+        ShowWindow(
+            existing,
+            SW_RESTORE);
+    } else {
+        ShowWindow(
+            existing,
+            SW_SHOW);
+    }
+
+    if (!SetForegroundWindow(
+            existing)) {
+        FLASHWINFO flash{};
+        flash.cbSize =
+            sizeof(flash);
+        flash.hwnd =
+            existing;
+        flash.dwFlags =
+            FLASHW_TRAY |
+            FLASHW_TIMERNOFG;
+        flash.uCount = 3;
+        flash.dwTimeout = 0;
+        FlashWindowEx(
+            &flash);
+    }
 }
 
 bool ValidateWowRoot(const std::filesystem::path& root, std::wstring& error) {
@@ -4927,8 +5631,45 @@ int RunMainWindow(HINSTANCE instance) {
 
     g_root = exe.parent_path();
 
+    const std::wstring instanceKey =
+        InstanceKeyForRoot(g_root);
+    g_windowClassName =
+        std::wstring(
+            kWindowClassBase) +
+        L"_" +
+        instanceKey;
+
+    const std::wstring mutexName =
+        L"Local\\TocPilot_" +
+        instanceKey;
+    HANDLE instanceMutex =
+        CreateMutexW(
+            nullptr,
+            FALSE,
+            mutexName.c_str());
+
+    if (!instanceMutex) {
+        MessageBoxW(
+            nullptr,
+            L"Could not create the TocPilot single-instance guard.",
+            L"TocPilot",
+            MB_OK | MB_ICONERROR);
+        return 2;
+    }
+
+    if (GetLastError() ==
+        ERROR_ALREADY_EXISTS) {
+        ActivateExistingInstance(
+            g_windowClassName);
+        CloseHandle(
+            instanceMutex);
+        return 0;
+    }
+
     std::wstring error;
     if (!ValidateWowRoot(g_root, error)) {
+        CloseHandle(
+            instanceMutex);
         MessageBoxW(
             nullptr,
             error.c_str(),
@@ -4962,22 +5703,67 @@ int RunMainWindow(HINSTANCE instance) {
 
     INITCOMMONCONTROLSEX controls{};
     controls.dwSize = sizeof(controls);
-    controls.dwICC = ICC_LISTVIEW_CLASSES | ICC_STANDARD_CLASSES;
+    controls.dwICC =
+        ICC_LISTVIEW_CLASSES |
+        ICC_STANDARD_CLASSES |
+        ICC_LINK_CLASS;
     InitCommonControlsEx(&controls);
 
     WNDCLASSEXW wc{};
     wc.cbSize = sizeof(wc);
     wc.hInstance = instance;
     wc.lpfnWndProc = WindowProc;
-    wc.lpszClassName = kWindowClass;
-    wc.hCursor = LoadCursorW(nullptr, IDC_ARROW);
-    wc.hIcon = LoadIconW(nullptr, IDI_APPLICATION);
-    wc.hbrBackground = reinterpret_cast<HBRUSH>(COLOR_WINDOW + 1);
+    wc.lpszClassName =
+        g_windowClassName.c_str();
+    wc.hCursor =
+        LoadCursorW(
+            nullptr,
+            IDC_ARROW);
+    wc.hIcon =
+        LoadIconW(
+            instance,
+            MAKEINTRESOURCEW(
+                IDI_TOCPILOT));
+    wc.hIconSm =
+        reinterpret_cast<HICON>(
+            LoadImageW(
+                instance,
+                MAKEINTRESOURCEW(
+                    IDI_TOCPILOT),
+                IMAGE_ICON,
+                16,
+                16,
+                LR_DEFAULTCOLOR));
+    wc.hbrBackground =
+        reinterpret_cast<HBRUSH>(
+            COLOR_WINDOW + 1);
 
     if (!RegisterClassExW(&wc)) {
+        CloseHandle(
+            instanceMutex);
         MessageBoxW(
             nullptr,
             L"Could not register the TocPilot window class.",
+            L"TocPilot",
+            MB_OK | MB_ICONERROR);
+        return 3;
+    }
+
+    WNDCLASSEXW toolClass = wc;
+    toolClass.lpfnWndProc =
+        TocPilotWindowProc;
+    toolClass.lpszClassName =
+        kTocPilotWindowClass;
+
+    if (!RegisterClassExW(
+            &toolClass) &&
+        GetLastError() !=
+            ERROR_CLASS_ALREADY_EXISTS) {
+        CloseHandle(
+            instanceMutex);
+        MessageBoxW(
+            nullptr,
+            L"Could not register the TocPilot tool window.",
             L"TocPilot",
             MB_OK | MB_ICONERROR);
         return 3;
@@ -4988,7 +5774,7 @@ int RunMainWindow(HINSTANCE instance) {
 
     HWND hwnd = CreateWindowExW(
         0,
-        kWindowClass,
+        g_windowClassName.c_str(),
         title.c_str(),
         WS_OVERLAPPEDWINDOW,
         CW_USEDEFAULT,
@@ -5006,6 +5792,8 @@ int RunMainWindow(HINSTANCE instance) {
             L"Could not create the TocPilot window.",
             L"TocPilot",
             MB_OK | MB_ICONERROR);
+        CloseHandle(
+            instanceMutex);
         return 4;
     }
 
@@ -5018,7 +5806,13 @@ int RunMainWindow(HINSTANCE instance) {
         DispatchMessageW(&msg);
     }
 
-    return static_cast<int>(msg.wParam);
+    const int result =
+        static_cast<int>(
+            msg.wParam);
+
+    CloseHandle(
+        instanceMutex);
+    return result;
 }
 
 } // namespace
