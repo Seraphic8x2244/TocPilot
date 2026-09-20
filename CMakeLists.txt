@@ -194,6 +194,30 @@ if(BUILD_TESTING)
 
     add_test(NAME update-all-orchestration COMMAND TocPilotUpdateAllTests)
 
+    add_executable(TocPilotUpdateTests
+        tests/update_tests.cpp
+        src/update.cpp
+    )
+    target_compile_features(TocPilotUpdateTests PRIVATE cxx_std_20)
+    target_compile_definitions(TocPilotUpdateTests PRIVATE
+        UNICODE
+        _UNICODE
+        WIN32_LEAN_AND_MEAN
+        NOMINMAX
+    )
+    target_include_directories(TocPilotUpdateTests PRIVATE src)
+    target_link_libraries(TocPilotUpdateTests PRIVATE winhttp bcrypt)
+
+    if(MSVC)
+        target_compile_options(TocPilotUpdateTests PRIVATE /W4 /permissive- /utf-8)
+    endif()
+
+    add_test(NAME self-update-discovery COMMAND TocPilotUpdateTests)
+    add_test(
+        NAME self-update-live-latest
+        COMMAND TocPilotUpdateTests --live-latest
+    )
+
     add_executable(TocPilotAdoptionTests
         tests/adoption_tests.cpp
         src/adoption.cpp
