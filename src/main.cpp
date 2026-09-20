@@ -896,6 +896,7 @@ void UpdatePackageButtons() {
         g_packageInspectInProgress ||
         g_packageInstallInProgress ||
         g_updateAllInProgress ||
+        g_autoStatusRefreshInProgress ||
         g_appUpdateInProgress;
 
     if (g_updateAllButton) {
@@ -1392,6 +1393,164 @@ std::size_t FindPackageIndexById(
     return g_state.packages.size();
 }
 
+bool IsAutoStatusCurrentPackage(
+    std::wstring_view packageId) {
+    return
+        g_autoStatusRefreshInProgress &&
+        g_autoStatusPosition <
+            g_autoStatusPackageIds.size() &&
+        g_autoStatusPackageIds[
+            g_autoStatusPosition] ==
+            packageId;
+}
+
+void ContinueAutoStatusRefresh(HWND hwnd);
+
+void CompleteAutoStatusRefreshStep(
+    HWND hwnd,
+    bool ok,
+    bool updateAvailable) {
+    if (!g_autoStatusRefreshInProgress ||
+        g_autoStatusPosition >=
+            g_autoStatusPackageIds.size()) {
+        return;
+    }
+
+    if (!ok) {
+        ++g_autoStatusFailed;
+    } else if (updateAvailable) {
+        ++g_autoStatusUpdates;
+    } else {
+        ++g_autoStatusCurrent;
+    }
+
+    ++g_autoStatusPosition;
+    ContinueAutoStatusRefresh(hwnd);
+}
+
+void FinishAutoStatusRefresh(HWND hwnd) {
+    g_autoStatusRefreshInProgress = false;
+
+    RefreshPackageStateUi();
+
+    std::wstring message =
+        L"Status check complete: " +
+        std::to_wstring(
+            g_autoStatusUpdates) +
+        L" update(s) available, " +
+        std::to_wstring(
+            g_autoStatusCurrent) +
+        L" current";
+
+    if (g_autoStatusFailed != 0) {
+        message +=
+            L", " +
+            std::to_wstring(
+                g_autoStatusFailed) +
+            L" failed";
+    }
+
+    message +=
+        L".";
+
+    if (g_packageHint) {
+        SetWindowTextW(
+            g_packageHint,
+            message.c_str());
+    }
+
+    UpdatePackageButtons();
+}
+
+void ContinueAutoStatusRefresh(HWND hwnd) {
+    while (g_autoStatusPosition <
+           g_autoStatusPackageIds.size()) {
+        const std::wstring packageId =
+            g_autoStatusPackageIds[
+                g_autoStatusPosition];
+
+        const std::size_t index =
+            FindPackageIndexById(
+                packageId);
+
+        if (index >=
+                g_state.packages.size() ||
+            !tp::IsUpdateAllCandidate(
+                g_state.packages[index])) {
+            ++g_autoStatusFailed;
+            ++g_autoStatusPosition;
+            continue;
+        }
+
+        const auto& package =
+            g_state.packages[index];
+
+        SetPackageRowStatus(
+            index,
+            L"Checking...");
+
+        if (g_packageHint) {
+            const std::wstring message =
+                L"Checking addon status " +
+                std::to_wstring(
+                    g_autoStatusPosition + 1) +
+                L" of " +
+                std::to_wstring(
+                    g_autoStatusPackageIds.size()) +
+                L": " +
+                package.name +
+                L". No addon files will be changed.";
+
+            SetWindowTextW(
+                g_packageHint,
+                message.c_str());
+        }
+
+        StartPackageRefresh(
+            hwnd,
+            index);
+        return;
+    }
+
+    FinishAutoStatusRefresh(hwnd);
+}
+
+void StartAutoStatusRefresh(HWND hwnd) {
+    if (!g_stateReady ||
+        g_autoStatusRefreshInProgress ||
+        g_updateAllInProgress ||
+        g_packageRefreshInProgress ||
+        g_packageInspectInProgress ||
+        g_packageInstallInProgress ||
+        g_appUpdateInProgress) {
+        return;
+    }
+
+    g_autoStatusPackageIds.clear();
+
+    for (const auto& package :
+         g_state.packages) {
+        if (tp::IsUpdateAllCandidate(
+                package)) {
+            g_autoStatusPackageIds.push_back(
+                package.id);
+        }
+    }
+
+    if (g_autoStatusPackageIds.empty()) {
+        return;
+    }
+
+    g_autoStatusPosition = 0;
+    g_autoStatusCurrent = 0;
+    g_autoStatusUpdates = 0;
+    g_autoStatusFailed = 0;
+    g_autoStatusRefreshInProgress = true;
+
+    UpdatePackageButtons();
+    ContinueAutoStatusRefresh(hwnd);
+}
+
 bool IsUpdateAllCurrentPackage(
     std::wstring_view packageId) {
     return
@@ -1565,6 +1724,7 @@ void CompleteUpdateAllStep(
 
 void StartUpdateAll(HWND hwnd) {
     if (g_updateAllInProgress ||
+        g_autoStatusRefreshInProgress ||
         g_packageRefreshInProgress ||
         g_packageInspectInProgress ||
         g_packageInstallInProgress ||
@@ -2637,6 +2797,8 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             EnableWindow(g_updateButton, TRUE);
         }
 
+        StartAutoStatusRefresh(hwnd);
+
         return 0;
     }
 
@@ -3031,6 +3193,10 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             IsUpdateAllCurrentPackage(
                 result->packageId);
 
+        const bool autoStatusStep =
+            IsAutoStatusCurrentPackage(
+                result->packageId);
+
         if (result->index >=
                 g_state.packages.size() ||
             g_state.packages[result->index].id !=
@@ -3049,13 +3215,20 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                     tp::UpdateAllOutcome::Failed,
                     result->packageId +
                         L": package tracking changed during refresh.");
+            } else if (autoStatusStep) {
+                CompleteAutoStatusRefreshStep(
+                    hwnd,
+                    false,
+                    false);
             } else {
                 UpdatePackageButtons();
             }
             return 0;
         }
 
-        const auto index = result->index;
+        const auto index =
+            result->index;
+
         const std::wstring packageName =
             g_state.packages[index].name;
 
@@ -3080,6 +3253,11 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                     hwnd,
                     tp::UpdateAllOutcome::Failed,
                     message);
+            } else if (autoStatusStep) {
+                CompleteAutoStatusRefreshStep(
+                    hwnd,
+                    false,
+                    false);
             } else {
                 SelectPackageRow(index);
                 UpdatePackageButtons();
@@ -3087,7 +3265,8 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             return 0;
         }
 
-        tp::AppState updatedState = g_state;
+        tp::AppState updatedState =
+            g_state;
         std::wstring error;
 
         if (!tp::SetPackageLatestRevision(
@@ -3118,6 +3297,11 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                     hwnd,
                     tp::UpdateAllOutcome::Failed,
                     message);
+            } else if (autoStatusStep) {
+                CompleteAutoStatusRefreshStep(
+                    hwnd,
+                    false,
+                    false);
             } else {
                 SelectPackageRow(index);
                 UpdatePackageButtons();
@@ -3125,7 +3309,8 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             return 0;
         }
 
-        g_state = std::move(updatedState);
+        g_state =
+            std::move(updatedState);
         g_stateCreated = false;
         g_stateError.clear();
 
@@ -3133,12 +3318,16 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
         SelectPackageRow(index);
         UpdatePackageButtons();
 
-        if (updateAllStep) {
-            const auto& package =
-                g_state.packages[index];
+        const auto& package =
+            g_state.packages[index];
 
-            if (package.installedRevision !=
-                package.latestRevision) {
+        const bool updateAvailable =
+            !package.installedRevision.empty() &&
+            package.installedRevision !=
+                package.latestRevision;
+
+        if (updateAllStep) {
+            if (updateAvailable) {
                 SetPackageRowStatus(
                     index,
                     L"Update available");
@@ -3155,10 +3344,15 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             return 0;
         }
 
-        if (g_packageHint) {
-            const auto& package =
-                g_state.packages[index];
+        if (autoStatusStep) {
+            CompleteAutoStatusRefreshStep(
+                hwnd,
+                true,
+                updateAvailable);
+            return 0;
+        }
 
+        if (g_packageHint) {
             const std::wstring shortSha =
                 package.latestRevision.substr(
                     0,
