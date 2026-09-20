@@ -46,21 +46,47 @@ std::string Advertisement() {
 
 int main(int argc, char** argv) {
     if (argc == 2 && std::string(argv[1]) == "--live-github") {
-        std::wstring sha;
+        tp::GitRemoteRepositoryInfo info;
         std::wstring error;
-        if (!tp::ResolvePublicGitBranchHead(
+        if (!tp::FetchPublicGitRepositoryInfo(
                 L"github.com",
                 L"Seraphic8x2244/TocPilot",
-                L"main",
-                sha,
+                info,
                 error)) {
             std::wcerr
-                << L"live GitHub smart-HTTP lookup failed: "
+                << L"live GitHub smart-HTTP repository lookup failed: "
                 << error
                 << L'\n';
             return 1;
         }
 
+        if (info.branches.empty() ||
+            info.defaultBranch != L"main") {
+            std::wcerr
+                << L"live GitHub smart-HTTP branch enumeration/default failed. "
+                << L"default="
+                << info.defaultBranch
+                << L", branches="
+                << info.branches.size()
+                << L'\n';
+            return 1;
+        }
+
+        const auto mainIt =
+            std::find_if(
+                info.branches.begin(),
+                info.branches.end(),
+                [](const tp::GitRemoteBranch& branch) {
+                    return branch.name == L"main";
+                });
+
+        if (mainIt == info.branches.end()) {
+            std::wcerr
+                << L"live GitHub smart-HTTP branch list has no main branch\n";
+            return 1;
+        }
+
+        const std::wstring& sha = mainIt->sha;
         const bool valid =
             (sha.size() == 40 || sha.size() == 64) &&
             std::all_of(
@@ -82,10 +108,49 @@ int main(int argc, char** argv) {
         }
 
         std::wcout
-            << L"Live GitHub smart-HTTP lookup passed: "
+            << L"Live GitHub smart-HTTP repository lookup passed: "
+            << info.branches.size()
+            << L" branches, default "
+            << info.defaultBranch
+            << L", main "
             << sha
             << L'\n';
         return 0;
+    }
+
+    {
+        tp::GitRemoteRepositoryInfo info;
+        std::wstring error;
+        if (!tp::ParseGitSmartHttpRepositoryAdvertisement(
+                Advertisement(),
+                info,
+                error) ||
+            info.defaultBranch != L"main" ||
+            info.branches.size() != 2) {
+            Fail("smart-HTTP branch enumeration/default parser failed");
+        } else {
+            const auto mainIt =
+                std::find_if(
+                    info.branches.begin(),
+                    info.branches.end(),
+                    [](const tp::GitRemoteBranch& branch) {
+                        return branch.name == L"main";
+                    });
+            const auto featureIt =
+                std::find_if(
+                    info.branches.begin(),
+                    info.branches.end(),
+                    [](const tp::GitRemoteBranch& branch) {
+                        return branch.name == L"feature/test";
+                    });
+
+            if (mainIt == info.branches.end() ||
+                featureIt == info.branches.end() ||
+                mainIt->sha != std::wstring(40, L'a') ||
+                featureIt->sha != std::wstring(40, L'b')) {
+                Fail("smart-HTTP enumerated branch data was incorrect");
+            }
+        }
     }
 
     {
