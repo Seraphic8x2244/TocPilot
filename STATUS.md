@@ -4,7 +4,7 @@
 
 - Active branch: `p2-github-branches`.
 - Current runtime-tested application version includes the `v0.1.13` adoption slice. The user successfully adopted existing Git-managed addons, then ran Update All across 21 installed packages: Queued 21 / Processed 21 / Updated 1 / Already current 20 / Failed 0. This validates adoption feeding the normal refresh/update transaction path. Restart persistence and continued GitAddonsManager visibility of retained `.git` metadata remain the final adoption runtime checks.
-- v0.1.14 is the prior release line. The next runtime slice is implemented through `2059d73`: automatic installed-GitHub-package status refresh at startup, stable click-to-sort package columns with sort indicators, and read-only `Interface\\AddOns` folder classification / one-level Git-container diagnostics. This source head is not yet versioned or runtime-tested.
+- v0.1.15 is now tagged from release-request commit `2d9d963`. The tag resolves to the 0.1.15 source, which confirms the automated release passed source/version validation, Windows x64 Release build, and the complete CTest suite before reaching tag creation. The runtime slice adds automatic installed-GitHub-package status refresh at startup, stable click-to-sort package columns with sort indicators, and read-only `Interface\\AddOns` folder classification / one-level Git-container diagnostics. Runtime validation is still pending.
 - Post-v0.1.13 adoption follow-up commits:
   - `5e9d4c8` — Fix expandable dialog labels.
   - `a2a47a4` — Harden task dialog manifest declaration.
@@ -58,11 +58,15 @@
 - License: MIT
 - Intended platform: Windows x64
 - Implementation: native C++20 / Win32 / CMake
-- Highest priority: release-gate implementation head `2059d73`, then publish/runtime-test v0.1.15
+- Highest priority: runtime-test v0.1.15 once the release asset/self-update is visible
 - Current adoption runtime result: 21 managed packages completed Update All with 1 updated / 20 current / 0 failed after existing Git installs were adopted.
 
 ## Latest commits
 
+- `2d9d963` — Request v0.1.15 status and diagnostics release
+- `f14f97e` — Set v0.1.15 application version
+- `f6819a1` — Bump TocPilot to v0.1.15
+- `0c8f08a` — Update handoff for v0.1.15 feature head
 - `2059d73` — Harden folder scanner test includes
 - `f91f51e` — Harden folder scanner includes
 - `a3d285e` — Show classified AddOns folder diagnostics
@@ -540,8 +544,8 @@ Complete. A real `v0.1.0 -> v0.1.1` in-app self-update succeeded on Windows besi
 
 ## Exact next step
 
-1. Version implementation head `2059d73` as `v0.1.15` and request the automated release.
-2. Treat the release workflow as the Windows gate: source/version validation, x64 Release build, and complete CTest suite (including `addon-folder-classification`) must pass before the tag/assets count as published.
-3. Runtime-test startup status refresh: no addon files change automatically, Current/Update available is accurate, and Update All still works normally afterward.
-4. Runtime-test Name / Source / Installed / Latest / Status header sorting in both directions; selection and package actions must continue to target the correct package after sorting.
-5. Open **Adopt Git → Show details** and confirm ignored-folder diagnostics include Blizzard/system/local folders, non-addon folders, and Git repository containers with only one-level nested addon-root reporting.
+1. Let the installed client self-update to `v0.1.15` once the release asset is visible.
+2. Runtime-test startup status refresh: verify no addon files change automatically, **Current / Update available** becomes accurate without pressing Refresh/Update All, and the final status-check summary is sensible.
+3. Click Name / Source / Installed / Latest / Status headers repeatedly and verify ascending/descending sort arrows, stable selection, and that Refresh/Update/Uninstall still target the package actually selected after sorting.
+4. Open **Adopt Git → Show details** and verify the new **Other Interface\\AddOns folders** section reports Blizzard/system/local folders, non-addon folders, and Git repository containers; container inspection must report only root/one-level `.toc` findings.
+5. Confirm normal Update All still behaves correctly after the automatic startup status pass. Multi-root GAM adoption/Yes-No root selection remains deferred to the next slice.
