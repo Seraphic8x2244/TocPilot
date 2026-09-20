@@ -2966,6 +2966,121 @@ void HandleTextScaleChange(HWND hwnd) {
     LayoutControls(hwnd);
 }
 
+HICON LoadExecutableIcon(
+    const std::filesystem::path& path) {
+    HICON large = nullptr;
+    HICON small = nullptr;
+
+    if (ExtractIconExW(
+            path.c_str(),
+            0,
+            &large,
+            &small,
+            1) == 0) {
+        return nullptr;
+    }
+
+    if (small) {
+        if (large) {
+            DestroyIcon(large);
+        }
+        return small;
+    }
+
+    return large;
+}
+
+void LaunchSiblingExecutable(
+    HWND hwnd,
+    std::wstring_view filename) {
+    const std::filesystem::path path =
+        g_root /
+        std::wstring(filename);
+
+    std::error_code ec;
+    if (!std::filesystem::is_regular_file(
+            path,
+            ec)) {
+        const std::wstring message =
+            std::wstring(filename) +
+            L" was not found beside TocPilot.exe.";
+
+        MessageBoxW(
+            hwnd,
+            message.c_str(),
+            L"TocPilot",
+            MB_OK | MB_ICONINFORMATION);
+        return;
+    }
+
+    const HINSTANCE result =
+        ShellExecuteW(
+            hwnd,
+            L"open",
+            path.c_str(),
+            nullptr,
+            g_root.c_str(),
+            SW_SHOWNORMAL);
+
+    if (reinterpret_cast<INT_PTR>(result) <= 32) {
+        const std::wstring message =
+            L"Could not launch " +
+            std::wstring(filename) +
+            L".";
+
+        MessageBoxW(
+            hwnd,
+            message.c_str(),
+            L"TocPilot",
+            MB_OK | MB_ICONERROR);
+    }
+}
+
+void ToggleAdvanced(HWND hwnd) {
+    RECT rect{};
+    if (!GetWindowRect(
+            hwnd,
+            &rect)) {
+        return;
+    }
+
+    g_advancedVisible =
+        !g_advancedVisible;
+
+    if (g_advancedButton) {
+        SetWindowTextW(
+            g_advancedButton,
+            g_advancedVisible
+                ? L"< Advanced"
+                : L"Advanced >");
+    }
+
+    const int currentWidth =
+        rect.right - rect.left;
+    const int currentHeight =
+        rect.bottom - rect.top;
+    const int newWidth =
+        std::max(
+            kCompactWindowWidth,
+            currentWidth +
+                (g_advancedVisible
+                    ? kAdvancedExtraWidth
+                    : -kAdvancedExtraWidth));
+
+    SetWindowPos(
+        hwnd,
+        nullptr,
+        0,
+        0,
+        newWidth,
+        currentHeight,
+        SWP_NOMOVE |
+            SWP_NOZORDER |
+            SWP_NOACTIVATE);
+
+    LayoutControls(hwnd);
+}
+
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) {
     switch (message) {
     case WM_CREATE: {
@@ -3074,7 +3189,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
         g_updateAllButton = CreateWindowExW(
             0,
             L"BUTTON",
-            L"Update All",
+            L"Update",
             WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON,
             20,
             145,
@@ -3130,7 +3245,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
         g_installPackageButton = CreateWindowExW(
             0,
             L"BUTTON",
-            L"Install",
+            L"Reinstall",
             WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON,
             405,
             145,
@@ -3158,7 +3273,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
         g_addPackageButton = CreateWindowExW(
             0,
             L"BUTTON",
-            L"Add Package",
+            L"Add",
             WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON,
             575,
             145,
@@ -3172,7 +3287,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
         g_removePackageButton = CreateWindowExW(
             0,
             L"BUTTON",
-            L"Forget",
+            L"Remove",
             WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON,
             680,
             145,
@@ -3186,7 +3301,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
         g_adoptGitButton = CreateWindowExW(
             0,
             L"BUTTON",
-            L"Adopt Git",
+            L"Existing Addons",
             WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON,
             750,
             145,
@@ -3194,6 +3309,23 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             32,
             hwnd,
             reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_ADOPT_GIT)),
+            GetModuleHandleW(nullptr),
+            nullptr);
+
+        g_advancedButton = CreateWindowExW(
+            0,
+            L"BUTTON",
+            L"Advanced >",
+            WS_CHILD | WS_VISIBLE | WS_TABSTOP |
+                BS_PUSHBUTTON,
+            0,
+            0,
+            100,
+            32,
+            hwnd,
+            reinterpret_cast<HMENU>(
+                static_cast<INT_PTR>(
+                    IDC_ADVANCED)),
             GetModuleHandleW(nullptr),
             nullptr);
 
@@ -3295,6 +3427,69 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                 LVS_EX_DOUBLEBUFFER |
                 LVS_EX_LABELTIP);
 
+        g_launchWowButton = CreateWindowExW(
+            0,
+            L"BUTTON",
+            L"",
+            WS_CHILD | WS_VISIBLE | WS_TABSTOP |
+                BS_PUSHBUTTON | BS_ICON,
+            0,
+            0,
+            32,
+            32,
+            hwnd,
+            reinterpret_cast<HMENU>(
+                static_cast<INT_PTR>(
+                    IDC_LAUNCH_WOW)),
+            GetModuleHandleW(nullptr),
+            nullptr);
+
+        g_launchVanillaFixesButton = CreateWindowExW(
+            0,
+            L"BUTTON",
+            L"",
+            WS_CHILD | WS_VISIBLE | WS_TABSTOP |
+                BS_PUSHBUTTON | BS_ICON,
+            0,
+            0,
+            32,
+            32,
+            hwnd,
+            reinterpret_cast<HMENU>(
+                static_cast<INT_PTR>(
+                    IDC_LAUNCH_VANILLAFIXES)),
+            GetModuleHandleW(nullptr),
+            nullptr);
+
+        g_wowIcon =
+            LoadExecutableIcon(
+                g_root / L"WoW.exe");
+        g_vanillaFixesIcon =
+            LoadExecutableIcon(
+                g_root / L"VanillaFixes.exe");
+
+        if (g_wowIcon) {
+            SendMessageW(
+                g_launchWowButton,
+                BM_SETIMAGE,
+                IMAGE_ICON,
+                reinterpret_cast<LPARAM>(
+                    g_wowIcon));
+        }
+
+        if (g_vanillaFixesIcon) {
+            SendMessageW(
+                g_launchVanillaFixesButton,
+                BM_SETIMAGE,
+                IMAGE_ICON,
+                reinterpret_cast<LPARAM>(
+                    g_vanillaFixesIcon));
+        } else {
+            EnableWindow(
+                g_launchVanillaFixesButton,
+                FALSE);
+        }
+
         AddPackageListColumns();
         PopulatePackageList();
         UpdatePackageButtons();
@@ -3318,8 +3513,12 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
 
     case WM_GETMINMAXINFO: {
         auto* info = reinterpret_cast<MINMAXINFO*>(lParam);
-        info->ptMinTrackSize.x = 1100;
-        info->ptMinTrackSize.y = 500;
+        info->ptMinTrackSize.x =
+            g_advancedVisible
+                ? kCompactWindowWidth +
+                    kAdvancedExtraWidth
+                : 560;
+        info->ptMinTrackSize.y = 440;
         return 0;
     }
 
@@ -3360,6 +3559,28 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
     }
 
     case WM_COMMAND:
+        if (LOWORD(wParam) == IDC_ADVANCED &&
+            HIWORD(wParam) == BN_CLICKED) {
+            ToggleAdvanced(hwnd);
+            return 0;
+        }
+
+        if (LOWORD(wParam) == IDC_LAUNCH_WOW &&
+            HIWORD(wParam) == BN_CLICKED) {
+            LaunchSiblingExecutable(
+                hwnd,
+                L"WoW.exe");
+            return 0;
+        }
+
+        if (LOWORD(wParam) == IDC_LAUNCH_VANILLAFIXES &&
+            HIWORD(wParam) == BN_CLICKED) {
+            LaunchSiblingExecutable(
+                hwnd,
+                L"VanillaFixes.exe");
+            return 0;
+        }
+
         if (LOWORD(wParam) == IDC_UPDATE && HIWORD(wParam) == BN_CLICKED) {
             if (!g_release.assetUrl.empty()) {
                 StartUpdate(hwnd);
@@ -4434,6 +4655,14 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
         break;
 
     case WM_DESTROY:
+        if (g_wowIcon) {
+            DestroyIcon(g_wowIcon);
+            g_wowIcon = nullptr;
+        }
+        if (g_vanillaFixesIcon) {
+            DestroyIcon(g_vanillaFixesIcon);
+            g_vanillaFixesIcon = nullptr;
+        }
         if (g_uiFont) {
             DeleteObject(g_uiFont);
             g_uiFont = nullptr;
@@ -4537,8 +4766,8 @@ int RunMainWindow(HINSTANCE instance) {
         WS_OVERLAPPEDWINDOW,
         CW_USEDEFAULT,
         CW_USEDEFAULT,
-        1100,
-        560,
+        kCompactWindowWidth,
+        kDefaultWindowHeight,
         nullptr,
         nullptr,
         instance,
