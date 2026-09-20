@@ -2410,6 +2410,225 @@ void UninstallPackage(
                 : MB_ICONWARNING));
 }
 
+void RemovePackage(
+    HWND hwnd,
+    std::size_t index) {
+    if (index >= g_state.packages.size()) {
+        return;
+    }
+
+    const auto package =
+        g_state.packages[index];
+
+    const bool hasInstalledFiles =
+        package.target == L"addons" &&
+        !package.installedRevision.empty() &&
+        !package.installedFiles.empty();
+
+    if (!hasInstalledFiles) {
+        const std::wstring prompt =
+            L"Remove " +
+            package.name +
+            L" from TocPilot?";
+
+        if (MessageBoxW(
+                hwnd,
+                prompt.c_str(),
+                L"TocPilot - Remove Addon",
+                MB_YESNO |
+                    MB_ICONWARNING |
+                    MB_DEFBUTTON2) != IDYES) {
+            return;
+        }
+
+        tp::AppState updatedState =
+            g_state;
+        std::wstring error;
+
+        if (!tp::RemovePackageRecord(
+                updatedState,
+                package.id,
+                error) ||
+            !tp::SaveState(
+                g_root,
+                updatedState,
+                error)) {
+            MessageBoxW(
+                hwnd,
+                error.c_str(),
+                L"TocPilot - Remove Addon",
+                MB_OK | MB_ICONERROR);
+            return;
+        }
+
+        g_state =
+            std::move(updatedState);
+        g_stateCreated = false;
+        g_stateError.clear();
+        RefreshPackageStateUi();
+        return;
+    }
+
+    std::vector<std::wstring>
+        otherInstalledFiles;
+
+    for (std::size_t i = 0;
+         i < g_state.packages.size();
+         ++i) {
+        if (i == index ||
+            g_state.packages[i].target !=
+                L"addons") {
+            continue;
+        }
+
+        const auto& files =
+            g_state.packages[i].installedFiles;
+
+        otherInstalledFiles.insert(
+            otherInstalledFiles.end(),
+            files.begin(),
+            files.end());
+    }
+
+    tp::AddonInstallPlan plan;
+    std::wstring error;
+
+    if (!tp::BuildAddonRemovalPlan(
+            g_root,
+            package.id,
+            package.installedFiles,
+            otherInstalledFiles,
+            plan,
+            error)) {
+        MessageBoxW(
+            hwnd,
+            error.c_str(),
+            L"TocPilot - Remove Addon",
+            MB_OK | MB_ICONWARNING);
+        return;
+    }
+
+    std::wstring prompt =
+        L"Remove " +
+        package.name +
+        L"?\r\n\r\nTocPilot will remove " +
+        std::to_wstring(
+            plan.obsoleteInstallFolders.size()) +
+        L" owned addon root(s) and delete this addon from TocPilot.";
+
+    if (MessageBoxW(
+            hwnd,
+            prompt.c_str(),
+            L"TocPilot - Remove Addon",
+            MB_YESNO |
+                MB_ICONWARNING |
+                MB_DEFBUTTON2) != IDYES) {
+        return;
+    }
+
+    g_packageInstallInProgress = true;
+    UpdatePackageButtons();
+    SetPackageRowStatus(
+        index,
+        L"Removing...");
+
+    tp::AddonInstallTransaction transaction;
+    if (!tp::BeginAddonInstallTransaction(
+            plan,
+            transaction,
+            error)) {
+        g_packageInstallInProgress = false;
+        SetPackageRowStatus(
+            index,
+            L"Remove failed");
+        UpdatePackageButtons();
+
+        MessageBoxW(
+            hwnd,
+            error.c_str(),
+            L"TocPilot - Remove Failed",
+            MB_OK | MB_ICONERROR);
+        return;
+    }
+
+    tp::AppState updatedState =
+        g_state;
+
+    if (!tp::RemovePackageRecord(
+            updatedState,
+            package.id,
+            error) ||
+        !tp::SaveState(
+            g_root,
+            updatedState,
+            error)) {
+        const std::wstring saveError =
+            error;
+        std::wstring rollbackError;
+
+        const bool rolledBack =
+            tp::RollbackAddonInstallTransaction(
+                transaction,
+                rollbackError);
+
+        g_packageInstallInProgress = false;
+
+        std::wstring message =
+            L"TocPilot could not save the removal: " +
+            saveError;
+
+        if (rolledBack) {
+            message +=
+                L"\r\n\r\nThe addon files were restored.";
+        } else {
+            message +=
+                L"\r\n\r\nFilesystem rollback also failed: " +
+                rollbackError;
+        }
+
+        MessageBoxW(
+            hwnd,
+            message.c_str(),
+            rolledBack
+                ? L"TocPilot - Remove Rolled Back"
+                : L"TocPilot - Rollback Failed",
+            MB_OK |
+                (rolledBack
+                    ? MB_ICONWARNING
+                    : MB_ICONERROR));
+
+        UpdatePackageButtons();
+        return;
+    }
+
+    g_state =
+        std::move(updatedState);
+    g_stateCreated = false;
+    g_stateError.clear();
+
+    std::wstring cleanupError;
+    const bool cleanupOk =
+        tp::FinalizeAddonInstallTransaction(
+            transaction,
+            cleanupError);
+
+    g_packageInstallInProgress = false;
+    RefreshPackageStateUi();
+
+    if (!cleanupOk) {
+        const std::wstring message =
+            package.name +
+            L" was removed, but transaction backup cleanup failed:\r\n\r\n" +
+            cleanupError;
+
+        MessageBoxW(
+            hwnd,
+            message.c_str(),
+            L"TocPilot - Remove Cleanup",
+            MB_OK | MB_ICONWARNING);
+    }
+}
+
 void AdoptGitAddons(HWND hwnd) {
     if (!g_stateReady ||
         g_updateAllInProgress ||
@@ -3753,64 +3972,17 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
 
         if (LOWORD(wParam) == IDC_REMOVE_PACKAGE &&
             HIWORD(wParam) == BN_CLICKED) {
-            const int row = SelectedPackageRow();
+            const int row =
+                SelectedPackageRow();
 
-            if (row < 0 ||
-                row >= static_cast<int>(
+            if (row >= 0 &&
+                row < static_cast<int>(
                     g_state.packages.size())) {
-                return 0;
-            }
-
-            const auto index =
-                static_cast<std::size_t>(row);
-            const auto package =
-                g_state.packages[index];
-
-            std::wstring prompt =
-                L"Forget " +
-                package.name +
-                L" from TocPilot?\r\n\r\n"
-                L"This removes only the TocPilot package record. "
-                L"No files or folders under Interface\\AddOns will be deleted.";
-
-            if (!package.installedFiles.empty()) {
-                prompt +=
-                    L"\r\n\r\nTocPilot will also forget its recorded ownership "
-                    L"of this package's installed files.";
-            }
-
-            if (MessageBoxW(
+                RemovePackage(
                     hwnd,
-                    prompt.c_str(),
-                    L"TocPilot - Forget Package",
-                    MB_YESNO |
-                        MB_ICONWARNING |
-                        MB_DEFBUTTON2) != IDYES) {
-                return 0;
+                    static_cast<std::size_t>(
+                        row));
             }
-
-            tp::AppState updatedState = g_state;
-            std::wstring error;
-            if (!tp::RemovePackageRecord(
-                    updatedState,
-                    package.id,
-                    error) ||
-                !tp::SaveState(
-                    g_root,
-                    updatedState,
-                    error)) {
-                MessageBoxW(
-                    hwnd,
-                    error.c_str(),
-                    L"TocPilot - Forget Package",
-                    MB_OK | MB_ICONERROR);
-                return 0;
-            }
-
-            g_state = std::move(updatedState);
-            g_stateCreated = false;
-            g_stateError.clear();
-            RefreshPackageStateUi();
             return 0;
         }
 
