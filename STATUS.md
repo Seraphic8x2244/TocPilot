@@ -3,11 +3,23 @@
 ## Continuation checkpoint — 2026-09-20 smart-HTTP transport
 
 - Active branch: `p2-github-branches`.
-- Current published version: `v0.1.19`; GitHub transport runtime gate passed.
-- Last fully runtime-tested version before the transport/self-update changes: `v0.1.17`.
-- Current source/release version: `v0.1.19`; tag `v0.1.19` points to release request commit `fd71e9e`.
+- Current published version: `v0.1.20`; smart-HTTP branch-picker runtime gate pending.
+- Current runtime-validated GitHub update path: `v0.1.19` Refresh / Update All passed repeatedly while the prior REST quota was exhausted.
+- Current source/release version: `v0.1.20`; tag `v0.1.20` points to release request commit `38a29ac`.
 - v0.1.18 exposed a bootstrap blocker: v0.1.17 self-update discovery still depended on GitHub REST and could not discover v0.1.18 after the user's quota was exhausted. v0.1.19 fixes this by resolving the normal `github.com/.../releases/latest` redirect, parsing the final `/releases/tag/vX.Y.Z` URL, and constructing direct asset/checksum URLs. One manual direct-asset replacement is still required to cross from an older REST-dependent build while quota is exhausted.
 - Latest commits:
+  - `d63e87f` — Rename GitHub test away from API terminology.
+  - `38a29ac` — Request v0.1.20 smart HTTP branch lookup release.
+  - `54ba294` — Set CMake version to 0.1.20.
+  - `4da3351` — Bump version to v0.1.20.
+  - `35cc339` — Describe smart HTTP branch loading in UI.
+  - `2700565` — Drop obsolete GitHub REST parser tests.
+  - `0b9d40c` — Delete GitHub REST branch transport implementation.
+  - `077db28` — Remove obsolete GitHub REST branch API surface.
+  - `318e856` — Test smart HTTP branch enumeration and default.
+  - `d4f5f0f` — Use smart HTTP for GitHub branch picker.
+  - `d363104` — Enumerate branches and default via smart HTTP.
+  - `9ee2245` — Expose smart HTTP repository ref discovery.
   - `fd71e9e` — Request v0.1.19 API-free self-update release.
   - `3a06113` — Set CMake version to 0.1.19.
   - `4a7d084` — Bump version to v0.1.19.
@@ -30,6 +42,10 @@
   - deterministic malformed/truncated/service-header/missing-branch/protocol-v2 parser coverage;
   - live CI probe added against public GitHub smart HTTP;
   - exact-SHA GitHub archive downloads now target `codeload.github.com/<owner>/<repo>/zip/<sha>` directly, removing the remaining REST zipball hop while preserving existing ZIP validation, staging, ownership, rollback, and transaction code.
+  - GitHub branch enumeration and default-branch discovery now use the same smart-HTTP advertisement: all `refs/heads/*` are parsed and `symref=HEAD:refs/heads/<default>` selects the default branch;
+  - `FetchGitHubRepositoryInfo` / Set Branch now use smart HTTP instead of GitHub repository metadata plus paged REST `/branches` calls;
+  - obsolete GitHub REST branch implementation, API path surface, JSON parser tests, and API headers/endpoints were removed; a runtime-source audit found no `api.github.com`, GitHub JSON API headers, `/repos/`, or `/branches` endpoint references;
+  - all Git repository discovery/branch operations are now smart HTTP. Direct codeload ZIPs and direct release assets remain ordinary HTTPS because they are file-distribution endpoints, not Git protocol operations, and do not depend on GitHub REST quota.
 - Runtime result immediately before this slice: `v0.1.17` self-update succeeded and `pfUI-VendorTweaks` updated successfully, but the startup/update sweep exhausted the user's unauthenticated GitHub REST allowance and produced one rate-limit error. This made the transport replacement urgent.
 - v0.1.19 release validation:
   - release workflow passed source/version validation, Windows x64 Release build, all 13 CTest tests, SHA-256 generation, tag creation, and asset publication;
@@ -47,10 +63,15 @@
   - user repeatedly ran **Update All** with no errors;
   - this was performed after the prior GitHub REST allowance had been exhausted, validating that routine managed-addon branch refresh no longer depends on the GitHub REST branches API;
   - real managed-addon update flow therefore validated smart-HTTP branch-head discovery plus direct GitHub codeload archive transport under normal application use.
+- v0.1.20 release validation:
+  - release workflow run `35523160550` passed source/version validation, Windows x64 Release build, the full CTest suite, checksum generation, tag creation, and asset publication;
+  - deterministic smart-HTTP branch enumeration/default-branch tests passed;
+  - live GitHub smart-HTTP repository lookup passed with branch enumeration and default-branch detection;
+  - tag `v0.1.20` points exactly to `38a29ac69eda4caa0ea07905b6da8168442263c5`;
+  - published `TocPilot.exe` is 832,000 bytes with SHA-256 `775de755b8ce56f17434aec75a3d7ad4588aa3a5dd17d281e7a8c3ad369b8b04`.
 
 - Product priority changed after the v0.1.19 GitHub transport pass: **do not add GitLab/Gitea/OctoWoW provider support yet**. Finish the GitHub-only product to a smooth, properly laid-out state first. Cross-provider transport is deferred until the GitHub UX/layout is considered complete.
 - Deferred after the GitHub runtime gate:
-  - switch branch enumeration/default-branch UI away from REST if quota pressure there becomes material;
   - validate the same provider-neutral ref discovery against GitLab and OctoWoW/Gitea-style hosts;
   - direct non-GitHub archive URL construction;
   - multi-root GAM adoption/selection and the remaining compact-UI work;
@@ -615,13 +636,14 @@ Complete. A real `v0.1.0 -> v0.1.1` in-app self-update succeeded on Windows besi
 - For Git repository containers, inspect only the repository root and **one directory level down** for addon roots; do not recursively hunt arbitrary repository depth.
 - For repositories containing multiple addon roots, present each detected root as an explicit Yes/No choice and persist that selection as package configuration so future Install/Update respects excluded roots. If a later revision adds a new addon root, surface it as a new choice instead of installing it silently.
 - Keep the repository/package as the update unit while allowing selected addon roots within it. This should support GAM layouts such as `_LP -> _LazyPig` and `Atlas.repo -> Atlas + AtlasLoot + AtlasQuest` after exact-SHA/sibling-root mapping is validated.
-- Treat this as a later UI-wrapper/layout pa- New GitHub-only blocker found after the transport runtime pass: branch lookup / branch-picker enumeration still uses GitHub REST (`FetchGitHubRepositoryInfo`), so it remains unusable when the unauthenticated quota is exhausted. Before layout work, move GitHub branch enumeration/default-branch discovery onto the existing smart-HTTP ref advertisement too.
+- Treat complex multi-root adoption as a later UI-wrapper/layout pass after the GitHub-only compact layout is stable.
 ## Exact next step
 
-1. Before layout work, remove the **remaining GitHub REST dependency in branch lookup**. Extend the smart-HTTP advertisement parser to enumerate all `refs/heads/*` and read the advertised `symref=HEAD:refs/heads/<default>` capability.
-2. Change GitHub repository/branch discovery used by Add Package / Set Branch to consume that smart-HTTP result instead of repository metadata + `/branches` REST calls.
-3. Add deterministic parser tests for branch enumeration/default-branch symref plus a live GitHub branch-list probe in CI.
-4. Runtime-test Add Package / Set Branch with the GitHub REST quota still exhausted.
-5. Once all routine GitHub operations—including branch lookup—are quota-free and stable, resume the GitHub-only UI/layout pass: compact **Add / Update / Remove / Advanced**, right-side advanced expansion, launch controls, sorting/status polish.
-6. Keep provider expansion frozen until GitHub UX/layout is complete.
-7. Keep the proven smart-HTTP SHA discovery, codeload transport, staging/security/ownership/rollback/transaction code unchanged except where branch enumeration reuses the same advertisement.
+1. Let the installed `v0.1.19` self-update normally to published `v0.1.20`.
+2. While the GitHub REST quota is still exhausted/low, select an existing GitHub package and open **Set Branch**. Confirm the branch list loads, the correct current/default branch is selected, and saving a branch succeeds.
+3. Also exercise the branch-selection step for a newly added GitHub repository if convenient. No GitHub REST rate-limit error should appear.
+4. If that runtime check passes, treat the GitHub transport layer as complete for the current product: branch head, full branch list, default branch, Refresh, Update All, exact-SHA archive fetch, and TocPilot self-update are all independent of GitHub REST quota.
+5. Then begin the GitHub-only layout pass immediately: compact default window focused on addon name/status with primary **Add / Update / Remove / Advanced** actions.
+6. **Advanced** should expand to the right and expose branch, refresh, inspect/reinstall, ownership/folder diagnostics, detailed columns, text-size/app-update controls, and other lower-frequency actions.
+7. Add/finish **Launch WoW** and **Launch VanillaFixes** controls and reconcile the already-implemented column sorting/status behavior with the compact/advanced layout.
+8. Keep provider expansion frozen until this GitHub-only layout is runtime-validated and feels complete.
