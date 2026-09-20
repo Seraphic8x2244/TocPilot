@@ -1,5 +1,47 @@
 # TocPilot status / handoff
 
+## Release-prep checkpoint — 2026-09-20 v0.1.24 Advanced toolbar + branch-cell UX
+
+- Active branch: `p2-github-branches`.
+- Published baseline: `v0.1.23`.
+- New source version: `v0.1.24`.
+- Latest implementation commits:
+  - `05643cd` — **Bump TocPilot to v0.1.24**.
+  - `ce478e2` — **Bump TocPilot build version to v0.1.24**.
+  - `5649ff4` — **Complete branch selector forward declarations**.
+  - `70fa018` — **Make Advanced branch cells one-click dropdowns**.
+  - `32bf8cf` — **Refine Advanced toolbar and addon labels**.
+  - `9582ebc` — **Checkpoint v0.1.24 branch-cell UX slice**.
+- Completed in source:
+  - **Remove** renamed to **Remove Addon** in compact and Advanced;
+  - **Reinstall** renamed to **Reinstall Addon**; uninstalled selected packages show **Install Addon**;
+  - Advanced list column **Source / Track** renamed to **Branch**;
+  - Branch column values are now branch-centric (`main`, `dev`, etc.) rather than `GitHub / branch`;
+  - compact remains four equal-width controls;
+  - Advanced now uses the same equal-width auto-fill layout strategy across all eight buttons;
+  - Advanced minimum button width is sized for the longest label (**Scan Existing Addons**);
+  - mode-specific window minimum widths are derived from whichever is wider: toolbar requirements or visible columns;
+  - expanding/collapsing Advanced preserves user-added width while applying the larger Advanced minimum;
+  - every GitHub row in Advanced custom-draws a visible combobox/dropdown-arrow affordance in the Branch cell;
+  - clicking an unselected Branch cell selects that addon and requests the branch dropdown in one interaction;
+  - if branch discovery is still running, TocPilot automatically opens the dropdown as soon as smart-HTTP discovery completes rather than requiring a second click;
+  - failed branch discovery clears the deferred-open request and can retry from the selector;
+  - stale deferred-open requests are cleared when selection changes or Advanced collapses.
+- Static audit confirms requested labels/header, equal-width Advanced code, dropdown-arrow drawing, one-click Branch-cell handler, and removal of the old fixed Advanced width constant.
+- Windows CI for the newest commits is currently queued/running at this checkpoint; no v0.1.24 tag has been created yet.
+- Runtime testing still required for visual arrow rendering, one-click auto-open timing, wide Advanced geometry, and branch switching.
+
+## Exact next step
+
+1. Require Windows x64 Release compile + complete CTest pass.
+2. Publish v0.1.24 only through the normal release workflow.
+3. Self-update from v0.1.23 to v0.1.24.
+4. Verify compact **Remove Addon** and Advanced **Reinstall Addon / Remove Addon** labels.
+5. Verify Advanced buttons are all equal width and resize evenly with the window.
+6. Verify **Branch** cells show an arrow on every GitHub addon and one click opens the dropdown (immediately if cached/loaded, automatically when discovery finishes otherwise).
+7. Scroll/sort/resize with a selection and verify the real selector remains aligned over the Branch cell.
+8. Continue subsequent runtime feedback in a fresh chat; this conversation is heavily tool-loaded and the handoff is current.
+
 ## Continuation checkpoint — 2026-09-20 v0.1.24 branch-cell UX refinement
 
 - Active branch: `p2-github-branches`.
