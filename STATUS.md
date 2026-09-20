@@ -1,5 +1,67 @@
 # TocPilot status / handoff
 
+## Continuation checkpoint — 2026-09-20 v0.1.22 UI identity/update-control implementation
+
+- Active branch: `p2-github-branches`.
+- Source version: `v0.1.22`; Windows CI/release has not yet been triggered at this checkpoint.
+- Branch head entering release preparation: `470e975` — Remove legacy main-window updater controls.
+- Latest implementation commits:
+  - `470e975` — Remove legacy main-window updater controls.
+  - `80269ee` — Bump TocPilot to v0.1.22.
+  - `1af361d` — Build v0.1.22 with application icon resources.
+  - `eec3207` — Embed TocPilot application icon.
+  - `dc8fc56` — Define TocPilot application icon resource.
+  - `8a78342` — Add TocPilot application icon asset.
+  - `80876b1` — Fix refresh and update-check sequencing.
+  - `5715f90` — Separate app and addon refresh flows.
+  - `e71b920` — Refine compact controls and app update UI.
+  - `ef5c9e3` — Record revised TocPilot UI direction.
+- Completed in v0.1.22 source:
+  - normal UI is single-instance per TocPilot/WoW directory using a path-derived named mutex; the updater-helper path bypasses the normal guard;
+  - a second launch for the same install restores/foregrounds the existing main window when possible;
+  - removed the old top TocPilot/version placeholder panels; version remains in the title bar;
+  - compact baseline reduced from 620x520 to 590x480 and minimum width is computed from toolbar-vs-visible-column requirements;
+  - compact primary row is now five equal-width controls: **Update All / Add Git / Remove / TocPilot / Advanced**;
+  - Advanced labels/actions now expose **Scan Existing Addons / Refresh All / Reinstall** with the renamed controls;
+  - **Refresh All** uses the existing safe status-sweep path and does not change addon files;
+  - addon base names custom-draw bold while non-main/master branch suffixes such as `(dev)` remain regular weight;
+  - WoW/VanillaFixes launch buttons increased to 40px with more separation; VanillaFixes is hidden entirely when `VanillaFixes.exe` is absent;
+  - new **TocPilot** tool window shows current version, GitHub repository/release links, and an explicit app-update state/action;
+  - TocPilot update states are **Checking...** (disabled), **Up to date** (disabled), **Update Available** (enabled), plus retry states on failure;
+  - the dedicated update action reuses the already runtime-proven download/SHA-256/two-process replacement flow;
+  - manual TocPilot update checks no longer trigger addon refreshes; the existing startup app-check can still sequence into the automatic addon status sweep;
+  - new gnome/courier application icon is embedded as a Windows multi-resolution icon resource (16/32/48/64/128) for EXE/window/taskbar identity.
+- Static audit passed:
+  - CMake/version.h both report v0.1.22;
+  - resource script/header are wired into the TocPilot target;
+  - requested labels are present;
+  - legacy main-window updater control/id and old Adopt Git dialog title are removed;
+  - single-instance, icon-resource and bold-name custom-draw paths are present.
+- Runtime/Windows-CI untested:
+  - MSVC/resource-compiler build of the new icon resource;
+  - single-instance foreground/restore behavior;
+  - self-update helper interaction with the single-instance guard;
+  - real compact sizing and five-button equal-width layout;
+  - bold name + regular branch suffix rendering under selection/focus;
+  - dedicated TocPilot window links and all update button states;
+  - Refresh All manual behavior;
+  - 40px launcher spacing and conditional VanillaFixes visibility;
+  - app icon appearance in Explorer/title bar/taskbar.
+- Deferred:
+  - inline per-row branch dropdowns;
+  - clickable per-row repository link in Advanced;
+  - human-readable Installed/Latest addon versions;
+  - complex multi-root GAM adoption/selection;
+  - GitLab/Gitea/OctoWoW provider expansion.
+
+## Exact next step
+
+1. Trigger the `v0.1.22` release workflow only from this exact source state plus the release-request/status commits.
+2. Require Windows x64 Release build and the complete CTest suite to pass before the tag/assets are created.
+3. Let v0.1.21 self-update to v0.1.22.
+4. Runtime-test: second-launch single-instance behavior, compact/Advanced geometry, all renamed controls, Refresh All, dedicated TocPilot update window/links/states, icon identity, bold addon names/regular branch suffixes, and launcher visibility/spacing.
+5. Refine only from that runtime feedback; keep provider expansion frozen.
+
 ## Continuation checkpoint — 2026-09-20 revised compact controls + app identity
 
 - Active branch: `p2-github-branches`.
