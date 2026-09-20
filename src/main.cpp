@@ -324,126 +324,286 @@ void ResizeListColumns() {
 
     RECT rect{};
     GetClientRect(g_packageList, &rect);
-    const int width = std::max(720, static_cast<int>(rect.right - rect.left - 4));
+    const int width =
+        std::max(
+            320,
+            static_cast<int>(
+                rect.right - rect.left - 4));
 
-    const int nameWidth = 180;
-    const int sourceWidth = 250;
+    if (!g_advancedVisible) {
+        const int statusWidth = 150;
+        const int nameWidth =
+            std::max(
+                170,
+                width - statusWidth);
+
+        ListView_SetColumnWidth(
+            g_packageList,
+            0,
+            nameWidth);
+        ListView_SetColumnWidth(
+            g_packageList,
+            1,
+            0);
+        ListView_SetColumnWidth(
+            g_packageList,
+            2,
+            0);
+        ListView_SetColumnWidth(
+            g_packageList,
+            3,
+            0);
+        ListView_SetColumnWidth(
+            g_packageList,
+            4,
+            statusWidth);
+        return;
+    }
+
+    const int nameWidth = 240;
+    const int sourceWidth = 300;
     const int installedWidth = 115;
     const int latestWidth = 115;
-    const int statusWidth = std::max(
-        120,
-        width - nameWidth - sourceWidth - installedWidth - latestWidth);
+    const int statusWidth =
+        std::max(
+            150,
+            width -
+                nameWidth -
+                sourceWidth -
+                installedWidth -
+                latestWidth);
 
-    ListView_SetColumnWidth(g_packageList, 0, nameWidth);
-    ListView_SetColumnWidth(g_packageList, 1, sourceWidth);
-    ListView_SetColumnWidth(g_packageList, 2, installedWidth);
-    ListView_SetColumnWidth(g_packageList, 3, latestWidth);
-    ListView_SetColumnWidth(g_packageList, 4, statusWidth);
+    ListView_SetColumnWidth(
+        g_packageList,
+        0,
+        nameWidth);
+    ListView_SetColumnWidth(
+        g_packageList,
+        1,
+        sourceWidth);
+    ListView_SetColumnWidth(
+        g_packageList,
+        2,
+        installedWidth);
+    ListView_SetColumnWidth(
+        g_packageList,
+        3,
+        latestWidth);
+    ListView_SetColumnWidth(
+        g_packageList,
+        4,
+        statusWidth);
 }
 
 void LayoutControls(HWND hwnd) {
     RECT client{};
     GetClientRect(hwnd, &client);
 
-    const int width = client.right - client.left;
-    const int height = client.bottom - client.top;
-    const int contentWidth = std::max(720, width - 40);
+    const int width =
+        client.right - client.left;
+    const int height =
+        client.bottom - client.top;
+    const int contentWidth =
+        std::max(
+            320,
+            width - 40);
 
     if (g_rootLabel) {
-        MoveWindow(g_rootLabel, 20, 48, contentWidth, 22, TRUE);
+        ShowWindow(
+            g_rootLabel,
+            SW_HIDE);
     }
-
     if (g_wowStatus) {
-        MoveWindow(g_wowStatus, 20, 80, 205, 24, TRUE);
+        ShowWindow(
+            g_wowStatus,
+            SW_HIDE);
     }
     if (g_githubStatus) {
-        MoveWindow(g_githubStatus, 235, 80, 220, 24, TRUE);
+        ShowWindow(
+            g_githubStatus,
+            SW_HIDE);
     }
     if (g_releaseStatus) {
-        MoveWindow(
+        ShowWindow(
             g_releaseStatus,
-            465,
-            80,
-            std::max(260, width - 485),
+            SW_HIDE);
+    }
+    if (g_stateStatus) {
+        ShowWindow(
+            g_stateStatus,
+            SW_HIDE);
+    }
+    if (g_packageHint) {
+        ShowWindow(
+            g_packageHint,
+            SW_HIDE);
+    }
+    if (g_setBranchButton) {
+        ShowWindow(
+            g_setBranchButton,
+            SW_HIDE);
+    }
+    if (g_inspectPackageButton) {
+        ShowWindow(
+            g_inspectPackageButton,
+            SW_HIDE);
+    }
+    if (g_uninstallPackageButton) {
+        ShowWindow(
+            g_uninstallPackageButton,
+            SW_HIDE);
+    }
+    if (g_updateButton) {
+        ShowWindow(
+            g_updateButton,
+            SW_HIDE);
+    }
+    if (g_textScaleLabel) {
+        ShowWindow(
+            g_textScaleLabel,
+            SW_HIDE);
+    }
+    if (g_textScaleCombo) {
+        ShowWindow(
+            g_textScaleCombo,
+            SW_HIDE);
+    }
+
+    if (g_versionLabel) {
+        MoveWindow(
+            g_versionLabel,
+            std::max(
+                360,
+                width - 190),
+            18,
+            170,
             24,
             TRUE);
     }
 
-    if (g_stateStatus) {
-        MoveWindow(g_stateStatus, 20, 108, contentWidth, 24, TRUE);
-    }
-
+    const int buttonY = 54;
     int x = 20;
-    const int buttonY = 145;
 
     if (g_updateAllButton) {
-        MoveWindow(g_updateAllButton, x, buttonY, 80, 32, TRUE);
+        ShowWindow(
+            g_updateAllButton,
+            SW_SHOW);
+        MoveWindow(
+            g_updateAllButton,
+            x,
+            buttonY,
+            80,
+            32,
+            TRUE);
         x += 85;
     }
-    if (g_refreshPackagesButton) {
-        MoveWindow(g_refreshPackagesButton, x, buttonY, 65, 32, TRUE);
-        x += 70;
-    }
-    if (g_setBranchButton) {
-        MoveWindow(g_setBranchButton, x, buttonY, 80, 32, TRUE);
-        x += 85;
-    }
-    if (g_inspectPackageButton) {
-        MoveWindow(g_inspectPackageButton, x, buttonY, 65, 32, TRUE);
-        x += 70;
-    }
-    if (g_installPackageButton) {
-        MoveWindow(g_installPackageButton, x, buttonY, 75, 32, TRUE);
-        x += 80;
-    }
-    if (g_uninstallPackageButton) {
-        MoveWindow(g_uninstallPackageButton, x, buttonY, 75, 32, TRUE);
-        x += 80;
-    }
-    if (g_addPackageButton) {
-        MoveWindow(g_addPackageButton, x, buttonY, 80, 32, TRUE);
-        x += 85;
-    }
-    if (g_removePackageButton) {
-        MoveWindow(g_removePackageButton, x, buttonY, 55, 32, TRUE);
-        x += 60;
-    }
+
     if (g_adoptGitButton) {
-        MoveWindow(g_adoptGitButton, x, buttonY, 75, 32, TRUE);
+        ShowWindow(
+            g_adoptGitButton,
+            g_advancedVisible
+                ? SW_SHOW
+                : SW_HIDE);
+
+        if (g_advancedVisible) {
+            MoveWindow(
+                g_adoptGitButton,
+                x,
+                buttonY,
+                112,
+                32,
+                TRUE);
+            x += 117;
+        }
+    }
+
+    if (g_addPackageButton) {
+        ShowWindow(
+            g_addPackageButton,
+            SW_SHOW);
+        MoveWindow(
+            g_addPackageButton,
+            x,
+            buttonY,
+            65,
+            32,
+            TRUE);
+        x += 70;
+    }
+
+    if (g_refreshPackagesButton) {
+        ShowWindow(
+            g_refreshPackagesButton,
+            g_advancedVisible
+                ? SW_SHOW
+                : SW_HIDE);
+
+        if (g_advancedVisible) {
+            MoveWindow(
+                g_refreshPackagesButton,
+                x,
+                buttonY,
+                75,
+                32,
+                TRUE);
+            x += 80;
+        }
+    }
+
+    if (g_installPackageButton) {
+        ShowWindow(
+            g_installPackageButton,
+            g_advancedVisible
+                ? SW_SHOW
+                : SW_HIDE);
+
+        if (g_advancedVisible) {
+            MoveWindow(
+                g_installPackageButton,
+                x,
+                buttonY,
+                85,
+                32,
+                TRUE);
+            x += 90;
+        }
+    }
+
+    if (g_removePackageButton) {
+        ShowWindow(
+            g_removePackageButton,
+            SW_SHOW);
+        MoveWindow(
+            g_removePackageButton,
+            x,
+            buttonY,
+            75,
+            32,
+            TRUE);
         x += 80;
     }
-    if (g_updateButton) {
-        MoveWindow(g_updateButton, x, buttonY, 100, 32, TRUE);
-    }
 
-    if (g_textScaleLabel) {
+    if (g_advancedButton) {
+        ShowWindow(
+            g_advancedButton,
+            SW_SHOW);
         MoveWindow(
-            g_textScaleLabel,
-            std::max(620, width - 205),
-            151,
-            70,
-            22,
-            TRUE);
-    }
-    if (g_textScaleCombo) {
-        MoveWindow(
-            g_textScaleCombo,
-            std::max(690, width - 130),
-            145,
-            110,
-            180,
+            g_advancedButton,
+            x,
+            buttonY,
+            100,
+            32,
             TRUE);
     }
 
-    if (g_packageHint) {
-        MoveWindow(g_packageHint, 20, 188, contentWidth, 22, TRUE);
-    }
-
-    const int listTop = 215;
-    const int listBottomPadding = 24;
-    const int listHeight = std::max(
-        190,
-        height - listTop - listBottomPadding);
+    const int listTop = 100;
+    const int listBottomPadding = 70;
+    const int listHeight =
+        std::max(
+            220,
+            height -
+                listTop -
+                listBottomPadding);
 
     if (g_packageList) {
         MoveWindow(
@@ -454,6 +614,36 @@ void LayoutControls(HWND hwnd) {
             listHeight,
             TRUE);
         ResizeListColumns();
+    }
+
+    const int iconY =
+        std::max(
+            listTop + listHeight + 8,
+            height - 54);
+
+    int iconX =
+        width - 52;
+
+    if (g_launchVanillaFixesButton) {
+        MoveWindow(
+            g_launchVanillaFixesButton,
+            iconX,
+            iconY,
+            32,
+            32,
+            TRUE);
+    }
+
+    iconX -= 38;
+
+    if (g_launchWowButton) {
+        MoveWindow(
+            g_launchWowButton,
+            iconX,
+            iconY,
+            32,
+            32,
+            TRUE);
     }
 }
 
