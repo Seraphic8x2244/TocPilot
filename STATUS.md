@@ -4,7 +4,7 @@
 
 - Active branch: `p2-github-branches`.
 - Current runtime-tested application version includes the `v0.1.13` adoption slice. The user successfully adopted existing Git-managed addons, then ran Update All across 21 installed packages: Queued 21 / Processed 21 / Updated 1 / Already current 20 / Failed 0. This validates adoption feeding the normal refresh/update transaction path. Restart persistence and continued GitAddonsManager visibility of retained `.git` metadata remain the final adoption runtime checks.
-- v0.1.15 is now tagged from release-request commit `2d9d963`. The tag resolves to the 0.1.15 source, which confirms the automated release passed source/version validation, Windows x64 Release build, and the complete CTest suite before reaching tag creation. The runtime slice adds automatic installed-GitHub-package status refresh at startup, stable click-to-sort package columns with sort indicators, and read-only `Interface\\AddOns` folder classification / one-level Git-container diagnostics. Runtime validation is still pending.
+- v0.1.15 runtime exposed one root-addon update mapping bug in `pfUI-VendorTweaks`. The fix is implemented and versioned as v0.1.16; release trigger commit `b6ae493` updates `.github/release-version` to `v0.1.16`. At the time of this handoff update the v0.1.16 tag has not appeared yet, so Windows build/CTest/release status is still pending.
 - Post-v0.1.13 adoption follow-up commits:
   - `5e9d4c8` — Fix expandable dialog labels.
   - `a2a47a4` — Harden task dialog manifest declaration.
@@ -58,11 +58,19 @@
 - License: MIT
 - Intended platform: Windows x64
 - Implementation: native C++20 / Win32 / CMake
-- Highest priority: runtime-test v0.1.15 once the release asset/self-update is visible
+- Highest priority: wait for the v0.1.16 release gate, then rerun Update All and confirm `pfUI-VendorTweaks` updates in place with 0 failures
 - Current adoption runtime result: 21 managed packages completed Update All with 1 updated / 20 current / 0 failed after existing Git installs were adopted.
 
 ## Latest commits
 
+- `b6ae493` — Request v0.1.16 root mapping fix release
+- `d8ddde8` — Set v0.1.16 application version
+- `6986cc2` — Bump TocPilot to v0.1.16
+- `676c77e` — Preserve adopted addon root during archive mapping
+- `93ee693` — Test owned root preservation for VendorTweaks
+- `7ef0a5c` — Preserve owned root for root-level addon updates
+- `6deec8c` — Allow root-addon mapping to preserve owned root
+- `684e06c` — Record v0.1.15 Update All layout failure
 - `2d9d963` — Request v0.1.15 status and diagnostics release
 - `f14f97e` — Set v0.1.15 application version
 - `f6819a1` — Bump TocPilot to v0.1.15
@@ -545,8 +553,8 @@ Complete. A real `v0.1.0 -> v0.1.1` in-app self-update succeeded on Windows besi
 
 ## Exact next step
 
-1. Fix GitHub root-addon mapping so an **already installed/adopted package with exactly one owned addon root** may preserve that existing root when the repository-root TOC stem no longer matches the repository name. Do not loosen the fresh-install ambiguity guard.
-2. Add deterministic archive coverage for `repository=pfUI-VendorTweaks`, root TOC `pfUI_VendorTweaks.toc`, existing owned root `pfUI-VendorTweaks`; it must map back to the owned root. The same archive without an existing-root hint must remain refused.
-3. Windows-CI the exact fix head, then publish the next runtime build (expected `v0.1.16`).
-4. Runtime rerun Update All; `pfUI-VendorTweaks` should update in place and the batch should complete with 0 failures.
-5. Then finish v0.1.15/v0.1.16 UI checks: column sorting/action targeting and **Adopt Git → Show details** folder diagnostics. Multi-root GAM adoption remains deferred.
+1. Check the automated release triggered by `b6ae493`. Do not treat v0.1.16 as published until its tag appears, which occurs only after source/version validation, Windows x64 Release build, and the complete CTest suite pass.
+2. If the release gate fails, fix the exact MSVC/CTest issue before retrying.
+3. Once v0.1.16 is available, self-update and rerun Update All; `pfUI-VendorTweaks` must preserve the existing owned `pfUI-VendorTweaks` folder despite the normalized `pfUI_VendorTweaks.toc` stem, and the batch should finish with 0 failures.
+4. Finish column sorting/action-target validation and **Adopt Git → Show details** folder diagnostics.
+5. Multi-root GAM adoption/Yes-No per root remains the next planned feature slice.
