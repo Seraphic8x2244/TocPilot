@@ -1460,6 +1460,13 @@ std::size_t FindPackageIndexById(
     return g_state.packages.size();
 }
 
+bool IsGitHubRateLimitError(
+    std::wstring_view error) {
+    return
+        error.find(L"rate-limited") !=
+        std::wstring_view::npos;
+}
+
 bool IsAutoStatusCurrentPackage(
     std::wstring_view packageId) {
     return
@@ -3447,12 +3454,29 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                 CompleteUpdateAllStep(
                     hwnd,
                     tp::UpdateAllOutcome::Failed,
-                    message);
+                    message,
+                    IsGitHubRateLimitError(
+                        result->error));
             } else if (autoStatusStep) {
-                CompleteAutoStatusRefreshStep(
-                    hwnd,
-                    false,
-                    false);
+                if (IsGitHubRateLimitError(
+                        result->error)) {
+                    ++g_autoStatusFailed;
+                    g_autoStatusPosition =
+                        g_autoStatusPackageIds.size();
+
+                    if (g_packageHint) {
+                        SetWindowTextW(
+                            g_packageHint,
+                            L"Automatic addon status check stopped because GitHub is rate-limiting requests. Existing saved status was left unchanged for the remaining packages.");
+                    }
+
+                    FinishAutoStatusRefresh(hwnd);
+                } else {
+                    CompleteAutoStatusRefreshStep(
+                        hwnd,
+                        false,
+                        false);
+                }
             } else {
                 SelectPackageRow(index);
                 UpdatePackageButtons();
