@@ -3,7 +3,7 @@
 ## Continuation checkpoint — 2026-09-19
 
 - Active branch: `p2-github-branches`.
-- Current published/runtime-tested application version: `v0.1.12`. Source is now versioned as `v0.1.13` for conservative GitAddonsManager/Git-clone adoption; release trigger commit `57d9f3d` updates `.github/release-version` to `v0.1.13`. No v0.1.13 Actions run is visible through the GitHub connector yet, so build/CTest/release status remains unverified.
+- Current runtime-tested application version includes the `v0.1.13` adoption slice. The user successfully adopted existing Git-managed addons, then ran Update All across 21 installed packages: Queued 21 / Processed 21 / Updated 1 / Already current 20 / Failed 0. This validates adoption feeding the normal refresh/update transaction path. Restart persistence and continued GitAddonsManager visibility of retained `.git` metadata remain the final adoption runtime checks.
 - Latest branch commit: `57d9f3d` — Request v0.1.13 adoption release. Latest adoption implementation/test commit: `dad2495` — Cover damaged Git adoption metadata.
 - New GitAddonsManager-adoption implementation/release commits:
   - `57d9f3d` — Request v0.1.13 adoption release.
@@ -42,12 +42,12 @@
 
 - Repository: `Seraphic8x2244/TocPilot`
 - Branch: `p2-github-branches`
-- Product stage: P0/P1 validated; P2 GitHub branch install/update/uninstall and Update All runtime-validated through v0.1.12; conservative GitAddonsManager/Git-clone adoption is implemented in source and awaiting Windows CI/runtime validation
+- Product stage: P0/P1 validated; P2 GitHub branch install/update/uninstall and Update All runtime-validated; conservative Git adoption is runtime-validated through adoption plus a 21-package Update All pass, with restart persistence / retained-Git compatibility still to confirm
 - License: MIT
 - Intended platform: Windows x64
 - Implementation: native C++20 / Win32 / CMake
-- Highest priority: confirm the v0.1.13 release workflow appears and passes Windows x64 build + full CTest; only then runtime-test Adopt Git
-- Current published/runtime-tested application version: `v0.1.12`; source/release request version: `v0.1.13` pending Windows workflow validation.
+- Highest priority: fix two adoption follow-ups before the next release: adopt an existing same-repository TocPilot record when it is still Not installed, and replace oversized adoption MessageBoxes with a native expandable-details dialog
+- Current adoption runtime result: 21 managed packages completed Update All with 1 updated / 20 current / 0 failed after existing Git installs were adopted.
 
 ## Latest commits
 
@@ -171,6 +171,14 @@
 - Core install transaction CI run `35460118275` passed; prepare-only safety run `35460454903` passed; exact implementation run `35460533602` passed Release build, full CTest, and artifact upload.
 
 ## CI validation
+
+v0.1.13 adoption/update integration runtime validation passed: after adopting existing Git-managed addon folders (including pfUI after forgetting its prior source-only record), Update All reported Queued 21 / Processed 21 / Updated 1 / Already current 20 / Failed 0. This confirms adopted installed revisions/file ownership are accepted by Update All and a changed adopted branch can flow through the normal transactional update path. Remaining adoption checks are restart persistence and confirming GitAddonsManager can still use the untouched local `.git` metadata.
+
+Runtime UX findings from the same adoption test:
+- the first adoption scan found 18 safe candidates and 3 genuine refusals;
+- rescanning after adoption mixed already-managed packages into the refusal list, obscuring the genuine refusal reasons;
+- commit `750af29` separates already-managed packages from true refusals, but the long MessageBox UX should be replaced by an expandable details dialog;
+- an existing same-repository TocPilot row that is still Not installed (observed with `brues-code/pfUI`) is currently treated as a duplicate/refusal; desired behavior is to upgrade that record in place during adoption instead of requiring Forget + rescan.
 
 v0.1.12 Update All runtime validation passed. The earlier current/current run reported Queued 2 / Processed 2 / Updated 0 / Current 2 / Failed 0, confirming multi-package enumeration, sequential processing, current-package skip behavior, and summary accounting. The user subsequently confirmed the changed-branch Update All path was also tested successfully, clearing the remaining runtime gate.
 
@@ -353,7 +361,7 @@ Tracked-branch Refresh test release `v0.1.6` was published automatically. Releas
 
 ## Untested / remaining validation
 
-- New adoption slice is not yet Windows-CI or runtime validated. Source/release version is v0.1.13 and `.github/release-version` has been advanced, but no corresponding Actions run is currently visible through the connector. Required runtime checks after a green release: valid GitHub simple-root clone is detected; candidate preview is correct; confirming adoption changes only `TocPilot.json`; live addon files and `.git` remain unchanged; restart shows Current with installed/latest SHA preserved; subsequent Refresh and Update All work from the adopted state; already-managed roots/repositories and complex GitAddonsManager layouts are refused safely.
+- Adoption detection and the adoption -> Update All integration path are runtime-validated. Still unverified: restart persistence after adoption, explicit confirmation that live addon files / `.git` were untouched, and GitAddonsManager continuing to recognize/update retained repositories.
 - The adoption pass intentionally does not claim GitLab repositories, detached HEADs, linked worktrees/submodules, or repositories without a root-level `.toc`. GitAddonsManager has no unique ownership marker, so the UI explicitly warns that an eligible normal Git clone is indistinguishable from a GitAddonsManager-created clone.
 
 - `v0.1.10` successful-path runtime validation passed with `Shellyoung/AdvancedTradeSkillWindow2` on its default `main` branch: first install succeeded, TocPilot still showed the package as Current after restart, and Reinstall completed successfully. This validates the normal transactional install/reinstall path and persisted ownership/state at runtime.
@@ -471,8 +479,8 @@ Complete. A real `v0.1.0 -> v0.1.1` in-app self-update succeeded on Windows besi
 
 ## Exact next step
 
-1. Check the automated workflows for release-trigger commit `57d9f3d`. The v0.1.13 release must not be treated as available until Windows x64 build and the complete CTest suite, including `git-addon-adoption`, pass.
-2. If CI fails, fix the exact MSVC/CTest issue and re-request v0.1.13 only from a green source head.
-3. Once v0.1.13 is published, self-update from v0.1.12 and runtime-test **Adopt Git** against real existing GitAddonsManager installs: preview candidates/refusals, adopt at least one simple GitHub root-addon clone, verify no live addon or `.git` file changed, restart, Refresh, and Update All.
-4. Confirm unsafe candidates are refused: damaged upstream metadata, already-managed repository/root, detached HEAD, GitLab, worktree/submodule `.git` file, and complex/no-root-`.toc` layouts.
-5. After that runtime gate passes, decide whether to extend adoption to GitAddonsManager's complex/unpacked multi-root layout; do not guess ownership for those roots in the current slice.
+1. Change adoption planning so a matching TocPilot repository record with no installed revision/file ownership is upgraded in place instead of refused as a duplicate. Preserve the existing package record/source JSON and fill branch, current revision, and installed-file ownership from the local Git clone.
+2. Keep already-installed matching repositories as already managed, and keep different-repository addon-root ownership conflicts as hard refusals. Add deterministic tests for all three cases.
+3. Introduce a minimal native dialog wrapper using expandable details for adoption summaries/refusals, so the main text stays compact while exact per-folder reasons remain visible/copyable.
+4. Version the fixes as the next runtime-test release after Windows x64 build/full CTest passes.
+5. Runtime-confirm restart persistence and that retained `.git` metadata remains usable by GitAddonsManager.
