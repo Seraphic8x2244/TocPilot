@@ -486,7 +486,7 @@ bool CollectInstalledFiles(
 
     std::filesystem::recursive_directory_iterator it(
         addonRoot,
-        std::filesystem::directory_options::skip_permission_denied,
+        std::filesystem::directory_options::none,
         ec);
 
     const std::filesystem::recursive_directory_iterator end;
