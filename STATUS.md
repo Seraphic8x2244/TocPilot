@@ -3,7 +3,7 @@
 ## Continuation checkpoint — 2026-09-20 smart-HTTP transport
 
 - Active branch: `p2-github-branches`.
-- Current published version: `v0.1.19`; runtime gate pending.
+- Current published version: `v0.1.19`; GitHub transport runtime gate passed.
 - Last fully runtime-tested version before the transport/self-update changes: `v0.1.17`.
 - Current source/release version: `v0.1.19`; tag `v0.1.19` points to release request commit `fd71e9e`.
 - v0.1.18 exposed a bootstrap blocker: v0.1.17 self-update discovery still depended on GitHub REST and could not discover v0.1.18 after the user's quota was exhausted. v0.1.19 fixes this by resolving the normal `github.com/.../releases/latest` redirect, parsing the final `/releases/tag/vX.Y.Z` URL, and constructing direct asset/checksum URLs. One manual direct-asset replacement is still required to cross from an older REST-dependent build while quota is exhausted.
@@ -42,11 +42,12 @@
   - the live GitHub smart-HTTP WinHTTP probe passed in CI;
   - tag `v0.1.18` points exactly to commit `71d49edf1fa016b3b3e3fb9ce0d86ea1c03e90cb`;
   - published `TocPilot.exe` is 834,048 bytes with SHA-256 `523786dbaab66879f96714a6568da189c66decd5f8e76fe4e0ac9189864292e6`.
-- Untested/current runtime gate:
-  - self-update from the user's installed `v0.1.17` to `v0.1.18`;
-  - automatic startup package sweep using smart HTTP for tracked GitHub branch heads;
-  - immediate Update All while the user's GitHub REST allowance is exhausted/low;
-  - at least one changed package downloading by exact SHA through direct `codeload.github.com` and completing the existing staging/security/transaction path.
+- Runtime validation passed for v0.1.19:
+  - user repeatedly spammed **Refresh** with no errors;
+  - user repeatedly ran **Update All** with no errors;
+  - this was performed after the prior GitHub REST allowance had been exhausted, validating that routine managed-addon branch refresh no longer depends on the GitHub REST branches API;
+  - real managed-addon update flow therefore validated smart-HTTP branch-head discovery plus direct GitHub codeload archive transport under normal application use.
+
 - Deferred after the GitHub runtime gate:
   - switch branch enumeration/default-branch UI away from REST if quota pressure there becomes material;
   - validate the same provider-neutral ref discovery against GitLab and OctoWoW/Gitea-style hosts;
@@ -628,11 +629,10 @@ Complete. A real `v0.1.0 -> v0.1.1` in-app self-update succeeded on Windows besi
 
 ## Exact next step
 
-1. Bootstrap once by manually downloading published `v0.1.19` directly from `https://github.com/Seraphic8x2244/TocPilot/releases/download/v0.1.19/TocPilot.exe`, closing TocPilot, and replacing the old executable. Older REST-dependent builds cannot discover this release while the user's GitHub API quota is exhausted.
-2. Launch `v0.1.19` and confirm it starts normally.
-3. Let the automatic managed-addon sweep finish, then immediately run **Update All** while the GitHub REST quota is still exhausted/low.
-4. Confirm the managed-addon sweep no longer reports REST rate-limit failures; branch heads should resolve through Git smart HTTP.
-5. If any addon is changed, confirm it downloads and installs through direct exact-SHA `codeload.github.com` while the existing staging, ZIP validation, ownership, rollback, and transaction path remains intact.
-6. The next TocPilot release after v0.1.19 should be discoverable/updatable in-app without GitHub REST quota because self-update now uses the normal latest-release redirect plus direct assets.
-7. After the GitHub runtime gate passes, validate provider-neutral smart HTTP against public GitLab and OctoWoW/Gitea-style repositories.
-8. Do not add libgit2, bundled Git, required `git.exe`, or public-repository credentials.
+1. Treat the GitHub transport/runtime gate as passed on `v0.1.19`.
+2. Validate the existing provider-neutral smart-HTTP ref resolver against one public GitLab repository and one OctoWoW/Gitea-style public repository using live CI probes.
+3. Record any concrete host/path/protocol differences. Add host-specific URL construction only where those live tests prove it is necessary.
+4. After ref discovery works on each host, add direct exact-SHA archive URL construction for that host while preserving the existing staging, ZIP validation, ownership, rollback, and transactional install pipeline.
+5. Keep GitHub branch enumeration/default-branch UI on REST for now; it is low-frequency and no longer blocks routine development.
+6. After cross-host transport is stable, return to deferred multi-root GAM adoption / per-root Yes-No selection and remaining compact-UI work.
+7. Do not add libgit2, bundled Git, required `git.exe`, or public-repository credentials.
