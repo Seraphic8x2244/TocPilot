@@ -74,13 +74,19 @@ constexpr int IDC_TOCPILOT_RELEASES = 1023;
 constexpr int IDC_BRANCH_SELECTOR = 1024;
 
 constexpr int kCompactWindowWidth = 590;
-constexpr int kAdvancedExtraWidth = 520;
 constexpr int kDefaultWindowHeight = 480;
 constexpr int kCompactButtonMinWidth = 100;
-constexpr int kCompactButtonGap = 6;
+constexpr int kAdvancedButtonMinWidth = 150;
+constexpr int kToolbarButtonGap = 6;
 constexpr int kCompactPrimaryButtonCount = 4;
+constexpr int kAdvancedButtonCount = 8;
 constexpr int kCompactNameColumnMinWidth = 220;
 constexpr int kCompactStatusColumnMinWidth = 150;
+constexpr int kAdvancedNameColumnMinWidth = 240;
+constexpr int kAdvancedBranchColumnMinWidth = 300;
+constexpr int kAdvancedInstalledColumnMinWidth = 115;
+constexpr int kAdvancedLatestColumnMinWidth = 115;
+constexpr int kAdvancedStatusColumnMinWidth = 150;
 
 constexpr std::array<double, 5> kTextScales{
     0.90,
@@ -148,6 +154,7 @@ bool g_branchSelectorUpdating = false;
 bool g_branchSelectorLoadInProgress = false;
 bool g_branchSelectorLoaded = false;
 bool g_branchSelectorLoadFailed = false;
+bool g_branchSelectorOpenWhenReady = false;
 std::uint64_t g_branchSelectorGeneration = 0;
 std::wstring g_branchSelectorPackageId;
 std::wstring g_branchSelectorDefaultBranch;
@@ -393,6 +400,67 @@ void SetTextScaleSelection() {
     ComboBox_SetCurSel(g_textScaleCombo, bestIndex);
 }
 
+int RequiredClientWidth(
+    bool advanced) {
+    const int buttonCount =
+        advanced
+            ? kAdvancedButtonCount
+            : kCompactPrimaryButtonCount;
+    const int buttonMinWidth =
+        advanced
+            ? kAdvancedButtonMinWidth
+            : kCompactButtonMinWidth;
+
+    const int toolbarWidth =
+        buttonCount *
+            buttonMinWidth +
+        (buttonCount - 1) *
+            kToolbarButtonGap;
+
+    const int columnsWidth =
+        advanced
+            ? kAdvancedNameColumnMinWidth +
+                kAdvancedBranchColumnMinWidth +
+                kAdvancedInstalledColumnMinWidth +
+                kAdvancedLatestColumnMinWidth +
+                kAdvancedStatusColumnMinWidth
+            : kCompactNameColumnMinWidth +
+                kCompactStatusColumnMinWidth;
+
+    return
+        40 +
+        std::max(
+            toolbarWidth,
+            columnsWidth);
+}
+
+int WindowWidthForClient(
+    HWND hwnd,
+    int clientWidth) {
+    RECT rect{
+        0,
+        0,
+        clientWidth,
+        400};
+
+    AdjustWindowRectEx(
+        &rect,
+        static_cast<DWORD>(
+            GetWindowLongPtrW(
+                hwnd,
+                GWL_STYLE)),
+        FALSE,
+        static_cast<DWORD>(
+            GetWindowLongPtrW(
+                hwnd,
+                GWL_EXSTYLE)));
+
+    return
+        static_cast<int>(
+            rect.right -
+            rect.left);
+}
+
 void PositionBranchSelector();
 
 void ResizeListColumns() {
@@ -439,7 +507,7 @@ void ResizeListColumns() {
     }
 
     const int nameWidth = 240;
-    const int sourceWidth = 300;
+    const int branchWidth = 300;
     const int installedWidth = 115;
     const int latestWidth = 115;
     const int statusWidth =
@@ -447,7 +515,7 @@ void ResizeListColumns() {
             150,
             width -
                 nameWidth -
-                sourceWidth -
+                branchWidth -
                 installedWidth -
                 latestWidth);
 
@@ -458,7 +526,7 @@ void ResizeListColumns() {
     ListView_SetColumnWidth(
         g_packageList,
         1,
-        sourceWidth);
+        branchWidth);
     ListView_SetColumnWidth(
         g_packageList,
         2,
@@ -534,7 +602,7 @@ void LayoutControls(HWND hwnd) {
 
         const int availableForButtons =
             contentWidth -
-            kCompactButtonGap *
+            kToolbarButtonGap *
                 (kCompactPrimaryButtonCount - 1);
         const int buttonWidth =
             std::max(
@@ -558,7 +626,7 @@ void LayoutControls(HWND hwnd) {
                     TRUE);
                 x +=
                     buttonWidth +
-                    kCompactButtonGap;
+                    kToolbarButtonGap;
             };
 
         placePrimary(g_updateAllButton);
@@ -566,13 +634,26 @@ void LayoutControls(HWND hwnd) {
         placePrimary(g_removePackageButton);
         placePrimary(g_advancedButton);
     } else {
+        const int availableForButtons =
+            contentWidth -
+            kToolbarButtonGap *
+                (kAdvancedButtonCount - 1);
+        const int buttonWidth =
+            std::max(
+                kAdvancedButtonMinWidth,
+                availableForButtons /
+                    kAdvancedButtonCount);
+
         int x = 20;
         const auto placeAdvanced =
-            [&](HWND control, int buttonWidth) {
+            [&](HWND control) {
                 if (!control) {
                     return;
                 }
-                ShowWindow(control, SW_SHOW);
+
+                ShowWindow(
+                    control,
+                    SW_SHOW);
                 MoveWindow(
                     control,
                     x,
@@ -582,17 +663,17 @@ void LayoutControls(HWND hwnd) {
                     TRUE);
                 x +=
                     buttonWidth +
-                    kCompactButtonGap;
+                    kToolbarButtonGap;
             };
 
-        placeAdvanced(g_updateAllButton, 92);
-        placeAdvanced(g_addPackageButton, 78);
-        placeAdvanced(g_refreshPackagesButton, 96);
-        placeAdvanced(g_installPackageButton, 88);
-        placeAdvanced(g_removePackageButton, 78);
-        placeAdvanced(g_adoptGitButton, 150);
-        placeAdvanced(g_tocPilotButton, 88);
-        placeAdvanced(g_advancedButton, 102);
+        placeAdvanced(g_updateAllButton);
+        placeAdvanced(g_addPackageButton);
+        placeAdvanced(g_refreshPackagesButton);
+        placeAdvanced(g_installPackageButton);
+        placeAdvanced(g_removePackageButton);
+        placeAdvanced(g_adoptGitButton);
+        placeAdvanced(g_tocPilotButton);
+        placeAdvanced(g_advancedButton);
     }
 
     const int listTop = 62;
@@ -668,7 +749,7 @@ void AddPackageListColumns() {
 
     constexpr std::array<ColumnSpec, 5> columns{{
         {L"Name", 180},
-        {L"Source / Track", 250},
+        {L"Branch", 250},
         {L"Installed", 115},
         {L"Latest", 115},
         {L"Status", 140}
@@ -706,11 +787,16 @@ bool PackageBranchMode(
 
 std::wstring PackageSourceText(
     const tp::PackageRecord& package) {
-    return
-        ProviderLabel(package.provider) +
-        (PackageBranchMode(package)
-            ? L" / " + package.ref
-            : L" / source only");
+    if (PackageBranchMode(package)) {
+        return package.ref;
+    }
+
+    if (package.provider ==
+        L"github") {
+        return L"Choose branch";
+    }
+
+    return L"—";
 }
 
 std::wstring PackageRevisionText(
@@ -1387,12 +1473,10 @@ void PopulateBranchSelectorCurrent(
         0,
         0);
 
-    std::wstring label =
-        ProviderLabel(package.provider) +
-        L" / " +
-        (package.ref.empty()
+    const std::wstring label =
+        package.ref.empty()
             ? L"Choose branch"
-            : package.ref);
+            : package.ref;
 
     const LRESULT item =
         SendMessageW(
@@ -1441,8 +1525,6 @@ void PopulateBranchSelectorLoaded(
             g_branchSelectorBranches[i];
 
         const std::wstring label =
-            ProviderLabel(package.provider) +
-            L" / " +
             branch.name;
 
         const LRESULT item =
@@ -1473,8 +1555,6 @@ void PopulateBranchSelectorLoaded(
     if (selected < 0 &&
         !package.ref.empty()) {
         const std::wstring missing =
-            ProviderLabel(package.provider) +
-            L" / " +
             package.ref +
             L" (not found)";
 
@@ -2074,10 +2154,12 @@ void UpdatePackageButtons() {
     }
 
     if (g_installPackageButton) {
-        const wchar_t* label = L"Install";
+        const wchar_t* label =
+            L"Install Addon";
         if (selectedPackage &&
             !selectedPackage->installedRevision.empty()) {
-            label = L"Reinstall";
+            label =
+                L"Reinstall Addon";
         }
 
         SetWindowTextW(
@@ -4479,13 +4561,35 @@ void ToggleAdvanced(HWND hwnd) {
         rect.right - rect.left;
     const int currentHeight =
         rect.bottom - rect.top;
-    const int newWidth =
+
+    const int compactMinimum =
         std::max(
             kCompactWindowWidth,
-            currentWidth +
-                (g_advancedVisible
-                    ? kAdvancedExtraWidth
-                    : -kAdvancedExtraWidth));
+            WindowWidthForClient(
+                hwnd,
+                RequiredClientWidth(
+                    false)));
+    const int advancedMinimum =
+        std::max(
+            compactMinimum,
+            WindowWidthForClient(
+                hwnd,
+                RequiredClientWidth(
+                    true)));
+    const int widthDelta =
+        advancedMinimum -
+        compactMinimum;
+
+    const int newWidth =
+        g_advancedVisible
+            ? std::max(
+                advancedMinimum,
+                currentWidth +
+                    widthDelta)
+            : std::max(
+                compactMinimum,
+                currentWidth -
+                    widthDelta);
 
     SetWindowPos(
         hwnd,
@@ -4622,7 +4726,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
         g_installPackageButton = CreateWindowExW(
             0,
             L"BUTTON",
-            L"Reinstall",
+            L"Reinstall Addon",
             WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON,
             405,
             145,
@@ -4664,7 +4768,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
         g_removePackageButton = CreateWindowExW(
             0,
             L"BUTTON",
-            L"Remove",
+            L"Remove Addon",
             WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON,
             680,
             145,
@@ -4943,27 +5047,11 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             reinterpret_cast<MINMAXINFO*>(
                 lParam);
 
-        const int toolbarWidth =
-            kCompactPrimaryButtonCount *
-                kCompactButtonMinWidth +
-            (kCompactPrimaryButtonCount - 1) *
-                kCompactButtonGap;
-        const int columnsWidth =
-            kCompactNameColumnMinWidth +
-            kCompactStatusColumnMinWidth;
-        const int compactClientWidth =
-            40 +
-            std::max(
-                toolbarWidth,
-                columnsWidth);
-
         RECT minimum{
             0,
             0,
-            compactClientWidth +
-                (g_advancedVisible
-                    ? kAdvancedExtraWidth
-                    : 0),
+            RequiredClientWidth(
+                g_advancedVisible),
             400};
 
         AdjustWindowRectEx(
