@@ -1,5 +1,66 @@
 # TocPilot status / handoff
 
+## Continuation checkpoint — 2026-09-20 revised compact controls + app identity
+
+- Active branch: `p2-github-branches`.
+- Current published/source version entering this slice: `v0.1.21`.
+- Runtime result for v0.1.21 compact/advanced layout:
+  - compact and Advanced widening behavior are good;
+  - startup scan no longer drags the list viewport;
+  - attention-first sorting and persisted sort behavior work;
+  - existing Add/Update/Refresh/Reinstall/Remove actions still work;
+  - VanillaFixes launcher works.
+- Revised compact/advanced control direction:
+  - rename **Update** -> **Update All**;
+  - rename **Refresh** -> **Refresh All**;
+  - rename **Existing Addons** -> **Scan Existing Addons**;
+  - rename **Add** -> **Add Git**;
+  - add a dedicated **TocPilot** button for application/about/update functions.
+- New **TocPilot** window requirement:
+  - small dedicated child/tool window, separate from addon-management controls;
+  - include links to the TocPilot GitHub repository and releases page;
+  - include a self-update status/action area;
+  - clicking Check for Updates runs the existing self-update discovery path;
+  - no update -> resolve to a disabled/inactive **Up to date** button/state;
+  - update found -> resolve to an enabled **Update Available** action that applies the existing proven self-update flow;
+  - do not overload addon **Refresh All** or **Update All** with application-update semantics.
+- Compact layout refinement requirements:
+  - remove the top `TocPilot` and `Version v...` placeholder boxes;
+  - compact mode may become smaller;
+  - compact primary buttons should have equal width, with a minimum at least large enough for the widest minimum label;
+  - distribute extra width evenly as the window grows;
+  - compact minimum window width should be bounded by whichever is wider: the equal-width toolbar requirement or the visible compact columns;
+  - addon base names should render bold while custom branch suffixes such as `(dev)` remain regular weight.
+- Launcher refinement requirements:
+  - make bottom executable icons slightly larger;
+  - increase spacing to reduce misclicks;
+  - only show the VanillaFixes launcher when `VanillaFixes.exe` exists;
+  - WoW launcher remains available when `WoW.exe` exists.
+- Process-safety requirement:
+  - normal TocPilot UI should be single-instance **per WoW/TocPilot directory**, not globally across all installations;
+  - a second launch for the same directory should activate/restore the existing TocPilot window and exit;
+  - self-update helper mode must bypass the normal instance guard so the two-process updater continues to work.
+- App identity requirement:
+  - supplied gnome/courier icon direction is approved for TocPilot;
+  - embed a proper multi-resolution Windows application icon for EXE/Explorer/window/taskbar usage.
+- Deferred in this slice:
+  - inline per-row branch dropdowns;
+  - clickable per-row repository links inside Advanced;
+  - human-readable Installed/Latest addon versions;
+  - GitLab/Gitea/OctoWoW provider expansion.
+
+## Exact next step
+
+1. Implement single-instance-per-install startup protection without breaking updater-helper mode.
+2. Remove the compact header/version boxes and reflow the window.
+3. Rename controls to **Update All**, **Refresh All**, **Scan Existing Addons**, and **Add Git**.
+4. Add the dedicated **TocPilot** child/tool window and wire it to the existing self-update discovery/apply flow.
+5. Recompute compact toolbar/window minimum sizing with equal-width primary buttons.
+6. Enlarge/space launch icons and hide VanillaFixes when its EXE is absent.
+7. Embed the supplied application icon as Windows resources.
+8. Add bold base-name / regular branch-suffix rendering in the package list.
+9. Run CI/tests, publish the next runtime-test build only after exact source/version validation passes, then visually/runtime-test this UI pass.
+
 ## Continuation checkpoint — 2026-09-20 compact/advanced UI v0.1.21
 
 - Active branch: `p2-github-branches`.
