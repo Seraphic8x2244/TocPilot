@@ -2465,6 +2465,7 @@ void RemovePackage(
             std::move(updatedState);
         g_stateCreated = false;
         g_stateError.clear();
+        g_packageViewOrder.clear();
         RefreshPackageStateUi();
         return;
     }
@@ -2605,6 +2606,7 @@ void RemovePackage(
         std::move(updatedState);
     g_stateCreated = false;
     g_stateError.clear();
+    g_packageViewOrder.clear();
 
     std::wstring cleanupError;
     const bool cleanupOk =
