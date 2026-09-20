@@ -146,6 +146,9 @@
 
 ## CI validation
 
+v0.1.12 Update All current-package runtime validation passed: with two TocPilot-managed installed packages, Update All reported Queued 2 / Processed 2 / Updated 0 / Current 2 / Failed 0. This confirms multi-package enumeration, sequential processing, current-package skip behavior, and summary accounting. The actual changed-branch update path still needs runtime validation.
+
+
 v0.1.12 self-update runtime validation passed: the user confirmed TocPilot detected and successfully took the update from v0.1.11 to v0.1.12.
 
 
@@ -441,7 +444,7 @@ Complete. A real `v0.1.0 -> v0.1.1` in-app self-update succeeded on Windows besi
 
 ## Exact next step
 
-1. Runtime-test **Update All** in `v0.1.12` with at least two installed managed packages: one already current and one with an available branch update.
-2. Confirm the current package is checked but not reinstalled, and only the changed package is updated.
-3. Confirm the final summary counts are correct and restart preserves the resulting installed/latest revisions.
-4. After the Update All runtime gate passes, simplify the temporary development UI toward Add Git Link + branch dropdown + automatic refresh/status + compact per-package actions.
+1. Multi-package current/current Update All path is runtime-validated in `v0.1.12` (Queued 2 / Processed 2 / Updated 0 / Current 2 / Failed 0).
+2. Runtime-test the changed-branch path: one installed package must have a newer tracked GitHub branch revision so Update All performs exactly one real update while leaving the other current package untouched.
+3. Confirm restart preserves the resulting installed/latest revisions and final summary reports Updated 1 / Current 1 / Failed 0.
+4. After the Update All runtime gate passes, implement conservative adoption of existing GitAddonsManager-managed addon folders by reading local `.git` metadata and taking ownership only after repository/root/ownership validation.
