@@ -1,5 +1,30 @@
 # TocPilot status / handoff
 
+## Continuation checkpoint — 2026-09-20 v0.1.23 branch-selector/UI refinement
+
+- Active branch: `p2-github-branches`.
+- Published baseline: `v0.1.22`.
+- Current branch head entering this slice: `20b19da` — **Record v0.1.22 release result**.
+- Requested UI changes for the next source build:
+  - **TocPilot** must be Advanced-only, not present in compact mode;
+  - Advanced toolbar ordering should place **Scan Existing Addons** between **Remove** and **TocPilot**;
+  - implement the previously deferred branch dropdown selector so a managed GitHub branch can be changed without opening the separate Set Branch dialog.
+- Existing v0.1.22 runtime verification remains pending for single-instance, compact/Advanced geometry, app-update tool window, icon identity, name styling, and launch buttons.
+- Deferred unless this slice naturally touches it:
+  - clickable repository links in Advanced;
+  - human-readable Installed/Latest addon versions;
+  - complex multi-root GAM adoption/selection;
+  - GitLab/Gitea/OctoWoW provider expansion.
+
+## Exact next step
+
+1. Rework compact/Advanced toolbar composition and minimum width for the new Advanced-only TocPilot placement.
+2. Inspect the current branch-enumeration and branch-change paths.
+3. Implement an Advanced branch dropdown bound to the selected managed GitHub package, reusing existing branch discovery and `SetPackageBranch` persistence rules.
+4. Keep the old Set Branch dialog only as fallback if useful; avoid duplicating branch-setting logic.
+5. Run Windows CI/tests before preparing any v0.1.23 release.
+6. Runtime-test the new toolbar order and branch-selection interaction.
+
 ## Release checkpoint — 2026-09-20 v0.1.22 published
 
 - Active branch: `p2-github-branches`.
