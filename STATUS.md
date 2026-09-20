@@ -640,10 +640,13 @@ Complete. A real `v0.1.0 -> v0.1.1` in-app self-update succeeded on Windows besi
 - New UX requirement after v0.1.20 runtime pass: persist package-list sort column and ascending/descending direction in `TocPilot.json`, save on change/close, and restore on next launch so the user's chosen ordering survives restarts.
 ## Exact next step
 
-1. Treat `v0.1.20` GitHub transport as runtime-passed: Set Branch loads successfully with the REST quota exhausted.
-2. Before editing UI code, lock the exact compact/advanced window design with the user.
-3. Compact mode should contain only the everyday information/actions needed to manage GitHub addons; Advanced expands to the right and owns diagnostics and lower-frequency controls.
-4. Persist package-list sort column and direction in `TocPilot.json`; restore the same ordering on next launch.
-5. Once the layout is agreed, implement it without changing the proven smart-HTTP/codeload/update transaction paths.
-6. Add/finish Launch WoW and Launch VanillaFixes as part of the compact/advanced pass.
-7. Keep provider expansion frozen until the GitHub-only layout and sorting persistence are runtime-validated.
+1. Implement the first real compact/advanced layout pass now; refine against the running app rather than further ASCII specification.
+2. Compact toolbar, above the addon list: **Update / Add / Remove / Advanced** only.
+3. Advanced widens the same window to the right and reveals additional toolbar actions on the same row: **Existing Addons / Refresh / Reinstall**. Keep all toolbar buttons outside the list control.
+4. Compact list shows **Name + Status**. Advanced reveals the existing detail columns on the same rows; branch/repository/version presentation can be refined after this first runtime pass.
+5. Packages needing attention must remain grouped at the top regardless of the selected column sort; apply the user's chosen ascending/descending sort within the attention and normal groups.
+6. Persist sort column/direction in `TocPilot.json` and restore on launch.
+7. Background startup/Refresh/Update sweeps must not programmatically select rows, call EnsureVisible, or otherwise move the user's list scroll position.
+8. Compact **Update** means Update All. **Remove** means remove the selected addon from disk and TocPilot state (the existing transactional uninstall path); old Forget/Inspect/etc. may remain under the hood but should not be exposed in this layout.
+9. Add WoW.exe and VanillaFixes.exe as icon-only launch buttons at the bottom, using the executables' own icons where available.
+10. Keep provider expansion frozen until this layout has been runtime-tested and adjusted.
