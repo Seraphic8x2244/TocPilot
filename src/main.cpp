@@ -1232,11 +1232,7 @@ void UpdatePackageButtons() {
         const wchar_t* label = L"Install";
         if (selectedPackage &&
             !selectedPackage->installedRevision.empty()) {
-            label =
-                selectedPackage->installedRevision ==
-                        selectedPackage->latestRevision
-                    ? L"Reinstall"
-                    : L"Update";
+            label = L"Reinstall";
         }
 
         SetWindowTextW(
@@ -1955,7 +1951,7 @@ void FinishUpdateAll(HWND hwnd) {
     g_updateAllInProgress = false;
     SetWindowTextW(
         g_updateAllButton,
-        L"Update All");
+        L"Update");
 
     RefreshPackageStateUi();
 
@@ -2123,7 +2119,7 @@ void CompleteUpdateAllStep(
         g_updateAllInProgress = false;
         SetWindowTextW(
             g_updateAllButton,
-            L"Update All");
+            L"Update");
         UpdatePackageButtons();
 
         MessageBoxW(
