@@ -1,3 +1,4 @@
+#include "addon_scan.h"
 #include "adoption.h"
 #include "add_package_dialog.h"
 #include "archive.h"
@@ -19,8 +20,10 @@
 #include <array>
 #include <cmath>
 #include <cwchar>
+#include <cwctype>
 #include <filesystem>
 #include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <system_error>
@@ -102,7 +105,16 @@ bool g_packageInspectInProgress = false;
 bool g_packageInstallInProgress = false;
 bool g_updateAllInProgress = false;
 bool g_appUpdateInProgress = false;
+bool g_autoStatusRefreshInProgress = false;
 tp::UpdateAllProgress g_updateAllProgress;
+std::vector<std::wstring> g_autoStatusPackageIds;
+std::size_t g_autoStatusPosition = 0;
+std::size_t g_autoStatusCurrent = 0;
+std::size_t g_autoStatusUpdates = 0;
+std::size_t g_autoStatusFailed = 0;
+std::vector<std::size_t> g_packageViewOrder;
+int g_packageSortColumn = -1;
+bool g_packageSortAscending = true;
 std::wstring g_stateError;
 
 struct CheckResult {
@@ -466,92 +478,314 @@ std::wstring ProviderLabel(const std::wstring& provider) {
     return provider;
 }
 
+bool PackageBranchMode(
+    const tp::PackageRecord& package) {
+    return
+        package.mode == L"branch" &&
+        !package.ref.empty();
+}
+
+std::wstring PackageSourceText(
+    const tp::PackageRecord& package) {
+    return
+        ProviderLabel(package.provider) +
+        (PackageBranchMode(package)
+            ? L" / " + package.ref
+            : L" / source only");
+}
+
+std::wstring PackageRevisionText(
+    const std::wstring& revision) {
+    return revision.empty()
+        ? L"—"
+        : revision.substr(
+            0,
+            std::min<std::size_t>(
+                7,
+                revision.size()));
+}
+
+std::wstring PackageStatusText(
+    const tp::PackageRecord& package) {
+    if (!PackageBranchMode(package)) {
+        return L"Not configured";
+    }
+
+    if (package.installedRevision.empty()) {
+        return L"Not installed";
+    }
+
+    return package.installedRevision ==
+            package.latestRevision
+        ? L"Current"
+        : L"Update available";
+}
+
+int CompareInsensitive(
+    std::wstring_view left,
+    std::wstring_view right) {
+    const std::size_t count =
+        std::min(
+            left.size(),
+            right.size());
+
+    for (std::size_t i = 0;
+         i < count;
+         ++i) {
+        const wchar_t a =
+            static_cast<wchar_t>(
+                std::towlower(left[i]));
+        const wchar_t b =
+            static_cast<wchar_t>(
+                std::towlower(right[i]));
+
+        if (a < b) {
+            return -1;
+        }
+        if (a > b) {
+            return 1;
+        }
+    }
+
+    if (left.size() < right.size()) {
+        return -1;
+    }
+    if (left.size() > right.size()) {
+        return 1;
+    }
+
+    return 0;
+}
+
+std::wstring PackageColumnText(
+    const tp::PackageRecord& package,
+    int column) {
+    switch (column) {
+    case 0:
+        return package.name;
+    case 1:
+        return PackageSourceText(package);
+    case 2:
+        return package.installedRevision;
+    case 3:
+        return package.latestRevision;
+    case 4:
+        return PackageStatusText(package);
+    default:
+        return {};
+    }
+}
+
+void RebuildPackageViewOrder() {
+    g_packageViewOrder.clear();
+    g_packageViewOrder.reserve(
+        g_state.packages.size());
+
+    for (std::size_t index = 0;
+         index < g_state.packages.size();
+         ++index) {
+        g_packageViewOrder.push_back(
+            index);
+    }
+
+    if (g_packageSortColumn < 0) {
+        return;
+    }
+
+    std::stable_sort(
+        g_packageViewOrder.begin(),
+        g_packageViewOrder.end(),
+        [](std::size_t leftIndex,
+           std::size_t rightIndex) {
+            const auto& left =
+                g_state.packages[leftIndex];
+            const auto& right =
+                g_state.packages[rightIndex];
+
+            int comparison =
+                CompareInsensitive(
+                    PackageColumnText(
+                        left,
+                        g_packageSortColumn),
+                    PackageColumnText(
+                        right,
+                        g_packageSortColumn));
+
+            if (comparison == 0) {
+                comparison =
+                    CompareInsensitive(
+                        left.name,
+                        right.name);
+            }
+
+            if (comparison == 0) {
+                comparison =
+                    CompareInsensitive(
+                        left.id,
+                        right.id);
+            }
+
+            return g_packageSortAscending
+                ? comparison < 0
+                : comparison > 0;
+        });
+}
+
+void UpdatePackageSortIndicator() {
+    if (!g_packageList) {
+        return;
+    }
+
+    const HWND header =
+        ListView_GetHeader(
+            g_packageList);
+
+    if (!header) {
+        return;
+    }
+
+    const int count =
+        Header_GetItemCount(
+            header);
+
+    for (int column = 0;
+         column < count;
+         ++column) {
+        HDITEMW item{};
+        item.mask =
+            HDI_FORMAT;
+
+        if (!Header_GetItem(
+                header,
+                column,
+                &item)) {
+            continue;
+        }
+
+        item.fmt &=
+            ~(HDF_SORTUP |
+              HDF_SORTDOWN);
+
+        if (column ==
+            g_packageSortColumn) {
+            item.fmt |=
+                g_packageSortAscending
+                    ? HDF_SORTUP
+                    : HDF_SORTDOWN;
+        }
+
+        Header_SetItem(
+            header,
+            column,
+            &item);
+    }
+}
+
+int PackageDisplayRow(
+    std::size_t packageIndex) {
+    for (std::size_t row = 0;
+         row < g_packageViewOrder.size();
+         ++row) {
+        if (g_packageViewOrder[row] ==
+            packageIndex) {
+            return static_cast<int>(
+                row);
+        }
+    }
+
+    return -1;
+}
+
 void PopulatePackageList() {
     if (!g_packageList) {
         return;
     }
 
-    ListView_DeleteAllItems(g_packageList);
+    RebuildPackageViewOrder();
+    ListView_DeleteAllItems(
+        g_packageList);
 
-    for (std::size_t i = 0; i < g_state.packages.size(); ++i) {
-        const auto& package = g_state.packages[i];
+    for (std::size_t displayIndex = 0;
+         displayIndex <
+            g_packageViewOrder.size();
+         ++displayIndex) {
+        const std::size_t packageIndex =
+            g_packageViewOrder[
+                displayIndex];
+
+        const auto& package =
+            g_state.packages[
+                packageIndex];
 
         LVITEMW item{};
-        item.mask = LVIF_TEXT;
-        item.iItem = static_cast<int>(i);
+        item.mask =
+            LVIF_TEXT;
+        item.iItem =
+            static_cast<int>(
+                displayIndex);
         item.iSubItem = 0;
-        item.pszText = const_cast<LPWSTR>(package.name.c_str());
+        item.pszText =
+            const_cast<LPWSTR>(
+                package.name.c_str());
 
-        const int row = ListView_InsertItem(g_packageList, &item);
+        const int row =
+            ListView_InsertItem(
+                g_packageList,
+                &item);
+
         if (row < 0) {
             continue;
         }
 
-        const bool branchMode =
-            package.mode == L"branch" &&
-            !package.ref.empty();
-
         const std::wstring source =
-            ProviderLabel(package.provider) +
-            (branchMode
-                ? L" / " + package.ref
-                : L" / source only");
-
+            PackageSourceText(
+                package);
         const std::wstring installed =
-            package.installedRevision.empty()
-                ? L"—"
-                : package.installedRevision.substr(
-                    0,
-                    std::min<std::size_t>(
-                        7,
-                        package.installedRevision.size()));
-
+            PackageRevisionText(
+                package.installedRevision);
         const std::wstring latest =
-            package.latestRevision.empty()
-                ? L"—"
-                : package.latestRevision.substr(
-                    0,
-                    std::min<std::size_t>(
-                        7,
-                        package.latestRevision.size()));
-
-        const wchar_t* status = branchMode
-            ? (package.installedRevision.empty()
-                ? L"Not installed"
-                : (package.installedRevision ==
-                       package.latestRevision
-                    ? L"Current"
-                    : L"Update available"))
-            : L"Not configured";
+            PackageRevisionText(
+                package.latestRevision);
+        const std::wstring status =
+            PackageStatusText(
+                package);
 
         ListView_SetItemText(
             g_packageList,
             row,
             1,
-            const_cast<LPWSTR>(source.c_str()));
+            const_cast<LPWSTR>(
+                source.c_str()));
         ListView_SetItemText(
             g_packageList,
             row,
             2,
-            const_cast<LPWSTR>(installed.c_str()));
+            const_cast<LPWSTR>(
+                installed.c_str()));
         ListView_SetItemText(
             g_packageList,
             row,
             3,
-            const_cast<LPWSTR>(latest.c_str()));
+            const_cast<LPWSTR>(
+                latest.c_str()));
         ListView_SetItemText(
             g_packageList,
             row,
             4,
-            const_cast<LPWSTR>(status));
+            const_cast<LPWSTR>(
+                status.c_str()));
     }
 
-    if (!g_state.packages.empty()) {
+    UpdatePackageSortIndicator();
+
+    if (!g_packageViewOrder.empty()) {
         ListView_SetItemState(
             g_packageList,
             0,
-            LVIS_SELECTED | LVIS_FOCUSED,
-            LVIS_SELECTED | LVIS_FOCUSED);
+            LVIS_SELECTED |
+                LVIS_FOCUSED,
+            LVIS_SELECTED |
+                LVIS_FOCUSED);
     }
 }
 
@@ -560,10 +794,53 @@ int SelectedPackageRow() {
         return -1;
     }
 
-    return ListView_GetNextItem(
-        g_packageList,
-        -1,
-        LVNI_SELECTED);
+    const int displayRow =
+        ListView_GetNextItem(
+            g_packageList,
+            -1,
+            LVNI_SELECTED);
+
+    if (displayRow < 0 ||
+        displayRow >=
+            static_cast<int>(
+                g_packageViewOrder.size())) {
+        return -1;
+    }
+
+    return static_cast<int>(
+        g_packageViewOrder[
+            static_cast<std::size_t>(
+                displayRow)]);
+}
+
+void SortPackageListByColumn(
+    int column) {
+    if (column < 0 ||
+        column >= 5) {
+        return;
+    }
+
+    const int selected =
+        SelectedPackageRow();
+
+    if (g_packageSortColumn ==
+        column) {
+        g_packageSortAscending =
+            !g_packageSortAscending;
+    } else {
+        g_packageSortColumn =
+            column;
+        g_packageSortAscending =
+            true;
+    }
+
+    PopulatePackageList();
+
+    if (selected >= 0) {
+        SelectPackageRow(
+            static_cast<std::size_t>(
+                selected));
+    }
 }
 
 void UpdatePackageButtons() {
@@ -711,15 +988,25 @@ void SelectPackageRow(std::size_t index) {
         return;
     }
 
+    const int row =
+        PackageDisplayRow(
+            index);
+
+    if (row < 0) {
+        return;
+    }
+
     ListView_SetItemState(
         g_packageList,
-        static_cast<int>(index),
-        LVIS_SELECTED | LVIS_FOCUSED,
-        LVIS_SELECTED | LVIS_FOCUSED);
+        row,
+        LVIS_SELECTED |
+            LVIS_FOCUSED,
+        LVIS_SELECTED |
+            LVIS_FOCUSED);
 
     ListView_EnsureVisible(
         g_packageList,
-        static_cast<int>(index),
+        row,
         FALSE);
 }
 
@@ -731,14 +1018,26 @@ void SetPackageRowStatus(
         return;
     }
 
+    const int row =
+        PackageDisplayRow(
+            index);
+
+    if (row < 0) {
+        return;
+    }
+
     ListView_SetItemText(
         g_packageList,
-        static_cast<int>(index),
+        row,
         4,
-        const_cast<LPWSTR>(text.c_str()));
+        const_cast<LPWSTR>(
+            text.c_str()));
 }
 
 void RefreshPackageStateUi() {
+    const int selected =
+        SelectedPackageRow();
+
     SetIndicator(
         g_stateStatus,
         StateStatusText());
@@ -750,6 +1049,16 @@ void RefreshPackageStateUi() {
     }
 
     PopulatePackageList();
+
+    if (selected >= 0 &&
+        selected <
+            static_cast<int>(
+                g_state.packages.size())) {
+        SelectPackageRow(
+            static_cast<std::size_t>(
+                selected));
+    }
+
     UpdatePackageButtons();
 }
 
@@ -2353,10 +2662,25 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             reinterpret_cast<NMHDR*>(lParam);
 
         if (header &&
-            header->idFrom == IDC_PACKAGE_LIST &&
-            header->code == LVN_ITEMCHANGED) {
-            UpdatePackageButtons();
-            return 0;
+            header->idFrom ==
+                IDC_PACKAGE_LIST) {
+            if (header->code ==
+                LVN_ITEMCHANGED) {
+                UpdatePackageButtons();
+                return 0;
+            }
+
+            if (header->code ==
+                LVN_COLUMNCLICK) {
+                const auto* list =
+                    reinterpret_cast<NMLISTVIEW*>(
+                        lParam);
+
+                SortPackageListByColumn(
+                    list->iSubItem);
+                UpdatePackageButtons();
+                return 0;
+            }
         }
         break;
     }
