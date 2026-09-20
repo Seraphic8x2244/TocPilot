@@ -617,12 +617,38 @@ std::wstring SingleOwnedAddonRoot(
     return root;
 }
 
+std::wstring PackageDisplayName(
+    const tp::PackageRecord& package) {
+    if (!PackageBranchMode(package) ||
+        package.ref.empty() ||
+        CompareInsensitive(package.ref, L"main") == 0 ||
+        CompareInsensitive(package.ref, L"master") == 0) {
+        return package.name;
+    }
+
+    return
+        package.name +
+        L" (" +
+        package.ref +
+        L")";
+}
+
+bool PackageNeedsAttention(
+    const tp::PackageRecord& package) {
+    return
+        !PackageBranchMode(package) ||
+        package.installedRevision.empty() ||
+        package.latestRevision.empty() ||
+        package.installedRevision !=
+            package.latestRevision;
+}
+
 std::wstring PackageColumnText(
     const tp::PackageRecord& package,
     int column) {
     switch (column) {
     case 0:
-        return package.name;
+        return PackageDisplayName(package);
     case 1:
         return PackageSourceText(package);
     case 2:
@@ -648,10 +674,6 @@ void RebuildPackageViewOrder() {
             index);
     }
 
-    if (g_packageSortColumn < 0) {
-        return;
-    }
-
     std::stable_sort(
         g_packageViewOrder.begin(),
         g_packageViewOrder.end(),
@@ -661,6 +683,19 @@ void RebuildPackageViewOrder() {
                 g_state.packages[leftIndex];
             const auto& right =
                 g_state.packages[rightIndex];
+
+            const bool leftAttention =
+                PackageNeedsAttention(left);
+            const bool rightAttention =
+                PackageNeedsAttention(right);
+
+            if (leftAttention != rightAttention) {
+                return leftAttention;
+            }
+
+            if (g_packageSortColumn < 0) {
+                return false;
+            }
 
             int comparison =
                 CompareInsensitive(
@@ -784,9 +819,11 @@ void PopulatePackageList() {
             static_cast<int>(
                 displayIndex);
         item.iSubItem = 0;
+        const std::wstring displayName =
+            PackageDisplayName(package);
         item.pszText =
             const_cast<LPWSTR>(
-                package.name.c_str());
+                displayName.c_str());
 
         const int row =
             ListView_InsertItem(
@@ -837,16 +874,6 @@ void PopulatePackageList() {
     }
 
     UpdatePackageSortIndicator();
-
-    if (!g_packageViewOrder.empty()) {
-        ListView_SetItemState(
-            g_packageList,
-            0,
-            LVIS_SELECTED |
-                LVIS_FOCUSED,
-            LVIS_SELECTED |
-                LVIS_FOCUSED);
-    }
 }
 
 void SelectPackageRow(std::size_t index);
@@ -894,6 +921,21 @@ void SortPackageListByColumn(
             column;
         g_packageSortAscending =
             true;
+    }
+
+    if (g_stateReady) {
+        g_state.settings.packageSortColumn =
+            g_packageSortColumn;
+        g_state.settings.packageSortAscending =
+            g_packageSortAscending;
+
+        std::wstring saveError;
+        if (!tp::SaveState(
+                g_root,
+                g_state,
+                saveError)) {
+            g_stateError = saveError;
+        }
     }
 
     PopulatePackageList();
@@ -1066,11 +1108,6 @@ void SelectPackageRow(std::size_t index) {
             LVIS_FOCUSED,
         LVIS_SELECTED |
             LVIS_FOCUSED);
-
-    ListView_EnsureVisible(
-        g_packageList,
-        row,
-        FALSE);
 }
 
 void SetPackageRowStatus(
@@ -1739,8 +1776,6 @@ void ContinueUpdateAll(HWND hwnd) {
 
         const auto& package =
             g_state.packages[index];
-
-        SelectPackageRow(index);
 
         if (tp::IsPackageRefreshFresh(
                 g_packageRefreshStamps,
@@ -4184,6 +4219,13 @@ int RunMainWindow(HINSTANCE instance) {
         g_state,
         g_stateCreated,
         g_stateError);
+
+    if (g_stateReady) {
+        g_packageSortColumn =
+            g_state.settings.packageSortColumn;
+        g_packageSortAscending =
+            g_state.settings.packageSortAscending;
+    }
 
     INITCOMMONCONTROLSEX controls{};
     controls.dwSize = sizeof(controls);
