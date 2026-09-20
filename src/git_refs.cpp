@@ -104,6 +104,43 @@ std::string WideToUtf8(std::wstring_view input) {
     return output;
 }
 
+std::wstring Utf8ToWide(std::string_view input) {
+    if (input.empty()) {
+        return {};
+    }
+
+    if (input.size() >
+        static_cast<std::size_t>(std::numeric_limits<int>::max())) {
+        return {};
+    }
+
+    const int sourceLength = static_cast<int>(input.size());
+    const int needed = MultiByteToWideChar(
+        CP_UTF8,
+        MB_ERR_INVALID_CHARS,
+        input.data(),
+        sourceLength,
+        nullptr,
+        0);
+
+    if (needed <= 0) {
+        return {};
+    }
+
+    std::wstring output(static_cast<std::size_t>(needed), L'\0');
+    if (MultiByteToWideChar(
+            CP_UTF8,
+            MB_ERR_INVALID_CHARS,
+            input.data(),
+            sourceLength,
+            output.data(),
+            needed) != needed) {
+        return {};
+    }
+
+    return output;
+}
+
 std::wstring AsciiToWide(std::string_view input) {
     std::wstring output;
     output.reserve(input.size());
@@ -435,29 +472,23 @@ bool CheckHttpStatus(
 
 } // namespace
 
-bool ParseGitSmartHttpBranchAdvertisement(
+bool ParseGitSmartHttpRepositoryAdvertisement(
     std::string_view advertisement,
-    std::string_view branch,
-    std::string& remoteSha,
+    GitRemoteRepositoryInfo& info,
     std::wstring& error) {
-    remoteSha.clear();
+    info = {};
     error.clear();
-
-    if (branch.empty()) {
-        error = L"Tracked Git branch name is empty.";
-        return false;
-    }
-
-    const std::string target =
-        "refs/heads/" + std::string(branch);
 
     bool sawService = false;
     bool sawRef = false;
+    std::string headSha;
+    std::string defaultBranchUtf8;
     std::size_t pos = 0;
 
     while (pos < advertisement.size()) {
         if (advertisement.size() - pos < 4) {
-            error = L"Git ref advertisement has a truncated packet length.";
+            error =
+                L"Git ref advertisement has a truncated packet length.";
             return false;
         }
 
@@ -465,7 +496,8 @@ bool ParseGitSmartHttpBranchAdvertisement(
         if (!ParseHexLength(
                 advertisement.substr(pos, 4),
                 packetLength)) {
-            error = L"Git ref advertisement has an invalid packet length.";
+            error =
+                L"Git ref advertisement has an invalid packet length.";
             return false;
         }
         pos += 4;
@@ -477,13 +509,15 @@ bool ParseGitSmartHttpBranchAdvertisement(
         }
 
         if (packetLength < 4) {
-            error = L"Git ref advertisement has an invalid packet length.";
+            error =
+                L"Git ref advertisement has an invalid packet length.";
             return false;
         }
 
         const std::size_t payloadLength = packetLength - 4;
         if (payloadLength > advertisement.size() - pos) {
-            error = L"Git ref advertisement has a truncated packet.";
+            error =
+                L"Git ref advertisement has a truncated packet.";
             return false;
         }
 
@@ -510,20 +544,59 @@ bool ParseGitSmartHttpBranchAdvertisement(
             payload.remove_suffix(1);
         }
 
+        std::string_view refPayload = payload;
         const std::size_t nul = payload.find('\0');
         if (nul != std::string_view::npos) {
-            payload = payload.substr(0, nul);
+            refPayload = payload.substr(0, nul);
+
+            std::string_view capabilities =
+                payload.substr(nul + 1);
+            std::size_t capPos = 0;
+            while (capPos < capabilities.size()) {
+                while (capPos < capabilities.size() &&
+                       (capabilities[capPos] == ' ' ||
+                        capabilities[capPos] == '\n' ||
+                        capabilities[capPos] == '\r' ||
+                        capabilities[capPos] == '\t')) {
+                    ++capPos;
+                }
+
+                const std::size_t capEnd =
+                    capabilities.find_first_of(
+                        " \r\n\t",
+                        capPos);
+                const std::string_view capability =
+                    capabilities.substr(
+                        capPos,
+                        capEnd == std::string_view::npos
+                            ? capabilities.size() - capPos
+                            : capEnd - capPos);
+
+                constexpr std::string_view symrefPrefix =
+                    "symref=HEAD:refs/heads/";
+                if (capability.starts_with(symrefPrefix)) {
+                    defaultBranchUtf8 =
+                        std::string(
+                            capability.substr(
+                                symrefPrefix.size()));
+                }
+
+                if (capEnd == std::string_view::npos) {
+                    break;
+                }
+                capPos = capEnd + 1;
+            }
         }
 
-        const std::size_t space = payload.find(' ');
+        const std::size_t space = refPayload.find(' ');
         if (space == std::string_view::npos) {
             continue;
         }
 
         const std::string_view objectId =
-            payload.substr(0, space);
+            refPayload.substr(0, space);
         const std::string_view refName =
-            payload.substr(space + 1);
+            refPayload.substr(space + 1);
 
         if (!IsHexObjectId(objectId)) {
             error =
@@ -532,16 +605,36 @@ bool ParseGitSmartHttpBranchAdvertisement(
         }
 
         sawRef = true;
-        if (refName == target) {
-            if (!sawService) {
-                error =
-                    L"Server response is not a Git smart-HTTP upload-pack advertisement.";
-                return false;
-            }
 
-            remoteSha.assign(objectId);
-            return true;
+        if (refName == "HEAD") {
+            headSha.assign(objectId);
+            continue;
         }
+
+        constexpr std::string_view headsPrefix =
+            "refs/heads/";
+        if (!refName.starts_with(headsPrefix)) {
+            continue;
+        }
+
+        const std::string_view branchUtf8 =
+            refName.substr(headsPrefix.size());
+        const std::wstring branchName =
+            Utf8ToWide(branchUtf8);
+        const std::wstring sha =
+            AsciiToWide(objectId);
+
+        if ((branchName.empty() && !branchUtf8.empty()) ||
+            sha.empty()) {
+            error =
+                L"Git ref advertisement contains invalid branch encoding.";
+            return false;
+        }
+
+        info.branches.push_back(
+            GitRemoteBranch{
+                branchName,
+                sha});
     }
 
     if (!sawService) {
@@ -550,17 +643,144 @@ bool ParseGitSmartHttpBranchAdvertisement(
         return false;
     }
 
-    if (!sawRef) {
-        error = L"Git repository advertised no visible refs.";
+    if (!sawRef || info.branches.empty()) {
+        error =
+            L"Git repository advertised no visible branches.";
         return false;
     }
 
-    const std::wstring branchWide = AsciiToWide(branch);
+    std::sort(
+        info.branches.begin(),
+        info.branches.end(),
+        [](const GitRemoteBranch& left,
+           const GitRemoteBranch& right) {
+            return left.name < right.name;
+        });
+
+    if (!defaultBranchUtf8.empty()) {
+        const std::wstring advertisedDefault =
+            Utf8ToWide(defaultBranchUtf8);
+
+        if (advertisedDefault.empty()) {
+            error =
+                L"Git default branch name is not valid UTF-8.";
+            return false;
+        }
+
+        const auto it = std::find_if(
+            info.branches.begin(),
+            info.branches.end(),
+            [&](const GitRemoteBranch& branch) {
+                return branch.name == advertisedDefault;
+            });
+
+        if (it != info.branches.end()) {
+            info.defaultBranch = advertisedDefault;
+        }
+    }
+
+    if (info.defaultBranch.empty() &&
+        !headSha.empty()) {
+        const std::wstring headWide =
+            AsciiToWide(headSha);
+        const GitRemoteBranch* match = nullptr;
+
+        for (const auto& branch : info.branches) {
+            if (branch.sha != headWide) {
+                continue;
+            }
+
+            if (match) {
+                match = nullptr;
+                break;
+            }
+
+            match = &branch;
+        }
+
+        if (match) {
+            info.defaultBranch = match->name;
+        }
+    }
+
+    return true;
+}
+
+bool FetchPublicGitRepositoryInfo(
+    std::wstring_view host,
+    std::wstring_view repository,
+    GitRemoteRepositoryInfo& info,
+    std::wstring& error) {
+    info = {};
+    error.clear();
+
+    std::wstring path;
+    if (!BuildInfoRefsPath(repository, path, error)) {
+        return false;
+    }
+
+    std::string body;
+    DWORD status = 0;
+    if (!HttpGetAdvertisement(
+            host,
+            path,
+            body,
+            status,
+            error) ||
+        !CheckHttpStatus(status, error)) {
+        return false;
+    }
+
+    return ParseGitSmartHttpRepositoryAdvertisement(
+        body,
+        info,
+        error);
+}
+
+bool ParseGitSmartHttpBranchAdvertisement(
+    std::string_view advertisement,
+    std::string_view branch,
+    std::string& remoteSha,
+    std::wstring& error) {
+    remoteSha.clear();
+    error.clear();
+
+    if (branch.empty()) {
+        error = L"Tracked Git branch name is empty.";
+        return false;
+    }
+
+    const std::wstring branchWide =
+        Utf8ToWide(branch);
+    if (branchWide.empty() && !branch.empty()) {
+        error =
+            L"Tracked Git branch name is not valid UTF-8.";
+        return false;
+    }
+
+    GitRemoteRepositoryInfo info;
+    if (!ParseGitSmartHttpRepositoryAdvertisement(
+            advertisement,
+            info,
+            error)) {
+        return false;
+    }
+
+    for (const auto& item : info.branches) {
+        if (item.name == branchWide) {
+            remoteSha = WideToUtf8(item.sha);
+            if (remoteSha.empty()) {
+                error =
+                    L"Git host returned an invalid branch object ID.";
+                return false;
+            }
+            return true;
+        }
+    }
+
     error =
-        L"Tracked Git branch was not found" +
-        (branchWide.empty()
-            ? std::wstring(L".")
-            : std::wstring(L": ") + branchWide);
+        L"Tracked Git branch was not found: " +
+        branchWide;
     return false;
 }
 
@@ -578,44 +798,26 @@ bool ResolvePublicGitBranchHead(
         return false;
     }
 
-    std::wstring path;
-    if (!BuildInfoRefsPath(repository, path, error)) {
-        return false;
-    }
-
-    const std::string branchUtf8 = WideToUtf8(branch);
-    if (branchUtf8.empty() && !branch.empty()) {
-        error = L"Tracked Git branch name is not valid Unicode.";
-        return false;
-    }
-
-    std::string body;
-    DWORD status = 0;
-    if (!HttpGetAdvertisement(
+    GitRemoteRepositoryInfo info;
+    if (!FetchPublicGitRepositoryInfo(
             host,
-            path,
-            body,
-            status,
-            error) ||
-        !CheckHttpStatus(status, error)) {
-        return false;
-    }
-
-    std::string sha;
-    if (!ParseGitSmartHttpBranchAdvertisement(
-            body,
-            branchUtf8,
-            sha,
+            repository,
+            info,
             error)) {
         return false;
     }
 
-    remoteSha = AsciiToWide(sha);
-    if (remoteSha.empty()) {
-        error = L"Git host returned an invalid branch object ID.";
-        return false;
+    for (const auto& item : info.branches) {
+        if (item.name == branch) {
+            remoteSha = item.sha;
+            return true;
+        }
     }
-    return true;
+
+    error =
+        L"Tracked Git branch was not found: " +
+        std::wstring(branch);
+    return false;
 }
 
 } // namespace tp
