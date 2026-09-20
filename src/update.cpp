@@ -23,7 +23,11 @@ namespace tp {
 namespace {
 
 constexpr wchar_t kLatestReleaseUrl[] =
-    L"https://api.github.com/repos/Seraphic8x2244/TocPilot/releases/latest";
+    L"https://github.com/Seraphic8x2244/TocPilot/releases/latest";
+constexpr wchar_t kReleaseTagPathPrefix[] =
+    L"/Seraphic8x2244/TocPilot/releases/tag/";
+constexpr wchar_t kReleaseDownloadBase[] =
+    L"https://github.com/Seraphic8x2244/TocPilot/releases/download/";
 constexpr wchar_t kUserAgent[] = L"TocPilot/" TOCPILOT_VERSION_W;
 
 struct InternetHandles {
@@ -183,8 +187,7 @@ bool OpenRequest(
     }
 
     const wchar_t headers[] =
-        L"Accept: application/vnd.github+json\r\n"
-        L"X-GitHub-Api-Version: 2022-11-28\r\n";
+        L"Accept: */*\r\n";
 
     if (!WinHttpAddRequestHeaders(
             handles.request,
@@ -222,6 +225,50 @@ bool OpenRequest(
             &statusSize,
             WINHTTP_NO_HEADER_INDEX)) {
         error = L"Could not read HTTP status: " + WindowsError(GetLastError());
+        return false;
+    }
+
+    return true;
+}
+
+bool QueryEffectiveUrl(
+    HINTERNET request,
+    std::wstring& url,
+    std::wstring& error) {
+    url.clear();
+
+    DWORD bytes = 0;
+    WinHttpQueryOption(
+        request,
+        WINHTTP_OPTION_URL,
+        nullptr,
+        &bytes);
+
+    if (bytes == 0) {
+        error =
+            L"Could not determine final release URL: " +
+            WindowsError(GetLastError());
+        return false;
+    }
+
+    std::vector<wchar_t> buffer(
+        bytes / sizeof(wchar_t) + 1,
+        L'\0');
+
+    if (!WinHttpQueryOption(
+            request,
+            WINHTTP_OPTION_URL,
+            buffer.data(),
+            &bytes)) {
+        error =
+            L"Could not determine final release URL: " +
+            WindowsError(GetLastError());
+        return false;
+    }
+
+    url.assign(buffer.data());
+    if (url.empty()) {
+        error = L"GitHub returned an empty final release URL.";
         return false;
     }
 
@@ -909,6 +956,100 @@ void TryDeleteFile(const std::filesystem::path& path) {
 
 } // namespace
 
+bool ParseLatestReleaseTagFromUrl(
+    std::wstring_view url,
+    std::wstring& tag,
+    std::wstring& error) {
+    tag.clear();
+    error.clear();
+
+    UrlParts parts;
+    if (!CrackUrl(std::wstring(url), parts, error)) {
+        return false;
+    }
+
+    if (!parts.secure ||
+        Lower(parts.host) != L"github.com") {
+        error = L"Latest release redirect did not resolve to github.com.";
+        return false;
+    }
+
+    std::wstring path = parts.path;
+    const std::size_t suffix = path.find_first_of(L"?#");
+    if (suffix != std::wstring::npos) {
+        path.resize(suffix);
+    }
+
+    while (path.size() > 1 && path.back() == L'/') {
+        path.pop_back();
+    }
+
+    constexpr std::wstring_view prefix =
+        kReleaseTagPathPrefix;
+
+    if (path.size() <= prefix.size() ||
+        path.compare(0, prefix.size(), prefix) != 0) {
+        error =
+            L"Latest release redirect has an unexpected GitHub path.";
+        return false;
+    }
+
+    tag = path.substr(prefix.size());
+    if (tag.find(L'/') != std::wstring::npos) {
+        tag.clear();
+        error =
+            L"Latest release redirect contains an invalid tag.";
+        return false;
+    }
+
+    SemVer version;
+    if (!ParseSemVer(tag, version)) {
+        tag.clear();
+        error =
+            L"Latest release redirect does not contain a valid semantic version tag.";
+        return false;
+    }
+
+    return true;
+}
+
+bool ResolveLatestReleaseTag(
+    std::wstring& tag,
+    std::wstring& error) {
+    tag.clear();
+    error.clear();
+
+    InternetHandles handles;
+    DWORD status = 0;
+    if (!OpenRequest(
+            kLatestReleaseUrl,
+            handles,
+            status,
+            error)) {
+        return false;
+    }
+
+    if (status < 200 || status >= 300) {
+        error =
+            L"GitHub latest-release page returned status " +
+            std::to_wstring(status);
+        return false;
+    }
+
+    std::wstring finalUrl;
+    if (!QueryEffectiveUrl(
+            handles.request,
+            finalUrl,
+            error)) {
+        return false;
+    }
+
+    return ParseLatestReleaseTagFromUrl(
+        finalUrl,
+        tag,
+        error);
+}
+
 std::filesystem::path ExecutablePath() {
     std::wstring buffer(32768, L'\0');
     const DWORD length = GetModuleFileNameW(
@@ -931,36 +1072,20 @@ bool CheckLatestRelease(
     release = {};
     state = ReleaseCheckState::NoRelease;
 
-    std::string body;
-    DWORD status = 0;
-    if (!HttpGetString(kLatestReleaseUrl, body, status, error)) {
+    if (!ResolveLatestReleaseTag(
+            release.tag,
+            error)) {
         return false;
     }
 
-    if (status == 404) {
-        return true;
-    }
-
-    if (status < 200 || status >= 300) {
-        error = L"GitHub returned status " + std::to_wstring(status);
-        return false;
-    }
-
-    const auto tag = JsonStringField(body, "tag_name");
-    if (!tag) {
-        error = L"GitHub release response has no tag_name.";
-        return false;
-    }
-
-    release.tag = Utf8ToWide(*tag);
-    if (release.tag.empty()) {
-        error = L"GitHub release tag is not valid UTF-8.";
-        return false;
-    }
-
-    if (!ExtractAssets(body, release, error)) {
-        return false;
-    }
+    release.assetUrl =
+        std::wstring(kReleaseDownloadBase) +
+        release.tag +
+        L"/TocPilot.exe";
+    release.checksumUrl =
+        std::wstring(kReleaseDownloadBase) +
+        release.tag +
+        L"/TocPilot.exe.sha256";
 
     state = IsNewer(release.tag, TOCPILOT_VERSION_TAG_W)
         ? ReleaseCheckState::UpdateAvailable
