@@ -4,6 +4,7 @@
 
 #include <filesystem>
 #include <string>
+#include <string_view>
 
 namespace tp {
 
@@ -21,6 +22,15 @@ enum class ReleaseCheckState {
 };
 
 std::filesystem::path ExecutablePath();
+
+bool ParseLatestReleaseTagFromUrl(
+    std::wstring_view url,
+    std::wstring& tag,
+    std::wstring& error);
+
+bool ResolveLatestReleaseTag(
+    std::wstring& tag,
+    std::wstring& error);
 
 bool CheckLatestRelease(
     ReleaseInfo& release,
