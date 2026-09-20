@@ -3,9 +3,11 @@
 ## Continuation checkpoint — 2026-09-20 smart-HTTP transport
 
 - Active branch: `p2-github-branches`.
-- Current published/runtime-tested version: `v0.1.17`.
-- Current source candidate version: `v0.1.18`; `.github/release-version` remains at `v0.1.17` until the candidate passes CI.
+- Current published version: `v0.1.18`; runtime gate pending.
+- Last fully runtime-tested version before the transport change: `v0.1.17`.
+- Current source/release version: `v0.1.18`; tag `v0.1.18` points to release request commit `71d49ed`.
 - Latest commits:
+  - `71d49ed` — Request v0.1.18 smart HTTP transport release.
   - `e967923` — Set CMake version to 0.1.18.
   - `0012898` — Bump version to v0.1.18.
   - `0d256ad` — Run live GitHub smart HTTP probe in CI.
@@ -22,11 +24,16 @@
   - live CI probe added against public GitHub smart HTTP;
   - exact-SHA GitHub archive downloads now target `codeload.github.com/<owner>/<repo>/zip/<sha>` directly, removing the remaining REST zipball hop while preserving existing ZIP validation, staging, ownership, rollback, and transaction code.
 - Runtime result immediately before this slice: `v0.1.17` self-update succeeded and `pfUI-VendorTweaks` updated successfully, but the startup/update sweep exhausted the user's unauthenticated GitHub REST allowance and produced one rate-limit error. This made the transport replacement urgent.
-- Untested/current gate:
-  - latest `v0.1.18` candidate head still needs a complete Windows x64 Build + CTest pass;
-  - the live GitHub smart-HTTP CI probe must pass;
-  - direct codeload archive download still needs runtime validation through a real addon update;
-  - startup sweep + immediate Update All must be tested while the user's REST allowance is exhausted/low to prove routine addon management no longer depends on that quota.
+- Release validation:
+  - release workflow run `35521952232` passed source/version validation, Windows x64 Release build, the full 11-test CTest suite, SHA-256 generation, tag creation, and release asset publication;
+  - the live GitHub smart-HTTP WinHTTP probe passed in CI;
+  - tag `v0.1.18` points exactly to commit `71d49edf1fa016b3b3e3fb9ce0d86ea1c03e90cb`;
+  - published `TocPilot.exe` is 834,048 bytes with SHA-256 `523786dbaab66879f96714a6568da189c66decd5f8e76fe4e0ac9189864292e6`.
+- Untested/current runtime gate:
+  - self-update from the user's installed `v0.1.17` to `v0.1.18`;
+  - automatic startup package sweep using smart HTTP for tracked GitHub branch heads;
+  - immediate Update All while the user's GitHub REST allowance is exhausted/low;
+  - at least one changed package downloading by exact SHA through direct `codeload.github.com` and completing the existing staging/security/transaction path.
 - Deferred after the GitHub runtime gate:
   - switch branch enumeration/default-branch UI away from REST if quota pressure there becomes material;
   - validate the same provider-neutral ref discovery against GitLab and OctoWoW/Gitea-style hosts;
@@ -608,9 +615,11 @@ Complete. A real `v0.1.0 -> v0.1.1` in-app self-update succeeded on Windows besi
 
 ## Exact next step
 
-1. Finish CI on the current `v0.1.18` candidate head. The required gate is Windows x64 build plus the full CTest suite including `git-smart-http-live-github`.
-2. If CI exposes a parser/transport/build issue, fix it before publishing.
-3. Once green, change only `.github/release-version` to `v0.1.18` and let the release workflow rebuild, rerun the full tests, create the tag, and publish `TocPilot.exe` plus checksum.
-4. Runtime-test `v0.1.18`: let startup refresh all tracked GitHub packages, immediately run Update All, and confirm there is no GitHub REST rate-limit failure. A changed package must also download/install successfully through direct codeload.
-5. After that GitHub runtime gate passes, validate the same smart-HTTP resolver against GitLab and OctoWoW/Gitea-style public repositories before broadening package support.
-6. Do not change the existing staging/security/transaction pipeline and do not add libgit2, bundled Git, required `git.exe`, or credentials for public repositories.
+1. Runtime-test published `v0.1.18`: allow the installed `v0.1.17` client to self-update and restart into `v0.1.18`.
+2. Let the automatic managed-package status sweep finish, then immediately run **Update All**.
+3. Confirm the routine GitHub package sweep no longer reports `GitHub API access was refused or rate-limited`; tracked branch heads should now resolve through Git smart HTTP rather than the GitHub REST branches API.
+4. If any addon is changed, confirm it downloads and installs successfully through the direct exact-SHA codeload path while the existing staging, ZIP validation, ownership, rollback, and transaction behavior remains intact.
+5. Record the Update All summary and any exact failing package/error text.
+6. After the GitHub runtime gate passes, validate the provider-neutral smart-HTTP resolver against public GitLab and OctoWoW/Gitea-style repositories, then add only the host-specific archive URL construction actually required.
+7. Branch enumeration/default-branch selection and TocPilot's own release metadata still use provider APIs; do not confuse those low-frequency calls with the now API-free routine managed-addon branch sweep.
+8. Do not add libgit2, bundled Git, required `git.exe`, or public-repository credentials.
