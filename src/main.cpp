@@ -5,6 +5,7 @@
 #include "branch_dialog.h"
 #include "github_api.h"
 #include "install.h"
+#include "refresh_freshness.h"
 #include "state.h"
 #include "update.h"
 #include "update_all.h"
@@ -107,6 +108,7 @@ bool g_updateAllInProgress = false;
 bool g_appUpdateInProgress = false;
 bool g_autoStatusRefreshInProgress = false;
 tp::UpdateAllProgress g_updateAllProgress;
+std::vector<tp::PackageRefreshStamp> g_packageRefreshStamps;
 std::vector<std::wstring> g_autoStatusPackageIds;
 std::size_t g_autoStatusPosition = 0;
 std::size_t g_autoStatusCurrent = 0;
@@ -1293,7 +1295,8 @@ void StartPackageInspection(
 
 void StartPackageInstall(
     HWND hwnd,
-    std::size_t index) {
+    std::size_t index,
+    std::wstring knownRemoteSha = {}) {
     if (index >= g_state.packages.size()) {
         return;
     }
@@ -1350,6 +1353,7 @@ void StartPackageInstall(
         [hwnd,
          index,
          package,
+         knownRemoteSha = std::move(knownRemoteSha),
          otherInstalledFiles = std::move(otherInstalledFiles),
          wowRoot]() mutable {
             auto result =
@@ -1360,7 +1364,11 @@ void StartPackageInstall(
             result->packageName = package.name;
             result->branch = package.ref;
 
-            if (!tp::ResolveGitHubBranchHead(
+            result->remoteSha =
+                std::move(knownRemoteSha);
+
+            if (result->remoteSha.empty() &&
+                !tp::ResolveGitHubBranchHead(
                     package.repository,
                     package.ref,
                     result->remoteSha,
@@ -1719,6 +1727,44 @@ void ContinueUpdateAll(HWND hwnd) {
             g_state.packages[index];
 
         SelectPackageRow(index);
+
+        if (tp::IsPackageRefreshFresh(
+                g_packageRefreshStamps,
+                package,
+                GetTickCount64())) {
+            if (package.installedRevision !=
+                package.latestRevision) {
+                SetPackageRowStatus(
+                    index,
+                    L"Update available");
+
+                if (g_packageHint) {
+                    const std::wstring message =
+                        L"Update All: using recent status for " +
+                        package.name +
+                        L"; preparing the known changed revision.";
+
+                    SetWindowTextW(
+                        g_packageHint,
+                        message.c_str());
+                }
+
+                StartPackageInstall(
+                    hwnd,
+                    index,
+                    package.latestRevision);
+                return;
+            }
+
+            std::wstring ignored;
+            tp::CompleteUpdateAllItem(
+                g_updateAllProgress,
+                tp::UpdateAllOutcome::Current,
+                {},
+                ignored);
+            continue;
+        }
+
         SetPackageRowStatus(
             index,
             L"Checking...");
@@ -3463,6 +3509,11 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
         g_stateCreated = false;
         g_stateError.clear();
 
+        tp::RecordPackageRefresh(
+            g_packageRefreshStamps,
+            g_state.packages[index],
+            GetTickCount64());
+
         RefreshPackageStateUi();
         SelectPackageRow(index);
         UpdatePackageButtons();
@@ -3482,7 +3533,8 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                     L"Update available");
                 StartPackageInstall(
                     hwnd,
-                    index);
+                    index,
+                    package.latestRevision);
                 return 0;
             }
 
