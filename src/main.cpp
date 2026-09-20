@@ -56,6 +56,13 @@ constexpr int IDC_INSTALL_PACKAGE = 1013;
 constexpr int IDC_REMOVE_PACKAGE = 1014;
 constexpr int IDC_UNINSTALL_PACKAGE = 1015;
 constexpr int IDC_ADOPT_GIT = 1016;
+constexpr int IDC_ADVANCED = 1017;
+constexpr int IDC_LAUNCH_WOW = 1018;
+constexpr int IDC_LAUNCH_VANILLAFIXES = 1019;
+
+constexpr int kCompactWindowWidth = 660;
+constexpr int kAdvancedExtraWidth = 520;
+constexpr int kDefaultWindowHeight = 560;
 
 constexpr std::array<double, 5> kTextScales{
     0.90,
@@ -87,6 +94,9 @@ HWND g_uninstallPackageButton = nullptr;
 HWND g_removePackageButton = nullptr;
 HWND g_addPackageButton = nullptr;
 HWND g_adoptGitButton = nullptr;
+HWND g_advancedButton = nullptr;
+HWND g_launchWowButton = nullptr;
+HWND g_launchVanillaFixesButton = nullptr;
 HWND g_packageList = nullptr;
 HWND g_packageHint = nullptr;
 HWND g_textScaleLabel = nullptr;
@@ -95,6 +105,8 @@ HWND g_rootLabel = nullptr;
 HWND g_versionLabel = nullptr;
 
 HFONT g_uiFont = nullptr;
+HICON g_wowIcon = nullptr;
+HICON g_vanillaFixesIcon = nullptr;
 
 tp::ReleaseInfo g_release;
 tp::AppState g_state;
@@ -107,6 +119,7 @@ bool g_packageInstallInProgress = false;
 bool g_updateAllInProgress = false;
 bool g_appUpdateInProgress = false;
 bool g_autoStatusRefreshInProgress = false;
+bool g_advancedVisible = false;
 tp::UpdateAllProgress g_updateAllProgress;
 std::vector<tp::PackageRefreshStamp> g_packageRefreshStamps;
 std::vector<std::wstring> g_autoStatusPackageIds;
