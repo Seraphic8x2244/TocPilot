@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.24)
 
-project(TocPilot VERSION 0.1.13 LANGUAGES C CXX)
+project(TocPilot VERSION 0.1.14 LANGUAGES C CXX)
 
 # miniz 3.1.2, pinned from richgel999/miniz commit
 # 77d0dce8627735138c51770d1799a1ef48f2117d.
