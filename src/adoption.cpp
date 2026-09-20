@@ -593,11 +593,14 @@ bool CollectInstalledFiles(
     return true;
 }
 
-bool ValidateStateConflicts(
+bool ResolveStateTarget(
     const AppState& state,
     std::wstring_view packageId,
     std::wstring_view installFolder,
+    std::optional<std::size_t>& existingPackageIndex,
     std::wstring& error) {
+    existingPackageIndex.reset();
+
     const std::wstring rootPrefix =
         (
             std::filesystem::path(
@@ -607,14 +610,31 @@ bool ValidateStateConflicts(
             .generic_wstring() +
         L"/";
 
-    for (const auto& existing :
-         state.packages) {
+    for (std::size_t index = 0;
+         index < state.packages.size();
+         ++index) {
+        const auto& existing =
+            state.packages[index];
+
         if (EqualsInsensitive(
                 existing.id,
                 packageId)) {
-            error =
-                L"This repository is already managed by TocPilot.";
-            return false;
+            if (!existing.installedRevision.empty() ||
+                !existing.installedFiles.empty()) {
+                error =
+                    L"This repository is already managed by TocPilot.";
+                return false;
+            }
+
+            if (existing.target != L"addons") {
+                error =
+                    L"The matching TocPilot package does not target addons and cannot "
+                    L"adopt this folder in place.";
+                return false;
+            }
+
+            existingPackageIndex =
+                index;
         }
 
         for (auto owned :
@@ -799,10 +819,14 @@ bool PlanGitAddonAdoption(
         L"github:" +
         identity.repository;
 
-    if (!ValidateStateConflicts(
+    std::optional<std::size_t>
+        existingPackageIndex;
+
+    if (!ResolveStateTarget(
             state,
             packageId,
             installFolder,
+            existingPackageIndex,
             error)) {
         return false;
     }
@@ -819,20 +843,28 @@ bool PlanGitAddonAdoption(
     }
 
     PackageRecord package;
-    package.id =
-        packageId;
-    package.name =
-        installFolder;
-    package.provider =
-        L"github";
-    package.repository =
-        identity.repository;
+
+    if (existingPackageIndex) {
+        package =
+            state.packages[
+                *existingPackageIndex];
+    } else {
+        package.id =
+            packageId;
+        package.name =
+            installFolder;
+        package.provider =
+            L"github";
+        package.repository =
+            identity.repository;
+        package.target =
+            L"addons";
+    }
+
     package.mode =
         L"branch";
     package.ref =
         std::move(branchWide);
-    package.target =
-        L"addons";
     package.installedRevision =
         revisionWide;
     package.latestRevision =
@@ -844,6 +876,8 @@ bool PlanGitAddonAdoption(
         addonRoot;
     plan.package =
         std::move(package);
+    plan.existingPackageIndex =
+        existingPackageIndex;
 
     return true;
 }
