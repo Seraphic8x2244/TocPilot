@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.24)
 
-project(TocPilot VERSION 0.1.21 LANGUAGES C CXX)
+project(TocPilot VERSION 0.1.22 LANGUAGES C CXX)
 
 # miniz 3.1.2, pinned from richgel999/miniz commit
 # 77d0dce8627735138c51770d1799a1ef48f2117d.
@@ -38,6 +38,7 @@ add_executable(TocPilot WIN32
     src/update.cpp
     src/update_all.cpp
     src/ui_dialog.cpp
+    resources/TocPilot.rc
 )
 
 target_compile_features(TocPilot PRIVATE cxx_std_20)
@@ -55,7 +56,7 @@ if(MSVC)
     target_compile_options(TocPilot PRIVATE /W4 /permissive- /utf-8)
 endif()
 
-target_include_directories(TocPilot PRIVATE src)
+target_include_directories(TocPilot PRIVATE src resources)
 target_link_libraries(TocPilot PRIVATE TocPilotMiniz winhttp bcrypt shell32 comctl32)
 
 set_target_properties(TocPilot PROPERTIES
