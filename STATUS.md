@@ -1,5 +1,40 @@
 # TocPilot status / handoff
 
+## Continuation checkpoint — 2026-09-20 smart-HTTP transport
+
+- Active branch: `p2-github-branches`.
+- Current published/runtime-tested version: `v0.1.17`.
+- Current source candidate version: `v0.1.18`; `.github/release-version` remains at `v0.1.17` until the candidate passes CI.
+- Latest commits:
+  - `e967923` — Set CMake version to 0.1.18.
+  - `0012898` — Bump version to v0.1.18.
+  - `0d256ad` — Run live GitHub smart HTTP probe in CI.
+  - `380641e` — Add live GitHub smart HTTP probe.
+  - `b697aa5` — Require smart HTTP service header before refs.
+  - `020883d` — Test direct GitHub codeload paths.
+  - `6fabbf2` — Download exact GitHub archives without REST.
+  - `57443b0` — Use smart HTTP for GitHub branch head refresh.
+- Completed in source:
+  - provider-neutral WinHTTP smart-HTTP ref discovery against `info/refs?service=git-upload-pack`;
+  - protocol-v0/v1 pkt-line parsing for `refs/heads/<branch>`, including first-ref capability/NUL handling and 40/64-character object IDs;
+  - GitHub `ResolveGitHubBranchHead` now delegates to the smart-HTTP resolver, so routine refresh/inspect/install branch-head resolution no longer pages the GitHub REST branches API;
+  - deterministic malformed/truncated/service-header/missing-branch/protocol-v2 parser coverage;
+  - live CI probe added against public GitHub smart HTTP;
+  - exact-SHA GitHub archive downloads now target `codeload.github.com/<owner>/<repo>/zip/<sha>` directly, removing the remaining REST zipball hop while preserving existing ZIP validation, staging, ownership, rollback, and transaction code.
+- Runtime result immediately before this slice: `v0.1.17` self-update succeeded and `pfUI-VendorTweaks` updated successfully, but the startup/update sweep exhausted the user's unauthenticated GitHub REST allowance and produced one rate-limit error. This made the transport replacement urgent.
+- Untested/current gate:
+  - latest `v0.1.18` candidate head still needs a complete Windows x64 Build + CTest pass;
+  - the live GitHub smart-HTTP CI probe must pass;
+  - direct codeload archive download still needs runtime validation through a real addon update;
+  - startup sweep + immediate Update All must be tested while the user's REST allowance is exhausted/low to prove routine addon management no longer depends on that quota.
+- Deferred after the GitHub runtime gate:
+  - switch branch enumeration/default-branch UI away from REST if quota pressure there becomes material;
+  - validate the same provider-neutral ref discovery against GitLab and OctoWoW/Gitea-style hosts;
+  - direct non-GitHub archive URL construction;
+  - multi-root GAM adoption/selection and the remaining compact-UI work;
+  - private-repository authentication, libgit2/git.exe, and bundled Git remain explicitly out of scope.
+
+
 ## Continuation checkpoint — 2026-09-19
 
 - Active branch: `p2-github-branches`.
@@ -573,10 +608,9 @@ Complete. A real `v0.1.0 -> v0.1.1` in-app self-update succeeded on Windows besi
 
 ## Exact next step
 
-1. Treat the **v0.1.17 runtime gate as passed** for self-update and `pfUI-VendorTweaks`, but record that unauthenticated REST branch polling still exhausted the user's GitHub quota.
-2. Implement the **smallest production-capable Git smart-HTTP ref-discovery path now**: use WinHTTP against public `info/refs?service=git-upload-pack` and resolve one named `refs/heads/<branch>` to its exact SHA without provider REST.
-3. Add deterministic parser tests for pkt-line advertisements, including service header, flush packets, capabilities/NUL suffixes, malformed packet lengths, missing branches, and unsupported protocol responses.
-4. Wire GitHub tracked-branch refresh to the new provider-neutral ref-discovery path first, retaining the v0.1.17 freshness cache as an optimization and keeping REST only where still required for UI such as branch enumeration.
-5. Build/CTest in CI, then publish the next runtime test release and verify a startup sweep + immediate Update All no longer consumes the GitHub REST branch quota.
-6. After GitHub runtime validation, prove the same ref-discovery code against GitLab and OctoWoW/Gitea-style public repositories, adding only host-specific URL construction where concrete differences require it.
-7. Keep exact-SHA archive staging/security/transaction code unchanged. Do **not** add libgit2, bundle Git, require `git.exe`, or add public-repo credentials.
+1. Finish CI on the current `v0.1.18` candidate head. The required gate is Windows x64 build plus the full CTest suite including `git-smart-http-live-github`.
+2. If CI exposes a parser/transport/build issue, fix it before publishing.
+3. Once green, change only `.github/release-version` to `v0.1.18` and let the release workflow rebuild, rerun the full tests, create the tag, and publish `TocPilot.exe` plus checksum.
+4. Runtime-test `v0.1.18`: let startup refresh all tracked GitHub packages, immediately run Update All, and confirm there is no GitHub REST rate-limit failure. A changed package must also download/install successfully through direct codeload.
+5. After that GitHub runtime gate passes, validate the same smart-HTTP resolver against GitLab and OctoWoW/Gitea-style public repositories before broadening package support.
+6. Do not change the existing staging/security/transaction pipeline and do not add libgit2, bundled Git, required `git.exe`, or credentials for public repositories.
