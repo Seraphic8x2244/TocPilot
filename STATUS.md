@@ -3,7 +3,7 @@
 ## Continuation checkpoint — 2026-09-19
 
 - Active branch: `p2-github-branches`.
-- Current application version: `v0.1.12`; release tag exists and the user confirmed the installed `v0.1.11` client successfully self-updated to `v0.1.12`. Update All still requires runtime validation. Update All is implemented in source and remains unreleased pending Windows CI.
+- Current application version: `v0.1.12`; release tag exists and the user confirmed the installed `v0.1.11` client successfully self-updated to `v0.1.12`. The user has now also runtime-tested Update All, including the changed-branch path, so the v0.1.12 Update All runtime gate is cleared.
 - Latest implementation commit: `9dd56e4` — Polish uninstall development controls.
 - New uninstall implementation commits:
   - `f75f286` — Add transactional package uninstall UI.
@@ -18,8 +18,8 @@
 - Runtime gate cleared for the uninstall slice: the user confirmed `v0.1.11` Uninstall behaved as expected through uninstall, restart, retained package state, and reinstall.
 - Update All implementation head: `18d0f84` — Stop Update All after rollback failure. Supporting commits: `bc803fd` (sequential UI orchestration), `3df5659` (CTest wiring), `30989b0`/`c2d06a2` (test/source include hardening), `4e785ec` (queue tests), `642b536`/`d854cbb` (Update All queue module).
 - Update All behavior now implemented: only installed TocPilot-owned GitHub branch packages are queued; each package is refreshed first; already-current packages are left untouched; changed branches reuse the existing single-package staged transaction; ordinary package failures are isolated so remaining packages continue; rollback failure stops the batch; not-installed packages are ignored; a final summary reports queued/processed/updated/current/failed counts.
-- Deferred beyond this slice: Update All orchestration, explicit adoption of pre-existing unmanaged addon roots, crash-recovery journaling for unexpected process/power loss during live commit, GitHub release assets, GitLab support, DLL/direct-file installation, import/export, column persistence, and modification detection/backups.
-- Exact next step: bump/request `v0.1.11`; the release workflow will re-run Windows x64 build + full CTest before publishing. Then self-update from `v0.1.10`, runtime-test Uninstall (owned roots removed, package retained as Not installed, restart stable, unrelated addons preserved), then Reinstall. Do not begin Update All until this runtime gate passes.
+- Deferred beyond the current adoption slice: crash-recovery journaling for unexpected process/power loss during live commit, GitHub release assets, GitLab support, DLL/direct-file installation, import/export, column persistence, and modification detection/backups.
+- Exact next step: implement conservative adoption of existing GitAddonsManager-managed addon folders by reading local `.git` metadata, validating provider/repository/branch and addon-root ownership, then converting only safe matches into TocPilot package ownership without reinstalling or overwriting live addon files.
 - Delivery rule: publish runtime-test builds only after their exact source version passes Windows CI.
 
 ## Current state
@@ -32,7 +32,7 @@
 - License: MIT
 - Intended platform: Windows x64
 - Implementation: native C++20 / Win32 / CMake
-- Highest priority: CI-validate the Update All implementation, then publish the next runtime-test release
+- Highest priority: adopt existing GitAddonsManager installs conservatively without changing their live addon files
 - Current application version: `v0.1.11`; published and runtime-validated for transactional uninstall/reinstall.
 
 ## Latest commits
@@ -146,7 +146,7 @@
 
 ## CI validation
 
-v0.1.12 Update All current-package runtime validation passed: with two TocPilot-managed installed packages, Update All reported Queued 2 / Processed 2 / Updated 0 / Current 2 / Failed 0. This confirms multi-package enumeration, sequential processing, current-package skip behavior, and summary accounting. The actual changed-branch update path still needs runtime validation.
+v0.1.12 Update All runtime validation passed. The earlier current/current run reported Queued 2 / Processed 2 / Updated 0 / Current 2 / Failed 0, confirming multi-package enumeration, sequential processing, current-package skip behavior, and summary accounting. The user subsequently confirmed the changed-branch Update All path was also tested successfully, clearing the remaining runtime gate.
 
 
 v0.1.12 self-update runtime validation passed: the user confirmed TocPilot detected and successfully took the update from v0.1.11 to v0.1.12.
@@ -365,9 +365,7 @@ P0 edge/failure paths not yet deliberately forced:
 - paths containing spaces;
 - non-system drive such as `D:\Games\WoW`.
 
-Deferred beyond the current Update All validation slice:
-
-- explicit adoption/replacement flow for pre-existing unmanaged addon roots;
+Deferred beyond the current adoption slice:
 - crash-recovery journal/reconciliation after unexpected process or power loss during live commit;
 - GitHub release package/assets support;
 - GitLab support;
@@ -444,7 +442,8 @@ Complete. A real `v0.1.0 -> v0.1.1` in-app self-update succeeded on Windows besi
 
 ## Exact next step
 
-1. Multi-package current/current Update All path is runtime-validated in `v0.1.12` (Queued 2 / Processed 2 / Updated 0 / Current 2 / Failed 0).
-2. Runtime-test the changed-branch path: one installed package must have a newer tracked GitHub branch revision so Update All performs exactly one real update while leaving the other current package untouched.
-3. Confirm restart preserves the resulting installed/latest revisions and final summary reports Updated 1 / Current 1 / Failed 0.
-4. After the Update All runtime gate passes, implement conservative adoption of existing GitAddonsManager-managed addon folders by reading local `.git` metadata and taking ownership only after repository/root/ownership validation.
+1. Inspect GitAddonsManager's on-disk repository layout and the local `.git` metadata available inside existing managed addon folders.
+2. Add a read-only discovery/planning layer that identifies safe GitHub branch candidates without modifying live files.
+3. Require repository normalization, branch/ref resolution, current HEAD identification, addon-root mapping, and collision/ownership checks before adoption is allowed.
+4. Persist successful adoption as TocPilot package state (`installed_revision` plus full `installed_files`) without reinstalling, deleting, or overwriting the existing addon.
+5. Add deterministic CTests for valid adoption and conservative refusal cases before exposing the adoption UI.
