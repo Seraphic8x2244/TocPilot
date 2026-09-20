@@ -100,6 +100,7 @@ if(BUILD_TESTING)
     add_executable(TocPilotGitHubApiTests
         tests/github_api_tests.cpp
         src/github_api.cpp
+        src/git_refs.cpp
     )
     target_compile_features(TocPilotGitHubApiTests PRIVATE cxx_std_20)
     target_compile_definitions(TocPilotGitHubApiTests PRIVATE
