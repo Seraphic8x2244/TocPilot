@@ -887,6 +887,7 @@ bool DetectAddonCandidates(
 bool DetectGitHubAddonCandidates(
     const std::filesystem::path& extractedRoot,
     std::wstring_view repository,
+    std::wstring_view existingInstallFolder,
     std::vector<AddonCandidate>& candidates,
     std::wstring& error) {
     if (!DetectAddonCandidates(
@@ -920,6 +921,16 @@ bool DetectGitHubAddonCandidates(
         // case, require a root-level .toc whose stem matches the repository
         // name and use that repository name as the real install folder.
         if (!parent.empty()) {
+            continue;
+        }
+
+        if (!existingInstallFolder.empty() &&
+            candidates.size() == 1) {
+            // An already-installed/adopted single-root package has authoritative
+            // ownership for its live addon folder. Preserve that root even if a
+            // later repository cleanup changes the root-level .toc stem.
+            candidate.installFolder =
+                std::wstring(existingInstallFolder);
             continue;
         }
 
