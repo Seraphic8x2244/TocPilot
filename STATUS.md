@@ -4,7 +4,7 @@
 
 - Active branch: `p2-github-branches`.
 - Current runtime-tested application version includes the `v0.1.13` adoption slice. The user successfully adopted existing Git-managed addons, then ran Update All across 21 installed packages: Queued 21 / Processed 21 / Updated 1 / Already current 20 / Failed 0. This validates adoption feeding the normal refresh/update transaction path. Restart persistence and continued GitAddonsManager visibility of retained `.git` metadata remain the final adoption runtime checks.
-- v0.1.14 release request is committed at `dccec55`. Tag `v0.1.14` now exists and resolves to the 0.1.14 source, which confirms the release workflow passed source validation, Windows x64 build, and the full CTest suite before reaching its create-tag step. Release asset publication is the final workflow step; the current connector does not expose release assets directly.
+- v0.1.14 is the prior release line. The next runtime slice is implemented through `2059d73`: automatic installed-GitHub-package status refresh at startup, stable click-to-sort package columns with sort indicators, and read-only `Interface\\AddOns` folder classification / one-level Git-container diagnostics. This source head is not yet versioned or runtime-tested.
 - Post-v0.1.13 adoption follow-up commits:
   - `5e9d4c8` — Fix expandable dialog labels.
   - `a2a47a4` — Harden task dialog manifest declaration.
@@ -58,11 +58,22 @@
 - License: MIT
 - Intended platform: Windows x64
 - Implementation: native C++20 / Win32 / CMake
-- Highest priority: build the next runtime slice with automatic managed-addon status refresh, clickable package-column sorting, and read-only AddOns folder classification / one-level Git-container diagnostics
+- Highest priority: release-gate implementation head `2059d73`, then publish/runtime-test v0.1.15
 - Current adoption runtime result: 21 managed packages completed Update All with 1 updated / 20 current / 0 failed after existing Git installs were adopted.
 
 ## Latest commits
 
+- `2059d73` — Harden folder scanner test includes
+- `f91f51e` — Harden folder scanner includes
+- `a3d285e` — Show classified AddOns folder diagnostics
+- `5a069ab` — Auto-refresh managed addon update status
+- `0f82805` — Declare package row selector before sorting
+- `e7bbe0c` — Add stable package column sorting
+- `11e5a98` — Build and test AddOns folder scanner
+- `235e371` — Test AddOns folder classification
+- `896a639` — Classify AddOns folders conservatively
+- `3572a82` — Add AddOns folder classification API
+- `dd86ca3` — Set next TocPilot runtime slice
 - `dccec55` — Request v0.1.14 adoption UX release
 - `1b5bdad` — Set v0.1.14 application version
 - `21bc962` — Bump TocPilot to v0.1.14
@@ -390,6 +401,7 @@ Tracked-branch Refresh test release `v0.1.6` was published automatically. Releas
 
 - Adoption detection and the adoption -> Update All integration path are runtime-validated. Still unverified: restart persistence after adoption, explicit confirmation that live addon files / `.git` were untouched, and GitAddonsManager continuing to recognize/update retained repositories.
 - Post-v0.1.13 follow-ups are not yet Windows/runtime validated: in-place adoption of a matching Not-installed TocPilot record, the new TaskDialog/Common-Controls-v6 wrapper, expanded/collapsed detail labels, and the compact adoption summary/refusal presentation.
+- v0.1.15 implementation is not yet Windows/runtime validated. Required checks: startup status refresh completes without installing anything; rows accurately switch to **Update available** when remote SHA differs; manual Update All still works afterward; every package column sorts ascending/descending without changing package identity/action targets; sort arrows render correctly; Add Git details show unmanaged/local, Blizzard/system, non-addon, and Git-container folders; Git-container diagnostics inspect no deeper than one child directory.
 - The adoption pass intentionally does not yet claim GitLab repositories, detached HEADs, linked worktrees/submodules, or Git repository containers without a root-level `.toc`. GitAddonsManager has no unique ownership marker, so the UI explicitly warns that an eligible normal Git clone is indistinguishable from a GitAddonsManager-created clone.
 - Runtime/repository investigation identified the GAM container layout for the two remaining refusals. `satan666/_LP` tracks the loadable addon under `_LazyPig/_LazyPig.toc`, while the user's live `_LP` folder contains only `.git` plus repository metadata; GAM has therefore separated the tracked addon root into a sibling live folder while retaining the Git container. `Cabro/Atlas` similarly tracks three loadable roots: `Atlas/Atlas.toc`, `AtlasLoot/AtlasLoot.toc`, and `AtlasQuest/AtlasQuest.toc`. Future complex-GAM adoption should resolve the container's exact local SHA/origin, inspect that exact repository revision using the existing archive-inspection path, map detected addon roots to sibling live `Interface\\AddOns` folders, and adopt those roots as one TocPilot package without touching the Git container.
 - Current update-readiness UX limitation: package rows already derive **Current** vs **Update available** by comparing `installed_revision` and `latest_revision`, and the selected Install button changes to **Update** when they differ. However, TocPilot does not automatically refresh all remote branch heads at startup, so `latest_revision` may be stale until manual Refresh or Update All; automatic status refresh is therefore required for trustworthy at-a-glance update indicators.
@@ -528,8 +540,8 @@ Complete. A real `v0.1.0 -> v0.1.1` in-app self-update succeeded on Windows besi
 
 ## Exact next step
 
-1. Implement a startup/background refresh pass for installed/configured GitHub branch packages that updates `latest_revision` only, never installs automatically, and makes **Current** / **Update available** trustworthy without pressing Refresh or Update All.
-2. Implement ListView header sorting with ascending/descending toggle and visible sort indicator while preserving package identity/selection independently of display row order.
-3. Add a read-only AddOns folder classifier for immediate children of `Interface\\AddOns`: managed root, unmanaged root-level-`.toc` addon, Git repository container, Blizzard/system/local addon, and non-addon/no-`.toc` folder. For Git containers, inspect at most one directory level down for `.toc` roots and report them diagnostically; do not adopt multi-root containers yet.
-4. Add deterministic tests for the non-UI classification/sort/status helpers where practical, then Windows-CI the exact source head.
-5. Version/publish the next runtime build (expected `v0.1.15`) only after Windows x64 build/full CTest passes. Runtime-test auto update-readiness, column sorting, and folder diagnostics.
+1. Version implementation head `2059d73` as `v0.1.15` and request the automated release.
+2. Treat the release workflow as the Windows gate: source/version validation, x64 Release build, and complete CTest suite (including `addon-folder-classification`) must pass before the tag/assets count as published.
+3. Runtime-test startup status refresh: no addon files change automatically, Current/Update available is accurate, and Update All still works normally afterward.
+4. Runtime-test Name / Source / Installed / Latest / Status header sorting in both directions; selection and package actions must continue to target the correct package after sorting.
+5. Open **Adopt Git → Show details** and confirm ignored-folder diagnostics include Blizzard/system/local folders, non-addon folders, and Git repository containers with only one-level nested addon-root reporting.
