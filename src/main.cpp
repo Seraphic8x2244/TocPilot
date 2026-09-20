@@ -25,6 +25,7 @@
 #include <cwctype>
 #include <cstdint>
 #include <filesystem>
+#include <iterator>
 #include <memory>
 #include <optional>
 #include <string>
@@ -3295,6 +3296,13 @@ void StartUpdateCheck(
                     ? L"Updating..."
                     : L"Checking...");
         }
+        if (g_tocPilotUpdateStatus) {
+            SetWindowTextW(
+                g_tocPilotUpdateStatus,
+                g_appUpdateInProgress
+                    ? L"Downloading and verifying the TocPilot update..."
+                    : L"Checking GitHub for the latest TocPilot release...");
+        }
         return;
     }
 
@@ -4449,9 +4457,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
 
         if (LOWORD(wParam) == IDC_REFRESH_PACKAGES &&
             HIWORD(wParam) == BN_CLICKED) {
-            if (refreshAddonsAfter) {
-                StartAutoStatusRefresh(hwnd);
-            }
+            StartAutoStatusRefresh(hwnd);
             return 0;
         }
 
@@ -4716,7 +4722,9 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                 L"Update check failed. Check your connection and try again.",
                 L"Retry Check",
                 true);
-            StartAutoStatusRefresh(hwnd);
+            if (refreshAddonsAfter) {
+                StartAutoStatusRefresh(hwnd);
+            }
             return 0;
         }
 
@@ -5568,7 +5576,7 @@ std::wstring InstanceKeyForRoot(
         });
 
     std::uint64_t hash =
-        1469598103934665603ULL;
+        14695981039346656037ULL;
 
     for (const wchar_t value :
          text) {
