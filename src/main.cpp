@@ -699,41 +699,16 @@ void LayoutControls(HWND hwnd) {
     PositionBranchSelector();
 
     const int iconSize = 40;
-    const int iconGap = 10;
     const int iconY =
         std::max(
             listTop + listHeight + 8,
             height - 54);
 
-    int iconX =
-        width - 20 - iconSize;
-
-    if (g_launchVanillaFixesButton) {
-        ShowWindow(
-            g_launchVanillaFixesButton,
-            g_hasVanillaFixes
-                ? SW_SHOW
-                : SW_HIDE);
-
-        if (g_hasVanillaFixes) {
-            MoveWindow(
-                g_launchVanillaFixesButton,
-                iconX,
-                iconY,
-                iconSize,
-                iconSize,
-                TRUE);
-            iconX -=
-                iconSize +
-                iconGap;
-        }
-    }
-
     if (g_launchWowButton) {
         ShowWindow(g_launchWowButton, SW_SHOW);
         MoveWindow(
             g_launchWowButton,
-            iconX,
+            width - 20 - iconSize,
             iconY,
             iconSize,
             iconSize,
@@ -3178,66 +3153,25 @@ void ContinueUpdateAll(HWND hwnd) {
         const auto& package =
             g_state.packages[index];
 
-        if (tp::IsPackageRefreshFresh(
-                g_packageRefreshStamps,
-                package,
-                GetTickCount64())) {
-            if (package.installedRevision !=
-                package.latestRevision) {
-                SetPackageRowStatus(
-                    index,
-                    L"Update available");
-
-                if (g_packageHint) {
-                    const std::wstring message =
-                        L"Update All: using recent status for " +
-                        package.name +
-                        L"; preparing the known changed revision.";
-
-                    SetWindowTextW(
-                        g_packageHint,
-                        message.c_str());
-                }
-
-                StartPackageInstall(
-                    hwnd,
-                    index,
-                    package.latestRevision);
-                return;
-            }
-
-            std::wstring ignored;
-            tp::CompleteUpdateAllItem(
-                g_updateAllProgress,
-                tp::UpdateAllOutcome::Current,
-                {},
-                ignored);
-            continue;
-        }
-
         SetPackageRowStatus(
             index,
-            L"Checking...");
+            L"Updating...");
 
         if (g_packageHint) {
             const std::wstring message =
-                L"Update All: checking " +
-                std::to_wstring(
-                    g_updateAllProgress.position + 1) +
-                L" of " +
-                std::to_wstring(
-                    g_updateAllProgress.packageIds.size()) +
-                L" - " +
+                L"Update All: applying the known update for " +
                 package.name +
-                L".";
+                L". Refresh All is responsible for discovering newer revisions.";
+
             SetWindowTextW(
                 g_packageHint,
                 message.c_str());
         }
 
-        StartPackageRefresh(
+        StartPackageInstall(
             hwnd,
-            index);
+            index,
+            package.latestRevision);
         return;
     }
 
@@ -3293,18 +3227,18 @@ void StartUpdateAll(HWND hwnd) {
     if (progress.packageIds.empty()) {
         MessageBoxW(
             hwnd,
-            L"There are no installed GitHub branch packages eligible for Update All.",
+            L"There are no installed addons currently marked Update available. Run Refresh All to check for new revisions.",
             L"TocPilot - Update All",
             MB_OK | MB_ICONINFORMATION);
         return;
     }
 
     std::wstring prompt =
-        L"Check " +
+        L"Update " +
         std::to_wstring(progress.packageIds.size()) +
-        L" installed package(s) and update any whose tracked branch has changed?\r\n\r\n"
-        L"Packages that are already current will not be reinstalled. "
-        L"Packages that are not installed are ignored. "
+        L" addon(s) already marked Update available?\r\n\r\n"
+        L"Update All will use the latest revisions already discovered by startup or Refresh All. "
+        L"It will not rescan addons that are currently marked Current. "
         L"If one package fails, TocPilot will continue with the remaining packages.";
 
     if (MessageBoxW(
@@ -5162,23 +5096,6 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             GetModuleHandleW(nullptr),
             nullptr);
 
-        g_launchVanillaFixesButton = CreateWindowExW(
-            0,
-            L"BUTTON",
-            L"Launch VanillaFixes",
-            WS_CHILD | WS_VISIBLE | WS_TABSTOP |
-                BS_PUSHBUTTON | BS_ICON,
-            0,
-            0,
-            40,
-            40,
-            hwnd,
-            reinterpret_cast<HMENU>(
-                static_cast<INT_PTR>(
-                    IDC_LAUNCH_VANILLAFIXES)),
-            GetModuleHandleW(nullptr),
-            nullptr);
-
         g_wowIcon =
             LoadExecutableIcon(
                 g_root / L"WoW.exe",
@@ -5199,29 +5116,26 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                     36);
         }
 
-        if (g_wowIcon) {
+        const HICON launchIcon =
+            g_hasVanillaFixes &&
+                    g_vanillaFixesIcon
+                ? g_vanillaFixesIcon
+                : g_wowIcon;
+
+        SetWindowTextW(
+            g_launchWowButton,
+            g_hasVanillaFixes
+                ? L"Launch VanillaFixes"
+                : L"Launch WoW");
+
+        if (launchIcon) {
             SendMessageW(
                 g_launchWowButton,
                 BM_SETIMAGE,
                 IMAGE_ICON,
                 reinterpret_cast<LPARAM>(
-                    g_wowIcon));
+                    launchIcon));
         }
-
-        if (g_vanillaFixesIcon) {
-            SendMessageW(
-                g_launchVanillaFixesButton,
-                BM_SETIMAGE,
-                IMAGE_ICON,
-                reinterpret_cast<LPARAM>(
-                    g_vanillaFixesIcon));
-        }
-
-        ShowWindow(
-            g_launchVanillaFixesButton,
-            g_hasVanillaFixes
-                ? SW_SHOW
-                : SW_HIDE);
 
         AddPackageListColumns();
         PopulatePackageList();
@@ -5229,13 +5143,9 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
         ApplyUiFont(hwnd);
         LayoutControls(hwnd);
 
-        if (!g_stateReady || g_state.settings.checkAppUpdates) {
-            StartUpdateCheck(
-                hwnd,
-                true);
-        } else {
-            StartAutoStatusRefresh(hwnd);
-        }
+        StartUpdateCheck(
+            hwnd,
+            true);
 
         return 0;
     }
@@ -5412,15 +5322,9 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             HIWORD(wParam) == BN_CLICKED) {
             LaunchSiblingExecutable(
                 hwnd,
-                L"WoW.exe");
-            return 0;
-        }
-
-        if (LOWORD(wParam) == IDC_LAUNCH_VANILLAFIXES &&
-            HIWORD(wParam) == BN_CLICKED) {
-            LaunchSiblingExecutable(
-                hwnd,
-                L"VanillaFixes.exe");
+                g_hasVanillaFixes
+                    ? L"VanillaFixes.exe"
+                    : L"WoW.exe");
             return 0;
         }
 
