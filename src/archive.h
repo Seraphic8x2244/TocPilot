@@ -58,6 +58,7 @@ bool DetectAddonCandidates(
 bool DetectGitHubAddonCandidates(
     const std::filesystem::path& extractedRoot,
     std::wstring_view repository,
+    std::wstring_view existingInstallFolder,
     std::vector<AddonCandidate>& candidates,
     std::wstring& error);
 
