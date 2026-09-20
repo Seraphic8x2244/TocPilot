@@ -490,6 +490,17 @@ Complete. A real `v0.1.0 -> v0.1.1` in-app self-update succeeded on Windows besi
 - local modification detection/backups;
 - diagnostics.
 
+### Later UI direction
+
+- Add **Launch WoW.exe** and **Launch VanillaFixes.exe** buttons. Launch targets should resolve beside TocPilot/WoW and fail cleanly if the executable is absent.
+- Default to a compact/small main window focused on addon name + status.
+- Keep the normal path automatic/minimal:
+  - automatically check TocPilot for updates and show a simple Yes/No prompt when one is available;
+  - automatically scan for newly discoverable GitAddonsManager/Git installs and show a simple Yes/No adoption prompt only when new candidates exist.
+- Compact-mode primary actions: **Add**, **Update**, **Remove**, **Advanced**.
+- **Advanced** expands the window to the right and exposes the detailed addon columns plus lower-frequency controls such as branch/refresh/inspect/reinstall/ownership diagnostics.
+- Treat this as a later UI-wrapper/layout pass; do not mix it into the current v0.1.14 adoption-fix release.
+
 ## Deferred
 
 - private repositories/authentication;
