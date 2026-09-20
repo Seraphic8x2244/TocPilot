@@ -4,7 +4,14 @@
 
 - Active branch: `p2-github-branches`.
 - Current application version: `v0.1.12`; release tag exists and the user confirmed the installed `v0.1.11` client successfully self-updated to `v0.1.12`. The user has now also runtime-tested Update All, including the changed-branch path, so the v0.1.12 Update All runtime gate is cleared.
-- Latest implementation commit: `9dd56e4` — Polish uninstall development controls.
+- Latest implementation commit: `45e4603` — Refuse incomplete adoption scans.
+- New GitAddonsManager-adoption implementation commits:
+  - `45e4603` — Refuse incomplete adoption scans.
+  - `1fb09dd` — Add conservative Git install adoption UI.
+  - `09b2848` — Wire Git addon adoption tests.
+  - `f71895d` — Test conservative Git addon adoption.
+  - `e148319` — Plan conservative GitAddonsManager adoption.
+  - `19f266b` — Add Git addon adoption planning API.
 - New uninstall implementation commits:
   - `f75f286` — Add transactional package uninstall UI.
   - `c4c1864` — Test uninstall state clearing.
@@ -13,6 +20,7 @@
   - `5ca70ee` — Add installed-state clear operation.
   - `ef0ddd2` — Reuse install transactions for addon removal.
   - `7a194fb` — Add removal transaction planning API.
+- Completed in source: conservative adoption of simple existing Git-managed addon installs. The new **Adopt Git** flow scans only direct `Interface\\AddOns\\<folder>` repositories, reads local `.git` metadata without requiring Git/libgit2, requires a root-level `.toc`, an `origin` GitHub URL, attached local branch, matching upstream metadata, and a resolvable 40-character local HEAD; excludes `.git` from TocPilot file ownership; refuses duplicate repositories and addon roots already owned by TocPilot; stages all accepted records in memory and writes `TocPilot.json` once after user confirmation without reinstalling, deleting, or overwriting live addon files. GitLab, detached HEADs, linked worktrees/submodules, complex/unpacked multi-root layouts, symlinked content, and incomplete filesystem scans are refused.
 - Completed in source: transactional uninstall for TocPilot-owned addon roots now reuses the existing install transaction/backup/rollback engine; shared ownership is refused; failed filesystem commits roll back; failed state saves restore removed roots; successful uninstall clears installed revision/file ownership while retaining repository/branch tracking; the existing **Forget** action remains explicitly non-destructive; deterministic install/state tests cover removal, shared ownership refusal, injected rollback, and installed-state clearing.
 - Previously completed and runtime-validated: P0 self-update; P1 state/UI/provider foundation; GitHub branch selection/Refresh/Inspect; transactional single-package install/reinstall; unmanaged addon-root collision refusal, through `v0.1.10`.
 - Runtime gate cleared for the uninstall slice: the user confirmed `v0.1.11` Uninstall behaved as expected through uninstall, restart, retained package state, and reinstall.
@@ -28,15 +36,21 @@
 
 - Repository: `Seraphic8x2244/TocPilot`
 - Branch: `p2-github-branches`
-- Product stage: P0/P1 validated; P2 GitHub branch tracking and single-package install/reinstall runtime-validated, transactional uninstall implemented in source and awaiting CI/runtime validation
+- Product stage: P0/P1 validated; P2 GitHub branch install/update/uninstall and Update All runtime-validated through v0.1.12; conservative GitAddonsManager/Git-clone adoption is implemented in source and awaiting Windows CI/runtime validation
 - License: MIT
 - Intended platform: Windows x64
 - Implementation: native C++20 / Win32 / CMake
-- Highest priority: adopt existing GitAddonsManager installs conservatively without changing their live addon files
+- Highest priority: Windows-CI validate the new conservative Git adoption planner/UI, then publish a v0.1.13 runtime-test build
 - Current application version: `v0.1.11`; published and runtime-validated for transactional uninstall/reinstall.
 
 ## Latest commits
 
+- `45e4603` — Refuse incomplete adoption scans
+- `1fb09dd` — Add conservative Git install adoption UI
+- `09b2848` — Wire Git addon adoption tests
+- `f71895d` — Test conservative Git addon adoption
+- `e148319` — Plan conservative GitAddonsManager adoption
+- `19f266b` — Add Git addon adoption planning API
 - `9dd56e4` — Polish uninstall development controls
 - `f75f286` — Add transactional package uninstall UI
 - `c4c1864` — Test uninstall state clearing
@@ -327,6 +341,9 @@ Tracked-branch Refresh test release `v0.1.6` was published automatically. Releas
 
 ## Untested / remaining validation
 
+- New adoption slice is not yet Windows-CI or runtime validated. Required checks: planner/test target compiles under MSVC; valid GitHub simple-root clone is detected; candidate preview is correct; confirming adoption changes only `TocPilot.json`; live addon files and `.git` remain unchanged; restart shows Current with installed/latest SHA preserved; subsequent Refresh and Update All work from the adopted state; already-managed roots/repositories and complex GitAddonsManager layouts are refused safely.
+- The adoption pass intentionally does not claim GitLab repositories, detached HEADs, linked worktrees/submodules, or repositories without a root-level `.toc`. GitAddonsManager has no unique ownership marker, so the UI explicitly warns that an eligible normal Git clone is indistinguishable from a GitAddonsManager-created clone.
+
 - `v0.1.10` successful-path runtime validation passed with `Shellyoung/AdvancedTradeSkillWindow2` on its default `main` branch: first install succeeded, TocPilot still showed the package as Current after restart, and Reinstall completed successfully. This validates the normal transactional install/reinstall path and persisted ownership/state at runtime.
 
 - `v0.1.10` unmanaged pfUI collision runtime test passed: `brues-code/pfUI` / `master` correctly refused to replace the existing unmanaged `Interface\AddOns\pfUI`, showed the failure popup, and created no generated GitHub wrapper folder.
@@ -442,8 +459,8 @@ Complete. A real `v0.1.0 -> v0.1.1` in-app self-update succeeded on Windows besi
 
 ## Exact next step
 
-1. Inspect GitAddonsManager's on-disk repository layout and the local `.git` metadata available inside existing managed addon folders.
-2. Add a read-only discovery/planning layer that identifies safe GitHub branch candidates without modifying live files.
-3. Require repository normalization, branch/ref resolution, current HEAD identification, addon-root mapping, and collision/ownership checks before adoption is allowed.
-4. Persist successful adoption as TocPilot package state (`installed_revision` plus full `installed_files`) without reinstalling, deleting, or overwriting the existing addon.
-5. Add deterministic CTests for valid adoption and conservative refusal cases before exposing the adoption UI.
+1. Get Windows x64 CI/CTest green for adoption implementation head `45e4603`, including the new `git-addon-adoption` test target.
+2. Fix any MSVC/CTest issues before versioning; do not publish a runtime build from a failing source head.
+3. Bump source/release version to `v0.1.13` and publish through the automated release workflow.
+4. Runtime-test **Adopt Git** against real existing GitAddonsManager installs: preview candidates/refusals, adopt at least one simple GitHub root-addon clone, verify no live addon or `.git` file changed, restart, Refresh, and Update All.
+5. After that gate passes, decide whether to extend adoption to GitAddonsManager's complex/unpacked multi-root layout; do not guess ownership for those roots in the current slice.
