@@ -1,5 +1,50 @@
 # TocPilot status / handoff
 
+## Release-prep checkpoint — 2026-09-20 v0.1.23 Advanced branch selector
+
+- Active branch: `p2-github-branches`.
+- Published baseline entering this slice: `v0.1.22`.
+- New source version: `v0.1.23`.
+- Key implementation commits:
+  - `7853ba4` — **Initialize Advanced branch selector on toggle**.
+  - `7627fff` — **Add inline Advanced branch selector**.
+  - `0c17600` — **Checkpoint v0.1.23 branch selector slice**.
+  - `911fe54` / `4af5fbc` — v0.1.23 build/version bumps.
+- Completed:
+  - **TocPilot** is now Advanced-only and is hidden in compact mode;
+  - compact toolbar is now **Update All / Add Git / Remove / Advanced**, still equal-width;
+  - Advanced toolbar order is **Update All / Add Git / Refresh All / Reinstall / Remove / Scan Existing Addons / TocPilot / Advanced**;
+  - therefore **Scan Existing Addons** is directly between **Remove** and **TocPilot** as requested;
+  - removed the obsolete hidden **Set Branch** button/command from the main window;
+  - Advanced mode now overlays a branch dropdown on the selected GitHub package's **Source / Track** cell;
+  - selecting a row asynchronously loads visible branches using the existing GitHub/Git smart-HTTP repository-info path;
+  - changing the dropdown immediately updates the tracked branch and saved latest branch SHA in `TocPilot.json`, but does **not** reinstall or modify addon files;
+  - branch selection records the fetched SHA as fresh so a following **Update All** can use that known branch head without an unnecessary immediate re-query;
+  - stale async branch-load results are generation-guarded when selection changes;
+  - the selector follows list scrolling, column resizing, sorting, window resizing, and Advanced toggling;
+  - failed branch lookups leave the current branch visible and can retry on the next dropdown open;
+  - the existing branch-selection dialog remains for the initial **Add Git** workflow.
+- Validation:
+  - Windows x64 build run `35530113414` completed successfully from the branch-selector implementation commit;
+  - complete CTest suite passed in that run;
+  - an earlier intermediate build from `7627fff` failed because the first branch-selector commit lacked one forward declaration; `7853ba4` fixed it and passed.
+- Still requires runtime UI testing:
+  - compact toolbar after removing TocPilot;
+  - exact Advanced button spacing/order;
+  - selected-row inline dropdown alignment while scrolling/resizing;
+  - branch list loading/retry behavior;
+  - changing branch updates tracking/status without installing files;
+  - branch dropdown behavior on repositories with many branches or a missing old branch.
+
+## Exact next step
+
+1. Publish v0.1.23 only if the release workflow passes Windows Release build + complete CTest suite.
+2. Self-update the runtime install to v0.1.23.
+3. In Advanced mode select several addons and verify the dropdown appears in each selected **Source / Track** cell and follows scrolling.
+4. Change one package between `main` and a custom branch such as `dev`; verify only tracking/status changes until **Update All** or **Reinstall** is explicitly invoked.
+5. Confirm compact has no TocPilot button and Advanced has **Remove / Scan Existing Addons / TocPilot** in that order.
+6. Refine from runtime feedback; provider expansion remains frozen.
+
 ## Continuation checkpoint — 2026-09-20 v0.1.23 branch-selector/UI refinement
 
 - Active branch: `p2-github-branches`.
