@@ -48,6 +48,7 @@
   - this was performed after the prior GitHub REST allowance had been exhausted, validating that routine managed-addon branch refresh no longer depends on the GitHub REST branches API;
   - real managed-addon update flow therefore validated smart-HTTP branch-head discovery plus direct GitHub codeload archive transport under normal application use.
 
+- Product priority changed after the v0.1.19 GitHub transport pass: **do not add GitLab/Gitea/OctoWoW provider support yet**. Finish the GitHub-only product to a smooth, properly laid-out state first. Cross-provider transport is deferred until the GitHub UX/layout is considered complete.
 - Deferred after the GitHub runtime gate:
   - switch branch enumeration/default-branch UI away from REST if quota pressure there becomes material;
   - validate the same provider-neutral ref discovery against GitLab and OctoWoW/Gitea-style hosts;
@@ -614,25 +615,13 @@ Complete. A real `v0.1.0 -> v0.1.1` in-app self-update succeeded on Windows besi
 - For Git repository containers, inspect only the repository root and **one directory level down** for addon roots; do not recursively hunt arbitrary repository depth.
 - For repositories containing multiple addon roots, present each detected root as an explicit Yes/No choice and persist that selection as package configuration so future Install/Update respects excluded roots. If a later revision adds a new addon root, surface it as a new choice instead of installing it silently.
 - Keep the repository/package as the update unit while allowing selected addon roots within it. This should support GAM layouts such as `_LP -> _LazyPig` and `Atlas.repo -> Atlas + AtlasLoot + AtlasQuest` after exact-SHA/sibling-root mapping is validated.
-- Treat this as a later UI-wrapper/layout pass; do not mix it into the current v0.1.14 adoption-fix release.
+- Treat this as a later UI-wrapper/layout pa## Exact next step
 
-## Deferred
-
-- private repositories/authentication;
-- code signing;
-- self-hosted GitLab;
-- rollback history UI;
-- delta updates;
-- CLI/headless mode;
-- scheduled/background updating;
-- multi-directory profile management.
-
-## Exact next step
-
-1. Treat the GitHub transport/runtime gate as passed on `v0.1.19`.
-2. Validate the existing provider-neutral smart-HTTP ref resolver against one public GitLab repository and one OctoWoW/Gitea-style public repository using live CI probes.
-3. Record any concrete host/path/protocol differences. Add host-specific URL construction only where those live tests prove it is necessary.
-4. After ref discovery works on each host, add direct exact-SHA archive URL construction for that host while preserving the existing staging, ZIP validation, ownership, rollback, and transactional install pipeline.
-5. Keep GitHub branch enumeration/default-branch UI on REST for now; it is low-frequency and no longer blocks routine development.
-6. After cross-host transport is stable, return to deferred multi-root GAM adoption / per-root Yes-No selection and remaining compact-UI work.
-7. Do not add libgit2, bundled Git, required `git.exe`, or public-repository credentials.
+1. Freeze provider expansion. Keep the current GitHub-only runtime path as the production target for now.
+2. Finish the GitHub UX before adding another provider: review the current main-window layout, package actions, status presentation, sorting, and launch controls against the deferred compact-layout design.
+3. Implement the compact default layout first: primary package list with **Add / Update / Remove / Advanced**, keeping routine actions visible without the large development-oriented control surface.
+4. Make **Advanced** expand the window to the right for lower-frequency controls/details rather than crowding the default view.
+5. Add/finish **Launch WoW** and **Launch VanillaFixes** controls in the intended compact area, with correct enabled/disabled behavior.
+6. Finish package-list sorting and remaining GitHub-only folder/status classification UX needed for day-to-day addon development.
+7. Keep the already-proven smart-HTTP branch discovery, direct codeload archive transport, cache, staging, ZIP validation, ownership, rollback, and transactional install pipeline unchanged while doing UI work.
+8. Only after the GitHub-only application feels complete and the layout is runtime-validated should provider-neutral GitLab/Gitea/OctoWoW work resume.
