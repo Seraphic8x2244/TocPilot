@@ -541,19 +541,103 @@ void TestExistingRootOwnershipRejected() {
         ec);
 }
 
-void TestDuplicateRepositoryRejected() {
+void TestSourceOnlyRepositoryAdoptedInPlace() {
     const auto root =
         MakeSimpleClone(
-            L"duplicate");
+            L"sourceonly");
 
     if (root.empty()) {
-        Fail("could not create duplicate fixture");
+        Fail("could not create source-only fixture");
         return;
     }
 
     tp::PackageRecord existing;
     existing.id =
         L"github:owner/exampleaddon";
+    existing.name =
+        L"Custom Display Name";
+    existing.provider =
+        L"github";
+    existing.repository =
+        L"owner/exampleaddon";
+    existing.mode =
+        L"unconfigured";
+    existing.target =
+        L"addons";
+    existing.sourceJson =
+        "{\"future\":true}";
+
+    tp::AppState state;
+    state.packages.push_back(
+        existing);
+
+    tp::GitAddonAdoptionPlan plan;
+    std::wstring error;
+
+    if (!tp::PlanGitAddonAdoption(
+            root,
+            root /
+                L"Interface" /
+                L"AddOns" /
+                L"ExampleAddon",
+            state,
+            plan,
+            error) ||
+        !plan.existingPackageIndex ||
+        *plan.existingPackageIndex != 0 ||
+        plan.package.name !=
+            L"Custom Display Name" ||
+        plan.package.sourceJson !=
+            existing.sourceJson ||
+        plan.package.mode !=
+            L"branch" ||
+        plan.package.ref !=
+            L"main" ||
+        plan.package.installedRevision !=
+            L"0123456789abcdef0123456789abcdef01234567" ||
+        plan.package.installedFiles.size() !=
+            2) {
+        Fail("source-only repository was not prepared for in-place adoption");
+    }
+
+    std::error_code ec;
+    std::filesystem::remove_all(
+        root,
+        ec);
+}
+
+void TestInstalledRepositoryRejected() {
+    const auto root =
+        MakeSimpleClone(
+            L"duplicate");
+
+    if (root.empty()) {
+        Fail("could not create installed duplicate fixture");
+        return;
+    }
+
+    tp::PackageRecord existing;
+    existing.id =
+        L"github:owner/exampleaddon";
+    existing.name =
+        L"ExampleAddon";
+    existing.provider =
+        L"github";
+    existing.repository =
+        L"owner/exampleaddon";
+    existing.mode =
+        L"branch";
+    existing.ref =
+        L"main";
+    existing.target =
+        L"addons";
+    existing.installedRevision =
+        L"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    existing.latestRevision =
+        existing.installedRevision;
+    existing.installedFiles = {
+        L"Interface/AddOns/ExampleAddon/main.lua"
+    };
 
     tp::AppState state;
     state.packages.push_back(
@@ -574,7 +658,7 @@ void TestDuplicateRepositoryRejected() {
         error.find(
             L"already managed") ==
             std::wstring::npos) {
-        Fail("duplicate repository adoption was accepted");
+        Fail("already-installed repository adoption was accepted");
     }
 
     std::error_code ec;
@@ -594,7 +678,8 @@ int main() {
     TestBrokenUpstreamRejected();
     TestGitFileLayoutRejected();
     TestExistingRootOwnershipRejected();
-    TestDuplicateRepositoryRejected();
+    TestSourceOnlyRepositoryAdoptedInPlace();
+    TestInstalledRepositoryRejected();
 
     if (failures != 0) {
         std::cerr
