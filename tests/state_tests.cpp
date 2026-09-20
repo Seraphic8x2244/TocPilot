@@ -139,6 +139,9 @@ void TestCreateAddRoundTrip(
     }
 
     state.settings.textScale = 1.25;
+    state.settings.packageSortColumn = 4;
+    state.settings.packageSortAscending = false;
+
     if (!tp::SaveState(root, state, error)) {
         Fail("SaveState failed");
         return;
@@ -165,7 +168,9 @@ void TestCreateAddRoundTrip(
         loaded.packages[0].installedRevision != installedSha ||
         loaded.packages[0].latestRevision != installedSha ||
         loaded.packages[0].installedFiles != installedFiles ||
-        loaded.settings.textScale != 1.25) {
+        loaded.settings.textScale != 1.25 ||
+        loaded.settings.packageSortColumn != 4 ||
+        loaded.settings.packageSortAscending) {
         Fail("round-trip state values did not match");
     }
 }
