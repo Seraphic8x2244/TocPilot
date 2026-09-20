@@ -107,9 +107,9 @@ int ShowExpandableDialog(
         config.pszExpandedInformation =
             detailsText.c_str();
         config.pszExpandedControlText =
-            L"Show details";
-        config.pszCollapsedControlText =
             L"Hide details";
+        config.pszCollapsedControlText =
+            L"Show details";
     }
 
     if (defaultButton != 0) {
