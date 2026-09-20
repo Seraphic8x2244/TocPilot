@@ -1,5 +1,44 @@
 # TocPilot status / handoff
 
+## Release checkpoint — 2026-09-20 v0.1.25 published
+
+- Active branch: `p2-github-branches`.
+- Published version: `v0.1.25`.
+- Release tag `v0.1.25` points exactly to `c9e0b195bad05d26919d49bd9926379f371ed7e5` — **Request v0.1.25 behavior refinement release**.
+- Release workflow run `35536264813` completed successfully:
+  - source/version validation passed;
+  - Windows x64 Release configure/build passed;
+  - complete CTest suite passed;
+  - SHA-256 sidecar generation passed;
+  - tag creation passed;
+  - release asset publication passed.
+- Published `TocPilot.exe`: 894,464 bytes.
+- v0.1.25 behaviour changes:
+  - TocPilot now always checks its own latest release at normal startup, then continues into addon status refresh;
+  - **Update All** only queues addons already known to be **Update available** and applies their saved latest revision without rescanning Current addons;
+  - startup/**Refresh All** remain responsible for discovering remote addon updates;
+  - the WoW/VanillaFixes controls are now one smart launch button: `VanillaFixes.exe` + its icon when present, otherwise `WoW.exe` + its icon;
+  - Branch selection uses a transient native popup menu instead of an overlaid combobox, removing the main source of selector jitter/alignment problems;
+  - zero/one-branch repositories do not open a pointless branch popup; the selected one-branch row drops its arrow after discovery.
+- Installed/Latest still display abbreviated commit SHAs in v0.1.25:
+  - Smart HTTP can expose Git refs/tags but cannot read a remote addon TOC `## Version`;
+  - a future slice can map exact revisions to Git tags opportunistically and fall back to SHA;
+  - true TOC version values require remote content inspection.
+- Runtime testing still required for all v0.1.25 interaction changes.
+
+## Exact next runtime step
+
+1. Start the existing `v0.1.24` TocPilot and confirm it discovers `v0.1.25` automatically on opening.
+2. Self-update normally to `v0.1.25`.
+3. Confirm the single launch icon targets VanillaFixes when `VanillaFixes.exe` exists and WoW otherwise.
+4. In Advanced mode click Branch cells:
+   - multi-branch repositories should open a popup menu anchored to the cell;
+   - one-branch repositories should not open a one-item menu.
+5. Let startup status refresh complete, then press **Update All**:
+   - only addons already marked **Update available** should be queued/applied;
+   - Current addons should not be rescanned by Update All.
+6. Report runtime feedback before starting the human-readable version/tag slice or any provider expansion.
+
 ## Implementation checkpoint — 2026-09-20 post-v0.1.24 runtime-feedback slice
 
 - Active branch: `p2-github-branches`.
