@@ -615,13 +615,13 @@ Complete. A real `v0.1.0 -> v0.1.1` in-app self-update succeeded on Windows besi
 - For Git repository containers, inspect only the repository root and **one directory level down** for addon roots; do not recursively hunt arbitrary repository depth.
 - For repositories containing multiple addon roots, present each detected root as an explicit Yes/No choice and persist that selection as package configuration so future Install/Update respects excluded roots. If a later revision adds a new addon root, surface it as a new choice instead of installing it silently.
 - Keep the repository/package as the update unit while allowing selected addon roots within it. This should support GAM layouts such as `_LP -> _LazyPig` and `Atlas.repo -> Atlas + AtlasLoot + AtlasQuest` after exact-SHA/sibling-root mapping is validated.
-- Treat this as a later UI-wrapper/layout pa## Exact next step
+- Treat this as a later UI-wrapper/layout pa- New GitHub-only blocker found after the transport runtime pass: branch lookup / branch-picker enumeration still uses GitHub REST (`FetchGitHubRepositoryInfo`), so it remains unusable when the unauthenticated quota is exhausted. Before layout work, move GitHub branch enumeration/default-branch discovery onto the existing smart-HTTP ref advertisement too.
+## Exact next step
 
-1. Freeze provider expansion. Keep the current GitHub-only runtime path as the production target for now.
-2. Finish the GitHub UX before adding another provider: review the current main-window layout, package actions, status presentation, sorting, and launch controls against the deferred compact-layout design.
-3. Implement the compact default layout first: primary package list with **Add / Update / Remove / Advanced**, keeping routine actions visible without the large development-oriented control surface.
-4. Make **Advanced** expand the window to the right for lower-frequency controls/details rather than crowding the default view.
-5. Add/finish **Launch WoW** and **Launch VanillaFixes** controls in the intended compact area, with correct enabled/disabled behavior.
-6. Finish package-list sorting and remaining GitHub-only folder/status classification UX needed for day-to-day addon development.
-7. Keep the already-proven smart-HTTP branch discovery, direct codeload archive transport, cache, staging, ZIP validation, ownership, rollback, and transactional install pipeline unchanged while doing UI work.
-8. Only after the GitHub-only application feels complete and the layout is runtime-validated should provider-neutral GitLab/Gitea/OctoWoW work resume.
+1. Before layout work, remove the **remaining GitHub REST dependency in branch lookup**. Extend the smart-HTTP advertisement parser to enumerate all `refs/heads/*` and read the advertised `symref=HEAD:refs/heads/<default>` capability.
+2. Change GitHub repository/branch discovery used by Add Package / Set Branch to consume that smart-HTTP result instead of repository metadata + `/branches` REST calls.
+3. Add deterministic parser tests for branch enumeration/default-branch symref plus a live GitHub branch-list probe in CI.
+4. Runtime-test Add Package / Set Branch with the GitHub REST quota still exhausted.
+5. Once all routine GitHub operations—including branch lookup—are quota-free and stable, resume the GitHub-only UI/layout pass: compact **Add / Update / Remove / Advanced**, right-side advanced expansion, launch controls, sorting/status polish.
+6. Keep provider expansion frozen until GitHub UX/layout is complete.
+7. Keep the proven smart-HTTP SHA discovery, codeload transport, staging/security/ownership/rollback/transaction code unchanged except where branch enumeration reuses the same advertisement.
