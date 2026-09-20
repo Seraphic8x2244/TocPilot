@@ -58,7 +58,7 @@
 - License: MIT
 - Intended platform: Windows x64
 - Implementation: native C++20 / Win32 / CMake
-- Highest priority: runtime-test v0.1.14 in-place adoption and expandable details once the release asset/self-update is visible
+- Highest priority: build the next runtime slice with automatic managed-addon status refresh, clickable package-column sorting, and read-only AddOns folder classification / one-level Git-container diagnostics
 - Current adoption runtime result: 21 managed packages completed Update All with 1 updated / 20 current / 0 failed after existing Git installs were adopted.
 
 ## Latest commits
@@ -528,8 +528,8 @@ Complete. A real `v0.1.0 -> v0.1.1` in-app self-update succeeded on Windows besi
 
 ## Exact next step
 
-1. Let the installed v0.1.13 client detect/self-update to v0.1.14 once the release asset is visible.
-2. Runtime-test two focused cases: (a) a matching TocPilot **Not installed** record is adopted in place without Forget, and (b) adoption dialogs show compact counts with **Show details** exposing exact candidates/refusal reasons.
-3. Confirm restart persistence after adoption.
-4. Confirm retained `.git` metadata remains usable by GitAddonsManager.
-5. After those gates pass, begin the later compact-UI/launcher pass recorded under **Later UI direction**.
+1. Implement a startup/background refresh pass for installed/configured GitHub branch packages that updates `latest_revision` only, never installs automatically, and makes **Current** / **Update available** trustworthy without pressing Refresh or Update All.
+2. Implement ListView header sorting with ascending/descending toggle and visible sort indicator while preserving package identity/selection independently of display row order.
+3. Add a read-only AddOns folder classifier for immediate children of `Interface\\AddOns`: managed root, unmanaged root-level-`.toc` addon, Git repository container, Blizzard/system/local addon, and non-addon/no-`.toc` folder. For Git containers, inspect at most one directory level down for `.toc` roots and report them diagnostically; do not adopt multi-root containers yet.
+4. Add deterministic tests for the non-UI classification/sort/status helpers where practical, then Windows-CI the exact source head.
+5. Version/publish the next runtime build (expected `v0.1.15`) only after Windows x64 build/full CTest passes. Runtime-test auto update-readiness, column sorting, and folder diagnostics.
