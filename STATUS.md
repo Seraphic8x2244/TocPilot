@@ -63,6 +63,15 @@
 
 ## Latest commits
 
+- `c61adab` — Report rate-limited status sweeps clearly
+- `bb27ab2` — Stop redundant work when GitHub rate limits
+- `c0f96e4` — Reuse fresh branch heads during Update All
+- `659d9a0` — Build and test refresh freshness cache
+- `1a997d0` — Test package refresh freshness cache
+- `79c1f89` — Harden refresh freshness includes
+- `b61a019` — Implement package refresh freshness cache
+- `844a84c` — Add package refresh freshness API
+- `934d20c` — Record startup refresh rate-limit runtime bug
 - `b6ae493` — Request v0.1.16 root mapping fix release
 - `d8ddde8` — Set v0.1.16 application version
 - `6986cc2` — Bump TocPilot to v0.1.16
@@ -554,8 +563,8 @@ Complete. A real `v0.1.0 -> v0.1.1` in-app self-update succeeded on Windows besi
 
 ## Exact next step
 
-1. Add an in-process freshness cache for successful package branch-head refreshes. Startup auto-status checks should mark each package fresh after saving `latest_revision`.
-2. Update All should reuse a fresh cached result (short TTL, e.g. a few minutes) and immediately decide Current vs install/update without another GitHub branch-head request. Stale/unknown packages must still refresh normally.
-3. Add deterministic tests for fresh-cache eligibility/expiry and ensure failed refreshes never become fresh.
-4. Windows-CI and publish the next runtime fix build (expected `v0.1.17`).
-5. Runtime-test startup status sweep followed immediately by Update All: it must not hit GitHub rate limits, and the pending `pfUI-VendorTweaks` update should exercise the v0.1.16 root-preservation fix. Then finish sorting/folder-diagnostic checks.
+1. Version implementation head `c61adab` as `v0.1.17` and request the automated release.
+2. Require Windows x64 Release build and the full CTest suite, including the new `package-refresh-freshness` test, before treating the tag as published.
+3. Runtime-test after GitHub's current rate-limit window resets: let startup status refresh finish, then immediately run Update All. Update All should reuse the fresh branch heads instead of requerying all packages, and changed packages should install directly from the already-known exact SHA without another branch lookup.
+4. Confirm `pfUI-VendorTweaks` now updates in place with the v0.1.16 root-preservation fix.
+5. If GitHub is still rate-limiting at startup, v0.1.17 should stop the automatic sweep after the first rate-limit response and preserve saved status for the remainder instead of producing a 22-item failure storm.
