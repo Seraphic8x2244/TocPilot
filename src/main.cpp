@@ -1336,6 +1336,7 @@ void PopulatePackageList() {
 }
 
 void SelectPackageRow(std::size_t index);
+void RefreshPackageStateUi();
 
 int SelectedPackageRow() {
     if (!g_packageList) {
@@ -4498,6 +4499,7 @@ void ToggleAdvanced(HWND hwnd) {
             SWP_NOACTIVATE);
 
     LayoutControls(hwnd);
+    UpdatePackageButtons();
 }
 
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) {
