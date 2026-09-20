@@ -116,7 +116,7 @@ if(BUILD_TESTING)
         target_compile_options(TocPilotGitHubApiTests PRIVATE /W4 /permissive- /utf-8)
     endif()
 
-    add_test(NAME github-api-parsing COMMAND TocPilotGitHubApiTests)
+    add_test(NAME github-transport COMMAND TocPilotGitHubApiTests)
 
     add_executable(TocPilotGitRefsTests
         tests/git_refs_tests.cpp
