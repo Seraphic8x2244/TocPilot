@@ -4,7 +4,19 @@
 
 - Active branch: `p2-github-branches`.
 - Current runtime-tested application version includes the `v0.1.13` adoption slice. The user successfully adopted existing Git-managed addons, then ran Update All across 21 installed packages: Queued 21 / Processed 21 / Updated 1 / Already current 20 / Failed 0. This validates adoption feeding the normal refresh/update transaction path. Restart persistence and continued GitAddonsManager visibility of retained `.git` metadata remain the final adoption runtime checks.
-- Latest branch commit: `57d9f3d` — Request v0.1.13 adoption release. Latest adoption implementation/test commit: `dad2495` — Cover damaged Git adoption metadata.
+- Latest implementation commit: `5e9d4c8` — Fix expandable dialog labels. The current source still reports v0.1.13; the post-v0.1.13 adoption UX/source-only-record fixes have not yet been versioned for a new release.
+- Post-v0.1.13 adoption follow-up commits:
+  - `5e9d4c8` — Fix expandable dialog labels.
+  - `a2a47a4` — Harden task dialog manifest declaration.
+  - `04a6cac` — Use expandable adoption detail dialogs.
+  - `cb8626b` — Build native dialog wrapper.
+  - `3782839` — Implement expandable native dialogs.
+  - `4433a5e` — Add native expandable dialog API.
+  - `68543d3` — Upgrade source-only packages during adoption.
+  - `a46d70a` — Test in-place source-only adoption.
+  - `e895a1e` — Adopt source-only package records in place.
+  - `7786f77` — Track in-place adoption targets.
+  - `750af29` — Separate managed addons from adoption refusals.
 - New GitAddonsManager-adoption implementation/release commits:
   - `57d9f3d` — Request v0.1.13 adoption release.
   - `248012a` — Set v0.1.13 application version.
@@ -46,11 +58,22 @@
 - License: MIT
 - Intended platform: Windows x64
 - Implementation: native C++20 / Win32 / CMake
-- Highest priority: fix two adoption follow-ups before the next release: adopt an existing same-repository TocPilot record when it is still Not installed, and replace oversized adoption MessageBoxes with a native expandable-details dialog
+- Highest priority: Windows-CI validate the completed post-v0.1.13 adoption follow-ups, then version/publish the next runtime-test release
 - Current adoption runtime result: 21 managed packages completed Update All with 1 updated / 20 current / 0 failed after existing Git installs were adopted.
 
 ## Latest commits
 
+- `5e9d4c8` — Fix expandable dialog labels
+- `a2a47a4` — Harden task dialog manifest declaration
+- `04a6cac` — Use expandable adoption detail dialogs
+- `cb8626b` — Build native dialog wrapper
+- `3782839` — Implement expandable native dialogs
+- `4433a5e` — Add native expandable dialog API
+- `68543d3` — Upgrade source-only packages during adoption
+- `a46d70a` — Test in-place source-only adoption
+- `e895a1e` — Adopt source-only package records in place
+- `7786f77` — Track in-place adoption targets
+- `750af29` — Separate managed addons from adoption refusals
 - `57d9f3d` — Request v0.1.13 adoption release
 - `248012a` — Set v0.1.13 application version
 - `24f06ef` — Bump TocPilot to v0.1.13
@@ -176,9 +199,9 @@ v0.1.13 adoption/update integration runtime validation passed: after adopting ex
 
 Runtime UX findings from the same adoption test:
 - the first adoption scan found 18 safe candidates and 3 genuine refusals;
-- rescanning after adoption mixed already-managed packages into the refusal list, obscuring the genuine refusal reasons;
-- commit `750af29` separates already-managed packages from true refusals, but the long MessageBox UX should be replaced by an expandable details dialog;
-- an existing same-repository TocPilot row that is still Not installed (observed with `brues-code/pfUI`) is currently treated as a duplicate/refusal; desired behavior is to upgrade that record in place during adoption instead of requiring Forget + rescan.
+- rescanning after adoption mixed already-managed packages into the refusal list, obscuring the genuine refusal reasons; commit `750af29` now separates those categories;
+- an existing same-repository TocPilot row that is still Not installed (observed with `brues-code/pfUI`) previously required Forget + rescan; commits `7786f77` through `68543d3` now upgrade that record in place while preserving its existing package/source JSON;
+- oversized adoption MessageBoxes have been replaced in source by a minimal native `TaskDialogIndirect` wrapper with compact summary text and collapsed **Show details** information; it falls back to `MessageBoxW` if TaskDialog is unavailable.
 
 v0.1.12 Update All runtime validation passed. The earlier current/current run reported Queued 2 / Processed 2 / Updated 0 / Current 2 / Failed 0, confirming multi-package enumeration, sequential processing, current-package skip behavior, and summary accounting. The user subsequently confirmed the changed-branch Update All path was also tested successfully, clearing the remaining runtime gate.
 
@@ -362,6 +385,7 @@ Tracked-branch Refresh test release `v0.1.6` was published automatically. Releas
 ## Untested / remaining validation
 
 - Adoption detection and the adoption -> Update All integration path are runtime-validated. Still unverified: restart persistence after adoption, explicit confirmation that live addon files / `.git` were untouched, and GitAddonsManager continuing to recognize/update retained repositories.
+- Post-v0.1.13 follow-ups are not yet Windows/runtime validated: in-place adoption of a matching Not-installed TocPilot record, the new TaskDialog/Common-Controls-v6 wrapper, expanded/collapsed detail labels, and the compact adoption summary/refusal presentation.
 - The adoption pass intentionally does not claim GitLab repositories, detached HEADs, linked worktrees/submodules, or repositories without a root-level `.toc`. GitAddonsManager has no unique ownership marker, so the UI explicitly warns that an eligible normal Git clone is indistinguishable from a GitAddonsManager-created clone.
 
 - `v0.1.10` successful-path runtime validation passed with `Shellyoung/AdvancedTradeSkillWindow2` on its default `main` branch: first install succeeded, TocPilot still showed the package as Current after restart, and Reinstall completed successfully. This validates the normal transactional install/reinstall path and persisted ownership/state at runtime.
@@ -479,8 +503,8 @@ Complete. A real `v0.1.0 -> v0.1.1` in-app self-update succeeded on Windows besi
 
 ## Exact next step
 
-1. Change adoption planning so a matching TocPilot repository record with no installed revision/file ownership is upgraded in place instead of refused as a duplicate. Preserve the existing package record/source JSON and fill branch, current revision, and installed-file ownership from the local Git clone.
-2. Keep already-installed matching repositories as already managed, and keep different-repository addon-root ownership conflicts as hard refusals. Add deterministic tests for all three cases.
-3. Introduce a minimal native dialog wrapper using expandable details for adoption summaries/refusals, so the main text stays compact while exact per-folder reasons remain visible/copyable.
-4. Version the fixes as the next runtime-test release after Windows x64 build/full CTest passes.
-5. Runtime-confirm restart persistence and that retained `.git` metadata remains usable by GitAddonsManager.
+1. Get Windows x64 build/full CTest green for implementation head `5e9d4c8`, including the updated adoption tests and the new native TaskDialog wrapper in the main executable.
+2. Fix any MSVC/Common-Controls issue before versioning; do not publish from a failing source head.
+3. Bump to the next release version (expected `v0.1.14`) and publish through the automated release path.
+4. Runtime-test two focused cases: (a) a matching TocPilot **Not installed** record is adopted in place without Forget, and (b) adoption dialogs show compact counts with **Show details** exposing exact candidates/refusal reasons.
+5. Also finish the original adoption gate by restarting TocPilot and confirming retained `.git` metadata remains usable by GitAddonsManager.
