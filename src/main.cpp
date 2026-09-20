@@ -1138,6 +1138,26 @@ void RefreshPackageStateUi() {
     const int selected =
         SelectedPackageRow();
 
+    std::wstring topPackageId;
+    if (g_packageList) {
+        const int topRow =
+            ListView_GetTopIndex(g_packageList);
+
+        if (topRow >= 0 &&
+            topRow < static_cast<int>(
+                g_packageViewOrder.size())) {
+            const std::size_t topIndex =
+                g_packageViewOrder[
+                    static_cast<std::size_t>(
+                        topRow)];
+
+            if (topIndex < g_state.packages.size()) {
+                topPackageId =
+                    g_state.packages[topIndex].id;
+            }
+        }
+    }
+
     SetIndicator(
         g_stateStatus,
         StateStatusText());
@@ -1149,6 +1169,49 @@ void RefreshPackageStateUi() {
     }
 
     PopulatePackageList();
+
+    if (!topPackageId.empty() &&
+        g_packageList) {
+        std::size_t topIndex =
+            g_state.packages.size();
+
+        for (std::size_t i = 0;
+             i < g_state.packages.size();
+             ++i) {
+            if (g_state.packages[i].id ==
+                topPackageId) {
+                topIndex = i;
+                break;
+            }
+        }
+
+        if (topIndex <
+            g_state.packages.size()) {
+            const int topRow =
+                PackageDisplayRow(topIndex);
+
+            if (topRow > 0) {
+                RECT first{};
+                RECT target{};
+
+                if (ListView_GetItemRect(
+                        g_packageList,
+                        0,
+                        &first,
+                        LVIR_BOUNDS) &&
+                    ListView_GetItemRect(
+                        g_packageList,
+                        topRow,
+                        &target,
+                        LVIR_BOUNDS)) {
+                    ListView_Scroll(
+                        g_packageList,
+                        0,
+                        target.top - first.top);
+                }
+            }
+        }
+    }
 
     if (selected >= 0 &&
         selected <
@@ -3575,10 +3638,6 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             g_state.packages[index],
             GetTickCount64());
 
-        RefreshPackageStateUi();
-        SelectPackageRow(index);
-        UpdatePackageButtons();
-
         const auto& package =
             g_state.packages[index];
 
@@ -3599,6 +3658,9 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                 return 0;
             }
 
+            SetPackageRowStatus(
+                index,
+                L"Current");
             CompleteUpdateAllStep(
                 hwnd,
                 tp::UpdateAllOutcome::Current,
@@ -3607,12 +3669,21 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
         }
 
         if (autoStatusStep) {
+            SetPackageRowStatus(
+                index,
+                updateAvailable
+                    ? L"Update available"
+                    : L"Current");
             CompleteAutoStatusRefreshStep(
                 hwnd,
                 true,
                 updateAvailable);
             return 0;
         }
+
+        RefreshPackageStateUi();
+        SelectPackageRow(index);
+        UpdatePackageButtons();
 
         if (g_packageHint) {
             const std::wstring shortSha =
@@ -4036,6 +4107,17 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                 installedPackage.repository,
                 stagingCleanupError);
 
+        if (updateAllStep) {
+            SetPackageRowStatus(
+                index,
+                L"Current");
+            CompleteUpdateAllStep(
+                hwnd,
+                tp::UpdateAllOutcome::Updated,
+                {});
+            return 0;
+        }
+
         RefreshPackageStateUi();
         SelectPackageRow(index);
         UpdatePackageButtons();
@@ -4073,14 +4155,6 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             SetWindowTextW(
                 g_packageHint,
                 hint.c_str());
-        }
-
-        if (updateAllStep) {
-            CompleteUpdateAllStep(
-                hwnd,
-                tp::UpdateAllOutcome::Updated,
-                {});
-            return 0;
         }
 
         std::wstring summary =
