@@ -6,6 +6,7 @@
 - Current published version: `v0.1.18`; runtime gate pending.
 - Last fully runtime-tested version before the transport change: `v0.1.17`.
 - Current source/release version: `v0.1.18`; tag `v0.1.18` points to release request commit `71d49ed`.
+- v0.1.18 runtime blocker discovered before the addon-transport gate: the installed v0.1.17 client cannot self-update while the user's unauthenticated GitHub REST quota is exhausted because `CheckLatestRelease` still calls `api.github.com/repos/Seraphic8x2244/TocPilot/releases/latest`. Direct GitHub release-asset downloads themselves are not REST-quota-bound. Active priority is therefore to remove the self-update check's REST dependency, publish the next version, and use one manual direct-asset replacement to cross this bootstrap gap.
 - Latest commits:
   - `71d49ed` — Request v0.1.18 smart HTTP transport release.
   - `e967923` — Set CMake version to 0.1.18.
@@ -615,11 +616,11 @@ Complete. A real `v0.1.0 -> v0.1.1` in-app self-update succeeded on Windows besi
 
 ## Exact next step
 
-1. Runtime-test published `v0.1.18`: allow the installed `v0.1.17` client to self-update and restart into `v0.1.18`.
-2. Let the automatic managed-package status sweep finish, then immediately run **Update All**.
-3. Confirm the routine GitHub package sweep no longer reports `GitHub API access was refused or rate-limited`; tracked branch heads should now resolve through Git smart HTTP rather than the GitHub REST branches API.
-4. If any addon is changed, confirm it downloads and installs successfully through the direct exact-SHA codeload path while the existing staging, ZIP validation, ownership, rollback, and transaction behavior remains intact.
-5. Record the Update All summary and any exact failing package/error text.
-6. After the GitHub runtime gate passes, validate the provider-neutral smart-HTTP resolver against public GitLab and OctoWoW/Gitea-style repositories, then add only the host-specific archive URL construction actually required.
-7. Branch enumeration/default-branch selection and TocPilot's own release metadata still use provider APIs; do not confuse those low-frequency calls with the now API-free routine managed-addon branch sweep.
-8. Do not add libgit2, bundled Git, required `git.exe`, or public-repository credentials.
+1. Fix self-update discovery before further runtime testing: replace the GitHub REST `/releases/latest` lookup with a normal `https://github.com/Seraphic8x2244/TocPilot/releases/latest` request, follow GitHub's redirect, derive the version tag from the final `/releases/tag/vX.Y.Z` URL, and construct direct release asset/checksum URLs.
+2. Preserve the existing SHA-256 verification and updater replacement flow; only release discovery should change.
+3. Add deterministic parsing tests plus a live CI probe that resolves the public GitHub latest-release redirect without REST.
+4. Version and publish the next release only after the full Windows build/CTest/live probe passes.
+5. Because v0.1.17 cannot discover that release while the user's REST quota is burned, bootstrap once by manually replacing TocPilot.exe from the direct GitHub release asset.
+6. Then runtime-test the new version: startup managed-addon sweep + immediate Update All must work despite the exhausted REST quota, and at least one changed package should complete through smart-HTTP SHA discovery + direct codeload archive download.
+7. After the GitHub runtime gate passes, validate provider-neutral smart HTTP against GitLab and OctoWoW/Gitea-style hosts.
+8. Do not alter staging/security/transaction semantics and do not add libgit2, bundled Git, required `git.exe`, or public-repo credentials.
