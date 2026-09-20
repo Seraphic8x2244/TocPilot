@@ -23,6 +23,7 @@ if(MSVC)
 endif()
 
 add_executable(TocPilot WIN32
+    src/adoption.cpp
     src/add_package_dialog.cpp
     src/archive.cpp
     src/branch_dialog.cpp
@@ -163,4 +164,24 @@ if(BUILD_TESTING)
     endif()
 
     add_test(NAME update-all-orchestration COMMAND TocPilotUpdateAllTests)
+
+    add_executable(TocPilotAdoptionTests
+        tests/adoption_tests.cpp
+        src/adoption.cpp
+        src/provider.cpp
+    )
+    target_compile_features(TocPilotAdoptionTests PRIVATE cxx_std_20)
+    target_compile_definitions(TocPilotAdoptionTests PRIVATE
+        UNICODE
+        _UNICODE
+        WIN32_LEAN_AND_MEAN
+        NOMINMAX
+    )
+    target_include_directories(TocPilotAdoptionTests PRIVATE src)
+
+    if(MSVC)
+        target_compile_options(TocPilotAdoptionTests PRIVATE /W4 /permissive- /utf-8)
+    endif()
+
+    add_test(NAME git-addon-adoption COMMAND TocPilotAdoptionTests)
 endif()
