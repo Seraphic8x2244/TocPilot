@@ -3,7 +3,7 @@
 ## Continuation checkpoint — 2026-09-19
 
 - Active branch: `p2-github-branches`.
-- Current source version: `v0.1.12`; `v0.1.11` remains the last runtime-validated release. Update All source head `58b29e1` is being promoted at the user's direction; the push-triggered CI result was not independently observable through the current connector. The `v0.1.12` release workflow must pass its own Windows x64 build + full CTest gate before publication. Update All is implemented in source and remains unreleased pending Windows CI.
+- Current application version: `v0.1.12`; release tag exists and the user confirmed the installed `v0.1.11` client successfully self-updated to `v0.1.12`. Update All still requires runtime validation. Update All is implemented in source and remains unreleased pending Windows CI.
 - Latest implementation commit: `9dd56e4` — Polish uninstall development controls.
 - New uninstall implementation commits:
   - `f75f286` — Add transactional package uninstall UI.
@@ -145,6 +145,9 @@
 - Core install transaction CI run `35460118275` passed; prepare-only safety run `35460454903` passed; exact implementation run `35460533602` passed Release build, full CTest, and artifact upload.
 
 ## CI validation
+
+v0.1.12 self-update runtime validation passed: the user confirmed TocPilot detected and successfully took the update from v0.1.11 to v0.1.12.
+
 
 v0.1.11 transactional uninstall/reinstall runtime validation passed: the user confirmed Uninstall removed the managed addon as expected, TocPilot restart preserved the retained package record/state, and Reinstall restored the addon successfully.
 
@@ -438,8 +441,7 @@ Complete. A real `v0.1.0 -> v0.1.1` in-app self-update succeeded on Windows besi
 
 ## Exact next step
 
-1. The user instructed TocPilot to proceed with the `v0.1.12` release assuming the current `58b29e1` Actions build is green; that push-run result is not independently visible through the connector.
-2. Bump source and release request to `v0.1.12`; rely on the release workflow's own Windows x64 build + full CTest gate before publication.
-3. Runtime-test **Update All** with at least two installed managed packages: one already current and one with an available branch update; confirm the current package is not reinstalled and only the changed package is updated.
-4. Confirm a deliberately failing package does not prevent later packages from being checked, while a rollback failure would stop the batch.
-5. After the Update All runtime gate passes, simplify the temporary development UI toward Add Git Link + branch dropdown + automatic refresh/status + compact per-package actions.
+1. Runtime-test **Update All** in `v0.1.12` with at least two installed managed packages: one already current and one with an available branch update.
+2. Confirm the current package is checked but not reinstalled, and only the changed package is updated.
+3. Confirm the final summary counts are correct and restart preserves the resulting installed/latest revisions.
+4. After the Update All runtime gate passes, simplify the temporary development UI toward Add Git Link + branch dropdown + automatic refresh/status + compact per-package actions.
