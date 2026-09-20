@@ -1546,6 +1546,9 @@ void AdoptGitAddons(HWND hwnd) {
     std::vector<std::wstring>
         refusals;
 
+    std::vector<std::wstring>
+        alreadyManaged;
+
     std::error_code ec;
 
     for (std::filesystem::directory_iterator it(
@@ -1590,12 +1593,21 @@ void AdoptGitAddons(HWND hwnd) {
                 stagedState,
                 plan,
                 error)) {
-            refusals.push_back(
+            const std::wstring folderName =
                 it->path()
                     .filename()
-                    .wstring() +
-                L": " +
-                error);
+                    .wstring();
+
+            if (error ==
+                L"This repository is already managed by TocPilot.") {
+                alreadyManaged.push_back(
+                    folderName);
+            } else {
+                refusals.push_back(
+                    folderName +
+                    L": " +
+                    error);
+            }
             continue;
         }
 
@@ -1626,11 +1638,19 @@ void AdoptGitAddons(HWND hwnd) {
             L"URL, an attached branch with matching upstream metadata, and no "
             L"existing TocPilot ownership.";
 
+        if (!alreadyManaged.empty()) {
+            message +=
+                L"\r\n\r\nAlready managed by TocPilot: " +
+                std::to_wstring(
+                    alreadyManaged.size()) +
+                L".";
+        }
+
         if (!refusals.empty()) {
             message +=
                 L"\r\n\r\nRefused candidates:";
 
-            constexpr std::size_t maxShown = 10;
+            constexpr std::size_t maxShown = 20;
             const std::size_t shown =
                 std::min<std::size_t>(
                     maxShown,
@@ -1651,7 +1671,7 @@ void AdoptGitAddons(HWND hwnd) {
                     std::to_wstring(
                         refusals.size() -
                         shown) +
-                    L" more.";
+                    L" more refused candidate(s).";
             }
         }
 
@@ -1709,6 +1729,14 @@ void AdoptGitAddons(HWND hwnd) {
                 plans.size() -
                 shownPlans) +
             L" more.\r\n";
+    }
+
+    if (!alreadyManaged.empty()) {
+        prompt +=
+            L"\r\n" +
+            std::to_wstring(
+                alreadyManaged.size()) +
+            L" Git folder(s) are already managed by TocPilot and were skipped.";
     }
 
     if (!refusals.empty()) {
