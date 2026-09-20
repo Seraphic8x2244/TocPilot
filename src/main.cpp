@@ -557,6 +557,63 @@ int CompareInsensitive(
     return 0;
 }
 
+std::wstring SingleOwnedAddonRoot(
+    const tp::PackageRecord& package) {
+    constexpr std::wstring_view prefix =
+        L"Interface/AddOns/";
+
+    std::wstring root;
+
+    for (auto owned :
+         package.installedFiles) {
+        std::replace(
+            owned.begin(),
+            owned.end(),
+            L'\\',
+            L'/');
+
+        if (owned.size() <=
+                prefix.size() ||
+            CompareInsensitive(
+                std::wstring_view(owned).substr(
+                    0,
+                    prefix.size()),
+                prefix) != 0) {
+            return {};
+        }
+
+        const std::size_t slash =
+            owned.find(
+                L'/',
+                prefix.size());
+
+        if (slash ==
+                std::wstring::npos ||
+            slash ==
+                prefix.size()) {
+            return {};
+        }
+
+        const std::wstring candidate =
+            owned.substr(
+                prefix.size(),
+                slash -
+                    prefix.size());
+
+        if (root.empty()) {
+            root =
+                candidate;
+        } else if (
+            CompareInsensitive(
+                root,
+                candidate) != 0) {
+            return {};
+        }
+    }
+
+    return root;
+}
+
 std::wstring PackageColumnText(
     const tp::PackageRecord& package,
     int column) {
@@ -1211,6 +1268,7 @@ void StartPackageInspection(
                 } else if (!tp::DetectGitHubAddonCandidates(
                         result->inspection.extractedRoot,
                         package.repository,
+                        SingleOwnedAddonRoot(package),
                         result->inspection.candidates,
                         result->error)) {
                     result->ok = false;
@@ -1340,6 +1398,7 @@ void StartPackageInstall(
                 } else if (!tp::DetectGitHubAddonCandidates(
                         result->inspection.extractedRoot,
                         package.repository,
+                        SingleOwnedAddonRoot(package),
                         result->inspection.candidates,
                         result->error)) {
                     result->ok = false;
