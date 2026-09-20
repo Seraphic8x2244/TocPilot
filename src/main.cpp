@@ -7,6 +7,7 @@
 #include "state.h"
 #include "update.h"
 #include "update_all.h"
+#include "ui_dialog.h"
 #include "version.h"
 
 #include <windows.h>
@@ -1638,88 +1639,52 @@ void AdoptGitAddons(HWND hwnd) {
     }
 
     if (ec) {
-        const std::wstring message =
-            L"Could not finish scanning Interface\\AddOns for Git-managed addons.";
-
-        MessageBoxW(
+        tp::ShowExpandableDialog(
             hwnd,
-            message.c_str(),
             L"TocPilot - Adopt Git Addons",
-            MB_OK | MB_ICONERROR);
+            L"Git addon scan failed",
+            L"TocPilot could not finish scanning Interface\\AddOns.",
+            {},
+            tp::DialogIcon::Error,
+            tp::DialogButtons::Ok);
         return;
     }
 
-    if (plans.empty()) {
-        std::wstring message =
-            L"No safe GitHub branch installs were found to adopt.\r\n\r\n"
-            L"TocPilot currently adopts only direct addon folders that contain "
-            L"a normal .git directory, a root-level .toc file, an origin GitHub "
-            L"URL, an attached branch with matching upstream metadata, and no "
-            L"existing TocPilot ownership.";
-
-        if (!alreadyManaged.empty()) {
-            message +=
-                L"\r\n\r\nAlready managed by TocPilot: " +
-                std::to_wstring(
-                    alreadyManaged.size()) +
-                L".";
+    auto appendEntries = [](
+        std::wstring& details,
+        std::wstring_view heading,
+        const std::vector<std::wstring>& entries) {
+        if (entries.empty()) {
+            return;
         }
 
-        if (!refusals.empty()) {
-            message +=
-                L"\r\n\r\nRefused candidates:";
-
-            constexpr std::size_t maxShown = 20;
-            const std::size_t shown =
-                std::min<std::size_t>(
-                    maxShown,
-                    refusals.size());
-
-            for (std::size_t i = 0;
-                 i < shown;
-                 ++i) {
-                message +=
-                    L"\r\n- " +
-                    refusals[i];
-            }
-
-            if (shown <
-                refusals.size()) {
-                message +=
-                    L"\r\n- ...and " +
-                    std::to_wstring(
-                        refusals.size() -
-                        shown) +
-                    L" more refused candidate(s).";
-            }
+        if (!details.empty()) {
+            details +=
+                L"\r\n\r\n";
         }
 
-        MessageBoxW(
-            hwnd,
-            message.c_str(),
-            L"TocPilot - Adopt Git Addons",
-            MB_OK | MB_ICONINFORMATION);
-        return;
-    }
+        details +=
+            heading;
+        details +=
+            L":";
 
-    std::wstring prompt =
-        L"TocPilot found " +
-        std::to_wstring(
-            plans.size()) +
-        L" safe GitHub branch install(s) that can be adopted without "
-        L"reinstalling or changing live addon files.\r\n\r\n";
+        for (const auto& entry :
+             entries) {
+            details +=
+                L"\r\n- " +
+                entry;
+        }
+    };
 
-    constexpr std::size_t maxPlansShown = 20;
-    const std::size_t shownPlans =
-        std::min<std::size_t>(
-            maxPlansShown,
-            plans.size());
+    std::vector<std::wstring>
+        planDetails;
+    planDetails.reserve(
+        plans.size());
 
-    for (std::size_t i = 0;
-         i < shownPlans;
-         ++i) {
+    for (const auto& plan :
+         plans) {
         const auto& package =
-            plans[i].package;
+            plan.package;
 
         const std::wstring shortSha =
             package.installedRevision.substr(
@@ -1728,58 +1693,92 @@ void AdoptGitAddons(HWND hwnd) {
                     7,
                     package.installedRevision.size()));
 
-        prompt +=
-            L"- " +
+        std::wstring line =
             package.name +
             L" <- " +
             package.repository +
             L" / " +
             package.ref +
             L" @ " +
-            shortSha +
-            L"\r\n";
+            shortSha;
+
+        if (plan.existingPackageIndex) {
+            line +=
+                L" (existing TocPilot record)";
+        }
+
+        planDetails.push_back(
+            std::move(line));
     }
 
-    if (shownPlans <
-        plans.size()) {
-        prompt +=
-            L"- ...and " +
-            std::to_wstring(
-                plans.size() -
-                shownPlans) +
-            L" more.\r\n";
-    }
+    std::wstring details;
+    appendEntries(
+        details,
+        L"Will adopt",
+        planDetails);
+    appendEntries(
+        details,
+        L"Refused candidates",
+        refusals);
+    appendEntries(
+        details,
+        L"Already managed by TocPilot",
+        alreadyManaged);
 
-    if (!alreadyManaged.empty()) {
-        prompt +=
-            L"\r\n" +
+    if (plans.empty()) {
+        std::wstring content =
+            L"Already managed: " +
             std::to_wstring(
                 alreadyManaged.size()) +
-            L" Git folder(s) are already managed by TocPilot and were skipped.";
-    }
-
-    if (!refusals.empty()) {
-        prompt +=
-            L"\r\n" +
+            L".\r\nRefused: " +
             std::to_wstring(
                 refusals.size()) +
-            L" other Git folder(s) were refused by the conservative safety checks.";
+            L".\r\n\r\n"
+            L"TocPilot adopts only direct addon folders with a normal .git "
+            L"directory, root-level .toc file, GitHub origin, attached branch "
+            L"with matching upstream metadata, and no conflicting ownership.";
+
+        tp::ShowExpandableDialog(
+            hwnd,
+            L"TocPilot - Adopt Git Addons",
+            L"No new Git installs to adopt",
+            content,
+            details,
+            tp::DialogIcon::Information,
+            tp::DialogButtons::Ok);
+        return;
     }
 
-    prompt +=
-        L"\r\n\r\nAdoption records the current branch SHA and complete addon "
-        L"file ownership in TocPilot.json. Existing .git metadata is left in "
-        L"place and no addon file is deleted or overwritten. GitAddonsManager "
-        L"does not leave a unique ownership marker, so this list may also include "
-        L"normal Git clones; review it before continuing.\r\n\r\nAdopt these installs?";
+    std::wstring content =
+        L"Ready to adopt: " +
+        std::to_wstring(
+            plans.size()) +
+        L".\r\nAlready managed: " +
+        std::to_wstring(
+            alreadyManaged.size()) +
+        L".\r\nRefused: " +
+        std::to_wstring(
+            refusals.size()) +
+        L".\r\n\r\n"
+        L"Adoption records the local branch SHA and addon-file ownership in "
+        L"TocPilot.json. Existing addon files and .git metadata are not changed. "
+        L"GitAddonsManager leaves no unique ownership marker, so eligible normal "
+        L"Git clones are indistinguishable and are listed in the details.";
 
-    if (MessageBoxW(
+    const int response =
+        tp::ShowExpandableDialog(
             hwnd,
-            prompt.c_str(),
             L"TocPilot - Adopt Git Addons",
-            MB_YESNO |
-                MB_ICONQUESTION |
-                MB_DEFBUTTON2) != IDYES) {
+            std::to_wstring(
+                plans.size()) +
+                L" Git install(s) ready to adopt",
+            content,
+            details,
+            tp::DialogIcon::Information,
+            tp::DialogButtons::YesNo,
+            IDNO);
+
+    if (response != IDYES) {
         return;
     }
 
@@ -1793,11 +1792,14 @@ void AdoptGitAddons(HWND hwnd) {
             L"State: Save failed - " +
                 error);
 
-        MessageBoxW(
+        tp::ShowExpandableDialog(
             hwnd,
-            error.c_str(),
             L"TocPilot - Adoption Save Failed",
-            MB_OK | MB_ICONERROR);
+            L"Adoption state could not be saved",
+            error,
+            {},
+            tp::DialogIcon::Error,
+            tp::DialogButtons::Ok);
         return;
     }
 
@@ -1821,11 +1823,14 @@ void AdoptGitAddons(HWND hwnd) {
             message.c_str());
     }
 
-    MessageBoxW(
+    tp::ShowExpandableDialog(
         hwnd,
-        message.c_str(),
         L"TocPilot - Adoption Complete",
-        MB_OK | MB_ICONINFORMATION);
+        L"Git installs adopted",
+        message,
+        {},
+        tp::DialogIcon::Information,
+        tp::DialogButtons::Ok);
 }
 
 void StartUpdateCheck(HWND hwnd) {
