@@ -10,6 +10,8 @@ namespace tp {
 struct AppSettings {
     double textScale = 1.0;
     bool checkAppUpdates = true;
+    int packageSortColumn = -1;
+    bool packageSortAscending = true;
 };
 
 struct PackageRecord {
