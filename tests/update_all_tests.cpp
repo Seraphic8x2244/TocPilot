@@ -83,33 +83,17 @@ int main() {
     auto progress =
         tp::MakeUpdateAllProgress(state);
 
-    if (progress.packageIds.size() != 2 ||
-        progress.packageIds[0] != current.id ||
-        progress.packageIds[1] != update.id) {
-        Fail("Update All candidate selection was incorrect");
+    if (progress.packageIds.size() != 1 ||
+        progress.packageIds[0] != update.id) {
+        Fail("Update All should queue only known updates");
     }
 
     if (!tp::UpdateAllHasCurrent(progress) ||
-        tp::UpdateAllCurrentPackageId(progress) != current.id) {
-        Fail("Update All did not start at the first candidate");
+        tp::UpdateAllCurrentPackageId(progress) != update.id) {
+        Fail("Update All did not start at the known update");
     }
 
     std::wstring error;
-    if (!tp::CompleteUpdateAllItem(
-            progress,
-            tp::UpdateAllOutcome::Failed,
-            L"Current: simulated failure",
-            error)) {
-        Fail("Update All could not record a failed package");
-    }
-
-    if (!tp::UpdateAllHasCurrent(progress) ||
-        tp::UpdateAllCurrentPackageId(progress) != update.id ||
-        progress.failed != 1 ||
-        progress.failures.size() != 1) {
-        Fail("Update All failure did not advance to the next package");
-    }
-
     if (!tp::CompleteUpdateAllItem(
             progress,
             tp::UpdateAllOutcome::Updated,
@@ -121,7 +105,7 @@ int main() {
     if (tp::UpdateAllHasCurrent(progress) ||
         progress.updated != 1 ||
         progress.current != 0 ||
-        progress.failed != 1) {
+        progress.failed != 0) {
         Fail("Update All summary counts were incorrect");
     }
 
@@ -134,32 +118,43 @@ int main() {
         Fail("Update All accepted completion after the queue ended");
     }
 
-    auto allCurrent =
+    auto noKnownUpdates =
         tp::MakeUpdateAllProgress(
             tp::AppState{
                 1,
                 {},
                 {
                     current,
-                    update
+                    notInstalled
                 },
                 {}
             });
 
+    if (tp::UpdateAllHasCurrent(noKnownUpdates) ||
+        !noKnownUpdates.packageIds.empty()) {
+        Fail("Update All queued packages without a known update");
+    }
+
+    tp::UpdateAllProgress accounting;
+    accounting.packageIds = {
+        L"one",
+        L"two"
+    };
+
     if (!tp::CompleteUpdateAllItem(
-            allCurrent,
+            accounting,
             tp::UpdateAllOutcome::Current,
             {},
             error) ||
         !tp::CompleteUpdateAllItem(
-            allCurrent,
-            tp::UpdateAllOutcome::Current,
-            {},
+            accounting,
+            tp::UpdateAllOutcome::Failed,
+            L"two: simulated failure",
             error) ||
-        allCurrent.current != 2 ||
-        allCurrent.updated != 0 ||
-        allCurrent.failed != 0) {
-        Fail("Update All current-item accounting was incorrect");
+        accounting.current != 1 ||
+        accounting.updated != 0 ||
+        accounting.failed != 1) {
+        Fail("Update All outcome accounting was incorrect");
     }
 
     if (failures != 0) {
