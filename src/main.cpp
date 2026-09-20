@@ -3195,14 +3195,14 @@ HICON LoadExecutableIcon(
         return nullptr;
     }
 
-    if (small) {
-        if (large) {
-            DestroyIcon(large);
+    if (large) {
+        if (small) {
+            DestroyIcon(small);
         }
-        return small;
+        return large;
     }
 
-    return large;
+    return small;
 }
 
 void LaunchSiblingExecutable(
