@@ -210,6 +210,7 @@ int main() {
                 if (!tp::DetectGitHubAddonCandidates(
                         rootAddonExtracted,
                         L"Shagu/pfUI",
+                        {},
                         candidates,
                         error)) {
                     Fail("GitHub root-addon mapping failed");
@@ -253,9 +254,66 @@ int main() {
                 if (tp::DetectGitHubAddonCandidates(
                         ambiguousExtracted,
                         L"Owner/Repo",
+                        {},
                         candidates,
                         error)) {
                     Fail("ambiguous GitHub root-addon layout was accepted");
+                }
+            }
+        }
+
+        const auto preservedRootZipPath =
+            temp / L"preserved-root-addon.zip";
+        const auto preservedRootExtracted =
+            temp / L"preserved-root-addon-extracted";
+
+        if (!WriteFixtureZip(
+                preservedRootZipPath,
+                {
+                    {"Seraphic8x2244-pfUI-VendorTweaks-deadbeef/pfUI_VendorTweaks.toc",
+                     "## Interface: 11200\n## Title: pfUI VendorTweaks\n"},
+                    {"Seraphic8x2244-pfUI-VendorTweaks-deadbeef/pfUI_VendorTweaks.lua",
+                     "print('vendor tweaks')\n"}
+                })) {
+            Fail("could not create preserved-root ZIP fixture");
+        } else {
+            std::size_t entries = 0;
+            std::uint64_t bytes = 0;
+            std::wstring error;
+
+            if (!tp::ExtractZipSecure(
+                    preservedRootZipPath,
+                    preservedRootExtracted,
+                    entries,
+                    bytes,
+                    error)) {
+                Fail("preserved-root ZIP extraction failed");
+            } else {
+                std::vector<tp::AddonCandidate> candidates;
+                if (!tp::DetectGitHubAddonCandidates(
+                        preservedRootExtracted,
+                        L"Seraphic8x2244/pfUI-VendorTweaks",
+                        L"pfUI-VendorTweaks",
+                        candidates,
+                        error)) {
+                    Fail("existing owned root was not preserved");
+                } else if (
+                    candidates.size() != 1 ||
+                    candidates[0].installFolder !=
+                        L"pfUI-VendorTweaks") {
+                    Fail("root-addon update did not preserve owned install folder");
+                }
+
+                candidates.clear();
+                error.clear();
+
+                if (tp::DetectGitHubAddonCandidates(
+                        preservedRootExtracted,
+                        L"Seraphic8x2244/pfUI-VendorTweaks",
+                        {},
+                        candidates,
+                        error)) {
+                    Fail("fresh ambiguous root-addon layout was accepted");
                 }
             }
         }
