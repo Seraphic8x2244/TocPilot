@@ -60,9 +60,9 @@ constexpr int IDC_ADVANCED = 1017;
 constexpr int IDC_LAUNCH_WOW = 1018;
 constexpr int IDC_LAUNCH_VANILLAFIXES = 1019;
 
-constexpr int kCompactWindowWidth = 660;
+constexpr int kCompactWindowWidth = 620;
 constexpr int kAdvancedExtraWidth = 520;
-constexpr int kDefaultWindowHeight = 560;
+constexpr int kDefaultWindowHeight = 520;
 
 constexpr std::array<double, 5> kTextScales{
     0.90,
