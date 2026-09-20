@@ -1,0 +1,3 @@
+#include "resource.h"
+
+IDI_TOCPILOT ICON "TocPilot.ico"
