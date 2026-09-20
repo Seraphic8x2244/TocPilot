@@ -51,6 +51,12 @@ bool BuildGitHubArchiveApiPath(
     std::wstring& apiPath,
     std::wstring& error);
 
+bool BuildGitHubCodeloadPath(
+    std::wstring_view repository,
+    std::wstring_view ref,
+    std::wstring& path,
+    std::wstring& error);
+
 bool DownloadGitHubArchive(
     std::wstring_view repository,
     std::wstring_view ref,
