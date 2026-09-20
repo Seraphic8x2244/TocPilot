@@ -32,6 +32,7 @@ add_executable(TocPilot WIN32
     src/install.cpp
     src/main.cpp
     src/provider.cpp
+    src/refresh_freshness.cpp
     src/state.cpp
     src/update.cpp
     src/update_all.cpp
@@ -205,4 +206,18 @@ if(BUILD_TESTING)
     endif()
 
     add_test(NAME addon-folder-classification COMMAND TocPilotAddonScanTests)
+
+    add_executable(TocPilotRefreshFreshnessTests
+        tests/refresh_freshness_tests.cpp
+        src/refresh_freshness.cpp
+    )
+    target_compile_features(TocPilotRefreshFreshnessTests PRIVATE cxx_std_20)
+    target_include_directories(TocPilotRefreshFreshnessTests PRIVATE src)
+
+    if(MSVC)
+        target_compile_options(TocPilotRefreshFreshnessTests PRIVATE /W4 /permissive- /utf-8)
+    endif()
+
+    add_test(NAME package-refresh-freshness COMMAND TocPilotRefreshFreshnessTests)
+
 endif()
