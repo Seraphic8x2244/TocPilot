@@ -1,11 +1,67 @@
 # TocPilot status / handoff
 
+## Continuation checkpoint — 2026-09-20 compact/advanced UI v0.1.21
+
+- Active branch: `p2-github-branches`.
+- Current published/source version: `v0.1.21`; tag `v0.1.21` points exactly to release request commit `c7e1d10e4aeaabc8a1f40afb0d5f023a886d1e6b`.
+- `v0.1.20` GitHub transport gate is runtime-passed: user confirmed Set Branch works correctly with the REST quota exhausted, completing the smart-HTTP GitHub branch-list/default-branch validation.
+- v0.1.21 release workflow run `35525749093` passed source/version validation, Windows x64 Release build, full CTest suite, SHA-256 generation, tag creation, and asset publication.
+- Published `TocPilot.exe`: 846,336 bytes; SHA-256 `bf424a110b3d07c84346df08878eba4d36b207b945a7eac1a0a59b467db4d254`.
+- Latest implementation/release commits:
+  - `c7e1d10` — Request v0.1.21 compact layout release.
+  - `6f43b53` — Set CMake version to 0.1.21.
+  - `9d102e5` — Bump version to v0.1.21.
+  - `950585b` — Keep compact state errors visible.
+  - `1ec26e6` — Set compact layout baseline to 620x520.
+  - `19a6bb3` — Make branch chooser neutral for Add flow.
+  - `4a6b699` — Avoid stale row mapping after addon removal.
+  - `253d7c0` — Use large executable icons for launch buttons.
+  - `ca06b32` — Serialize startup app and addon update checks.
+  - `ce93523` — Test persisted package sorting.
+  - `7e6c8d8` — Prompt for app updates automatically at startup.
+  - `4e8a43e` — Align Add dialog with compact install flow.
+  - `6d2e5ff` — Make compact Add choose branch and install.
+  - `a67284e` — Make Remove delete addon and TocPilot record.
+  - `c1289f1` — Align compact update and advanced reinstall labels.
+  - `a56f114` — Wire advanced widening and executable icon launchers.
+  - `cc268f2` — Lay out compact and widened advanced views.
+  - `a04f0f3` — Add compact advanced UI state.
+  - `7105e9f` — Stop background refreshes moving addon list.
+  - `9c159d4` — Persist sorting and pin attention addons.
+  - `e6e7556` — Load and save package sort preferences.
+  - `cc99dd9` — Persist package sort settings in app state.
+- Completed in v0.1.21 source:
+  - compact 620x520 default window with **Update / Add / Remove / Advanced** toolbar above the addon list;
+  - **Update** retains the proven batch Update All backend; **Remove** transactionally removes owned addon files and the TocPilot record;
+  - Advanced widens the same window 520px to the right and reveals **Existing Addons / Refresh / Reinstall** plus the existing detailed columns, rather than switching to a separate details panel;
+  - compact list shows Name + Status; main/master names remain plain while alternate branches display as `Addon (branch)`;
+  - addons requiring attention are grouped ahead of normal/current addons regardless of user-selected sort; sorting still applies within each group;
+  - sort column/direction persist in `TocPilot.json` and restore on launch, with deterministic round-trip test coverage;
+  - background startup/status/Update sweeps no longer select/EnsureVisible each processed addon; deliberate list rebuilds preserve the user's top visible addon where possible;
+  - bottom-right WoW.exe and VanillaFixes.exe launchers use the executables' extracted icons; missing VanillaFixes disables its launcher;
+  - Add now performs a complete GitHub flow: repository URL -> smart-HTTP branch choice -> save -> staged/validated install;
+  - app self-update check is automatic at startup and prompts only when an update is available; addon status sweep starts after the app-update decision so the two startup jobs do not race;
+  - old Inspect/Set Branch/Uninstall/manual app-update/text-size/status controls and supporting code largely remain under the hood but are not exposed in this first layout.
+- Runtime-untested in v0.1.21:
+  - actual compact spacing/feel at 620x520 and Advanced widen/collapse;
+  - attention-first ordering with real update states plus persisted sort after restart;
+  - list viewport remaining stable during the full startup status sweep;
+  - WoW/VanillaFixes icon appearance and launch behavior on the user's install;
+  - complete Remove behavior on an installed addon;
+  - complete Add -> branch -> install flow in the new compact UI.
+- Intentionally deferred until after the first real UI review:
+  - inline per-row branch dropdown in Advanced;
+  - clickable repository link;
+  - human-readable addon/version metadata for Installed/Latest instead of commit SHA display;
+  - further spacing/button/column refinements driven by the running UI;
+  - provider expansion remains frozen.
+
 ## Continuation checkpoint — 2026-09-20 smart-HTTP transport
 
 - Active branch: `p2-github-branches`.
-- Current published version: `v0.1.20`; smart-HTTP branch-picker runtime gate pending.
+- Transport checkpoint release: `v0.1.20`; GitHub smart-HTTP branch-picker/runtime gate passed.
 - Current runtime-validated GitHub update path: `v0.1.19` Refresh / Update All passed repeatedly while the prior REST quota was exhausted.
-- Current source/release version: `v0.1.20`; tag `v0.1.20` points to release request commit `38a29ac`.
+- Transport checkpoint tag: `v0.1.20` points to release request commit `38a29ac`.
 - v0.1.18 exposed a bootstrap blocker: v0.1.17 self-update discovery still depended on GitHub REST and could not discover v0.1.18 after the user's quota was exhausted. v0.1.19 fixes this by resolving the normal `github.com/.../releases/latest` redirect, parsing the final `/releases/tag/vX.Y.Z` URL, and constructing direct asset/checksum URLs. One manual direct-asset replacement is still required to cross from an older REST-dependent build while quota is exhausted.
 - Latest commits:
   - `d63e87f` — Rename GitHub test away from API terminology.
@@ -640,13 +696,12 @@ Complete. A real `v0.1.0 -> v0.1.1` in-app self-update succeeded on Windows besi
 - New UX requirement after v0.1.20 runtime pass: persist package-list sort column and ascending/descending direction in `TocPilot.json`, save on change/close, and restore on next launch so the user's chosen ordering survives restarts.
 ## Exact next step
 
-1. Implement the first real compact/advanced layout pass now; refine against the running app rather than further ASCII specification.
-2. Compact toolbar, above the addon list: **Update / Add / Remove / Advanced** only.
-3. Advanced widens the same window to the right and reveals additional toolbar actions on the same row: **Existing Addons / Refresh / Reinstall**. Keep all toolbar buttons outside the list control.
-4. Compact list shows **Name + Status**. Advanced reveals the existing detail columns on the same rows; branch/repository/version presentation can be refined after this first runtime pass.
-5. Packages needing attention must remain grouped at the top regardless of the selected column sort; apply the user's chosen ascending/descending sort within the attention and normal groups.
-6. Persist sort column/direction in `TocPilot.json` and restore on launch.
-7. Background startup/Refresh/Update sweeps must not programmatically select rows, call EnsureVisible, or otherwise move the user's list scroll position.
-8. Compact **Update** means Update All. **Remove** means remove the selected addon from disk and TocPilot state (the existing transactional uninstall path); old Forget/Inspect/etc. may remain under the hood but should not be exposed in this layout.
-9. Add WoW.exe and VanillaFixes.exe as icon-only launch buttons at the bottom, using the executables' own icons where available.
-10. Keep provider expansion frozen until this layout has been runtime-tested and adjusted.
+1. Let `v0.1.20` self-update normally to published `v0.1.21`.
+2. Judge the real compact window rather than refining from ASCII: toolbar spacing, list proportions, Name/Status widths, bottom launch icons, and whether 620x520 is the right baseline.
+3. Click **Advanced** repeatedly and confirm the window feels like the same program widening/revealing hidden controls/columns, then collapsing without moving its left edge.
+4. During the automatic startup addon scan, manually scroll/select elsewhere and confirm TocPilot no longer drags the list viewport through each scanned addon.
+5. Verify addons needing attention remain grouped at the top while column sorting still works inside attention/current groups; close/reopen and confirm sort column/direction persist.
+6. Smoke-test **Update**, **Existing Addons**, **Add** (URL -> branch -> install), **Refresh**, **Reinstall**, and **Remove** semantics.
+7. Verify the WoW.exe and VanillaFixes.exe icon buttons look correct and launch the intended sibling executables.
+8. After visual/runtime feedback, refine the real UI first. Planned Advanced refinements are inline branch dropdowns, clickable repository links, and human-readable Installed/Latest addon versions.
+9. Keep GitLab/Gitea/OctoWoW provider expansion frozen until the GitHub-only UI is considered complete.
