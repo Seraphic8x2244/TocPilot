@@ -3,7 +3,7 @@
 ## Continuation checkpoint — 2026-09-19
 
 - Active branch: `p2-github-branches`.
-- Current application version: `v0.1.11`; published and runtime-validated for transactional uninstall/reinstall. Update All source changes are not yet released. Update All is implemented in source and remains unreleased pending Windows CI.
+- Current application version: `v0.1.11`; published and runtime-validated for transactional uninstall/reinstall. Update All source head `58b29e1` is being promoted to `v0.1.12` at the user's direction; the push-triggered CI result is not observable through the current connector, so do not describe that pre-release run as independently verified. Update All is implemented in source and remains unreleased pending Windows CI.
 - Latest implementation commit: `9dd56e4` — Polish uninstall development controls.
 - New uninstall implementation commits:
   - `f75f286` — Add transactional package uninstall UI.
@@ -438,8 +438,8 @@ Complete. A real `v0.1.0 -> v0.1.1` in-app self-update succeeded on Windows besi
 
 ## Exact next step
 
-1. Confirm Update All implementation head `18d0f84` passes the Windows x64 build and full CTest suite, including the new `update-all-orchestration` test.
-2. If CI is green, bump TocPilot to the next runtime-test version and publish through the automated release path.
+1. The user instructed TocPilot to proceed with the `v0.1.12` release assuming the current `58b29e1` Actions build is green; that push-run result is not independently visible through the connector.
+2. Bump source and release request to `v0.1.12`; rely on the release workflow's own Windows x64 build + full CTest gate before publication.
 3. Runtime-test **Update All** with at least two installed managed packages: one already current and one with an available branch update; confirm the current package is not reinstalled and only the changed package is updated.
 4. Confirm a deliberately failing package does not prevent later packages from being checked, while a rollback failure would stop the batch.
 5. After the Update All runtime gate passes, simplify the temporary development UI toward Add Git Link + branch dropdown + automatic refresh/status + compact per-package actions.
