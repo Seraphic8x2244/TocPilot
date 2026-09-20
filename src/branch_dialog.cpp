@@ -143,8 +143,7 @@ void PopulateBranches(
     }
 
     status +=
-        L". Saving a branch only stores remote "
-        L"tracking metadata; no addon files are installed.";
+        L". Choose the branch TocPilot should track.";
 
     SetWindowTextW(
         GetDlgItem(
@@ -247,7 +246,7 @@ LRESULT CALLBACK DialogProc(
         HWND save = CreateWindowExW(
             0,
             L"BUTTON",
-            L"Save branch",
+            L"Use branch",
             WS_CHILD | WS_VISIBLE |
                 WS_TABSTOP |
                 BS_DEFPUSHBUTTON,
