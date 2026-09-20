@@ -637,13 +637,13 @@ Complete. A real `v0.1.0 -> v0.1.1` in-app self-update succeeded on Windows besi
 - For repositories containing multiple addon roots, present each detected root as an explicit Yes/No choice and persist that selection as package configuration so future Install/Update respects excluded roots. If a later revision adds a new addon root, surface it as a new choice instead of installing it silently.
 - Keep the repository/package as the update unit while allowing selected addon roots within it. This should support GAM layouts such as `_LP -> _LazyPig` and `Atlas.repo -> Atlas + AtlasLoot + AtlasQuest` after exact-SHA/sibling-root mapping is validated.
 - Treat complex multi-root adoption as a later UI-wrapper/layout pass after the GitHub-only compact layout is stable.
+- New UX requirement after v0.1.20 runtime pass: persist package-list sort column and ascending/descending direction in `TocPilot.json`, save on change/close, and restore on next launch so the user's chosen ordering survives restarts.
 ## Exact next step
 
-1. Let the installed `v0.1.19` self-update normally to published `v0.1.20`.
-2. While the GitHub REST quota is still exhausted/low, select an existing GitHub package and open **Set Branch**. Confirm the branch list loads, the correct current/default branch is selected, and saving a branch succeeds.
-3. Also exercise the branch-selection step for a newly added GitHub repository if convenient. No GitHub REST rate-limit error should appear.
-4. If that runtime check passes, treat the GitHub transport layer as complete for the current product: branch head, full branch list, default branch, Refresh, Update All, exact-SHA archive fetch, and TocPilot self-update are all independent of GitHub REST quota.
-5. Then begin the GitHub-only layout pass immediately: compact default window focused on addon name/status with primary **Add / Update / Remove / Advanced** actions.
-6. **Advanced** should expand to the right and expose branch, refresh, inspect/reinstall, ownership/folder diagnostics, detailed columns, text-size/app-update controls, and other lower-frequency actions.
-7. Add/finish **Launch WoW** and **Launch VanillaFixes** controls and reconcile the already-implemented column sorting/status behavior with the compact/advanced layout.
-8. Keep provider expansion frozen until this GitHub-only layout is runtime-validated and feels complete.
+1. Treat `v0.1.20` GitHub transport as runtime-passed: Set Branch loads successfully with the REST quota exhausted.
+2. Before editing UI code, lock the exact compact/advanced window design with the user.
+3. Compact mode should contain only the everyday information/actions needed to manage GitHub addons; Advanced expands to the right and owns diagnostics and lower-frequency controls.
+4. Persist package-list sort column and direction in `TocPilot.json`; restore the same ordering on next launch.
+5. Once the layout is agreed, implement it without changing the proven smart-HTTP/codeload/update transaction paths.
+6. Add/finish Launch WoW and Launch VanillaFixes as part of the compact/advanced pass.
+7. Keep provider expansion frozen until the GitHub-only layout and sorting persistence are runtime-validated.
