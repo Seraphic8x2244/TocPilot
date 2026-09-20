@@ -4,7 +4,7 @@
 
 - Active branch: `p2-github-branches`.
 - Current runtime-tested application version includes the `v0.1.13` adoption slice. The user successfully adopted existing Git-managed addons, then ran Update All across 21 installed packages: Queued 21 / Processed 21 / Updated 1 / Already current 20 / Failed 0. This validates adoption feeding the normal refresh/update transaction path. Restart persistence and continued GitAddonsManager visibility of retained `.git` metadata remain the final adoption runtime checks.
-- Latest implementation commit: `5e9d4c8` — Fix expandable dialog labels. The current source still reports v0.1.13; the post-v0.1.13 adoption UX/source-only-record fixes have not yet been versioned for a new release.
+- v0.1.14 release request is now committed at `dccec55`. Source/version commits are `21bc962` (CMake 0.1.14) and `1b5bdad` (version header 0.1.14). The automated release must still pass Windows x64 build + full CTest before the tag/assets are considered published.
 - Post-v0.1.13 adoption follow-up commits:
   - `5e9d4c8` — Fix expandable dialog labels.
   - `a2a47a4` — Harden task dialog manifest declaration.
@@ -58,11 +58,15 @@
 - License: MIT
 - Intended platform: Windows x64
 - Implementation: native C++20 / Win32 / CMake
-- Highest priority: Windows-CI validate the completed post-v0.1.13 adoption follow-ups, then version/publish the next runtime-test release
+- Highest priority: confirm the v0.1.14 automated release passes Windows x64 build/full CTest, then runtime-test in-place adoption and expandable details
 - Current adoption runtime result: 21 managed packages completed Update All with 1 updated / 20 current / 0 failed after existing Git installs were adopted.
 
 ## Latest commits
 
+- `dccec55` — Request v0.1.14 adoption UX release
+- `1b5bdad` — Set v0.1.14 application version
+- `21bc962` — Bump TocPilot to v0.1.14
+- `834c4fa` — Record launcher and compact UI roadmap
 - `5e9d4c8` — Fix expandable dialog labels
 - `a2a47a4` — Harden task dialog manifest declaration
 - `04a6cac` — Use expandable adoption detail dialogs
@@ -514,8 +518,8 @@ Complete. A real `v0.1.0 -> v0.1.1` in-app self-update succeeded on Windows besi
 
 ## Exact next step
 
-1. Get Windows x64 build/full CTest green for implementation head `5e9d4c8`, including the updated adoption tests and the new native TaskDialog wrapper in the main executable.
-2. Fix any MSVC/Common-Controls issue before versioning; do not publish from a failing source head.
-3. Bump to the next release version (expected `v0.1.14`) and publish through the automated release path.
+1. Check the automated release for trigger commit `dccec55`; require Windows x64 Release build and the complete CTest suite to pass before treating v0.1.14 as published.
+2. If CI fails, fix the exact MSVC/Common-Controls/test issue and re-request v0.1.14 from the corrected source head.
+3. Once v0.1.14 is published, self-update from v0.1.13.
 4. Runtime-test two focused cases: (a) a matching TocPilot **Not installed** record is adopted in place without Forget, and (b) adoption dialogs show compact counts with **Show details** exposing exact candidates/refusal reasons.
 5. Also finish the original adoption gate by restarting TocPilot and confirming retained `.git` metadata remains usable by GitAddonsManager.
