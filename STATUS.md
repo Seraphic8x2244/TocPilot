@@ -392,6 +392,8 @@ Tracked-branch Refresh test release `v0.1.6` was published automatically. Releas
 - Post-v0.1.13 follow-ups are not yet Windows/runtime validated: in-place adoption of a matching Not-installed TocPilot record, the new TaskDialog/Common-Controls-v6 wrapper, expanded/collapsed detail labels, and the compact adoption summary/refusal presentation.
 - The adoption pass intentionally does not yet claim GitLab repositories, detached HEADs, linked worktrees/submodules, or Git repository containers without a root-level `.toc`. GitAddonsManager has no unique ownership marker, so the UI explicitly warns that an eligible normal Git clone is indistinguishable from a GitAddonsManager-created clone.
 - Runtime/repository investigation identified the GAM container layout for the two remaining refusals. `satan666/_LP` tracks the loadable addon under `_LazyPig/_LazyPig.toc`, while the user's live `_LP` folder contains only `.git` plus repository metadata; GAM has therefore separated the tracked addon root into a sibling live folder while retaining the Git container. `Cabro/Atlas` similarly tracks three loadable roots: `Atlas/Atlas.toc`, `AtlasLoot/AtlasLoot.toc`, and `AtlasQuest/AtlasQuest.toc`. Future complex-GAM adoption should resolve the container's exact local SHA/origin, inspect that exact repository revision using the existing archive-inspection path, map detected addon roots to sibling live `Interface\\AddOns` folders, and adopt those roots as one TocPilot package without touching the Git container.
+- Current update-readiness UX limitation: package rows already derive **Current** vs **Update available** by comparing `installed_revision` and `latest_revision`, and the selected Install button changes to **Update** when they differ. However, TocPilot does not automatically refresh all remote branch heads at startup, so `latest_revision` may be stale until manual Refresh or Update All; automatic status refresh is therefore required for trustworthy at-a-glance update indicators.
+- Current package ListView has no `LVN_COLUMNCLICK` handling or sort state, so clicking Name / Source / Installed / Latest / Status headers is intentionally inert in the current implementation; add stable ascending/descending sorting later.
 
 - `v0.1.10` successful-path runtime validation passed with `Shellyoung/AdvancedTradeSkillWindow2` on its default `main` branch: first install succeeded, TocPilot still showed the package as Current after restart, and Reinstall completed successfully. This validates the normal transactional install/reinstall path and persisted ownership/state at runtime.
 
@@ -501,9 +503,16 @@ Complete. A real `v0.1.0 -> v0.1.1` in-app self-update succeeded on Windows besi
 - Default to a compact/small main window focused on addon name + status.
 - Keep the normal path automatic/minimal:
   - automatically check TocPilot for updates and show a simple Yes/No prompt when one is available;
+  - automatically refresh managed GitHub branch heads so update readiness is current without requiring manual Refresh/Update All first;
+  - make update readiness visually obvious in compact mode (at minimum a clear **Update available** status/action; later consider row/icon emphasis without relying on colour alone);
   - automatically scan for newly discoverable GitAddonsManager/Git installs and show a simple Yes/No adoption prompt only when new candidates exist.
 - Compact-mode primary actions: **Add**, **Update**, **Remove**, **Advanced**.
 - **Advanced** expands the window to the right and exposes the detailed addon columns plus lower-frequency controls such as branch/refresh/inspect/reinstall/ownership diagnostics.
+- Add click-to-sort behavior for package-list columns, with ascending/descending toggle and a visible sort indicator. Current Win32 ListView headers do not implement `LVN_COLUMNCLICK`.
+- Add an Advanced/details folder scan that classifies immediate children of `Interface\\AddOns` instead of silently ignoring non-managed folders: managed addon, unmanaged addon/root-level `.toc`, Git repository container, Blizzard/system/local addon, and non-addon/no-`.toc` folder.
+- For Git repository containers, inspect only the repository root and **one directory level down** for addon roots; do not recursively hunt arbitrary repository depth.
+- For repositories containing multiple addon roots, present each detected root as an explicit Yes/No choice and persist that selection as package configuration so future Install/Update respects excluded roots. If a later revision adds a new addon root, surface it as a new choice instead of installing it silently.
+- Keep the repository/package as the update unit while allowing selected addon roots within it. This should support GAM layouts such as `_LP -> _LazyPig` and `Atlas.repo -> Atlas + AtlasLoot + AtlasQuest` after exact-SHA/sibling-root mapping is validated.
 - Treat this as a later UI-wrapper/layout pass; do not mix it into the current v0.1.14 adoption-fix release.
 
 ## Deferred
