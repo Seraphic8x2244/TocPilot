@@ -34,6 +34,7 @@ add_executable(TocPilot WIN32
     src/state.cpp
     src/update.cpp
     src/update_all.cpp
+    src/ui_dialog.cpp
 )
 
 target_compile_features(TocPilot PRIVATE cxx_std_20)
