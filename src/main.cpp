@@ -3715,9 +3715,8 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             StartUpdateCheck(hwnd);
         } else {
             EnableWindow(g_updateButton, TRUE);
+            StartAutoStatusRefresh(hwnd);
         }
-
-        StartAutoStatusRefresh(hwnd);
 
         return 0;
     }
@@ -4080,6 +4079,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             SetIndicator(g_releaseStatus, L"Release: Unavailable");
             SetWindowTextW(g_updateButton, L"Retry app check");
             EnableWindow(g_updateButton, TRUE);
+            StartAutoStatusRefresh(hwnd);
             return 0;
         }
 
@@ -4091,6 +4091,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             SetIndicator(g_releaseStatus, L"Release: Not found");
             SetWindowTextW(g_updateButton, L"Check app update");
             EnableWindow(g_updateButton, TRUE);
+            StartAutoStatusRefresh(hwnd);
             break;
 
         case tp::ReleaseCheckState::UpdateAvailable:
@@ -4110,6 +4111,8 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                     MB_YESNO |
                         MB_ICONINFORMATION) == IDYES) {
                 StartUpdate(hwnd);
+            } else {
+                StartAutoStatusRefresh(hwnd);
             }
             break;
 
@@ -4120,6 +4123,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                 L"Release: Current - " + result->release.tag);
             SetWindowTextW(g_updateButton, L"Check app update");
             EnableWindow(g_updateButton, TRUE);
+            StartAutoStatusRefresh(hwnd);
             break;
         }
 
