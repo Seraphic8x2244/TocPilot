@@ -18,7 +18,10 @@ UpdateAllProgress MakeUpdateAllProgress(const AppState& state) {
     UpdateAllProgress progress;
 
     for (const auto& package : state.packages) {
-        if (IsUpdateAllCandidate(package)) {
+        if (IsUpdateAllCandidate(package) &&
+            !package.latestRevision.empty() &&
+            package.installedRevision !=
+                package.latestRevision) {
             progress.packageIds.push_back(package.id);
         }
     }
