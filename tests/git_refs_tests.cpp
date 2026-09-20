@@ -1,5 +1,7 @@
 #include "git_refs.h"
 
+#include <algorithm>
+#include <cctype>
 #include <cstdio>
 #include <iostream>
 #include <string>
@@ -42,7 +44,50 @@ std::string Advertisement() {
 
 } // namespace
 
-int main() {
+int main(int argc, char** argv) {
+    if (argc == 2 && std::string(argv[1]) == "--live-github") {
+        std::wstring sha;
+        std::wstring error;
+        if (!tp::ResolvePublicGitBranchHead(
+                L"github.com",
+                L"Seraphic8x2244/TocPilot",
+                L"main",
+                sha,
+                error)) {
+            std::wcerr
+                << L"live GitHub smart-HTTP lookup failed: "
+                << error
+                << L'\n';
+            return 1;
+        }
+
+        const bool valid =
+            (sha.size() == 40 || sha.size() == 64) &&
+            std::all_of(
+                sha.begin(),
+                sha.end(),
+                [](wchar_t ch) {
+                    return
+                        (ch >= L'0' && ch <= L'9') ||
+                        (ch >= L'a' && ch <= L'f') ||
+                        (ch >= L'A' && ch <= L'F');
+                });
+
+        if (!valid) {
+            std::wcerr
+                << L"live GitHub smart-HTTP lookup returned invalid SHA: "
+                << sha
+                << L'\n';
+            return 1;
+        }
+
+        std::wcout
+            << L"Live GitHub smart-HTTP lookup passed: "
+            << sha
+            << L'\n';
+        return 0;
+    }
+
     {
         std::string sha;
         std::wstring error;
