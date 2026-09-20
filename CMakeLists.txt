@@ -23,6 +23,7 @@ if(MSVC)
 endif()
 
 add_executable(TocPilot WIN32
+    src/addon_scan.cpp
     src/adoption.cpp
     src/add_package_dialog.cpp
     src/archive.cpp
@@ -185,4 +186,23 @@ if(BUILD_TESTING)
     endif()
 
     add_test(NAME git-addon-adoption COMMAND TocPilotAdoptionTests)
+
+    add_executable(TocPilotAddonScanTests
+        tests/addon_scan_tests.cpp
+        src/addon_scan.cpp
+    )
+    target_compile_features(TocPilotAddonScanTests PRIVATE cxx_std_20)
+    target_compile_definitions(TocPilotAddonScanTests PRIVATE
+        UNICODE
+        _UNICODE
+        WIN32_LEAN_AND_MEAN
+        NOMINMAX
+    )
+    target_include_directories(TocPilotAddonScanTests PRIVATE src)
+
+    if(MSVC)
+        target_compile_options(TocPilotAddonScanTests PRIVATE /W4 /permissive- /utf-8)
+    endif()
+
+    add_test(NAME addon-folder-classification COMMAND TocPilotAddonScanTests)
 endif()
