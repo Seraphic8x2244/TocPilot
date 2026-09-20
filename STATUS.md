@@ -1,5 +1,42 @@
 # TocPilot status / handoff
 
+## Release checkpoint — 2026-09-20 v0.1.24 published
+
+- Active branch: `p2-github-branches`.
+- Published version: `v0.1.24`.
+- Release tag `v0.1.24` points exactly to `ffdc961e323f6ec276ca1562a86cc59342f4e003` — **Request v0.1.24 branch-cell UX release**.
+- Release workflow run `35533964804` completed successfully:
+  - source/version validation passed;
+  - Windows x64 Release configure/build passed;
+  - complete CTest suite passed;
+  - SHA-256 sidecar generation passed;
+  - tag creation passed;
+  - release asset publication passed.
+- Published `TocPilot.exe`: 898,048 bytes; SHA-256 `e9244e39ebd80907ce01a9de0d383f99e93241c3cb0a6f4aaea6c4da479afb79`.
+- v0.1.24 UI changes:
+  - **Remove** -> **Remove Addon**;
+  - **Reinstall** -> **Reinstall Addon** and uninstalled selections show **Install Addon**;
+  - **Source / Track** -> **Branch**;
+  - Branch values/dropdown entries are branch names rather than `GitHub / branch`;
+  - Advanced toolbar now uses equal-width buttons with a minimum sized for **Scan Existing Addons**, and distributes extra width evenly;
+  - Advanced minimum window width is derived from toolbar/visible-column requirements instead of the old fixed +520px expansion;
+  - expanding/collapsing preserves additional user-resized width while respecting mode minimums;
+  - every GitHub Branch cell in Advanced draws a visible dropdown arrow;
+  - clicking an unselected Branch cell selects that addon and opens its dropdown in one interaction;
+  - if branches are still loading, the dropdown automatically opens when discovery completes instead of requiring a second click.
+- Runtime testing still required for the visual branch-arrow affordance, one-click timing, Advanced width/spacing, and selector alignment while scrolling/sorting/resizing.
+
+## Exact next runtime step
+
+1. Self-update TocPilot to `v0.1.24`.
+2. Confirm compact shows **Update All / Add Git / Remove Addon / Advanced**.
+3. Confirm all eight Advanced buttons are equal width and expand evenly with the window.
+4. Confirm **Branch** is the second column and every GitHub addon row visibly shows a dropdown arrow.
+5. Click the Branch cell of an unselected addon once; the branch list should open directly, or open automatically once the branch lookup finishes.
+6. Scroll, resize columns/window, and sort while a row is selected; verify the real selector stays aligned.
+7. Change a test branch and confirm tracking changes without addon files changing until an explicit **Update All** or **Reinstall Addon**.
+8. Continue from this checkpoint in a fresh chat; the current conversation is heavily tool-loaded.
+
 ## Release-prep checkpoint — 2026-09-20 v0.1.24 Advanced toolbar + branch-cell UX
 
 - Active branch: `p2-github-branches`.
