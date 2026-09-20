@@ -1997,6 +1997,7 @@ void UninstallPackage(
 void AdoptGitAddons(HWND hwnd) {
     if (!g_stateReady ||
         g_updateAllInProgress ||
+        g_autoStatusRefreshInProgress ||
         g_packageRefreshInProgress ||
         g_packageInspectInProgress ||
         g_packageInstallInProgress ||
@@ -2121,6 +2122,85 @@ void AdoptGitAddons(HWND hwnd) {
         return;
     }
 
+    std::vector<std::wstring>
+        folderDiagnostics;
+
+    {
+        std::vector<tp::AddonFolderInfo>
+            folders;
+        std::wstring scanError;
+
+        if (tp::ScanAddonFolders(
+                g_root,
+                g_state,
+                folders,
+                scanError)) {
+            for (const auto& folder :
+                 folders) {
+                if (folder.kind ==
+                    tp::AddonFolderKind::ManagedAddon) {
+                    continue;
+                }
+
+                if (folder.kind ==
+                        tp::AddonFolderKind::UnmanagedAddon &&
+                    folder.hasGitMetadata) {
+                    continue;
+                }
+
+                std::wstring line =
+                    folder.name +
+                    L" — " +
+                    tp::AddonFolderKindLabel(
+                        folder.kind);
+
+                if (folder.kind ==
+                    tp::AddonFolderKind::GitContainer) {
+                    line +=
+                        L"; no root .toc";
+
+                    if (folder.oneLevelAddonRoots.empty()) {
+                        line +=
+                            L"; one-level addon roots: none found locally";
+                    } else {
+                        line +=
+                            L"; one-level addon roots: ";
+
+                        for (std::size_t i = 0;
+                             i <
+                                folder.oneLevelAddonRoots.size();
+                             ++i) {
+                            if (i != 0) {
+                                line +=
+                                    L", ";
+                            }
+
+                            line +=
+                                folder.oneLevelAddonRoots[i];
+                        }
+                    }
+                } else if (
+                    folder.kind ==
+                    tp::AddonFolderKind::UnmanagedAddon) {
+                    line +=
+                        L"; root .toc present; no Git source";
+                } else if (
+                    folder.kind ==
+                    tp::AddonFolderKind::NonAddon) {
+                    line +=
+                        L"; no root .toc";
+                }
+
+                folderDiagnostics.push_back(
+                    std::move(line));
+            }
+        } else {
+            folderDiagnostics.push_back(
+                L"Folder diagnostics unavailable: " +
+                scanError);
+        }
+    }
+
     auto appendEntries = [](
         std::wstring& details,
         std::wstring_view heading,
@@ -2195,6 +2275,10 @@ void AdoptGitAddons(HWND hwnd) {
         details,
         L"Already managed by TocPilot",
         alreadyManaged);
+    appendEntries(
+        details,
+        L"Other Interface\\AddOns folders",
+        folderDiagnostics);
 
     if (plans.empty()) {
         std::wstring content =
@@ -2204,6 +2288,9 @@ void AdoptGitAddons(HWND hwnd) {
             L".\r\nRefused: " +
             std::to_wstring(
                 refusals.size()) +
+            L".\r\nOther folders in details: " +
+            std::to_wstring(
+                folderDiagnostics.size()) +
             L".\r\n\r\n"
             L"TocPilot adopts only direct addon folders with a normal .git "
             L"directory, root-level .toc file, GitHub origin, attached branch "
@@ -2230,6 +2317,9 @@ void AdoptGitAddons(HWND hwnd) {
         L".\r\nRefused: " +
         std::to_wstring(
             refusals.size()) +
+        L".\r\nOther folders in details: " +
+        std::to_wstring(
+            folderDiagnostics.size()) +
         L".\r\n\r\n"
         L"Adoption records the local branch SHA and addon-file ownership in "
         L"TocPilot.json. Existing addon files and .git metadata are not changed. "
