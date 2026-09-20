@@ -5,8 +5,10 @@
 #include <cctype>
 #include <cwctype>
 #include <fstream>
+#include <iterator>
 #include <string_view>
 #include <system_error>
+#include <utility>
 
 namespace tp {
 namespace {
