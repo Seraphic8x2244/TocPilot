@@ -4,7 +4,7 @@
 
 - Active branch: `p2-github-branches`.
 - Current runtime-tested application version includes the `v0.1.13` adoption slice. The user successfully adopted existing Git-managed addons, then ran Update All across 21 installed packages: Queued 21 / Processed 21 / Updated 1 / Already current 20 / Failed 0. This validates adoption feeding the normal refresh/update transaction path. Restart persistence and continued GitAddonsManager visibility of retained `.git` metadata remain the final adoption runtime checks.
-- v0.1.14 release request is now committed at `dccec55`. Source/version commits are `21bc962` (CMake 0.1.14) and `1b5bdad` (version header 0.1.14). The automated release must still pass Windows x64 build + full CTest before the tag/assets are considered published.
+- v0.1.14 release request is committed at `dccec55`. Tag `v0.1.14` now exists and resolves to the 0.1.14 source, which confirms the release workflow passed source validation, Windows x64 build, and the full CTest suite before reaching its create-tag step. Release asset publication is the final workflow step; the current connector does not expose release assets directly.
 - Post-v0.1.13 adoption follow-up commits:
   - `5e9d4c8` — Fix expandable dialog labels.
   - `a2a47a4` — Harden task dialog manifest declaration.
@@ -58,7 +58,7 @@
 - License: MIT
 - Intended platform: Windows x64
 - Implementation: native C++20 / Win32 / CMake
-- Highest priority: confirm the v0.1.14 automated release passes Windows x64 build/full CTest, then runtime-test in-place adoption and expandable details
+- Highest priority: runtime-test v0.1.14 in-place adoption and expandable details once the release asset/self-update is visible
 - Current adoption runtime result: 21 managed packages completed Update All with 1 updated / 20 current / 0 failed after existing Git installs were adopted.
 
 ## Latest commits
@@ -518,8 +518,8 @@ Complete. A real `v0.1.0 -> v0.1.1` in-app self-update succeeded on Windows besi
 
 ## Exact next step
 
-1. Check the automated release for trigger commit `dccec55`; require Windows x64 Release build and the complete CTest suite to pass before treating v0.1.14 as published.
-2. If CI fails, fix the exact MSVC/Common-Controls/test issue and re-request v0.1.14 from the corrected source head.
-3. Once v0.1.14 is published, self-update from v0.1.13.
-4. Runtime-test two focused cases: (a) a matching TocPilot **Not installed** record is adopted in place without Forget, and (b) adoption dialogs show compact counts with **Show details** exposing exact candidates/refusal reasons.
-5. Also finish the original adoption gate by restarting TocPilot and confirming retained `.git` metadata remains usable by GitAddonsManager.
+1. Let the installed v0.1.13 client detect/self-update to v0.1.14 once the release asset is visible.
+2. Runtime-test two focused cases: (a) a matching TocPilot **Not installed** record is adopted in place without Forget, and (b) adoption dialogs show compact counts with **Show details** exposing exact candidates/refusal reasons.
+3. Confirm restart persistence after adoption.
+4. Confirm retained `.git` metadata remains usable by GitAddonsManager.
+5. After those gates pass, begin the later compact-UI/launcher pass recorded under **Later UI direction**.
