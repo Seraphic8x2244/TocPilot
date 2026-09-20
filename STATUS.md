@@ -1,5 +1,35 @@
 # TocPilot status / handoff
 
+## Release checkpoint — 2026-09-20 v0.1.22 published
+
+- Active branch: `p2-github-branches`.
+- Published version: `v0.1.22`.
+- Release tag `v0.1.22` points exactly to `6b5b9353d95154bad916028041c9f51892a03d73` — **Retry v0.1.22 release after Windows build fix**.
+- Release workflow run `35528375519` completed successfully:
+  - source/version validation passed;
+  - Windows x64 Release configure/build passed;
+  - complete CTest suite passed;
+  - SHA-256 sidecar generation passed;
+  - tag creation passed;
+  - release asset publication passed.
+- Published `TocPilot.exe`: 887,296 bytes; SHA-256 `94f441841e8baeed0da5c8abb261e51e46f6b60a71fb21559cf668846a63e7c2`.
+- Published checksum sidecar: `TocPilot.exe.sha256`.
+- The first v0.1.22 release attempt (run `35528077055`) failed safely during compilation before tests/tagging because MSVC exposed Win32 `LONG`/`int` template type mismatches in new custom-draw/window-centering code. No bad tag or asset was published.
+- Fix commit `d593f8f` — **Fix Win32 layout type conversions** — passed normal Windows build run `35528228350` including the complete test suite before the corrected release was requested.
+- Runtime testing is still required for the new v0.1.22 UI/identity slice.
+
+## Exact next runtime step
+
+1. Let `v0.1.21` self-update normally to published `v0.1.22`. This also exercises the updater-helper interaction with the new single-instance guard.
+2. Launch TocPilot a second time from the same WoW directory: it should restore/foreground the existing window and exit the second process.
+3. Check the smaller compact layout and five equal-width buttons: **Update All / Add Git / Remove / TocPilot / Advanced**.
+4. Expand Advanced and verify **Scan Existing Addons / Refresh All / Reinstall** plus the detailed columns.
+5. Confirm addon base names are bold while branch suffixes such as `(dev)` remain regular weight.
+6. Open **TocPilot** and verify the GitHub/release links plus update check resolving to disabled **Up to date** on v0.1.22.
+7. Check the application icon in Explorer/title bar/taskbar.
+8. Check the larger/spaced WoW/VanillaFixes launch buttons and conditional VanillaFixes visibility.
+9. Keep provider expansion frozen; refine this UI only from runtime feedback.
+
 ## Continuation checkpoint — 2026-09-20 v0.1.22 UI identity/update-control implementation
 
 - Active branch: `p2-github-branches`.
