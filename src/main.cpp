@@ -114,6 +114,7 @@ std::size_t g_autoStatusPosition = 0;
 std::size_t g_autoStatusCurrent = 0;
 std::size_t g_autoStatusUpdates = 0;
 std::size_t g_autoStatusFailed = 0;
+bool g_autoStatusRateLimited = false;
 std::vector<std::size_t> g_packageViewOrder;
 int g_packageSortColumn = -1;
 bool g_packageSortAscending = true;
@@ -1527,6 +1528,11 @@ void FinishAutoStatusRefresh(HWND hwnd) {
     message +=
         L".";
 
+    if (g_autoStatusRateLimited) {
+        message +=
+            L" GitHub rate-limited the check; remaining packages were left at their saved status.";
+    }
+
     if (g_packageHint) {
         SetWindowTextW(
             g_packageHint,
@@ -1619,6 +1625,7 @@ void StartAutoStatusRefresh(HWND hwnd) {
     g_autoStatusCurrent = 0;
     g_autoStatusUpdates = 0;
     g_autoStatusFailed = 0;
+    g_autoStatusRateLimited = false;
     g_autoStatusRefreshInProgress = true;
 
     UpdatePackageButtons();
@@ -3461,15 +3468,10 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                 if (IsGitHubRateLimitError(
                         result->error)) {
                     ++g_autoStatusFailed;
+                    g_autoStatusRateLimited =
+                        true;
                     g_autoStatusPosition =
                         g_autoStatusPackageIds.size();
-
-                    if (g_packageHint) {
-                        SetWindowTextW(
-                            g_packageHint,
-                            L"Automatic addon status check stopped because GitHub is rate-limiting requests. Existing saved status was left unchanged for the remaining packages.");
-                    }
-
                     FinishAutoStatusRefresh(hwnd);
                 } else {
                     CompleteAutoStatusRefreshStep(
