@@ -400,6 +400,102 @@ void TestGitLabRejectedForNow() {
         ec);
 }
 
+void TestBrokenUpstreamRejected() {
+    const auto root =
+        MakeSimpleClone(
+            L"upstream");
+
+    if (root.empty()) {
+        Fail("could not create upstream fixture");
+        return;
+    }
+
+    const auto addon =
+        root /
+        L"Interface" /
+        L"AddOns" /
+        L"ExampleAddon";
+
+    WriteAll(
+        addon /
+            L".git" /
+            L"config",
+        "[remote \"origin\"]\n"
+        "    url = https://github.com/Owner/ExampleAddon.git\n"
+        "[branch \"main\"]\n"
+        "    remote = origin\n"
+        "    merge = refs/heads/master\n");
+
+    tp::AppState state;
+    tp::GitAddonAdoptionPlan plan;
+    std::wstring error;
+
+    if (tp::PlanGitAddonAdoption(
+            root,
+            addon,
+            state,
+            plan,
+            error) ||
+        error.find(
+            L"upstream metadata") ==
+            std::wstring::npos) {
+        Fail("broken branch upstream metadata was accepted");
+    }
+
+    std::error_code ec;
+    std::filesystem::remove_all(
+        root,
+        ec);
+}
+
+void TestGitFileLayoutRejected() {
+    const auto root =
+        MakeSimpleClone(
+            L"gitfile");
+
+    if (root.empty()) {
+        Fail("could not create git-file fixture");
+        return;
+    }
+
+    const auto addon =
+        root /
+        L"Interface" /
+        L"AddOns" /
+        L"ExampleAddon";
+
+    std::error_code ec;
+    std::filesystem::remove_all(
+        addon /
+            L".git",
+        ec);
+
+    WriteAll(
+        addon /
+            L".git",
+        "gitdir: C:/linked/worktree\n");
+
+    tp::AppState state;
+    tp::GitAddonAdoptionPlan plan;
+    std::wstring error;
+
+    if (tp::PlanGitAddonAdoption(
+            root,
+            addon,
+            state,
+            plan,
+            error) ||
+        error.find(
+            L"normal .git directory") ==
+            std::wstring::npos) {
+        Fail("linked worktree .git file was accepted");
+    }
+
+    std::filesystem::remove_all(
+        root,
+        ec);
+}
+
 void TestExistingRootOwnershipRejected() {
     const auto root =
         MakeSimpleClone(
@@ -495,6 +591,8 @@ int main() {
     TestDetachedHeadRejected();
     TestComplexLayoutRejected();
     TestGitLabRejectedForNow();
+    TestBrokenUpstreamRejected();
+    TestGitFileLayoutRejected();
     TestExistingRootOwnershipRejected();
     TestDuplicateRepositoryRejected();
 
