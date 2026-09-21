@@ -1,5 +1,19 @@
 # TocPilot status / handoff
 
+## v0.1.30 splash position adjustment — 2026-09-21
+
+- Active branch: `main`.
+- Runtime feedback after v0.1.29 tuning: move the plaque up 20 px and the words up 40 px.
+- Implemented exactly from the current geometry:
+  - plaque Y `238 -> 218`;
+  - status text Y `395 -> 355`.
+- Logo geometry remains unchanged.
+- Plaque size remains unchanged.
+- Animated-dot behavior remains unchanged and previously runtime-confirmed stable.
+- Temporary **Click to continue!** remains in place for inspection.
+- Latest implementation commit: `3ff7d38` — Raise splash plaque and status text.
+- Exact next step: publish the next tuning release from `main`, runtime-check the new positions, and only then decide whether to remove the click gate.
+
 ## v0.1.29 final splash tuning release request — 2026-09-21
 
 - Active branch: `main`.
