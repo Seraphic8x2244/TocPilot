@@ -421,10 +421,10 @@ void RenderSplash() {
         graphics.DrawImage(
             g_plaque.get(),
             Gdiplus::Rect(
-                95,
-                250,
-                630,
-                315),
+                115,
+                238,
+                590,
+                295),
             0,
             0,
             static_cast<INT>(
@@ -462,18 +462,53 @@ void RenderSplash() {
             Gdiplus::UnitPixel);
 
         Gdiplus::StringFormat format;
-        format.SetAlignment(
-            Gdiplus::
-                StringAlignmentCenter);
         format.SetLineAlignment(
             Gdiplus::
                 StringAlignmentCenter);
 
-        const Gdiplus::RectF textRect(
-            125.0f,
-            415.0f,
-            570.0f,
+        Gdiplus::RectF textRect(
+            145.0f,
+            405.0f,
+            530.0f,
             66.0f);
+
+        if (g_phase ==
+                StartupSplashPhase::
+                    AwaitingContinue) {
+            format.SetAlignment(
+                Gdiplus::
+                    StringAlignmentCenter);
+        } else {
+            format.SetAlignment(
+                Gdiplus::
+                    StringAlignmentNear);
+
+            const std::wstring longestText =
+                g_phase ==
+                        StartupSplashPhase::
+                            CheckingAppUpdate
+                    ? L"Checking for TocPilot Update..."
+                    : L"Scanning for Addon Updates...";
+
+            Gdiplus::RectF measuredText;
+            if (graphics.MeasureString(
+                    longestText.c_str(),
+                    -1,
+                    &font,
+                    Gdiplus::PointF(
+                        0.0f,
+                        0.0f),
+                    &measuredText) ==
+                Gdiplus::Ok) {
+                textRect.X =
+                    (static_cast<Gdiplus::REAL>(
+                         kSplashWidth) -
+                     measuredText.Width) /
+                    2.0f;
+                textRect.Width =
+                    measuredText.Width;
+            }
+        }
 
         Gdiplus::RectF shadowRect =
             textRect;
