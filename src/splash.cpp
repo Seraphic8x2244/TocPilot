@@ -454,7 +454,7 @@ void RenderSplash() {
             &gold);
     }
 
-    const POINT position =
+    POINT position =
         SplashPosition();
     POINT sourcePoint{0, 0};
     SIZE size{
