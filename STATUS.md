@@ -1,5 +1,44 @@
 # TocPilot status / handoff
 
+## Asset recovery checkpoint — 2026-09-21
+
+- Active branch: `p2-github-branches`.
+- Branch head before this checkpoint: `ab5527c` — **Add files via upload**.
+- Published version remains `v0.1.26`; source version remains `v0.1.26` until the corrected splash build passes CI.
+- The authoritative approved cutout logo has now been uploaded as `resources/TocPilot_logo_cutout.png` (1,315,364 bytes).
+- The current four-chunk embedded logo was validated structurally and is definitely truncated: its PNG IDAT chunk is incomplete and no IEND chunk is present. This confirms the brown rectangle seen at runtime is caused by incomplete embedded image data rather than splash geometry.
+- Approved geometry remains locked: do not move or rescale the logo or plaque.
+- The only intended visual geometry change is a small upward move of the gold runtime status line.
+- Temporary **Click to continue!** remains required for the next runtime screenshot pass.
+
+### Completed
+
+- Exact original cutout asset recovered in the repository.
+- Runtime corruption cause confirmed from PNG structure rather than inferred from the screenshot alone.
+- Existing v0.1.26 splash flow, animation, click gate, logo placement and plaque placement remain unchanged.
+
+### Untested / next implementation slice
+
+- Replace the fragile truncated base64 logo embedding with the complete uploaded PNG embedded as a Windows executable resource.
+- Load that resource into GDI+ without altering the current logo draw rectangle.
+- Move the status text upward slightly while leaving all other geometry unchanged.
+- Build Windows x64 Release and run the complete CTest suite.
+- Only after a clean build/test pass, prepare expected `v0.1.27` for runtime screenshot validation.
+
+### Deferred
+
+- Removing the temporary click gate and restoring automatic splash close.
+- Human-readable Installed/Latest versions.
+- GitLab/Gitea/OctoWoW provider expansion.
+
+### Exact next step
+
+1. Add `TocPilot_logo_cutout.png` to the executable resources and load it directly from the module resource bytes.
+2. Remove the truncated logo base64 include dependency from `src/splash.cpp` while keeping the plaque embedding unchanged.
+3. Keep splash size, logo rectangle `(20, 0, 780, 394)`, plaque rectangle `(95, 250, 630, 315)`, overlap and scale unchanged.
+4. Move only the runtime text rectangle upward slightly.
+5. Push the implementation, require Windows x64 Release + full CTest to pass, then prepare the next version only after CI is green.
+
 ## Runtime splash feedback checkpoint — 2026-09-21
 
 - Active branch: `p2-github-branches`.
