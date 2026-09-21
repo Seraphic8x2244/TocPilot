@@ -1,5 +1,20 @@
 # TocPilot status / handoff
 
+## Resume checkpoint — 2026-09-21 P2 splash tuning
+
+- Active branch: `p2-github-branches`.
+- Published/version baseline: `v0.1.27`.
+- Branch/release baseline commit: `8166a8c` — **Request v0.1.27 splash asset repair release**.
+- Latest relevant commits:
+  - `8166a8c` — Request v0.1.27 splash asset repair release
+  - `28d7dbb` — Bump TocPilot to v0.1.27
+  - `34946fa` — Repair splash logo resource embedding
+  - `dd40ec6` — Record splash asset recovery checkpoint
+- Completed/runtime-confirmed: clean resource-backed logo rendering; v0.1.27 release/build/tests green; logo position and scale accepted; temporary **Click to continue!** inspection gate retained.
+- Untested active work: shrink plaque approximately 5–8%; move plaque upward approximately 8–15 px; move status text upward to about Y=405; stabilize animated-dot text origin using a centered fixed-width region with left-aligned live text.
+- Deferred: remove click gate/restore automatic splash close; human-readable Installed/Latest versions; GitLab/Gitea/OctoWoW/provider expansion; unrelated broader P2 work.
+- Exact next step: edit only the splash plaque/status geometry and animated status text layout, leave the logo rectangle unchanged, then build Windows x64 Release and run the complete CTest suite before preparing the next tuning release.
+
 ## v0.1.27 runtime splash review / handoff — 2026-09-21
 
 - Active branch: `p2-github-branches`.
