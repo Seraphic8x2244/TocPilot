@@ -468,7 +468,7 @@ void RenderSplash() {
 
         Gdiplus::RectF textRect(
             145.0f,
-            405.0f,
+            395.0f,
             530.0f,
             66.0f);
 
