@@ -1,5 +1,29 @@
 # TocPilot status / handoff
 
+## v0.1.30 published / runtime gate — 2026-09-21
+
+- Active branch: `main`.
+- Source/published version: `v0.1.30`.
+- Release `v0.1.30` is now published and targets `25e9a12997bffd45c83495910454c96a35be94a9`.
+- Published assets are present:
+  - `TocPilot.exe` — 2,258,432 bytes; SHA-256 `affce9fd5e6908185450f5364302f8dc8021f361cdbd9ce3a4d6b6a9003643f9`;
+  - `TocPilot.exe.sha256`.
+- Because the release workflow publishes the tag/assets only after source-version validation, Windows x64 Release build, full CTest, and checksum generation, the v0.1.30 release pipeline is green through publication.
+- Current splash geometry remains:
+  - logo unchanged and locked;
+  - plaque Y `218`;
+  - status text Y `355`;
+  - plaque size unchanged;
+  - fixed-origin animated dots unchanged and previously runtime-confirmed stable;
+  - temporary **Click to continue!** retained.
+- Untested/runtime pending:
+  - self-update to `v0.1.30`;
+  - visual approval of the raised plaque and status text.
+- Deferred until runtime approval:
+  - remove **Click to continue!**;
+  - restore automatic splash close after addon scanning.
+- Exact next step: self-update to `v0.1.30`, relaunch, let the splash reach **Click to continue!**, and inspect/send runtime feedback or a screenshot. Make no further splash change until that result.
+
 ## v0.1.30 release request checkpoint — 2026-09-21
 
 - Active branch: `main`.
