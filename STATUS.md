@@ -1,5 +1,27 @@
 # TocPilot status / handoff
 
+## v0.1.32 published / plaque-only logo shadow — 2026-09-21
+
+- Active branch: `main`.
+- Published/source version: `v0.1.32`.
+- Release tag `v0.1.32` targets `c3f4d8d93a3059da932178b50ea0f26a24f6e7d8`.
+- Release workflow run `35665379358` passed source-version validation, Windows x64 Release configure/build, complete CTest, checksum generation, tag creation, and asset publication.
+- Published assets:
+  - `TocPilot.exe` — 2,260,992 bytes; SHA-256 `e9285b635db2702bb6975ec1ddb7d4bfa3a8452b085a01633fae5491912a8b69`;
+  - `TocPilot.exe.sha256` — 78 bytes.
+- Runtime issue fixed from `v0.1.31`: the logo shadow previously appeared around transparent logo details such as the propeller against the desktop.
+- `v0.1.32` now precomputes the logo shadow and masks its alpha by the actual scaled plaque alpha, so shadow pixels can exist only where the wooden plaque itself is opaque/semitransparent. Transparent plaque/background pixels cannot receive the shadow.
+- Shadow remains a soft two-pass black silhouette behind the real logo; real logo geometry and plaque geometry are unchanged.
+- Status text remains at Y `361`; fixed-origin animated dots and temporary **Click to continue!** gate are unchanged.
+- Latest relevant implementation commits:
+  - `aff42ee` — Complete splash shadow cleanup paths
+  - `93c0f75` — Mask splash shadow to plaque alpha
+  - `a49ed7a` — Confine splash shadow to plaque
+  - `fc95a75` — Record plaque-only shadow correction
+- Runtime pending: self-update to `v0.1.32` and visually confirm that the shadow is visible on the plaque but absent from the desktop around propeller/hair/other transparent-overhang edges.
+- Deferred until runtime approval: removing **Click to continue!**, restoring automatic splash close, and unrelated provider/UI work.
+- Exact next step: self-update to `v0.1.32`, inspect the plaque/logo overlap and the propeller edge against the desktop, then report whether shadow strength is right.
+
 ## v0.1.32 plaque-only shadow correction — 2026-09-21
 
 - Active branch: `main`.
