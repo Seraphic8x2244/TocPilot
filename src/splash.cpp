@@ -433,10 +433,21 @@ void RenderSplash() {
                 g_plaque->GetHeight()),
             Gdiplus::UnitPixel);
 
+        const Gdiplus::GraphicsState
+            logoShadowState =
+                graphics.Save();
+        graphics.SetClip(
+            Gdiplus::Rect(
+                115,
+                218,
+                590,
+                295),
+            Gdiplus::CombineModeIntersect);
+
         Gdiplus::ColorMatrix
             logoShadowSoftMatrix{};
         logoShadowSoftMatrix.m[3][3] =
-            0.20f;
+            0.16f;
         logoShadowSoftMatrix.m[4][4] =
             1.0f;
 
@@ -450,8 +461,8 @@ void RenderSplash() {
         graphics.DrawImage(
             g_logo.get(),
             Gdiplus::Rect(
-                25,
-                6,
+                24,
+                5,
                 780,
                 394),
             0,
@@ -466,7 +477,7 @@ void RenderSplash() {
         Gdiplus::ColorMatrix
             logoShadowCoreMatrix{};
         logoShadowCoreMatrix.m[3][3] =
-            0.42f;
+            0.32f;
         logoShadowCoreMatrix.m[4][4] =
             1.0f;
 
@@ -480,8 +491,8 @@ void RenderSplash() {
         graphics.DrawImage(
             g_logo.get(),
             Gdiplus::Rect(
-                28,
-                9,
+                26,
+                7,
                 780,
                 394),
             0,
@@ -492,6 +503,9 @@ void RenderSplash() {
                 g_logo->GetHeight()),
             Gdiplus::UnitPixel,
             &logoShadowCoreAttributes);
+
+        graphics.Restore(
+            logoShadowState);
 
         graphics.DrawImage(
             g_logo.get(),
