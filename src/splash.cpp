@@ -986,6 +986,7 @@ bool ShowStartupSplash(
             ERROR_CLASS_ALREADY_EXISTS) {
         g_logo.reset();
         g_plaque.reset();
+        g_logoPlaqueShadow.reset();
         Gdiplus::GdiplusShutdown(
             g_gdiplusToken);
         g_gdiplusToken = 0;
@@ -1021,6 +1022,7 @@ bool ShowStartupSplash(
             nullptr;
         g_logo.reset();
         g_plaque.reset();
+        g_logoPlaqueShadow.reset();
         Gdiplus::GdiplusShutdown(
             g_gdiplusToken);
         g_gdiplusToken = 0;
