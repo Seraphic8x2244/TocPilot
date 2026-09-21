@@ -1,5 +1,25 @@
 # TocPilot status / handoff
 
+## v0.1.33 shadow opacity tuning — 2026-09-22
+
+- Active branch: `main`.
+- Published/source baseline: `v0.1.32`.
+- Runtime feedback: the plaque-only shadow behavior is now correct, but the shadow remains too transparent to read strongly enough against the wooden plaque.
+- Keep locked:
+  - real logo rectangle `(20, 0, 780, 394)`;
+  - plaque rectangle `(115, 218, 590, 295)`;
+  - plaque-alpha masking behavior that prevents any shadow appearing on transparent desktop/background pixels;
+  - current shadow offsets/spread;
+  - status text Y `361`;
+  - fixed-origin animated dots;
+  - temporary **Click to continue!** gate.
+- Requested implementation slice: change shadow opacity only:
+  - soft pass `0.16 -> 0.30`;
+  - core pass `0.32 -> 0.55`.
+- Untested/runtime pending: visual weight of the stronger plaque-only shadow.
+- Deferred: any offset/spread changes, removing **Click to continue!**, restoring automatic splash close, and unrelated provider/UI work.
+- Exact next step: update only those two alpha values in `CreateLogoPlaqueShadow(...)`, review the diff, bump to `v0.1.33`, publish through the existing release workflow, then runtime-check the plaque/logo overlap.
+
 ## v0.1.32 published / plaque-only logo shadow — 2026-09-21
 
 - Active branch: `main`.
