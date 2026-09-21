@@ -434,24 +434,24 @@ void RenderSplash() {
             Gdiplus::UnitPixel);
 
         Gdiplus::ColorMatrix
-            logoShadowMatrix{};
-        logoShadowMatrix.m[3][3] =
-            0.24f;
-        logoShadowMatrix.m[4][4] =
+            logoShadowSoftMatrix{};
+        logoShadowSoftMatrix.m[3][3] =
+            0.20f;
+        logoShadowSoftMatrix.m[4][4] =
             1.0f;
 
         Gdiplus::ImageAttributes
-            logoShadowAttributes;
-        logoShadowAttributes.SetColorMatrix(
-            &logoShadowMatrix,
+            logoShadowSoftAttributes;
+        logoShadowSoftAttributes.SetColorMatrix(
+            &logoShadowSoftMatrix,
             Gdiplus::ColorMatrixFlagsDefault,
             Gdiplus::ColorAdjustTypeBitmap);
 
         graphics.DrawImage(
             g_logo.get(),
             Gdiplus::Rect(
-                23,
-                4,
+                25,
+                6,
                 780,
                 394),
             0,
@@ -461,7 +461,37 @@ void RenderSplash() {
             static_cast<INT>(
                 g_logo->GetHeight()),
             Gdiplus::UnitPixel,
-            &logoShadowAttributes);
+            &logoShadowSoftAttributes);
+
+        Gdiplus::ColorMatrix
+            logoShadowCoreMatrix{};
+        logoShadowCoreMatrix.m[3][3] =
+            0.42f;
+        logoShadowCoreMatrix.m[4][4] =
+            1.0f;
+
+        Gdiplus::ImageAttributes
+            logoShadowCoreAttributes;
+        logoShadowCoreAttributes.SetColorMatrix(
+            &logoShadowCoreMatrix,
+            Gdiplus::ColorMatrixFlagsDefault,
+            Gdiplus::ColorAdjustTypeBitmap);
+
+        graphics.DrawImage(
+            g_logo.get(),
+            Gdiplus::Rect(
+                28,
+                9,
+                780,
+                394),
+            0,
+            0,
+            static_cast<INT>(
+                g_logo->GetWidth()),
+            static_cast<INT>(
+                g_logo->GetHeight()),
+            Gdiplus::UnitPixel,
+            &logoShadowCoreAttributes);
 
         graphics.DrawImage(
             g_logo.get(),
