@@ -1,5 +1,22 @@
 # TocPilot status / handoff
 
+## v0.1.31 runtime shadow feedback — 2026-09-21
+
+- Active branch: `main`.
+- Published/source baseline entering this pass: `v0.1.31`.
+- Runtime feedback: the new splash logo/art drop shadow is not visibly perceptible.
+- Diagnosis from the implementation: the shadow uses only a +3 px X / +4 px Y offset at 24% alpha, so most of the silhouette remains directly under the opaque logo and the small exposed edge is too faint against the plaque/background.
+- Keep locked:
+  - original logo draw rectangle `(20, 0, 780, 394)`;
+  - plaque geometry `(115, 218, 590, 295)`;
+  - status text Y `361`;
+  - fixed-origin animated dots;
+  - temporary **Click to continue!** gate.
+- Requested implementation slice: make the logo/art shadow clearly perceptible but still soft/subtle, without moving or rescaling the actual logo or plaque.
+- Untested/runtime pending: revised shadow appearance.
+- Deferred: removing **Click to continue!**, restoring automatic splash close, and unrelated provider/UI work.
+- Exact next step: replace the single faint shadow draw with a slightly broader multi-pass black silhouette shadow, review the diff, bump to `v0.1.32`, publish through the existing release workflow, then runtime-test.
+
 ## v0.1.31 published — 2026-09-21
 
 - Active branch: `main`.
