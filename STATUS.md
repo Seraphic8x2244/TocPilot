@@ -6,7 +6,7 @@
 - `main` was fast-forwarded to the full former `p2-github-branches` history with no merge conflict or lost work.
 - At consolidation, `main` and `p2-github-branches` were identical.
 - Source version: `v0.1.28`.
-- Release tag `v0.1.28` now exists after the main-branch release trigger.
+- Release tag `v0.1.28` now exists and points exactly to `8bbeede23ca477ef2eef434df19108ce810a80f7`, the original P2 release-request commit. The first release workflow was still running when the tag was initially checked; the later main consolidation did not create this tag.
 - Tag creation occurs only after release source-version validation, Windows x64 Release build, complete CTest suite, and SHA-256 generation, so those stages passed for this release run.
 - The final GitHub release-asset publication step could not be independently queried through the connected GitHub API in this chat; verify the Releases page exposes `TocPilot.exe` and `TocPilot.exe.sha256`.
 - Branch policy: develop on `main` by default; create a temporary branch only for risky/destructive/long-running work. Consider a persistent `dev` branch later once `main` should remain release-stable for regular users.
