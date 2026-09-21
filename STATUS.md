@@ -1,5 +1,40 @@
 # TocPilot status / handoff
 
+## v0.1.33 published / stronger plaque-only shadow — 2026-09-22
+
+- Active branch: `main`.
+- Published/source version: `v0.1.33`.
+- Release tag `v0.1.33` points exactly to `25a2d05e48d3618e738918a094a41a0d138404f5`.
+- Release workflow run `35666674895` completed successfully.
+- Release pipeline passed:
+  - source-version validation;
+  - Windows x64 Release configure/build;
+  - complete CTest suite;
+  - SHA-256 sidecar generation;
+  - tag creation/verification;
+  - release asset publication.
+- Published assets:
+  - `TocPilot.exe` — 2,260,992 bytes; SHA-256 `c4742737354fbcee4dcf1e1b9addd77ed83fbafb2045db3dd9d2312c0a9dfe64`;
+  - `TocPilot.exe.sha256` — 78 bytes.
+- Included visual change:
+  - plaque-only shadow masking is unchanged and still prevents any logo shadow appearing on transparent desktop/background pixels;
+  - shadow opacity only was increased:
+    - soft pass `0.16 -> 0.30`;
+    - core pass `0.32 -> 0.55`;
+  - shadow offsets/spread are unchanged;
+  - logo/plaque geometry is unchanged;
+  - status text remains at Y `361`;
+  - fixed-origin animated dots and temporary **Click to continue!** remain unchanged.
+- Latest relevant commits:
+  - `25a2d05` — Request v0.1.33 shadow opacity release
+  - `ad24326` — Bump TocPilot to v0.1.33
+  - `75e7b10` — Bump TocPilot build version to v0.1.33
+  - `041fcb6` — Strengthen plaque-only splash shadow
+  - `7272909` — Checkpoint v0.1.33 shadow opacity tuning
+- Runtime pending: self-update to `v0.1.33` and visually confirm the stronger shadow has the right weight on the wooden plaque without reintroducing any desktop-edge shadow.
+- Deferred until runtime approval: changing shadow spread/offset, removing **Click to continue!**, restoring automatic splash close, and unrelated provider/UI work.
+- Exact next step: self-update to `v0.1.33`, inspect the plaque/logo overlap and propeller/hair edges against the desktop, then report whether the shadow weight is now right.
+
 ## v0.1.33 shadow opacity tuning — 2026-09-22
 
 - Active branch: `main`.
