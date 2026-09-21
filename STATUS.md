@@ -1,5 +1,81 @@
 # TocPilot status / handoff
 
+## v0.1.27 runtime splash review / handoff — 2026-09-21
+
+- Active branch: `p2-github-branches`.
+- Current branch head entering this handoff: `8166a8c` — **Request v0.1.27 splash asset repair release**.
+- Published version: `v0.1.27`.
+- Release tag `v0.1.27` points exactly to `8166a8c6b163b16d53630a2df46f750ebd49ff19`.
+- Release workflow `35620287102` completed successfully:
+  - source-version validation passed;
+  - Windows x64 Release build passed;
+  - complete CTest suite passed;
+  - SHA-256 sidecar generation passed;
+  - tag creation passed;
+  - release asset publication passed.
+- Published `TocPilot.exe`: 2,257,920 bytes; SHA-256 `b90f4a347f3b5539d6b058eebcc3d82d03ac4d5f8b9f628811a050ece89b75f2`.
+- Latest relevant commits:
+  - `8166a8c` — Request v0.1.27 splash asset repair release
+  - `28d7dbb` — Bump TocPilot to v0.1.27
+  - `34946fa` — Repair splash logo resource embedding
+  - `dd40ec6` — Record splash asset recovery checkpoint
+  - `ab5527c` — Add files via upload
+  - `4dfb20a` — Record splash runtime feedback handoff
+
+### Completed / runtime-confirmed
+
+- The authoritative cutout logo is now embedded from `resources/TocPilot_logo_cutout.png` as a Windows executable resource instead of the truncated base64 chunks.
+- The previous large brown corruption block is gone in the real v0.1.27 runtime screenshot.
+- The logo itself renders cleanly and its current position/scale remains acceptable.
+- The existing startup flow still reaches the temporary **Click to continue!** inspection state.
+- The first text adjustment moved the status rectangle from Y=425 to Y=415.
+- v0.1.27 is a known-good release baseline for the next visual tuning slice.
+
+### Runtime feedback to address next
+
+- The plaque currently feels a little too large / too far below the logo, more like it is hanging beneath the logo than tucked into it.
+- Preferred direction for the next pass:
+  - make the plaque slightly smaller, approximately 5–8% as a starting range;
+  - move the plaque upward enough to increase the overlap under the TocPilot logo, approximately 8–15 px as a starting range;
+  - do **not** move or rescale the logo unless runtime evidence requires it.
+- The gold status text still looks slightly low. Move it upward by about another 10 px from the current Y=415 position (initial target Y≈405).
+- Animated trailing dots currently make the status line visibly jiggle because the whole string is center-justified and its width changes between `.`, `..`, and `...`.
+- Preferred anti-jiggle rendering:
+  - reserve/measure a fixed-width region based on the longest animated form;
+  - center that fixed region on the plaque;
+  - render the live text left-aligned within that fixed centered region;
+  - this should preserve the apparent centered composition while keeping the text origin stable as dots are added.
+- Keep the temporary **Click to continue!** state for the next screenshot/inspection pass.
+
+### Untested work
+
+- Reduced plaque scale and increased logo/plaque overlap.
+- Additional ~10 px upward status-text move.
+- Fixed-origin / left-aligned-within-centered-box animated text rendering.
+- Final visual balance after those three changes.
+- Runtime behavior of both animated status messages after the alignment change.
+
+### Deferred
+
+- Removing temporary **Click to continue!**.
+- Restoring automatic splash close immediately after addon scanning.
+- Human-readable Installed/Latest addon versions.
+- GitLab/Gitea/OctoWoW provider expansion.
+- Any broader P2 feature work until the splash is visually approved.
+
+### Exact next step
+
+1. Resume from `p2-github-branches` at `8166a8c` / published `v0.1.27`.
+2. Treat the v0.1.27 runtime screenshot as the approved clean-logo baseline.
+3. Leave the logo draw rectangle unchanged.
+4. Make one conservative plaque-tuning pass: shrink it roughly 5–8% and move it upward roughly 8–15 px to increase overlap under the logo.
+5. Move the status text upward another ~10 px (initial target Y≈405).
+6. Replace whole-string center justification for animated statuses with a fixed centered region and left-aligned live text so `.` / `..` / `...` no longer causes horizontal jiggle.
+7. Keep **Click to continue!** for inspection.
+8. Build Windows x64 Release and run the complete CTest suite.
+9. If green, prepare the next tuning release (expected `v0.1.28`) and obtain another runtime screenshot before removing the click gate.
+10. Do not start provider expansion or other unrelated feature work until this splash pass is approved.
+
 ## Asset recovery checkpoint — 2026-09-21
 
 - Active branch: `p2-github-branches`.
