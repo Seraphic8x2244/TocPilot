@@ -1,5 +1,22 @@
 # TocPilot status / handoff
 
+## v0.1.28 release request checkpoint — 2026-09-21
+
+- Active branch: `p2-github-branches`.
+- Source version is now `v0.1.28`.
+- Latest commits:
+  - `8bbeede` — Request v0.1.28 splash tuning release
+  - `61d9817` — Bump TocPilot to v0.1.28
+  - `7e8b9ad` — Bump TocPilot build version to v0.1.28
+  - `0debb04` — Record P2 splash tuning implementation
+  - `fe4f17f` — Tune splash plaque and stabilize status text
+- The existing release workflow has been triggered by changing `.github/release-version` from `v0.1.27` to `v0.1.28`.
+- That workflow performs source-version validation, Windows x64 Release configure/build, the complete CTest suite, SHA-256 generation, tag creation, and release asset publication in sequence; failed build/tests prevent the tag/release steps from succeeding.
+- Completed in source: smaller/higher plaque, status text moved upward, fixed-origin animated dot rendering, unchanged logo geometry, temporary click gate retained.
+- Untested/runtime pending: confirmation that the release workflow completed successfully; runtime screenshot/visual approval of the new splash; confirmation that dot animation no longer jiggles.
+- Deferred: removing **Click to continue!** and restoring automatic splash close until runtime approval; human-readable Installed/Latest versions; provider expansion.
+- Exact next step: once `v0.1.28` is published, self-update from `v0.1.27`, relaunch, inspect the splash through both animated status states and **Click to continue!**, then provide a screenshot/feedback before any further geometry or click-gate changes.
+
 ## P2 splash tuning implementation checkpoint — 2026-09-21
 
 - Active branch: `p2-github-branches`.
