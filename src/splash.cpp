@@ -306,7 +306,7 @@ CreateLogoPlaqueShadow(
 
         Gdiplus::ColorMatrix
             softMatrix{};
-        softMatrix.m[3][3] = 0.16f;
+        softMatrix.m[3][3] = 0.30f;
         softMatrix.m[4][4] = 1.0f;
 
         Gdiplus::ImageAttributes
@@ -334,7 +334,7 @@ CreateLogoPlaqueShadow(
 
         Gdiplus::ColorMatrix
             coreMatrix{};
-        coreMatrix.m[3][3] = 0.32f;
+        coreMatrix.m[3][3] = 0.55f;
         coreMatrix.m[4][4] = 1.0f;
 
         Gdiplus::ImageAttributes
