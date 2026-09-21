@@ -422,7 +422,7 @@ void RenderSplash() {
             g_plaque.get(),
             Gdiplus::Rect(
                 115,
-                238,
+                218,
                 590,
                 295),
             0,
@@ -468,7 +468,7 @@ void RenderSplash() {
 
         Gdiplus::RectF textRect(
             145.0f,
-            395.0f,
+            355.0f,
             530.0f,
             66.0f);
 
