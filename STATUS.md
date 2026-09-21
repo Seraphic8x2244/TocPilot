@@ -1,5 +1,63 @@
 # TocPilot status / handoff
 
+## Runtime splash feedback checkpoint — 2026-09-21
+
+- Active branch: `p2-github-branches`.
+- Current branch head entering this handoff: `28b3ada` — **Record v0.1.26 splash tuning release**.
+- Published version: `v0.1.26`.
+- Published release commit/tag target: `af147e708660c7ced00f70ab622acc90264cbff2` — **Request v0.1.26 splash tuning release**.
+- Latest relevant commits:
+  - `28b3ada` — Record v0.1.26 splash tuning release
+  - `af147e7` — Request v0.1.26 splash tuning release
+  - `077cfb3` — Bump TocPilot to v0.1.26
+  - `5a0c48f` — Bump TocPilot build version to v0.1.26
+  - `f01ee2a` — Fix layered splash position pointer
+  - `b58275e` — Fix GDI+ COM include order
+  - `e1d3dc2` — Complete embedded splash asset set
+- v0.1.26 release pipeline passed Windows x64 Release build, complete CTest, checksum generation, tag creation and publication.
+- Runtime screenshot feedback from the first real splash test:
+  - splash flow works and reaches temporary **Click to continue!** hold correctly;
+  - click-gated inspection state is useful and should remain for the next tuning build;
+  - **logo location is approved — do not move it**;
+  - **plaque location is approved — do not move it**;
+  - overall logo/plaque overlap and splash placement are approved;
+  - runtime gold status text is **slightly too low** on the wooden panel and should be moved upward a small amount;
+  - the logo image is visibly corrupted by a large solid brown rectangle below the goblin/head area;
+  - this corruption is an implementation/asset-embedding fault, not a design/layout issue;
+  - do not regenerate, redraw or reinterpret the locked logo while fixing it.
+- Likely corruption cause identified during implementation:
+  - the splash source originally referenced six embedded logo chunks;
+  - only four logo chunk include files were ultimately retained in `src/splash.cpp`;
+  - the resulting embedded PNG data is incomplete/truncated and renders partially before corrupting.
+- Completed work:
+  - layered transparent Win32 splash exists;
+  - separate logo/plaque composition exists;
+  - runtime one-line gold status text exists;
+  - trailing dot animation exists;
+  - app-update -> addon-scan -> temporary click-to-continue state wiring works;
+  - no artificial startup delay is used.
+- Untested after the next fix:
+  - clean full-logo rendering with no corruption;
+  - exact upward text adjustment;
+  - status-line placement during both animated messages;
+  - final visual proportions after corruption is removed.
+- Deferred until the corrected splash screenshot is approved:
+  - removing temporary **Click to continue!**;
+  - automatic splash close immediately after addon scan;
+  - human-readable Installed/Latest versions;
+  - provider expansion remains frozen.
+
+## Exact next step
+
+1. Fix the embedded logo asset using the complete approved transparent TocPilot logo bytes; do **not** regenerate the artwork.
+2. Keep the current splash window size, logo coordinates, plaque coordinates, scale and overlap unchanged.
+3. Move the runtime gold status text upward slightly on the wooden panel; make no other geometry change unless required by the repaired asset.
+4. Keep the temporary **Click to continue!** state for another screenshot/inspection pass.
+5. Build Windows x64 Release and run the complete CTest suite.
+6. Publish the corrected tuning build as the next version (expected `v0.1.27`) only after build/tests pass.
+7. Runtime-test the corrected splash and obtain another screenshot.
+8. Once the corrected logo and text placement are approved, remove the temporary click gate and restore automatic splash close after addon scanning.
+
 ## Release checkpoint — 2026-09-21 v0.1.26 splash tuning build published
 
 - Active branch: `p2-github-branches`.
