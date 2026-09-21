@@ -7,6 +7,7 @@
 #include "install.h"
 #include "refresh_freshness.h"
 #include "state.h"
+#include "splash.h"
 #include "update.h"
 #include "update_all.h"
 #include "ui_dialog.h"
@@ -2910,6 +2911,11 @@ void FinishAutoStatusRefresh(HWND hwnd) {
     }
 
     UpdatePackageButtons();
+
+    if (tp::IsStartupSplashActive()) {
+        tp::SetStartupSplashPhase(
+            tp::StartupSplashPhase::AwaitingContinue);
+    }
 }
 
 void ContinueAutoStatusRefresh(HWND hwnd) {
@@ -2966,8 +2972,15 @@ void ContinueAutoStatusRefresh(HWND hwnd) {
 }
 
 void StartAutoStatusRefresh(HWND hwnd) {
-    if (!g_stateReady ||
-        g_autoStatusRefreshInProgress ||
+    if (!g_stateReady) {
+        if (tp::IsStartupSplashActive()) {
+            tp::SetStartupSplashPhase(
+                tp::StartupSplashPhase::AwaitingContinue);
+        }
+        return;
+    }
+
+    if (g_autoStatusRefreshInProgress ||
         g_updateAllInProgress ||
         g_packageRefreshInProgress ||
         g_packageInspectInProgress ||
@@ -2988,6 +3001,10 @@ void StartAutoStatusRefresh(HWND hwnd) {
     }
 
     if (g_autoStatusPackageIds.empty()) {
+        if (tp::IsStartupSplashActive()) {
+            tp::SetStartupSplashPhase(
+                tp::StartupSplashPhase::AwaitingContinue);
+        }
         return;
     }
 
@@ -5106,10 +5123,6 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
         ApplyUiFont(hwnd);
         LayoutControls(hwnd);
 
-        StartUpdateCheck(
-            hwnd,
-            true);
-
         return 0;
     }
 
@@ -5474,6 +5487,11 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                 L"Retry Check",
                 true);
             if (refreshAddonsAfter) {
+                if (tp::IsStartupSplashActive()) {
+                    tp::SetStartupSplashPhase(
+                        tp::StartupSplashPhase::
+                            ScanningAddonUpdates);
+                }
                 StartAutoStatusRefresh(hwnd);
             }
             return 0;
@@ -5526,6 +5544,11 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
         }
 
         if (refreshAddonsAfter) {
+            if (tp::IsStartupSplashActive()) {
+                tp::SetStartupSplashPhase(
+                    tp::StartupSplashPhase::
+                        ScanningAddonUpdates);
+            }
             StartAutoStatusRefresh(hwnd);
         }
         return 0;
@@ -6690,8 +6713,21 @@ int RunMainWindow(HINSTANCE instance) {
         return 4;
     }
 
-    ShowWindow(hwnd, SW_SHOW);
-    UpdateWindow(hwnd);
+    const bool splashShown =
+        tp::ShowStartupSplash(
+            instance,
+            hwnd);
+
+    if (!splashShown) {
+        ShowWindow(
+            hwnd,
+            SW_SHOW);
+        UpdateWindow(hwnd);
+    }
+
+    StartUpdateCheck(
+        hwnd,
+        true);
 
     MSG msg{};
     while (GetMessageW(&msg, nullptr, 0, 0) > 0) {
