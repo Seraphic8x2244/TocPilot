@@ -1,5 +1,35 @@
 # TocPilot status / handoff
 
+## v0.1.31 published — 2026-09-21
+
+- Active branch: `main`.
+- Published/source version: `v0.1.31`.
+- Release tag `v0.1.31` points exactly to `d0eea67dd94f61aeb45c437b1ae76f0789a179aa`.
+- Release workflow run `35664419619` completed successfully.
+- Release pipeline passed:
+  - source-version validation;
+  - Windows x64 Release configure/build;
+  - complete CTest suite;
+  - SHA-256 sidecar generation;
+  - tag creation/verification;
+  - release asset publication.
+- Published assets:
+  - `TocPilot.exe` — 2,258,432 bytes; SHA-256 `ed76f8cd13ddde4dedaa3019a08ced7010a3bf0fafd1a2d5ed540bb070f855b8`;
+  - `TocPilot.exe.sha256` — 78 bytes.
+- Included splash changes:
+  - subtle logo/art drop shadow at +3 px X / +4 px Y with 24% alpha;
+  - approved logo and plaque geometry otherwise unchanged;
+  - status text moved down exactly 6 px, Y `355 -> 361`;
+  - temporary **Click to continue!** and fixed-origin animated-dot behavior unchanged.
+- Runtime pending:
+  - self-update from `v0.1.30` to `v0.1.31`;
+  - human visual approval of shadow strength/offset and status-text placement.
+- Deferred until runtime approval:
+  - removing **Click to continue!**;
+  - restoring automatic splash close;
+  - unrelated provider/UI work.
+- Exact next step: self-update to `v0.1.31`, relaunch, inspect the splash at the temporary **Click to continue!** gate, and report whether the logo separation and status-text placement are right before any further geometry change.
+
 ## v0.1.31 release requested — 2026-09-21
 
 - Active branch: `main`.
