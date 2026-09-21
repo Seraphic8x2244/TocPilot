@@ -1,5 +1,20 @@
 # TocPilot status / handoff
 
+## v0.1.32 plaque-only shadow correction — 2026-09-21
+
+- Active branch: `main`.
+- Published baseline: `v0.1.31`.
+- Runtime screenshot/feedback confirms the v0.1.31 shadow is visible on transparent splash areas, notably around the propeller edges over the desktop.
+- This is incorrect for the intended effect: the logo/art should cast a shadow only where it overlaps the wooden plaque, never onto the desktop/background through transparent splash pixels.
+- Current source also contains an unpublished stronger-shadow experiment at `db3e1c6`; do not release that uncorrected behavior.
+- Keep locked:
+  - real logo rectangle `(20, 0, 780, 394)`;
+  - plaque rectangle `(115, 218, 590, 295)`;
+  - status text Y `361`;
+  - fixed-origin animated dots;
+  - temporary **Click to continue!** gate.
+- Exact next step: constrain the shadow rendering to the plaque overlap area only, verify that no shadow can appear on transparent desktop regions, then bump/publish `v0.1.32` for runtime inspection.
+
 ## v0.1.31 runtime shadow feedback — 2026-09-21
 
 - Active branch: `main`.
