@@ -1,5 +1,30 @@
 # TocPilot status / handoff
 
+## v0.1.30 splash contrast/text tuning requested — 2026-09-21
+
+- Active branch: `main`.
+- Published/source baseline: `v0.1.30`.
+- Latest relevant baseline commit: `25e9a12` — Request v0.1.30 splash position release.
+- Completed baseline:
+  - `v0.1.30` is published;
+  - splash logo geometry is unchanged/locked;
+  - plaque remains at Y `218`;
+  - status text currently begins at Y `355`;
+  - fixed-origin animated dots remain runtime-confirmed stable;
+  - temporary **Click to continue!** gate remains in place.
+- Requested implementation slice:
+  - add a subtle drop shadow behind the splash logo/art so it separates slightly from the wooden plaque;
+  - move the plaque status text down exactly 6 px, from Y `355` to Y `361`;
+  - do not otherwise move or rescale the logo or plaque.
+- Untested/runtime pending:
+  - visual weight/offset of the new logo/art shadow;
+  - final status-text placement at Y `361`.
+- Deferred:
+  - removing **Click to continue!**;
+  - restoring automatic splash close after addon scanning;
+  - unrelated provider/UI work.
+- Exact next step: inspect the splash drawing implementation, add the smallest practical logo/art drop shadow without changing its geometry, move status text Y `355 -> 361`, then review the source diff and run whatever repository-side validation is available before preparing any release.
+
 ## v0.1.30 published / runtime gate — 2026-09-21
 
 - Active branch: `main`.
