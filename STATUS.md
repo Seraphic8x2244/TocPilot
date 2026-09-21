@@ -1,5 +1,26 @@
 # TocPilot status / handoff
 
+## v0.1.31 release requested — 2026-09-21
+
+- Active branch: `main`.
+- Source version: `v0.1.31`.
+- Latest relevant commits:
+  - `d0eea67` — Request v0.1.31 splash tuning release
+  - `76aa4ef` — Bump TocPilot to v0.1.31
+  - `29bd962` — Bump TocPilot build version to v0.1.31
+  - `1c010de` — Checkpoint v0.1.31 release continuation
+  - `b3376e6` — Add splash logo shadow and lower status text
+- Release content:
+  - subtle logo/art drop shadow at +3 px X / +4 px Y with 24% alpha;
+  - approved logo and plaque geometry otherwise unchanged;
+  - status text moved down 6 px, Y `355 -> 361`;
+  - temporary **Click to continue!** and fixed-origin animated-dot behavior unchanged.
+- GitHub Release workflow run `35664419619` and normal Build run `35664419601` are running against request commit `d0eea67`.
+- Release workflow already passed checkout, release-tag resolution, and source-version validation; configure was in progress at the latest check. Build, CTest, checksum, tag creation, and asset publication were still pending.
+- Untested/runtime pending: successful workflow completion/publication and human visual approval of the shadow/text placement.
+- Deferred: removing **Click to continue!**, restoring automatic splash close, and unrelated provider/UI work.
+- Exact next step: verify workflow run `35664419619` completes successfully and that release `v0.1.31` exposes `TocPilot.exe` plus `TocPilot.exe.sha256`; then runtime-test via TocPilot self-update and inspect the splash.
+
 ## v0.1.31 release continuation — 2026-09-21
 
 - Active branch: `main`.
