@@ -1,3 +1,5 @@
 #include "resource.h"
 
 IDI_TOCPILOT ICON "TocPilot.ico"
+
+IDR_SPLASH_LOGO RCDATA "TocPilot_logo_cutout.png"

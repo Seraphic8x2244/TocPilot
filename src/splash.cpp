@@ -1,4 +1,5 @@
 #include "splash.h"
+#include "resource.h"
 
 #include <objidl.h>
 #include <gdiplus.h>
@@ -19,13 +20,6 @@ constexpr UINT_PTR kSplashTimerId = 1;
 constexpr UINT kSplashTimerMs = 420;
 constexpr int kSplashWidth = 820;
 constexpr int kSplashHeight = 575;
-
-constexpr char kLogoBase64[] =
-#include "splash_logo_00.inc"
-#include "splash_logo_01.inc"
-#include "splash_logo_02.inc"
-#include "splash_logo_03.inc"
-;
 
 constexpr char kPlaqueBase64[] =
 #include "splash_plaque_00.inc"
@@ -102,19 +96,18 @@ bool DecodeBase64(
 }
 
 std::unique_ptr<Gdiplus::Bitmap>
-LoadBitmapFromBase64(
-    std::string_view encoded) {
-    std::vector<BYTE> bytes;
-    if (!DecodeBase64(
-            encoded,
-            bytes)) {
+LoadBitmapFromBytes(
+    const BYTE* bytes,
+    std::size_t byteCount) {
+    if (!bytes ||
+        byteCount == 0) {
         return {};
     }
 
     HGLOBAL memory =
         GlobalAlloc(
             GMEM_MOVEABLE,
-            bytes.size());
+            byteCount);
 
     if (!memory) {
         return {};
@@ -129,8 +122,8 @@ LoadBitmapFromBase64(
     }
 
     std::copy(
-        bytes.begin(),
-        bytes.end(),
+        bytes,
+        bytes + byteCount,
         static_cast<BYTE*>(data));
     GlobalUnlock(memory);
 
@@ -193,6 +186,68 @@ LoadBitmapFromBase64(
 
     stream->Release();
     return copy;
+}
+
+std::unique_ptr<Gdiplus::Bitmap>
+LoadBitmapFromBase64(
+    std::string_view encoded) {
+    std::vector<BYTE> bytes;
+    if (!DecodeBase64(
+            encoded,
+            bytes)) {
+        return {};
+    }
+
+    return LoadBitmapFromBytes(
+        bytes.data(),
+        bytes.size());
+}
+
+std::unique_ptr<Gdiplus::Bitmap>
+LoadBitmapFromResource(
+    HINSTANCE instance,
+    int resourceId) {
+    const HRSRC resource =
+        FindResourceW(
+            instance,
+            MAKEINTRESOURCEW(
+                resourceId),
+            RT_RCDATA);
+
+    if (!resource) {
+        return {};
+    }
+
+    const DWORD byteCount =
+        SizeofResource(
+            instance,
+            resource);
+
+    if (byteCount == 0) {
+        return {};
+    }
+
+    const HGLOBAL loaded =
+        LoadResource(
+            instance,
+            resource);
+
+    if (!loaded) {
+        return {};
+    }
+
+    const void* data =
+        LockResource(loaded);
+
+    if (!data) {
+        return {};
+    }
+
+    return LoadBitmapFromBytes(
+        static_cast<const BYTE*>(
+            data),
+        static_cast<std::size_t>(
+            byteCount));
 }
 
 std::wstring SplashStatusText() {
@@ -416,7 +471,7 @@ void RenderSplash() {
 
         const Gdiplus::RectF textRect(
             125.0f,
-            425.0f,
+            415.0f,
             570.0f,
             66.0f);
 
@@ -622,8 +677,9 @@ bool ShowStartupSplash(
     }
 
     g_logo =
-        LoadBitmapFromBase64(
-            kLogoBase64);
+        LoadBitmapFromResource(
+            instance,
+            IDR_SPLASH_LOGO);
     g_plaque =
         LoadBitmapFromBase64(
             kPlaqueBase64);
