@@ -25,8 +25,6 @@ constexpr char kLogoBase64[] =
 #include "splash_logo_01.inc"
 #include "splash_logo_02.inc"
 #include "splash_logo_03.inc"
-#include "splash_logo_04.inc"
-#include "splash_logo_05.inc"
 ;
 
 constexpr char kPlaqueBase64[] =
