@@ -1,5 +1,18 @@
 # TocPilot status / handoff
 
+## v0.1.28 runtime splash approval checkpoint — 2026-09-21
+
+- Active branch: `main`.
+- Runtime-tested version: `v0.1.28`.
+- Approved and now locked:
+  - logo position/scale;
+  - plaque size/position/overlap;
+  - fixed-origin animated-dot rendering; the status text no longer jiggles horizontally as dots change.
+- Remaining visual issue: runtime status text is still slightly low within the wooden plaque.
+- Exact next change: move the status text rectangle upward by another 10 px, from Y=405 to Y=395, with no other splash geometry or animation changes.
+- Keep temporary **Click to continue!** for one final screenshot after that adjustment.
+- Deferred until that screenshot is approved: remove click gate and restore automatic splash close after addon scanning.
+
 ## v0.1.28 / main consolidation completed — 2026-09-21
 
 - `main` is now the authoritative TocPilot development branch.
