@@ -1,5 +1,31 @@
 # TocPilot status / handoff
 
+## P2 splash tuning implementation checkpoint — 2026-09-21
+
+- Active branch: `p2-github-branches`.
+- Published/version baseline remains `v0.1.27`; no version bump has been made.
+- Latest commits:
+  - `fe4f17f` — Tune splash plaque and stabilize status text
+  - `116da41` — Checkpoint P2 splash tuning resume
+  - `8166a8c` — Request v0.1.27 splash asset repair release
+  - `28d7dbb` — Bump TocPilot to v0.1.27
+- Completed in source:
+  - logo rectangle remains unchanged at `(20, 0, 780, 394)`;
+  - plaque changed from `(95, 250, 630, 315)` to centered `(115, 238, 590, 295)`, shrinking it about 6.35% and moving it up 12 px;
+  - status text moved from Y=415 to Y=405;
+  - animated statuses now measure the three-dot form, center that fixed-width region, and left-align the live one/two/three-dot text inside it so the text origin stays fixed;
+  - non-animated **Click to continue!** remains centered;
+  - temporary click gate remains intact.
+- Untested:
+  - Windows x64 Release compile for `fe4f17f`;
+  - complete CTest suite for `fe4f17f`;
+  - runtime visual balance of the smaller/higher plaque;
+  - runtime verification that the animated dot origin no longer jiggles;
+  - runtime screenshot approval.
+- CI note: `.github/workflows/build.yml` is configured to run on pushes to `p2-github-branches`, but the available GitHub connector in this chat does not expose push-triggered workflow-run listings/check-runs, so this checkpoint does not claim a CI result.
+- Deferred: version bump/release `v0.1.28` until build/tests are verified green; removing **Click to continue!**; restoring automatic splash close; human-readable Installed/Latest versions; provider expansion.
+- Exact next step: verify the Build workflow for commit `fe4f17f`; if Windows x64 Release + full CTest are green, bump source/release version to expected `v0.1.28`, publish it through the existing release workflow, then runtime-test the splash and obtain a screenshot before removing the click gate.
+
 ## Resume checkpoint — 2026-09-21 P2 splash tuning
 
 - Active branch: `p2-github-branches`.
