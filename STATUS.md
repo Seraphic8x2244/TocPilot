@@ -1,5 +1,18 @@
 # TocPilot status / handoff
 
+## Main-branch consolidation checkpoint — 2026-09-21
+
+- Branch policy is changing from milestone branches to a simple main-first workflow.
+- `main` is the normal TocPilot development branch from this point forward.
+- Create a temporary feature/dev branch only for genuinely risky, destructive, or long-running work that should not sit directly on the normal development line.
+- Once TocPilot reaches a broadly used/stable release point, consider keeping `main` release-stable and using a persistent `dev` branch for ongoing development.
+- The old milestone branches `p0-self-update`, `p1-state-ui`, `p2-github-branches`, and `runtime-update-fixture` contain no unique commits outside the current P2 history; their work is fully contained in the current line.
+- `p2-github-branches` is a clean fast-forward descendant of the old `main` history: 389+ commits ahead and 0 behind before this consolidation.
+- Build/release workflows have been simplified to watch `main`.
+- Source version is `v0.1.28`; splash tuning is implemented, but the first P2 release request did not create a `v0.1.28` tag/release.
+- Exact next step: fast-forward `main` to this consolidated P2 head. That main push should run the normal Build workflow and, because `.github/release-version` is `v0.1.28`, the Release workflow. Verify the `v0.1.28` tag/release exists before runtime testing.
+- After consolidation, new development chats should resume TocPilot from `main`; no special P2 branch instruction should be necessary.
+
 ## v0.1.28 release request checkpoint — 2026-09-21
 
 - Active branch: `p2-github-branches`.
