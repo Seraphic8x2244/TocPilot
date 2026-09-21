@@ -35,6 +35,7 @@ add_executable(TocPilot WIN32
     src/provider.cpp
     src/refresh_freshness.cpp
     src/state.cpp
+    src/splash.cpp
     src/update.cpp
     src/update_all.cpp
     src/ui_dialog.cpp
@@ -57,7 +58,7 @@ if(MSVC)
 endif()
 
 target_include_directories(TocPilot PRIVATE src resources)
-target_link_libraries(TocPilot PRIVATE TocPilotMiniz winhttp bcrypt shell32 comctl32)
+target_link_libraries(TocPilot PRIVATE TocPilotMiniz winhttp bcrypt shell32 comctl32 gdiplus ole32)
 
 set_target_properties(TocPilot PROPERTIES
     OUTPUT_NAME "TocPilot"
