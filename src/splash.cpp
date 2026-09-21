@@ -32,6 +32,8 @@ HWND g_splashMainWindow = nullptr;
 ULONG_PTR g_gdiplusToken = 0;
 std::unique_ptr<Gdiplus::Bitmap> g_logo;
 std::unique_ptr<Gdiplus::Bitmap> g_plaque;
+std::unique_ptr<Gdiplus::Bitmap>
+    g_logoPlaqueShadow;
 StartupSplashPhase g_phase =
     StartupSplashPhase::CheckingAppUpdate;
 int g_dotCount = 1;
@@ -250,6 +252,219 @@ LoadBitmapFromResource(
             byteCount));
 }
 
+std::unique_ptr<Gdiplus::Bitmap>
+CreateLogoPlaqueShadow(
+    Gdiplus::Bitmap* logo,
+    Gdiplus::Bitmap* plaque) {
+    constexpr INT plaqueWidth = 590;
+    constexpr INT plaqueHeight = 295;
+
+    if (!logo || !plaque) {
+        return {};
+    }
+
+    auto shadow =
+        std::make_unique<Gdiplus::Bitmap>(
+            plaqueWidth,
+            plaqueHeight,
+            PixelFormat32bppPARGB);
+    auto plaqueMask =
+        std::make_unique<Gdiplus::Bitmap>(
+            plaqueWidth,
+            plaqueHeight,
+            PixelFormat32bppPARGB);
+
+    if (!shadow ||
+        !plaqueMask ||
+        shadow->GetLastStatus() !=
+            Gdiplus::Ok ||
+        plaqueMask->GetLastStatus() !=
+            Gdiplus::Ok) {
+        return {};
+    }
+
+    {
+        Gdiplus::Graphics graphics(
+            shadow.get());
+
+        graphics.SetCompositingMode(
+            Gdiplus::CompositingModeSourceCopy);
+        graphics.Clear(
+            Gdiplus::Color(
+                0,
+                0,
+                0,
+                0));
+        graphics.SetCompositingMode(
+            Gdiplus::CompositingModeSourceOver);
+        graphics.SetInterpolationMode(
+            Gdiplus::
+                InterpolationModeHighQualityBicubic);
+        graphics.SetPixelOffsetMode(
+            Gdiplus::
+                PixelOffsetModeHighQuality);
+
+        Gdiplus::ColorMatrix
+            softMatrix{};
+        softMatrix.m[3][3] = 0.16f;
+        softMatrix.m[4][4] = 1.0f;
+
+        Gdiplus::ImageAttributes
+            softAttributes;
+        softAttributes.SetColorMatrix(
+            &softMatrix,
+            Gdiplus::ColorMatrixFlagsDefault,
+            Gdiplus::ColorAdjustTypeBitmap);
+
+        graphics.DrawImage(
+            logo,
+            Gdiplus::Rect(
+                24 - 115,
+                5 - 218,
+                780,
+                394),
+            0,
+            0,
+            static_cast<INT>(
+                logo->GetWidth()),
+            static_cast<INT>(
+                logo->GetHeight()),
+            Gdiplus::UnitPixel,
+            &softAttributes);
+
+        Gdiplus::ColorMatrix
+            coreMatrix{};
+        coreMatrix.m[3][3] = 0.32f;
+        coreMatrix.m[4][4] = 1.0f;
+
+        Gdiplus::ImageAttributes
+            coreAttributes;
+        coreAttributes.SetColorMatrix(
+            &coreMatrix,
+            Gdiplus::ColorMatrixFlagsDefault,
+            Gdiplus::ColorAdjustTypeBitmap);
+
+        graphics.DrawImage(
+            logo,
+            Gdiplus::Rect(
+                26 - 115,
+                7 - 218,
+                780,
+                394),
+            0,
+            0,
+            static_cast<INT>(
+                logo->GetWidth()),
+            static_cast<INT>(
+                logo->GetHeight()),
+            Gdiplus::UnitPixel,
+            &coreAttributes);
+    }
+
+    {
+        Gdiplus::Graphics graphics(
+            plaqueMask.get());
+
+        graphics.SetCompositingMode(
+            Gdiplus::CompositingModeSourceCopy);
+        graphics.Clear(
+            Gdiplus::Color(
+                0,
+                0,
+                0,
+                0));
+        graphics.SetCompositingMode(
+            Gdiplus::CompositingModeSourceOver);
+        graphics.SetInterpolationMode(
+            Gdiplus::
+                InterpolationModeHighQualityBicubic);
+        graphics.SetPixelOffsetMode(
+            Gdiplus::
+                PixelOffsetModeHighQuality);
+
+        graphics.DrawImage(
+            plaque,
+            Gdiplus::Rect(
+                0,
+                0,
+                plaqueWidth,
+                plaqueHeight),
+            0,
+            0,
+            static_cast<INT>(
+                plaque->GetWidth()),
+            static_cast<INT>(
+                plaque->GetHeight()),
+            Gdiplus::UnitPixel);
+    }
+
+    Gdiplus::Rect lockRect(
+        0,
+        0,
+        plaqueWidth,
+        plaqueHeight);
+    Gdiplus::BitmapData shadowData{};
+    Gdiplus::BitmapData plaqueData{};
+
+    if (shadow->LockBits(
+            &lockRect,
+            Gdiplus::ImageLockModeRead |
+                Gdiplus::ImageLockModeWrite,
+            PixelFormat32bppPARGB,
+            &shadowData) !=
+        Gdiplus::Ok) {
+        return {};
+    }
+
+    if (plaqueMask->LockBits(
+            &lockRect,
+            Gdiplus::ImageLockModeRead,
+            PixelFormat32bppPARGB,
+            &plaqueData) !=
+        Gdiplus::Ok) {
+        shadow->UnlockBits(
+            &shadowData);
+        return {};
+    }
+
+    for (INT y = 0;
+         y < plaqueHeight;
+         ++y) {
+        BYTE* shadowRow =
+            static_cast<BYTE*>(
+                shadowData.Scan0) +
+            y * shadowData.Stride;
+        const BYTE* plaqueRow =
+            static_cast<const BYTE*>(
+                plaqueData.Scan0) +
+            y * plaqueData.Stride;
+
+        for (INT x = 0;
+             x < plaqueWidth;
+             ++x) {
+            BYTE& shadowAlpha =
+                shadowRow[x * 4 + 3];
+            const BYTE plaqueAlpha =
+                plaqueRow[x * 4 + 3];
+
+            shadowAlpha =
+                static_cast<BYTE>(
+                    (static_cast<unsigned>(
+                         shadowAlpha) *
+                     static_cast<unsigned>(
+                         plaqueAlpha) +
+                     127u) /
+                    255u);
+        }
+    }
+
+    plaqueMask->UnlockBits(
+        &plaqueData);
+    shadow->UnlockBits(
+        &shadowData);
+    return shadow;
+}
+
 std::wstring SplashStatusText() {
     switch (g_phase) {
     case StartupSplashPhase::CheckingAppUpdate:
@@ -318,7 +533,8 @@ POINT SplashPosition() {
 void RenderSplash() {
     if (!g_splashWindow ||
         !g_logo ||
-        !g_plaque) {
+        !g_plaque ||
+        !g_logoPlaqueShadow) {
         return;
     }
 
@@ -433,79 +649,20 @@ void RenderSplash() {
                 g_plaque->GetHeight()),
             Gdiplus::UnitPixel);
 
-        const Gdiplus::GraphicsState
-            logoShadowState =
-                graphics.Save();
-        graphics.SetClip(
+        graphics.DrawImage(
+            g_logoPlaqueShadow.get(),
             Gdiplus::Rect(
                 115,
                 218,
                 590,
                 295),
-            Gdiplus::CombineModeIntersect);
-
-        Gdiplus::ColorMatrix
-            logoShadowSoftMatrix{};
-        logoShadowSoftMatrix.m[3][3] =
-            0.16f;
-        logoShadowSoftMatrix.m[4][4] =
-            1.0f;
-
-        Gdiplus::ImageAttributes
-            logoShadowSoftAttributes;
-        logoShadowSoftAttributes.SetColorMatrix(
-            &logoShadowSoftMatrix,
-            Gdiplus::ColorMatrixFlagsDefault,
-            Gdiplus::ColorAdjustTypeBitmap);
-
-        graphics.DrawImage(
-            g_logo.get(),
-            Gdiplus::Rect(
-                24,
-                5,
-                780,
-                394),
             0,
             0,
             static_cast<INT>(
-                g_logo->GetWidth()),
+                g_logoPlaqueShadow->GetWidth()),
             static_cast<INT>(
-                g_logo->GetHeight()),
-            Gdiplus::UnitPixel,
-            &logoShadowSoftAttributes);
-
-        Gdiplus::ColorMatrix
-            logoShadowCoreMatrix{};
-        logoShadowCoreMatrix.m[3][3] =
-            0.32f;
-        logoShadowCoreMatrix.m[4][4] =
-            1.0f;
-
-        Gdiplus::ImageAttributes
-            logoShadowCoreAttributes;
-        logoShadowCoreAttributes.SetColorMatrix(
-            &logoShadowCoreMatrix,
-            Gdiplus::ColorMatrixFlagsDefault,
-            Gdiplus::ColorAdjustTypeBitmap);
-
-        graphics.DrawImage(
-            g_logo.get(),
-            Gdiplus::Rect(
-                26,
-                7,
-                780,
-                394),
-            0,
-            0,
-            static_cast<INT>(
-                g_logo->GetWidth()),
-            static_cast<INT>(
-                g_logo->GetHeight()),
-            Gdiplus::UnitPixel,
-            &logoShadowCoreAttributes);
-
-        graphics.Restore(
-            logoShadowState);
+                g_logoPlaqueShadow->GetHeight()),
+            Gdiplus::UnitPixel);
 
         graphics.DrawImage(
             g_logo.get(),
@@ -746,6 +903,7 @@ LRESULT CALLBACK SplashWindowProc(
             nullptr;
         g_logo.reset();
         g_plaque.reset();
+        g_logoPlaqueShadow.reset();
 
         if (g_gdiplusToken != 0) {
             Gdiplus::GdiplusShutdown(
@@ -792,11 +950,17 @@ bool ShowStartupSplash(
     g_plaque =
         LoadBitmapFromBase64(
             kPlaqueBase64);
+    g_logoPlaqueShadow =
+        CreateLogoPlaqueShadow(
+            g_logo.get(),
+            g_plaque.get());
 
     if (!g_logo ||
-        !g_plaque) {
+        !g_plaque ||
+        !g_logoPlaqueShadow) {
         g_logo.reset();
         g_plaque.reset();
+        g_logoPlaqueShadow.reset();
         Gdiplus::GdiplusShutdown(
             g_gdiplusToken);
         g_gdiplusToken = 0;
