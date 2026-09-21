@@ -1,7 +1,7 @@
 #include "splash.h"
 
-#include <gdiplus.h>
 #include <objidl.h>
+#include <gdiplus.h>
 
 #include <algorithm>
 #include <cstdint>
