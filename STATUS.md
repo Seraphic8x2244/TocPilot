@@ -1,5 +1,31 @@
 # TocPilot status / handoff
 
+## v0.1.29 final splash tuning release request — 2026-09-21
+
+- Active branch: `main`.
+- Runtime-confirmed from `v0.1.28`:
+  - animated dots are fixed and no longer cause horizontal text jiggle;
+  - logo geometry is approved and locked;
+  - plaque geometry/overlap is approved and locked.
+- Final visual adjustment implemented:
+  - status text rectangle moved from Y=405 to Y=395;
+  - no other splash geometry, animation, or click-gate behavior changed.
+- Source version bumped to `v0.1.29`.
+- Latest relevant commits:
+  - `5c7d97c` — Request v0.1.29 final splash tuning release
+  - `f48db62` — Bump TocPilot to v0.1.29
+  - `7acf1ec` — Bump TocPilot build version to v0.1.29
+  - `4b81771` — Raise splash status text
+  - `7188025` — Record v0.1.28 splash runtime approval
+- Release workflow has been triggered from `main` by changing `.github/release-version` to `v0.1.29`.
+- Untested/runtime pending:
+  - release publication confirmation;
+  - final screenshot approval of text placement.
+- Deferred until final screenshot approval:
+  - remove temporary **Click to continue!**;
+  - restore automatic splash close after addon scanning.
+- Exact next step: once `v0.1.29` is published, self-update to it, relaunch, let the splash reach **Click to continue!**, and inspect/send one final screenshot. If approved, remove the click gate and restore automatic close with no further splash geometry changes.
+
 ## v0.1.28 runtime splash approval checkpoint — 2026-09-21
 
 - Active branch: `main`.
