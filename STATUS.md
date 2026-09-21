@@ -1,5 +1,29 @@
 # TocPilot status / handoff
 
+## v0.1.30 release request checkpoint — 2026-09-21
+
+- Active branch: `main`.
+- Source version: `v0.1.30`.
+- Latest relevant commits:
+  - `25e9a12` — Request v0.1.30 splash position release
+  - `a1a62a7` — Bump TocPilot to v0.1.30
+  - `7c25947` — Bump TocPilot build version to v0.1.30
+  - `b24f72b` — Record splash position adjustment
+  - `3ff7d38` — Raise splash plaque and status text
+- Current splash geometry:
+  - logo unchanged and locked;
+  - plaque Y `238 -> 218`;
+  - status text Y `395 -> 355`;
+  - plaque size unchanged;
+  - animated-dot behavior unchanged and runtime-confirmed stable;
+  - temporary **Click to continue!** still retained.
+- Release workflow requested from `main` by changing `.github/release-version` to `v0.1.30`.
+- At the last check, the `v0.1.30` tag had not appeared yet, so release publication was still pending.
+- Deferred until runtime approval:
+  - remove **Click to continue!**;
+  - restore automatic splash close after addon scanning.
+- Exact next step: wait for/poll `v0.1.30` release publication, self-update to it, inspect the new plaque/text positions, and provide runtime feedback before any further splash change.
+
 ## v0.1.30 splash position adjustment — 2026-09-21
 
 - Active branch: `main`.
