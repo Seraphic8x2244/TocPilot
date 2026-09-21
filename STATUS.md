@@ -1,5 +1,22 @@
 # TocPilot status / handoff
 
+## v0.1.31 release continuation — 2026-09-21
+
+- Active branch: `main`.
+- Published/source baseline entering this release pass: `v0.1.30`.
+- Latest relevant commits:
+  - `aff4bbb` — Record splash contrast tuning implementation
+  - `b3376e6` — Add splash logo shadow and lower status text
+  - `142a451` — Checkpoint v0.1.30 splash contrast tuning
+- Completed source change awaiting release:
+  - subtle splash logo/art drop shadow at +3 px X / +4 px Y, 24% alpha;
+  - plaque geometry unchanged;
+  - status text moved down exactly 6 px, Y `355 -> 361`;
+  - click gate and animated-dot behavior unchanged.
+- Untested/runtime pending: Windows x64 Release/CTest for this exact revision and human visual approval of the shadow/text placement.
+- Deferred: removing **Click to continue!**, restoring automatic splash close, and unrelated provider/UI work.
+- Exact next step: bump source/build version to `v0.1.31`, request the release through the existing release-version trigger, then verify the release workflow/tag/assets. Runtime visual judgment remains with the tester after publication.
+
 ## v0.1.30 splash contrast/text tuning implemented — 2026-09-21
 
 - Active branch: `main`.
