@@ -1,5 +1,32 @@
 # TocPilot status / handoff
 
+## v0.1.30 splash contrast/text tuning implemented — 2026-09-21
+
+- Active branch: `main`.
+- Published/source release baseline: `v0.1.30`; this visual tuning is committed after that published release and has not been version-bumped or published.
+- Latest relevant commits:
+  - `b3376e6` — Add splash logo shadow and lower status text
+  - `142a451` — Checkpoint v0.1.30 splash contrast tuning
+  - `25e9a12` — Request v0.1.30 splash position release
+- Completed in source:
+  - added a subtle black silhouette shadow behind the existing splash logo/art at +3 px X / +4 px Y with 24% alpha;
+  - kept the approved logo rectangle unchanged at `(20, 0, 780, 394)`;
+  - kept the plaque rectangle unchanged at `(115, 218, 590, 295)`;
+  - moved the plaque status text down exactly 6 px, from Y `355` to Y `361`;
+  - animated-dot layout and temporary **Click to continue!** behavior are unchanged.
+- Source diff has been reviewed and contains only the shadow draw plus the requested 6 px status-text move.
+- Untested/runtime pending:
+  - Windows x64 Release compile and complete CTest suite for `b3376e6`;
+  - runtime visual approval of shadow strength/offset;
+  - runtime visual approval of status text at Y `361`.
+- CI note: no commit status checks were exposed yet for `b3376e6` at the verification point.
+- Deferred:
+  - version bump/release until build/tests are green;
+  - removing **Click to continue!**;
+  - restoring automatic splash close after addon scanning;
+  - unrelated provider/UI work.
+- Exact next step: verify the Windows x64 Release build and full CTest results for `b3376e6`; if green, prepare the next tuning release and runtime-check the splash before changing any other geometry or removing the click gate.
+
 ## v0.1.30 splash contrast/text tuning requested — 2026-09-21
 
 - Active branch: `main`.
