@@ -433,6 +433,36 @@ void RenderSplash() {
                 g_plaque->GetHeight()),
             Gdiplus::UnitPixel);
 
+        Gdiplus::ColorMatrix
+            logoShadowMatrix{};
+        logoShadowMatrix.m[3][3] =
+            0.24f;
+        logoShadowMatrix.m[4][4] =
+            1.0f;
+
+        Gdiplus::ImageAttributes
+            logoShadowAttributes;
+        logoShadowAttributes.SetColorMatrix(
+            &logoShadowMatrix,
+            Gdiplus::ColorMatrixFlagsDefault,
+            Gdiplus::ColorAdjustTypeBitmap);
+
+        graphics.DrawImage(
+            g_logo.get(),
+            Gdiplus::Rect(
+                23,
+                4,
+                780,
+                394),
+            0,
+            0,
+            static_cast<INT>(
+                g_logo->GetWidth()),
+            static_cast<INT>(
+                g_logo->GetHeight()),
+            Gdiplus::UnitPixel,
+            &logoShadowAttributes);
+
         graphics.DrawImage(
             g_logo.get(),
             Gdiplus::Rect(
@@ -468,7 +498,7 @@ void RenderSplash() {
 
         Gdiplus::RectF textRect(
             145.0f,
-            355.0f,
+            361.0f,
             530.0f,
             66.0f);
 
