@@ -1,5 +1,61 @@
 # TocPilot status / handoff
 
+## Release checkpoint — 2026-09-21 v0.1.26 splash tuning build published
+
+- Active branch: `p2-github-branches`.
+- Published version: `v0.1.26`.
+- Release tag `v0.1.26` points exactly to `af147e708660c7ced00f70ab622acc90264cbff2` — **Request v0.1.26 splash tuning release**.
+- Release workflow run `35548054383` completed successfully:
+  - release tag resolution passed;
+  - source/version validation passed;
+  - Windows x64 Release configure/build passed;
+  - complete CTest suite passed;
+  - SHA-256 sidecar generation passed;
+  - tag creation passed;
+  - release asset publication passed.
+- Published `TocPilot.exe`: 1,004,032 bytes.
+- Splash implementation completed:
+  - locked TocPilot logo is embedded as a faithful transparent/resized asset; it is not AI-regenerated;
+  - blank wood/brass plaque is embedded separately for independent positioning;
+  - splash is a borderless transparent layered Win32 window;
+  - plaque is drawn first and logo overlaps it, hiding the plaque's top ornament;
+  - one centered runtime gold status line is drawn over the wooden panel;
+  - active status trailing dots animate `. -> .. -> ... -> .` at 420 ms;
+  - startup begins with **Checking for TocPilot Update**;
+  - after the app-update check completes it switches to **Scanning for Addon Updates**;
+  - after the startup addon scan completes it switches to temporary **Click to continue!** and remains visible indefinitely;
+  - clicking anywhere on the splash, or pressing Enter/Space, reveals the main TocPilot window and closes the splash;
+  - no artificial splash delay was added.
+- Build/debug notes:
+  - initial GDI+ build failures were corrected by fixing COM/GDI+ include order;
+  - layered-window position pointer constness was corrected;
+  - implementation commit `f01ee2a` passed Windows x64 Release compile + complete CTest before the v0.1.26 version bump;
+  - versioned-source build `35547887191` also passed before release publication.
+- Runtime/visual testing still required:
+  - logo/plaque scale and overlap;
+  - gold text size, placement and legibility;
+  - dot animation feel;
+  - transition timing between update check and addon scan;
+  - temporary **Click to continue!** hold and click-to-reveal behaviour;
+  - screenshots should be used to tune geometry before removing the temporary hold.
+- Deferred until splash geometry is approved:
+  - automatic splash close immediately after addon scan;
+  - human-readable Installed/Latest versions;
+  - provider expansion.
+
+## Exact next runtime step
+
+1. Launch an existing `v0.1.25` TocPilot and self-update normally to `v0.1.26`.
+2. Relaunch `v0.1.26`.
+3. Observe the splash through:
+   - **Checking for TocPilot Update. / .. / ...**
+   - **Scanning for Addon Updates. / .. / ...**
+   - **Click to continue!**
+4. Leave it on **Click to continue!**, inspect the logo/plaque/text layout and take a screenshot.
+5. Click anywhere on the splash and confirm the normal TocPilot window appears.
+6. Send the screenshot/layout feedback before any geometry tweaks.
+7. Once the splash is visually locked, remove the temporary **Click to continue!** state and auto-close after the addon scan.
+
 ## Splash implementation checkpoint — 2026-09-21
 
 - Active branch: `p2-github-branches`.
