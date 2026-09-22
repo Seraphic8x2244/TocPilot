@@ -1,6 +1,32 @@
 # TocPilot status / handoff
 
 
+## 2026-09-22 v0.1.34 runtime feedback / Update New checkpoint
+
+- Active branch: `main`.
+- Published/source baseline: `v0.1.34`.
+- Runtime feedback from `v0.1.34`:
+  - after the addon-update scan finishes, the package list is not returned fully to the top;
+  - rename the primary `Update All` action to **Update New**;
+  - clicking the update action still opens a confirmation popup, which is now unwanted routine friction.
+- Static diagnosis:
+  - `RefreshPackageStateUi()` intentionally preserves the previously visible top package ID when it rebuilds/sorts the ListView; `FinishAutoStatusRefresh()` calls it without overriding that preserved viewport, so the post-scan list can remain scrolled down;
+  - `StartUpdateAll()` still contains the retained `MessageBoxW(... MB_YESNO ...)` confirmation from the previous conservative modal-reduction slice;
+  - the update batch already operates only on packages currently marked `Update available`, stages/validates them transactionally, and preserves explicit error/safety handling, so the extra confirmation is routine rather than a safety refusal.
+- Smallest safe implementation:
+  - keep internal UpdateAll orchestration names/tests unchanged, but rename user-facing action/status strings to **Update New**;
+  - remove only the routine Update New Yes/No confirmation; keep internal orchestration errors and package safety/rollback failures explicit;
+  - after an addon status scan finishes, explicitly return the package ListView viewport to the first row while keeping the scan itself non-disruptive;
+  - make the completion feedback concise enough for the existing single-line in-window hint.
+- Validation at this checkpoint:
+  - **Implemented:** documentation only.
+  - **Static-checked:** post-scan viewport preservation path and remaining Update All confirmation popup.
+  - **CI-tested:** not yet for this follow-up.
+  - **Runtime-tested:** v0.1.34 findings above supplied by the user.
+- Exact next step: implement those three narrow changes, run Windows x64 Release + complete CTest, bump/publish the next version, then runtime-test post-scan top position and popup-free **Update New**.
+
+
+
 ## v0.1.34 published / startup-order and first non-modal feedback runtime build — 2026-09-22
 
 - Active branch: `main`.
