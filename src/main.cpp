@@ -4303,11 +4303,7 @@ void LaunchSiblingExecutable(
             std::wstring(filename) +
             L" was not found beside TocPilot.exe.";
 
-        MessageBoxW(
-            hwnd,
-            message.c_str(),
-            L"TocPilot",
-            MB_OK | MB_ICONINFORMATION);
+        SetRoutinePackageFeedback(message);
         return;
     }
 
@@ -4326,11 +4322,7 @@ void LaunchSiblingExecutable(
             std::wstring(filename) +
             L".";
 
-        MessageBoxW(
-            hwnd,
-            message.c_str(),
-            L"TocPilot",
-            MB_OK | MB_ICONERROR);
+        SetRoutinePackageFeedback(message);
     }
 }
 
