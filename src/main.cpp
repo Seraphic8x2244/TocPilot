@@ -51,6 +51,7 @@ constexpr UINT WM_TP_PACKAGE_INSPECT_COMPLETE = WM_APP + 4;
 constexpr UINT WM_TP_PACKAGE_INSTALL_COMPLETE = WM_APP + 5;
 constexpr UINT WM_TP_BRANCHES_READY = WM_APP + 6;
 constexpr UINT WM_TP_POSITION_BRANCH_SELECTOR = WM_APP + 7;
+constexpr UINT WM_TP_DLL_INSTALL_COMPLETE = WM_APP + 8;
 
 constexpr int IDC_WOW_STATUS = 1002;
 constexpr int IDC_GITHUB_STATUS = 1003;
@@ -238,6 +239,20 @@ struct PackageInstallResult {
                 ignored);
         }
     }
+};
+
+struct DirectDllInstallResult {
+    bool ok = false;
+    bool needsAttention = false;
+    std::size_t index = 0;
+    std::wstring packageId;
+    std::wstring packageName;
+    std::wstring asset;
+    std::wstring targetPath;
+    std::wstring resolvedTag;
+    std::uint64_t downloadedBytes = 0;
+    std::wstring actualSha256;
+    std::wstring error;
 };
 
 void SetIndicator(HWND control, const std::wstring& text) {
@@ -2900,6 +2915,146 @@ void StartPackageInspection(
         .detach();
 }
 
+void StartDirectDllInstall(
+    HWND hwnd,
+    std::size_t index,
+    std::wstring knownReleaseTag) {
+    if (index >=
+        g_state.packages.size()) {
+        return;
+    }
+
+    const auto package =
+        g_state.packages[index];
+
+    std::wstring configError;
+    if (!tp::ValidateDirectDllPackage(
+            package,
+            configError)) {
+        SetPackageNeedsAttention(
+            package.id,
+            true);
+        SetPackageRowStatus(
+            index,
+            L"Needs attention");
+
+        if (g_packageHint) {
+            const std::wstring message =
+                package.name +
+                L": " +
+                configError;
+            SetWindowTextW(
+                g_packageHint,
+                message.c_str());
+        }
+
+        UpdatePackageButtons();
+        return;
+    }
+
+    g_packageInstallInProgress =
+        true;
+    UpdatePackageButtons();
+
+    SetPackageRowStatus(
+        index,
+        package.installedRevision.empty()
+            ? L"Installing DLL..."
+            : L"Updating DLL...");
+
+    if (g_packageHint) {
+        const std::wstring message =
+            package.name +
+            L": resolving the exact latest-stable asset, then writing directly to " +
+            (g_root /
+             package.targetPath).wstring() +
+            L". No staged/temp/renamed/backup DLL will be created.";
+
+        SetWindowTextW(
+            g_packageHint,
+            message.c_str());
+    }
+
+    const auto wowRoot =
+        g_root;
+
+    std::thread(
+        [hwnd,
+         index,
+         package,
+         knownReleaseTag =
+             std::move(
+                 knownReleaseTag),
+         wowRoot]() mutable {
+            auto result =
+                std::make_unique<
+                    DirectDllInstallResult>();
+
+            result->index =
+                index;
+            result->packageId =
+                package.id;
+            result->packageName =
+                package.name;
+            result->asset =
+                package.asset;
+            result->targetPath =
+                package.targetPath;
+
+            tp::DirectDllRelease release;
+
+            if (!tp::ResolveLatestDirectDllRelease(
+                    package,
+                    release,
+                    result->error)) {
+                result->needsAttention =
+                    result->error.find(
+                        L"exact") !=
+                            std::wstring::npos ||
+                    result->error.find(
+                        L"unverifiable") !=
+                            std::wstring::npos ||
+                    result->error.find(
+                        L"Direct DLL") !=
+                            std::wstring::npos;
+            } else if (
+                !knownReleaseTag.empty() &&
+                release.tag !=
+                    knownReleaseTag) {
+                result->error =
+                    L"The latest stable release changed from " +
+                    knownReleaseTag +
+                    L" to " +
+                    release.tag +
+                    L" after the saved status check. Run Refresh All and retry so Update New never installs a different release than the one it displayed.";
+            } else {
+                result->resolvedTag =
+                    release.tag;
+
+                result->ok =
+                    tp::DownloadAndVerifyDirectDll(
+                        package,
+                        release,
+                        wowRoot,
+                        result->downloadedBytes,
+                        result->actualSha256,
+                        result->error);
+            }
+
+            if (!PostMessageW(
+                    hwnd,
+                    WM_TP_DLL_INSTALL_COMPLETE,
+                    0,
+                    reinterpret_cast<LPARAM>(
+                        result.get()))) {
+                return;
+            }
+
+            result.release();
+        })
+        .detach();
+}
+
 void StartPackageInstall(
     HWND hwnd,
     std::size_t index,
@@ -2910,6 +3065,16 @@ void StartPackageInstall(
 
     const auto package =
         g_state.packages[index];
+
+    if (tp::IsDirectDllPackage(
+            package)) {
+        StartDirectDllInstall(
+            hwnd,
+            index,
+            std::move(
+                knownRemoteSha));
+        return;
+    }
 
     if (package.provider != L"github" ||
         package.mode != L"branch" ||
@@ -6300,6 +6465,228 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             summary.c_str(),
             L"TocPilot - Archive Inspection",
             MB_OK | MB_ICONINFORMATION);
+
+        return 0;
+    }
+
+    case WM_TP_DLL_INSTALL_COMPLETE: {
+        std::unique_ptr<DirectDllInstallResult>
+            result(
+                reinterpret_cast<
+                    DirectDllInstallResult*>(
+                        lParam));
+
+        g_packageInstallInProgress = false;
+
+        const bool updateAllStep =
+            IsUpdateAllCurrentPackage(
+                result->packageId);
+
+        bool trackingMatches = false;
+
+        if (result->index <
+                g_state.packages.size() &&
+            g_state.packages[
+                result->index].id ==
+                result->packageId) {
+            const auto& package =
+                g_state.packages[
+                    result->index];
+
+            trackingMatches =
+                package.mode ==
+                    L"release" &&
+                package.asset ==
+                    result->asset &&
+                package.targetPath ==
+                    result->targetPath;
+        }
+
+        if (!trackingMatches) {
+            const std::wstring message =
+                result->packageId +
+                L": DLL install result was discarded because package tracking changed. Installed state was not changed.";
+
+            if (g_packageHint) {
+                SetWindowTextW(
+                    g_packageHint,
+                    message.c_str());
+            }
+
+            if (updateAllStep) {
+                CompleteUpdateAllStep(
+                    hwnd,
+                    tp::UpdateAllOutcome::Failed,
+                    message);
+            } else {
+                UpdatePackageButtons();
+            }
+            return 0;
+        }
+
+        const auto index =
+            result->index;
+        const auto& currentPackage =
+            g_state.packages[index];
+
+        if (!result->ok) {
+            if (result->needsAttention) {
+                SetPackageNeedsAttention(
+                    result->packageId,
+                    true);
+            }
+
+            SetPackageRowStatus(
+                index,
+                result->needsAttention
+                    ? L"Needs attention"
+                    : L"DLL update failed");
+
+            const std::wstring message =
+                currentPackage.name +
+                L": DLL install/update failed - " +
+                result->error +
+                L" Installed state was not advanced.";
+
+            if (g_packageHint) {
+                SetWindowTextW(
+                    g_packageHint,
+                    message.c_str());
+            }
+
+            if (updateAllStep) {
+                CompleteUpdateAllStep(
+                    hwnd,
+                    tp::UpdateAllOutcome::Failed,
+                    message,
+                    IsGitHubRateLimitError(
+                        result->error));
+            } else {
+                MessageBoxW(
+                    hwnd,
+                    message.c_str(),
+                    L"TocPilot - DLL Install Failed",
+                    MB_OK |
+                        MB_ICONWARNING);
+                SelectPackageRow(index);
+                UpdatePackageButtons();
+            }
+            return 0;
+        }
+
+        tp::AppState updatedState =
+            g_state;
+        std::wstring error;
+
+        if (!tp::SetPackageInstalledState(
+                updatedState.packages[index],
+                result->resolvedTag,
+                {result->targetPath},
+                error) ||
+            !tp::SaveState(
+                g_root,
+                updatedState,
+                error)) {
+            SetPackageRowStatus(
+                index,
+                L"State save failed");
+
+            const std::wstring message =
+                currentPackage.name +
+                L": the DLL was written and SHA-256 verified at the exact final path, but TocPilot could not save installed state - " +
+                error +
+                L". Installed state remains unchanged; no backup DLL exists by design.";
+
+            if (g_packageHint) {
+                SetWindowTextW(
+                    g_packageHint,
+                    message.c_str());
+            }
+
+            if (updateAllStep) {
+                CompleteUpdateAllStep(
+                    hwnd,
+                    tp::UpdateAllOutcome::Failed,
+                    message);
+            } else {
+                MessageBoxW(
+                    hwnd,
+                    message.c_str(),
+                    L"TocPilot - DLL State Save Failed",
+                    MB_OK |
+                        MB_ICONWARNING);
+                SelectPackageRow(index);
+                UpdatePackageButtons();
+            }
+            return 0;
+        }
+
+        g_state =
+            std::move(updatedState);
+        g_stateCreated = false;
+        g_stateError.clear();
+
+        SetPackageNeedsAttention(
+            result->packageId,
+            false);
+
+        if (updateAllStep) {
+            SetPackageRowStatus(
+                index,
+                L"Current");
+            CompleteUpdateAllStep(
+                hwnd,
+                tp::UpdateAllOutcome::Updated,
+                {});
+            return 0;
+        }
+
+        RefreshPackageStateUi();
+        SelectPackageRow(index);
+        UpdatePackageButtons();
+
+        const auto& installed =
+            g_state.packages[index];
+
+        const std::wstring message =
+            installed.name +
+            L": installed and verified release " +
+            installed.installedRevision +
+            L" at " +
+            (g_root /
+             installed.targetPath).wstring() +
+            L".";
+
+        if (g_packageHint) {
+            SetWindowTextW(
+                g_packageHint,
+                message.c_str());
+        }
+
+        const std::wstring summary =
+            installed.name +
+            L" installed successfully.\r\n\r\nRepository: " +
+            installed.repository +
+            L"\r\nRelease: " +
+            installed.installedRevision +
+            L"\r\nAsset: " +
+            installed.asset +
+            L"\r\nDestination: " +
+            (g_root /
+             installed.targetPath).wstring() +
+            L"\r\nDownloaded: " +
+            std::to_wstring(
+                result->downloadedBytes) +
+            L" bytes\r\nSHA-256: " +
+            result->actualSha256 +
+            L"\r\n\r\nNo staged, temporary, renamed, or backup DLL was created. TocPilot did not alter antivirus settings.";
+
+        MessageBoxW(
+            hwnd,
+            summary.c_str(),
+            L"TocPilot - DLL Installed",
+            MB_OK |
+                MB_ICONINFORMATION);
 
         return 0;
     }
