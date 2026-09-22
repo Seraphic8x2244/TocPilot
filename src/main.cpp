@@ -1528,6 +1528,18 @@ bool PackageOperationBusy() {
         g_appUpdateInProgress;
 }
 
+void SetRoutinePackageFeedback(
+    std::wstring_view message) {
+    if (!g_packageHint) {
+        return;
+    }
+
+    const std::wstring text(message);
+    SetWindowTextW(
+        g_packageHint,
+        text.c_str());
+}
+
 void PopulateBranchSelectorCurrent(
     const tp::PackageRecord& package) {
     if (!g_branchSelector) {
@@ -3091,20 +3103,7 @@ void FinishUpdateAll(HWND hwnd) {
         }
     }
 
-    if (g_packageHint) {
-        SetWindowTextW(
-            g_packageHint,
-            summary.c_str());
-    }
-
-    MessageBoxW(
-        hwnd,
-        summary.c_str(),
-        L"TocPilot - Update All",
-        MB_OK |
-            (g_updateAllProgress.failed == 0
-                ? MB_ICONINFORMATION
-                : MB_ICONWARNING));
+    SetRoutinePackageFeedback(summary);
 }
 
 void ContinueUpdateAll(HWND hwnd) {
@@ -3137,16 +3136,11 @@ void ContinueUpdateAll(HWND hwnd) {
             index,
             L"Updating...");
 
-        if (g_packageHint) {
-            const std::wstring message =
-                L"Update All: applying the known update for " +
-                package.name +
-                L". Refresh All is responsible for discovering newer revisions.";
-
-            SetWindowTextW(
-                g_packageHint,
-                message.c_str());
-        }
+        const std::wstring message =
+            L"Update All: applying the known update for " +
+            package.name +
+            L". Refresh All is responsible for discovering newer revisions.";
+        SetRoutinePackageFeedback(message);
 
         StartPackageInstall(
             hwnd,
@@ -3205,11 +3199,8 @@ void StartUpdateAll(HWND hwnd) {
         tp::MakeUpdateAllProgress(g_state);
 
     if (progress.packageIds.empty()) {
-        MessageBoxW(
-            hwnd,
-            L"There are no installed addons currently marked Update available. Run Refresh All to check for new revisions.",
-            L"TocPilot - Update All",
-            MB_OK | MB_ICONINFORMATION);
+        SetRoutinePackageFeedback(
+            L"There are no installed addons currently marked Update available. Run Refresh All to check for new revisions.");
         return;
     }
 
