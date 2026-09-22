@@ -427,6 +427,65 @@ void TestReleasePackageRoundTrip(
     }
 }
 
+
+void TestReleaseTrackingMutators(
+    const std::filesystem::path&) {
+    tp::PackageRecord package;
+    package.id =
+        L"github:Owner/ClassicAPI:release:ClassicAPI.dll";
+    package.name =
+        L"ClassicAPI.dll";
+    package.provider =
+        L"github";
+    package.repository =
+        L"Owner/ClassicAPI";
+    package.mode =
+        L"release";
+    package.releasePolicy =
+        L"latest_stable";
+    package.asset =
+        L"ClassicAPI.dll";
+    package.target =
+        L"wow_root";
+    package.targetPath =
+        L"ClassicAPI.dll";
+
+    std::wstring error;
+    if (!tp::SetPackageLatestRevision(
+            package,
+            L"v2.0.0",
+            error) ||
+        package.latestRevision !=
+            L"v2.0.0") {
+        Fail("release latest revision could not be recorded");
+        return;
+    }
+
+    if (!tp::SetPackageInstalledState(
+            package,
+            L"v2.0.0",
+            {L"ClassicAPI.dll"},
+            error) ||
+        package.installedRevision !=
+            L"v2.0.0" ||
+        package.latestRevision !=
+            L"v2.0.0" ||
+        package.installedFiles !=
+            std::vector<std::wstring>{
+                L"ClassicAPI.dll"}) {
+        Fail("release installed state could not be recorded");
+        return;
+    }
+
+    if (tp::SetPackageInstalledState(
+            package,
+            L"v2.0.1",
+            {L"renamed.dll"},
+            error)) {
+        Fail("release installed state accepted wrong owned target");
+    }
+}
+
 void TestUnknownFieldPreservation(
     const std::filesystem::path& root) {
     const std::string json =
@@ -495,6 +554,7 @@ int main() {
         TestRemovePackageRecord(root);
         TestClearInstalledState(root);
         TestReleasePackageRoundTrip(root);
+        TestReleaseTrackingMutators(root);
         TestUnknownFieldPreservation(root);
 
         std::error_code ec;

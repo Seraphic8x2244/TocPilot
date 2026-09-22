@@ -1527,25 +1527,40 @@ bool SetPackageBranch(
 
 bool SetPackageLatestRevision(
     PackageRecord& package,
-    std::wstring remoteSha,
+    std::wstring remoteRevision,
     std::wstring& error) {
     error.clear();
 
-    if (package.provider != L"github" ||
-        package.mode != L"branch" ||
-        package.ref.empty()) {
+    const bool branchPackage =
+        package.provider == L"github" &&
+        package.mode == L"branch" &&
+        !package.ref.empty();
+
+    const bool directReleasePackage =
+        package.provider == L"github" &&
+        package.mode == L"release" &&
+        package.releasePolicy == L"latest_stable" &&
+        !package.asset.empty() &&
+        package.target == L"wow_root" &&
+        !package.targetPath.empty();
+
+    if (!branchPackage &&
+        !directReleasePackage) {
         error =
-            L"Only configured GitHub branch packages can be refreshed.";
+            L"Only configured GitHub branch or latest-stable direct-release packages can be refreshed.";
         return false;
     }
 
-    if (remoteSha.empty()) {
+    if (remoteRevision.empty()) {
         error =
-            L"GitHub did not provide a valid branch commit SHA.";
+            branchPackage
+                ? L"GitHub did not provide a valid branch commit SHA."
+                : L"GitHub did not provide a valid release tag.";
         return false;
     }
 
-    package.latestRevision = std::move(remoteSha);
+    package.latestRevision =
+        std::move(remoteRevision);
     return true;
 }
 
@@ -1556,11 +1571,23 @@ bool SetPackageInstalledState(
     std::wstring& error) {
     error.clear();
 
-    if (package.provider != L"github" ||
-        package.mode != L"branch" ||
-        package.ref.empty()) {
+    const bool branchPackage =
+        package.provider == L"github" &&
+        package.mode == L"branch" &&
+        !package.ref.empty();
+
+    const bool directReleasePackage =
+        package.provider == L"github" &&
+        package.mode == L"release" &&
+        package.releasePolicy == L"latest_stable" &&
+        !package.asset.empty() &&
+        package.target == L"wow_root" &&
+        !package.targetPath.empty();
+
+    if (!branchPackage &&
+        !directReleasePackage) {
         error =
-            L"Only configured GitHub branch packages can be installed.";
+            L"Only configured GitHub branch or latest-stable direct-release packages can be installed.";
         return false;
     }
 
@@ -1579,9 +1606,21 @@ bool SetPackageInstalledState(
         }
     }
 
-    package.installedRevision = installedRevision;
-    package.latestRevision = std::move(installedRevision);
-    package.installedFiles = std::move(installedFiles);
+    if (directReleasePackage &&
+        (installedFiles.size() != 1 ||
+         installedFiles.front() !=
+             package.targetPath)) {
+        error =
+            L"Direct-release ownership must contain only the exact configured target file.";
+        return false;
+    }
+
+    package.installedRevision =
+        installedRevision;
+    package.latestRevision =
+        std::move(installedRevision);
+    package.installedFiles =
+        std::move(installedFiles);
     return true;
 }
 

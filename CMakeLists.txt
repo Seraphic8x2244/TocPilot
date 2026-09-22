@@ -28,6 +28,7 @@ add_executable(TocPilot WIN32
     src/add_package_dialog.cpp
     src/archive.cpp
     src/branch_dialog.cpp
+    src/direct_dll.cpp
     src/github_api.cpp
     src/github_release.cpp
     src/git_refs.cpp
@@ -241,6 +242,27 @@ if(BUILD_TESTING)
     endif()
 
     add_test(NAME github-release-metadata COMMAND TocPilotGitHubReleaseTests)
+
+    add_executable(TocPilotDirectDllTests
+        tests/direct_dll_tests.cpp
+        src/direct_dll.cpp
+        src/github_release.cpp
+    )
+    target_compile_features(TocPilotDirectDllTests PRIVATE cxx_std_20)
+    target_compile_definitions(TocPilotDirectDllTests PRIVATE
+        UNICODE
+        _UNICODE
+        WIN32_LEAN_AND_MEAN
+        NOMINMAX
+    )
+    target_include_directories(TocPilotDirectDllTests PRIVATE src)
+    target_link_libraries(TocPilotDirectDllTests PRIVATE winhttp bcrypt)
+
+    if(MSVC)
+        target_compile_options(TocPilotDirectDllTests PRIVATE /W4 /permissive- /utf-8)
+    endif()
+
+    add_test(NAME direct-dll-policy COMMAND TocPilotDirectDllTests)
 
     add_executable(TocPilotAdoptionTests
         tests/adoption_tests.cpp

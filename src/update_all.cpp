@@ -5,11 +5,24 @@
 namespace tp {
 
 bool IsUpdateAllCandidate(const PackageRecord& package) {
-    return
-        package.provider == L"github" &&
+    const bool branchAddon =
         package.mode == L"branch" &&
         !package.ref.empty() &&
-        package.target == L"addons" &&
+        package.target == L"addons";
+
+    const bool directDll =
+        package.mode == L"release" &&
+        package.releasePolicy == L"latest_stable" &&
+        !package.asset.empty() &&
+        package.target == L"wow_root" &&
+        !package.targetPath.empty() &&
+        package.installedFiles.size() == 1 &&
+        package.installedFiles.front() ==
+            package.targetPath;
+
+    return
+        package.provider == L"github" &&
+        (branchAddon || directDll) &&
         !package.installedRevision.empty() &&
         !package.installedFiles.empty();
 }

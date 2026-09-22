@@ -35,6 +35,41 @@ tp::PackageRecord Package(
     return package;
 }
 
+
+tp::PackageRecord DirectDllPackage(
+    std::wstring installed,
+    std::wstring latest) {
+    tp::PackageRecord package;
+    package.id =
+        L"github:Owner/ClassicAPI:release:ClassicAPI.dll";
+    package.name =
+        L"ClassicAPI.dll";
+    package.provider =
+        L"github";
+    package.repository =
+        L"Owner/ClassicAPI";
+    package.mode =
+        L"release";
+    package.releasePolicy =
+        L"latest_stable";
+    package.asset =
+        L"ClassicAPI.dll";
+    package.target =
+        L"wow_root";
+    package.targetPath =
+        L"ClassicAPI.dll";
+    package.installedRevision =
+        std::move(installed);
+    package.latestRevision =
+        std::move(latest);
+    if (!package.installedRevision.empty()) {
+        package.installedFiles = {
+            L"ClassicAPI.dll"
+        };
+    }
+    return package;
+}
+
 } // namespace
 
 int main() {
@@ -71,21 +106,44 @@ int main() {
     missingOwnership.id = L"github:Owner/MissingOwnership";
     missingOwnership.installedFiles.clear();
 
+    auto directDll =
+        DirectDllPackage(
+            L"v1.0.0",
+            L"v1.1.0");
+
+    auto directDllCurrent =
+        DirectDllPackage(
+            L"v1.1.0",
+            L"v1.1.0");
+    directDllCurrent.id =
+        L"github:Owner/ClassicAPI:release:Current.dll";
+    directDllCurrent.asset =
+        L"Current.dll";
+    directDllCurrent.targetPath =
+        L"Current.dll";
+    directDllCurrent.installedFiles = {
+        L"Current.dll"
+    };
+
     state.packages = {
         current,
         update,
         notInstalled,
         gitlab,
         unconfigured,
-        missingOwnership
+        missingOwnership,
+        directDll,
+        directDllCurrent
     };
 
     auto progress =
         tp::MakeUpdateAllProgress(state);
 
-    if (progress.packageIds.size() != 1 ||
-        progress.packageIds[0] != update.id) {
-        Fail("Update All should queue only known updates");
+    if (progress.packageIds.size() != 2 ||
+        progress.packageIds[0] != update.id ||
+        progress.packageIds[1] !=
+            directDll.id) {
+        Fail("Update All should queue known addon and DLL updates");
     }
 
     if (!tp::UpdateAllHasCurrent(progress) ||
@@ -102,11 +160,23 @@ int main() {
         Fail("Update All could not record an updated package");
     }
 
-    if (tp::UpdateAllHasCurrent(progress) ||
+    if (!tp::UpdateAllHasCurrent(progress) ||
+        tp::UpdateAllCurrentPackageId(progress) !=
+            directDll.id ||
         progress.updated != 1 ||
         progress.current != 0 ||
         progress.failed != 0) {
-        Fail("Update All summary counts were incorrect");
+        Fail("Update All did not advance from addon to DLL update");
+    }
+
+    if (!tp::CompleteUpdateAllItem(
+            progress,
+            tp::UpdateAllOutcome::Updated,
+            {},
+            error) ||
+        tp::UpdateAllHasCurrent(progress) ||
+        progress.updated != 2) {
+        Fail("Update All could not record the DLL update");
     }
 
     if (tp::CompleteUpdateAllItem(
