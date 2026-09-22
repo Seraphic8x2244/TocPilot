@@ -1,6 +1,30 @@
 # TocPilot status / handoff
 
 
+## 2026-09-22 Update New / post-scan viewport implementation complete
+
+- Active branch: `main`.
+- Published baseline remains `v0.1.34`; next release target is `v0.1.35`.
+- Latest source implementation commits:
+  - `b8f84df` — Finish Update New wording
+  - `8a78d2c` — Refine Update New runtime flow
+  - `6e961b2` — Checkpoint v0.1.34 runtime feedback
+- Implemented:
+  - primary user-facing **Update All** wording is now **Update New**;
+  - the routine Yes/No confirmation popup was removed from the explicit Update New button action;
+  - Update New still targets only packages already marked `Update available`; internal orchestration/safety/rollback errors remain explicit;
+  - Update New completion feedback is now a concise single-line in-window summary suitable for the existing hint control;
+  - after `FinishAutoStatusRefresh()` rebuilds/sorts the package list, TocPilot explicitly scrolls the ListView back to its first row;
+  - the scan itself remains non-disruptive; the viewport reset occurs only when the scan finishes.
+- Validation:
+  - **Implemented:** changes above on exact source head `b8f84df97cd377928ed3e02f64787dbdf3dff9d1`.
+  - **Static-checked:** no remaining user-facing `Update All` wording in `src/main.cpp`; routine confirmation removed; only serious Update New internal error path remains modal; post-scan top-scroll is called after list rebuild.
+  - **CI-tested:** Build run `35754683701` passed Windows x64 Release and complete CTest **13/13**, including live GitHub and self-update tests. Artifact `TocPilot-windows-x64` ID `10706174983`, digest `sha256:10c99447bd91d950307ac4aefbfb811b5e3c63f05a651a2f8626c427f482066a`.
+  - **Runtime-tested:** pending publication and user test.
+- Exact next step: bump/publish `v0.1.35`, verify release workflow/tag/assets, then runtime-test that the package list is fully at the top after startup scanning and **Update New** runs without the old confirmation popup.
+
+
+
 ## 2026-09-22 v0.1.34 runtime feedback / Update New checkpoint
 
 - Active branch: `main`.
