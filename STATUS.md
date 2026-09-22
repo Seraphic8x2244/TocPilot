@@ -1,5 +1,14 @@
 # TocPilot status / handoff
 
+## 2026-09-23 direct DLL runtime result
+
+- Runtime-tested on published `v0.1.37`:
+  - **ClassicAPI direct DLL: passed.** User confirmed the first GitHub release-backed direct-DLL flow worked correctly end to end.
+  - **SuperWoW: not supported by the current direct-DLL slice.** Its latest stable GitHub release (`Release`, “SuperWoW 2.2”) publishes only `SuperWoW.release.2.2.zip`; there is no direct `.dll` release asset for TocPilot’s exact-DLL picker.
+- This confirms the direct-DLL milestone can manage a real release-provided DLL, while release-ZIP handling remains the blocker for SuperWoW.
+- Deferred item now concretely validated by runtime testing: GitHub release ZIP support.
+- Exact next implementation candidate if SuperWoW support is prioritized: add a release-ZIP DLL slice that verifies the exact ZIP release asset first, inspects the archive safely, requires explicit selection of the exact inner DLL, and installs only that selected DLL to its approved WoW-root filename without creating staged/temp/renamed/backup DLL copies.
+
 ## 2026-09-22 v0.1.37 published / automatic splash self-update
 
 - Active branch: `main`.
