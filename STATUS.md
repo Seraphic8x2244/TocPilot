@@ -1,5 +1,35 @@
 # TocPilot status / handoff
 
+## 2026-09-22 v0.1.36 published / direct DLL runtime-test handoff
+
+- Active branch: `main`.
+- Published/source version: `v0.1.36`.
+- Release tag `v0.1.36` points exactly to `cb5ec0f711833d95e0fefaff5c2c35928e3a1f6f` (`Request v0.1.36 release`).
+- Version-preparation commit: `712f9a57a01eb4b658dd8e996901914ebc97f2da` (`Bump TocPilot to v0.1.36`).
+- First GitHub release-backed direct DLL slice is complete and published:
+  - latest stable GitHub release first;
+  - Add Package lists filename-safe `.dll` assets only and requires explicit exact asset selection;
+  - exact selected DLL name is also the exact validated WoW-root destination;
+  - first-manage trust warning identifies repository, release policy/release, exact asset, and destination, explains executable-code/security-software risk, and states TocPilot never alters antivirus settings;
+  - direct download writes only to the final DLL path, with no staged/temp/renamed/backup DLL;
+  - existing DLL is preflighted for writable/exclusive access where Windows exposes the lock;
+  - verification accepts a GitHub release SHA-256 digest or requires the exact `<asset>.sha256` sidecar, then validates completed-file size and SHA-256 before advancing installed state;
+  - failed/partial/mismatched downloads are removed and installed state remains unchanged;
+  - startup/Refresh scanning includes managed DLLs, missing managed DLLs become **Needs attention**, and missing/renamed/ambiguous future release assets are not guessed;
+  - **Update New** includes installed direct DLL packages whose saved latest stable release differs from installed state and re-resolves/refuses stale displayed release state rather than silently switching releases.
+- Validation:
+  - **CI-tested source bump:** Build run `35775691382` passed Windows x64 Release build, complete CTest, and artifact upload on `712f9a57`.
+  - **CI-tested release commit:** Build run `35776052015` passed on `cb5ec0f7`.
+  - **Release-tested:** Release run `35776052199` passed source-version validation, Windows x64 Release build, complete CTest, checksum generation, tag creation/verification, and release asset publication.
+  - **Runtime-tested:** `v0.1.35` baseline passed. The new direct-DLL picker/trust/install/verification/startup-status/Update New paths in `v0.1.36` are not runtime-tested yet.
+- Published assets:
+  - `TocPilot.exe` — 2,332,672 bytes; SHA-256 `af2e5e668b04e984268190fd689e0f84df95db73fe8bc6400670b9faa0993d1f`;
+  - `TocPilot.exe.sha256` — 78 bytes; release-asset SHA-256 `35a718a4fcbfd459f15565b0ea1f61aa1e702c6838e8abb519644b9ca8817bf5`.
+- Runtime test targets for `v0.1.36`: latest-stable DLL asset list and explicit selection; trust-warning contents; initial direct install with WoW closed; exact final filename only and no temp/renamed/`.bak` DLLs; restart/startup status; Refresh All; Update New; in-use/security-block failure reporting; missing/renamed asset **Needs attention** where a suitable test repository is available.
+- Deferred unchanged: direct-DLL Forget/Remove still does not delete the WoW-root DLL; complex GAM multi-root adoption, GitLab/Gitea/OctoWoW expansion, release ZIPs, prerelease tracking, arbitrary direct-file destinations, import/export, crash-recovery journal, local-modification detection, and unrelated UI polish remain deferred.
+- Exact next step: self-update/install `v0.1.36` and runtime-test the direct-DLL slice above. Record each runtime result before expanding P3 or implementing DLL removal semantics.
+
+
 ## 2026-09-22 P3 direct DLL slice CI-green / v0.1.36 release pending
 
 - Active branch: `main`.
