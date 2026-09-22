@@ -1,6 +1,25 @@
 # TocPilot status / handoff
 
 
+## 2026-09-22 P3 release metadata foundation CI-green
+
+- Active branch: `main`.
+- Current published version remains `v0.1.35`; no release has been requested yet.
+- Latest implementation commit: `fd429bfc17f3360a1aea206155ce0a5ba87f3f4c` (`Add reusable GitHub release metadata`).
+- Completed:
+  - reusable GitHub latest-stable release + exact-asset metadata module;
+  - TocPilot self-update now consumes exact GitHub release asset metadata instead of constructing download URLs by convention;
+  - schema-1 `PackageRecord` persistence now round-trips `release_policy`, exact `asset`, and exact `target_path` while retaining unknown-field preservation;
+  - deterministic release parser/exact-asset/missing-or-ambiguous-asset tests and release-package state round-trip coverage.
+- Validation:
+  - **Static-checked:** self-update exact-asset path and schema compatibility/unknown-field merge path.
+  - **CI-tested:** Build run `35770103082` passed Windows x64 Release build, complete CTest, and executable artifact upload on exact commit `fd429bf`.
+  - **Runtime-tested:** not yet; published baseline v0.1.35 remains the runtime-tested build.
+- Untested/not yet implemented in this P3 slice: Add-package DLL selection/trust warning, direct final-path DLL download/verification, missing-file/asset Needs-attention status, and DLL dispatch through startup scanning / Update New.
+- Deferred unchanged: complex GAM multi-root adoption, GitLab/Gitea/OctoWoW expansion, release ZIPs, prerelease tracking, arbitrary direct-file destinations, import/export, crash-recovery journal, local-modification detection, and unrelated UI polish.
+- Exact next step: implement the first managed DLL UI/install path using the new release metadata: require an exact `.dll` asset, show the one-time repository/asset/destination trust warning, write only to the exact WoW-root filename, verify the completed file before state commit, then dispatch release packages through startup scanning and Update New.
+
+
 ## 2026-09-22 P3 direct DLL metadata/release foundation started
 
 - Active branch: `main`.
