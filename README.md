@@ -1,4 +1,4 @@
-# TocPilot
+![TocPilot](resources/TocPilot_logo_cutout.png)
 
 Lightweight, portable World of Warcraft addon and release manager.
 
