@@ -494,11 +494,13 @@ At startup or on manual request:
 5. obtain the asset SHA-256 digest from GitHub release metadata where available;
 6. report update availability.
 
-Automatic update checks should not block normal startup.
+The startup check runs under the startup splash. If it finds a newer stable TocPilot release, TocPilot automatically downloads and verifies that exact release, launches the existing updater/replacement handoff, exits the old process, and relaunches the updated version **before addon/package status scanning continues**. A manual update check outside startup remains non-automatic: it reports availability and waits for the user to choose Update.
+
+If an automatic startup update fails before the updater handoff succeeds, the current executable remains runnable, addon/package status scanning may continue, and the splash must finish in an explicit update-failed state rather than implying TocPilot is current. The normal TocPilot update window remains the manual retry path.
 
 ### Download
 
-When the user chooses Update:
+When an update is applied automatically at startup or the user chooses Update manually:
 
 1. download the new `TocPilot.exe` to a temporary path;
 2. calculate SHA-256;
@@ -944,7 +946,9 @@ Deliver:
 Mandatory before package work:
 
 - current version == latest -> no update;
-- newer version exists -> update shown;
+- newer version exists during startup -> update is automatically downloaded/verified/applied and the updated TocPilot relaunches before addon scanning;
+- newer version exists during a manual check -> update is shown but not applied until the user chooses Update;
+- startup automatic-update failure -> current install stays runnable, failure is explicit on the splash, and the manual retry path remains available;
 - download interruption -> current install untouched;
 - digest mismatch -> replacement refused;
 - old process deliberately held open -> updater waits/retries;
