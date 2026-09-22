@@ -1,5 +1,40 @@
 # TocPilot status / handoff
 
+## 2026-09-22 v0.1.37 published / automatic splash self-update
+
+- Active branch: `main`.
+- Published/source version: `v0.1.37`.
+- Release tag `v0.1.37` points exactly to `3c3ad009d7577fe17cccd8a85482b5de930fb8ab` (`Request v0.1.37 release`).
+- Relevant commits:
+  - `9aae0b026cb8bee86a93964238ef4bca16e30740` — automatic startup self-update implementation;
+  - `fab06f9e8fb7d39a90254c3d1a4de364ddc61ccc` — development-plan documentation for automatic startup self-update;
+  - `315c58c5a80d668af78d5eee59c3ee9bcd9f0370` — source/version bump to `v0.1.37`;
+  - `3c3ad009d7577fe17cccd8a85482b5de930fb8ab` — release request.
+- Completed behavior:
+  - startup still begins with the splash and latest stable TocPilot release check;
+  - when startup finds a newer TocPilot release, it automatically invokes the existing verified self-update path instead of merely displaying **Update Available**;
+  - the splash changes to **Updating TocPilot...** while the exact release asset is downloaded and SHA-256 verified;
+  - on successful verification/updater handoff, the old process exits and the existing Windows-safe updater replaces/relaunches TocPilot; addon/package scanning does not start in the old process;
+  - the relaunched current version performs its normal startup check, then addon/package status scanning;
+  - manual update checks outside startup remain non-automatic and continue to use the existing **Update Available** button;
+  - if automatic startup update fails before handoff, the old executable stays runnable, package scanning continues, and the splash finishes with **Update failed - click to continue!** instead of implying TocPilot is current; the manual TocPilot update window remains the retry path.
+- Validation:
+  - implementation commit `9aae0b02`: Build run `35783013455` passed Windows x64 Release build, complete CTest, and artifact upload;
+  - `v0.1.37` bump commit `315c58c5`: first CI attempt failed only because `self-update-live-latest` was GitHub-rate-limited; rerun attempt 2 passed the build, all 15 tests including the live GitHub test, and artifact upload;
+  - release run `35784063204`: passed source-version validation, Windows x64 Release build, complete CTest, checksum generation, tag creation/verification, and asset publication.
+- Published assets:
+  - `TocPilot.exe` — 2,333,696 bytes; SHA-256 `f37cd224a40c5bd5f77684a5a96ce6bbf9e8c4dbd62996ab6154c9a76eafb097`;
+  - `TocPilot.exe.sha256` — 78 bytes; release-asset SHA-256 `b91fd14ec8b8feafc7e207b7b47a8c8a5c9e081d7315c77b37fcf90f40ed4987`.
+- Runtime-tested: `v0.1.35` baseline remains the last user-confirmed runtime pass.
+- Runtime-untested:
+  - launch published `v0.1.36` and confirm it automatically detects, downloads, verifies, applies, and relaunches into `v0.1.37` during the splash without opening the manual updater window;
+  - confirm the relaunched `v0.1.37` then performs addon/package scanning and reaches **Click to continue!** normally;
+  - automatic-update failure splash/manual-retry behavior;
+  - direct-DLL picker/trust/install/verification/startup-status/Update New paths introduced in `v0.1.36`.
+- Deferred unchanged: direct-DLL Forget/Remove still does not delete the WoW-root DLL; complex GAM multi-root adoption, GitLab/Gitea/OctoWoW expansion, release ZIPs, prerelease tracking, arbitrary direct-file destinations, import/export, crash-recovery journal, local-modification detection, and unrelated UI polish remain deferred.
+- Exact next step: from the currently installed `v0.1.36`, launch TocPilot and runtime-test the automatic splash update to published `v0.1.37`. After the relaunch confirms `v0.1.37`, continue with the direct-DLL runtime test targets already documented below.
+
+
 ## 2026-09-22 automatic splash self-update requested
 
 - Active branch: `main`.
