@@ -26,6 +26,9 @@ constexpr int IDC_DLL_ASSET = 2007;
 struct DialogContext {
     PackageRecord* package = nullptr;
     bool accepted = false;
+    bool releaseLoaded = false;
+    std::wstring releaseRepository;
+    GitHubReleaseInfo release;
 };
 
 void SetControlFont(
@@ -70,24 +73,6 @@ std::wstring ControlText(
     return text;
 }
 
-std::wstring Trim(
-    std::wstring value) {
-    while (!value.empty() &&
-           std::iswspace(
-               value.front())) {
-        value.erase(
-            value.begin());
-    }
-
-    while (!value.empty() &&
-           std::iswspace(
-               value.back())) {
-        value.pop_back();
-    }
-
-    return value;
-}
-
 DialogContext* Context(
     HWND hwnd) {
     return reinterpret_cast<
@@ -109,26 +94,108 @@ bool ReleaseDllChecked(
         BST_CHECKED;
 }
 
+bool EndsWithInsensitive(
+    std::wstring_view value,
+    std::wstring_view suffix) {
+    if (value.size() <
+        suffix.size()) {
+        return false;
+    }
+
+    const std::size_t offset =
+        value.size() -
+        suffix.size();
+
+    for (std::size_t i = 0;
+         i < suffix.size();
+         ++i) {
+        if (std::towlower(
+                value[offset + i]) !=
+            std::towlower(
+                suffix[i])) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+bool SelectableDllAsset(
+    std::wstring_view name) {
+    return
+        !name.empty() &&
+        name.find_first_of(
+            L"/\\") ==
+            std::wstring_view::npos &&
+        EndsWithInsensitive(
+            name,
+            L".dll");
+}
+
 void UpdateDllControls(
     HWND hwnd) {
-    const BOOL enabled =
-        ReleaseDllChecked(hwnd)
-            ? TRUE
-            : FALSE;
+    DialogContext* context =
+        Context(hwnd);
+
+    const bool dllMode =
+        ReleaseDllChecked(hwnd);
+
+    const bool assetReady =
+        dllMode &&
+        context &&
+        context->releaseLoaded;
 
     EnableWindow(
         GetDlgItem(
             hwnd,
             IDC_DLL_ASSET_LABEL),
-        enabled);
+        assetReady
+            ? TRUE
+            : FALSE);
     EnableWindow(
         GetDlgItem(
             hwnd,
             IDC_DLL_ASSET),
-        enabled);
+        assetReady
+            ? TRUE
+            : FALSE);
+
+    SetWindowTextW(
+        GetDlgItem(
+            hwnd,
+            IDC_ADD_SOURCE),
+        dllMode
+            ? (assetReady
+                ? L"Manage DLL"
+                : L"Load DLLs")
+            : L"Continue");
 }
 
-std::filesystem::path ExecutableDirectory() {
+void ResetDllRelease(
+    HWND hwnd) {
+    DialogContext* context =
+        Context(hwnd);
+
+    if (context) {
+        context->releaseLoaded =
+            false;
+        context->releaseRepository.clear();
+        context->release = {};
+    }
+
+    SendMessageW(
+        GetDlgItem(
+            hwnd,
+            IDC_DLL_ASSET),
+        CB_RESETCONTENT,
+        0,
+        0);
+
+    UpdateDllControls(hwnd);
+}
+
+std::filesystem::path
+ExecutableDirectory() {
     std::wstring buffer(
         32768,
         L'\0');
@@ -151,10 +218,9 @@ std::filesystem::path ExecutableDirectory() {
         buffer).parent_path();
 }
 
-bool PrepareReleaseDll(
+bool LoadLatestStableDllAssets(
     HWND hwnd,
     const RepositoryIdentity& identity,
-    PackageRecord& package,
     std::wstring& error) {
     error.clear();
 
@@ -165,16 +231,180 @@ bool PrepareReleaseDll(
         return false;
     }
 
-    const std::wstring assetName =
-        Trim(
-            ControlText(
-                GetDlgItem(
-                    hwnd,
-                    IDC_DLL_ASSET)));
+    SetWindowTextW(
+        GetDlgItem(
+            hwnd,
+            IDC_RESULT),
+        L"Resolving the latest stable GitHub release...");
+    UpdateWindow(hwnd);
 
-    if (assetName.empty()) {
+    GitHubReleaseInfo release;
+    if (!FetchLatestStableGitHubRelease(
+            identity.repository,
+            release,
+            error)) {
+        return false;
+    }
+
+    HWND assetControl =
+        GetDlgItem(
+            hwnd,
+            IDC_DLL_ASSET);
+
+    SendMessageW(
+        assetControl,
+        CB_RESETCONTENT,
+        0,
+        0);
+
+    std::size_t count = 0;
+
+    for (const auto& asset :
+         release.assets) {
+        if (!SelectableDllAsset(
+                asset.name)) {
+            continue;
+        }
+
+        if (SendMessageW(
+                assetControl,
+                CB_ADDSTRING,
+                0,
+                reinterpret_cast<LPARAM>(
+                    asset.name.c_str())) >=
+            0) {
+            ++count;
+        }
+    }
+
+    if (count == 0) {
         error =
-            L"Enter the exact .dll release asset name.";
+            L"The latest stable release contains no selectable .dll assets.";
+        return false;
+    }
+
+    DialogContext* context =
+        Context(hwnd);
+
+    if (!context) {
+        error =
+            L"Could not store release selection state.";
+        return false;
+    }
+
+    context->releaseLoaded =
+        true;
+    context->releaseRepository =
+        identity.repository;
+    context->release =
+        std::move(release);
+
+    SendMessageW(
+        assetControl,
+        CB_SETCURSEL,
+        static_cast<WPARAM>(-1),
+        0);
+
+    UpdateDllControls(hwnd);
+
+    const std::wstring message =
+        L"Latest stable release " +
+        context->release.tag +
+        L" contains " +
+        std::to_wstring(count) +
+        (count == 1
+            ? L" DLL asset. Select it explicitly, then click Manage DLL."
+            : L" DLL assets. Select the exact one to manage, then click Manage DLL.");
+
+    SetWindowTextW(
+        GetDlgItem(
+            hwnd,
+            IDC_RESULT),
+        message.c_str());
+
+    SetFocus(assetControl);
+    return true;
+}
+
+bool PrepareSelectedReleaseDll(
+    HWND hwnd,
+    const RepositoryIdentity& identity,
+    PackageRecord& package,
+    std::wstring& error) {
+    error.clear();
+
+    DialogContext* context =
+        Context(hwnd);
+
+    if (!context ||
+        !context->releaseLoaded ||
+        context->releaseRepository !=
+            identity.repository) {
+        return LoadLatestStableDllAssets(
+            hwnd,
+            identity,
+            error)
+            ? false
+            : false;
+    }
+
+    const HWND assetControl =
+        GetDlgItem(
+            hwnd,
+            IDC_DLL_ASSET);
+
+    const LRESULT selected =
+        SendMessageW(
+            assetControl,
+            CB_GETCURSEL,
+            0,
+            0);
+
+    if (selected == CB_ERR) {
+        error =
+            L"Select one exact DLL asset from the latest stable release.";
+        return false;
+    }
+
+    const int length =
+        static_cast<int>(
+            SendMessageW(
+                assetControl,
+                CB_GETLBTEXTLEN,
+                static_cast<WPARAM>(
+                    selected),
+                0));
+
+    if (length <= 0) {
+        error =
+            L"The selected DLL asset name is invalid.";
+        return false;
+    }
+
+    std::wstring assetName(
+        static_cast<std::size_t>(
+            length) +
+            1,
+        L'\0');
+
+    SendMessageW(
+        assetControl,
+        CB_GETLBTEXT,
+        static_cast<WPARAM>(
+            selected),
+        reinterpret_cast<LPARAM>(
+            assetName.data()));
+
+    assetName.resize(
+        static_cast<std::size_t>(
+            length));
+
+    GitHubReleaseAsset exactAsset;
+    if (!FindExactGitHubReleaseAsset(
+            context->release,
+            assetName,
+            exactAsset,
+            error)) {
         return false;
     }
 
@@ -202,35 +432,12 @@ bool PrepareReleaseDll(
     package.targetPath =
         assetName;
     package.installedRevision.clear();
-    package.latestRevision.clear();
+    package.latestRevision =
+        context->release.tag;
     package.installedFiles.clear();
 
     if (!ValidateDirectDllPackage(
             package,
-            error)) {
-        return false;
-    }
-
-    SetWindowTextW(
-        GetDlgItem(
-            hwnd,
-            IDC_RESULT),
-        L"Checking the latest stable GitHub release for that exact asset...");
-    UpdateWindow(hwnd);
-
-    GitHubReleaseInfo release;
-    if (!FetchLatestStableGitHubRelease(
-            identity.repository,
-            release,
-            error)) {
-        return false;
-    }
-
-    GitHubReleaseAsset asset;
-    if (!FindExactGitHubReleaseAsset(
-            release,
-            assetName,
-            asset,
             error)) {
         return false;
     }
@@ -244,9 +451,6 @@ bool PrepareReleaseDll(
         return false;
     }
 
-    package.latestRevision =
-        release.tag;
-
     const std::filesystem::path
         destination =
             root /
@@ -256,7 +460,9 @@ bool PrepareReleaseDll(
         L"DLLs contain executable code. Continue only if you trust this publisher.\r\n\r\n"
         L"Repository: " +
         identity.repository +
-        L"\r\nRelease policy: latest stable\r\nAsset: " +
+        L"\r\nRelease policy: latest stable\r\nCurrent stable release: " +
+        context->release.tag +
+        L"\r\nSelected asset: " +
         package.asset +
         L"\r\nDestination: " +
         destination.wstring() +
@@ -284,6 +490,7 @@ void ValidateAndAccept(
         GetDlgItem(
             hwnd,
             IDC_REPOSITORY_URL);
+
     const HWND result =
         GetDlgItem(
             hwnd,
@@ -316,9 +523,34 @@ void ValidateAndAccept(
 
     if (ReleaseDllChecked(
             hwnd)) {
+        if (identity.provider !=
+            ProviderKind::GitHub) {
+            SetWindowTextW(
+                result,
+                L"DLL package not added: direct DLL management currently supports GitHub repositories only.");
+            return;
+        }
+
+        if (!context->releaseLoaded ||
+            context->releaseRepository !=
+                identity.repository) {
+            ResetDllRelease(hwnd);
+
+            if (!LoadLatestStableDllAssets(
+                    hwnd,
+                    identity,
+                    error)) {
+                SetWindowTextW(
+                    result,
+                    (L"DLL package not added: " +
+                     error).c_str());
+            }
+            return;
+        }
+
         PackageRecord package;
 
-        if (!PrepareReleaseDll(
+        if (!PrepareSelectedReleaseDll(
                 hwnd,
                 identity,
                 package,
@@ -354,6 +586,7 @@ void ValidateAndAccept(
         MakeRepositoryPackage(
             std::move(provider),
             identity.repository);
+
     context->accepted = true;
     DestroyWindow(hwnd);
 }
@@ -387,7 +620,7 @@ LRESULT CALLBACK DialogProc(
             CreateWindowExW(
                 0,
                 L"STATIC",
-                L"Paste a public repository URL. Normal addon packages track a branch; the optional DLL mode tracks one exact asset from the latest stable GitHub release.",
+                L"Paste a public repository URL. Normal addon packages track a branch; DLL mode resolves the latest stable GitHub release first, then you choose one exact DLL asset.",
                 WS_CHILD |
                     WS_VISIBLE |
                     SS_LEFT,
@@ -424,7 +657,7 @@ LRESULT CALLBACK DialogProc(
             CreateWindowExW(
                 0,
                 L"BUTTON",
-                L"Manage an exact latest-stable release DLL in the WoW root",
+                L"Manage a latest-stable release DLL in the WoW root",
                 WS_CHILD |
                     WS_VISIBLE |
                     WS_TABSTOP |
@@ -444,12 +677,12 @@ LRESULT CALLBACK DialogProc(
             CreateWindowExW(
                 0,
                 L"STATIC",
-                L"Exact DLL asset filename:",
+                L"Exact DLL asset:",
                 WS_CHILD |
                     WS_VISIBLE,
                 20,
                 132,
-                170,
+                145,
                 22,
                 hwnd,
                 reinterpret_cast<HMENU>(
@@ -461,16 +694,17 @@ LRESULT CALLBACK DialogProc(
         HWND asset =
             CreateWindowExW(
                 WS_EX_CLIENTEDGE,
-                L"EDIT",
+                L"COMBOBOX",
                 L"",
                 WS_CHILD |
                     WS_VISIBLE |
                     WS_TABSTOP |
-                    ES_AUTOHSCROLL,
-                195,
+                    CBS_DROPDOWNLIST |
+                    WS_VSCROLL,
+                170,
                 128,
-                365,
-                26,
+                390,
+                180,
                 hwnd,
                 reinterpret_cast<HMENU>(
                     static_cast<INT_PTR>(
@@ -522,14 +756,14 @@ LRESULT CALLBACK DialogProc(
             CreateWindowExW(
                 0,
                 L"STATIC",
-                L"Normal mode will ask for a branch next. DLL mode verifies that the exact asset exists before showing the one-time trust warning.",
+                L"Normal mode will ask for a branch next. In DLL mode, click Load DLLs to inspect the latest stable release; TocPilot will not guess an asset.",
                 WS_CHILD |
                     WS_VISIBLE |
                     SS_LEFT,
                 20,
                 210,
                 540,
-                70,
+                74,
                 hwnd,
                 reinterpret_cast<HMENU>(
                     static_cast<INT_PTR>(
@@ -553,10 +787,24 @@ LRESULT CALLBACK DialogProc(
 
     case WM_COMMAND:
         if (LOWORD(wParam) ==
+                IDC_REPOSITORY_URL &&
+            HIWORD(wParam) ==
+                EN_CHANGE) {
+            DialogContext* context =
+                Context(hwnd);
+
+            if (context &&
+                context->releaseLoaded) {
+                ResetDllRelease(hwnd);
+            }
+            return 0;
+        }
+
+        if (LOWORD(wParam) ==
                 IDC_RELEASE_DLL &&
             HIWORD(wParam) ==
                 BN_CLICKED) {
-            UpdateDllControls(hwnd);
+            ResetDllRelease(hwnd);
             return 0;
         }
 
