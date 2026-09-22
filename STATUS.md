@@ -1,5 +1,19 @@
 # TocPilot status / handoff
 
+## 2026-09-22 automatic splash self-update requested
+
+- Active branch: `main`.
+- Current source/published version: `v0.1.36`.
+- Repository head entering this change: `7438a0335c7fea46482cfec14ef558e4c5b61172` (`Record v0.1.36 release handoff`).
+- User-requested startup behavior: when the splash update check finds a newer stable TocPilot release, TocPilot should automatically download and verify that exact release, launch the existing updater/replacement handoff, exit the old process, and relaunch the updated TocPilot before addon/package status scanning continues.
+- Preserve the existing self-update safety model: exact GitHub release asset metadata, checksum/SHA-256 verification, Windows executable-lock-safe updater handoff, and explicit failure reporting. Do not silently continue startup as though current when a newer release was found but automatic update failed.
+- Preserve the manual TocPilot update window as a retry/fallback path outside startup.
+- Completed at this checkpoint: requirement captured only.
+- Untested/unimplemented at this checkpoint: automatic invocation of the updater from the startup splash; startup sequencing after successful relaunch; failure/retry presentation on the splash.
+- Deferred work remains unchanged: direct-DLL removal semantics, complex GAM multi-root adoption, GitLab/Gitea/OctoWoW expansion, release ZIPs, prerelease tracking, arbitrary direct-file destinations, import/export, crash-recovery journal, local-modification detection, and unrelated UI polish.
+- Exact next step: wire `ReleaseCheckState::UpdateAvailable` during the startup splash to the existing verified self-update path, prevent addon scanning from starting in that process, keep manual checks non-automatic, add deterministic coverage for the startup decision where practical, run Windows x64 Release + complete CTest, update this handoff, then publish the next CI-green version for runtime testing.
+
+
 ## 2026-09-22 v0.1.36 published / direct DLL runtime-test handoff
 
 - Active branch: `main`.
