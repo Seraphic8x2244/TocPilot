@@ -1,28 +1,26 @@
 ![TocPilot](resources/TocPilot_logo_cutout.png)
 
-Lightweight, portable World of Warcraft addon and release manager.
-
-TocPilot is designed to live directly beside `WoW.exe`. It follows GitHub/GitLab branches and releases without creating local Git repositories, and is intended to manage both normal addons and release assets such as DLLs.
+SuperLightWeight, portable World of Warcraft addon and release manager.
 
 ## How to Install
 - Download TocPilot.exe and copy once per WoW installation, in the base game folder where wow.exe exists
-- On first run, you can click "Advanced" -> "Scan Existing Addons" to search for any git metadata and automatically import
+- On first run, you _can_ click "Advanced" -> "Scan Existing Addons" to search for any git metadata and automatically import addons you may have installed with... _other_ addon managers.
 
 ## How to Use
 - Run TocPilot.exe
 - Press the buttons, paste in git links
 
 # What's different?
-- native Windows application with no large bundled UI/runtime framework;
-- no hidden `.git` repositories in addon folders;
+- Native Windows application with no large bundled UI/runtime framework
+- No hidden `.git` repositories in addon folders
 - GitHub/GitLab branch tracking is not broken *cough* 
-- precise installed-file ownership;
-- portable local configuration;
-- self updates
+- Staging are in Interface folder for checksums on downloads
+- Portable ,local configuration in your Interface folder
+- Automatically self updates
 
 ## In Active Development
-- release/asset tracking;
-- direct DLL/file management;
+- Release/asset tracking (repos that have multiple addons bundled)
+- Direct DLL/file management (nampower, superwow, classicAPI etc)
 
 ## License
 
