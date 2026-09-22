@@ -366,6 +366,17 @@ Direct DLL installation is an intentional exception to archive staging. TocPilot
 
 TocPilot must never add exclusions, disable security software, or automatically terminate WoW. The DLL must be writable before update. After download, verify the completed file against the expected release digest/checksum when available and only then advance installed state. If the write is blocked, the file disappears, or verification fails, leave package state unchanged and report that the file may be in use or security software may have blocked it.
 
+### First direct-DLL milestone implementation status — 2026-09-22
+
+The first GitHub direct-DLL slice is implemented on `main` through `3da9d6259a2022c8efa87b8c99aa7cf8e0ae8fd7` and is the `v0.1.36` release candidate. Build run `35772084683` passed the Windows x64 Release build, complete CTest suite, and executable artifact upload.
+
+Implemented behaviour follows the rules above: resolve latest stable first; present filename-safe `.dll` assets and require explicit exact selection; show the first-manage trust warning; persist release policy/asset/target path in schema 1; require the exact asset on future releases; write directly to the exact WoW-root DLL filename without a staged/temp/renamed/backup DLL; never change antivirus settings; verify size and SHA-256 before recording installed state; surface missing/renamed/unverifiable assets as Needs attention; and include installed DLL packages in startup status scanning and Update New.
+
+For checksum verification TocPilot uses a valid GitHub release-asset `digest` when present, otherwise it requires the exact `<asset>.sha256` release asset. The DLL install is refused if TocPilot cannot obtain an expected SHA-256.
+
+The new DLL UI and real final-path write/update path remain runtime-untested until `v0.1.36` is published and exercised in a WoW installation. Direct-DLL deletion/uninstall is not part of this slice: forgetting a DLL package does not delete its WoW-root DLL.
+
+
 ### ZIP release assets
 
 If a selected release asset is a ZIP, TocPilot should inspect its contents and offer or infer an addon installation mapping.

@@ -1,5 +1,38 @@
 # TocPilot status / handoff
 
+## 2026-09-22 P3 direct DLL slice CI-green / v0.1.36 release pending
+
+- Active branch: `main`.
+- Source/published version at this checkpoint: `v0.1.35`; the next release will be `v0.1.36`.
+- Latest source implementation commit: `3da9d6259a2022c8efa87b8c99aa7cf8e0ae8fd7` (`Refine direct DLL attention handling`).
+- Relevant implementation commits:
+  - `fd429bf` — reusable GitHub latest-stable release + exact-asset metadata; self-update moved to exact returned release assets; release package persistence fields added.
+  - `8950872` — direct-DLL policy, exact WoW-root destination validation, digest/checksum resolution, direct final-path download, completed-file size/SHA-256 verification, deterministic policy tests.
+  - `c3a99f7` — initial direct-DLL trust/UI path.
+  - `8f6e9ea` — direct-DLL startup/Refresh status scanning and Needs-attention state.
+  - `ceb5944` — direct-DLL install/update dispatcher and Update New integration.
+  - `4b60bd9` — latest-stable-first DLL asset picker requiring explicit exact-asset selection before trust.
+  - `3da9d62` — structural Needs-attention classification while keeping transient network/rate-limit failures non-sticky.
+- Completed first direct-DLL milestone:
+  - GitHub only, latest stable release only.
+  - Add Package resolves the latest stable release first and lists only filename-safe `.dll` assets; no asset is preselected and TocPilot does not guess.
+  - The user explicitly selects the exact DLL asset. The configured destination is the same exact filename in the validated WoW root.
+  - First-manage trust warning identifies repository, latest-stable policy/release, exact selected asset, and exact destination; it explains executable-code risk and possible security-software quarantine and states that TocPilot never alters antivirus settings.
+  - Future refreshes require the exact configured asset name. Missing/renamed/ambiguous assets become **Needs attention**.
+  - DLL installation/update is a deliberate non-staged path: the release asset is downloaded directly to the exact final DLL path with no staged/temp/renamed/backup DLL.
+  - Existing targets are preflighted for exclusive read/write so an in-use DLL is refused before truncation where Windows exposes the lock.
+  - TocPilot accepts the GitHub release asset SHA-256 digest when supplied, otherwise requires the exact `<asset>.sha256` release asset; unverifiable DLLs are refused.
+  - The completed final-path DLL must match the release asset size and SHA-256 before installed state is advanced. Failed/partial/mismatched downloads are removed and installed state is left unchanged.
+  - Startup/Refresh status scanning includes installed direct DLL packages; a missing managed DLL becomes **Needs attention**.
+  - **Update New** queues installed direct DLL packages whose saved latest stable release differs from installed state. The install re-resolves latest stable and refuses if the release changed since the displayed status, requiring a fresh status scan instead of silently installing another release.
+- Validation:
+  - **CI-tested:** Build run `35772084683` passed Windows x64 Release build, complete CTest, and executable artifact upload on exact commit `3da9d62`.
+  - **CI-tested core/live milestones:** runs `35770888060` and `35771635388` also passed.
+  - **Runtime-tested:** the `v0.1.35` baseline passed; the new direct-DLL picker, trust dialog, real download/write/verification path, startup DLL status, and Update New DLL path are not runtime-tested yet.
+- Runtime test targets for `v0.1.36`: latest-stable asset list and explicit selection; trust-warning contents; initial direct install with WoW closed; exact final filename only and no temp/renamed/`.bak` DLLs; restart/startup status; Refresh All; Update New; in-use/security-block failure reporting; missing/renamed asset Needs attention where a suitable test repository is available.
+- Intentional limitation/deferred work: direct-DLL **Forget/Remove does not delete the WoW-root DLL in this milestone**. Direct DLL uninstall/removal semantics remain deferred; the package-management milestone here is add/install/status/update. Also deferred: complex GAM multi-root adoption, GitLab/Gitea/OctoWoW expansion, release ZIPs, prerelease tracking, arbitrary direct-file destinations, import/export, crash-recovery journal, local-modification detection, and unrelated UI polish.
+- Exact next step: bump and publish `v0.1.36` through the normal release workflow, verify the published `TocPilot.exe` and checksum assets, then runtime-test the direct-DLL slice above.
+
 
 ## 2026-09-22 P3 release metadata foundation CI-green
 
