@@ -1,5 +1,30 @@
 # TocPilot status / handoff
 
+## 2026-09-22 priority reset after v0.1.33
+
+- Active branch: `main`.
+- Current published/source version: `v0.1.33`.
+- Latest published visual state:
+  - plaque-only logo shadow masking is working correctly;
+  - shadow opacity was increased in `v0.1.33` to soft `0.30` / core `0.55`;
+  - logo/plaque geometry is unchanged;
+  - status text remains at Y `361`.
+- New user direction / priorities:
+  - **Do not** make the previously proposed UI-polish/testing pass the next priority.
+  - Treat compact/Advanced UI visual testing and similar UI refinement as non-critical/deferred for now.
+  - Startup ordering requirement: TocPilot self-update should run on the splash screen **before** addon scanning begins. Preserve that ordering explicitly when changing startup flow.
+  - Do not rush into removing the temporary splash click gate / changing splash-close behavior merely because it was previously listed as the next task; re-evaluate splash lifecycle only in the context of the required self-update-then-addon-scan startup sequence.
+  - Begin moving away from clunky Windows popup/error MessageBox-style interruptions where TocPilot performs routine operations. Prefer calmer in-window/non-modal status/error presentation where practical, while preserving visibility of important failures and safety refusals.
+- Existing UI runtime checks (sorting/action targeting, Add Git diagnostics, layout polish, etc.) are deferred as non-critical unless they block a higher-priority feature.
+- Still deferred unless reprioritized: GitLab/Gitea/OctoWoW provider expansion, broader release-asset/package-type work, and unrelated UI polish.
+- Exact next step for the next development chat:
+  1. Read `STATUS.md` and `DEVELOPMENT.md` before changing code.
+  2. Inspect the current startup/splash flow and document the exact sequence for self-update, splash phases, addon scanning, and main-window reveal.
+  3. Confirm/adjust architecture so self-update runs on the splash screen before addon scanning.
+  4. Inventory current MessageBox/TaskDialog/error-popup usage and propose a small, consistent replacement pattern for routine operational errors/status without hiding important failures.
+  5. Keep deferred UI visual testing out of the critical path.
+  6. Preserve the implemented/static-checked/runtime-tested distinction in STATUS updates.
+
 ## v0.1.33 published / stronger plaque-only shadow — 2026-09-22
 
 - Active branch: `main`.
