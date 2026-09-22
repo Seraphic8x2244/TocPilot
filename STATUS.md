@@ -1,6 +1,28 @@
 # TocPilot status / handoff
 
 
+## 2026-09-22 v0.1.34 publication checkpoint
+
+- Active branch: `main`.
+- Current published/source version before this release pass: `v0.1.33`.
+- Current handoff head entering publication: `c7aa14bc13b344df3d2c3fa90635bceb51fa8301`.
+- Latest source implementation head: `e501cdca0d4b9167c3a1debfcf24e4f519f66a99`.
+- Completed and ready to publish:
+  - startup remains serialized as TocPilot update check on the splash -> addon status scan -> temporary **Click to continue!** gate -> main-window reveal;
+  - first routine non-modal feedback slice is implemented for Update All progress/no-work/completion;
+  - routine sibling WoW/VanillaFixes missing-target and launch-failure reporting is now in-window;
+  - destructive confirmations, safety refusals, rollback/startup failures, and updater-helper failures remain explicit/modal.
+- Validation before publication:
+  - **Implemented:** source changes above.
+  - **Static-checked:** startup ordering, splash phase/reveal path, modal-retention boundaries, and final source diffs.
+  - **CI-tested:** exact implementation head `e501cdca0d4b9167c3a1debfcf24e4f519f66a99` passed Windows x64 Release build and complete CTest **13/13** in Build run `35729549922`.
+  - **Runtime-tested:** not yet for this slice; the next published build is specifically for user runtime testing.
+- User delivery preference: when a TocPilot update slice is ready and CI-green, publish the version rather than leaving it only on `main`, so the installed app can self-update for runtime testing.
+- Deferred unchanged: splash visual/UI polish, removal of the temporary click gate, sorting/action-targeting checks, Add Git diagnostics, GitLab/Gitea/OctoWoW expansion, broader package/release-asset work, and unrelated UI polish.
+- Exact next step: bump source to `v0.1.34`, request the release through `.github/release-version`, verify the release workflow builds/tests/publishes successfully, then runtime-test self-update/startup sequencing and the reduced-popup behavior.
+
+
+
 ## 2026-09-22 startup ordering preserved / first non-modal feedback slice complete
 
 - Active branch: `main`.
@@ -497,8 +519,7 @@
   - non-animated **Click to continue!** remains centered;
   - temporary click gate remains intact.
 - Untested:
-  - Windows x64 Release compile for `fe4f17f`;
-  - complete CTest suite for `fe4f17f`;
+  - Windows x64 Release compile for `fe4f17f`;  - complete CTest suite for `fe4f17f`;
   - runtime visual balance of the smaller/higher plaque;
   - runtime verification that the animated dot origin no longer jiggles;
   - runtime screenshot approval.
@@ -997,8 +1018,7 @@
   - show a branch dropdown affordance on every GitHub addon row that can select a branch;
   - make the Branch cell one-click: first click selects the addon and opens its dropdown; if branches are still loading, auto-open when loading completes rather than requiring a second click.
 - Keep compact toolbar as **Update All / Add Git / Remove Addon / Advanced**.
-- Keep Advanced button order as **Update All / Add Git / Refresh All / Reinstall Addon / Remove Addon / Scan Existing Addons / TocPilot / Advanced**.
-- Provider expansion remains frozen.
+- Keep Advanced button order as **Update All / Add Git / Refresh All / Reinstall Addon / Remove Addon / Scan Existing Addons / TocPilot / Advanced**.- Provider expansion remains frozen.
 
 ## Exact next step
 
@@ -1497,8 +1517,7 @@
 - `5a069ab` — Auto-refresh managed addon update status
 - `0f82805` — Declare package row selector before sorting
 - `e7bbe0c` — Add stable package column sorting
-- `11e5a98` — Build and test AddOns folder scanner
-- `235e371` — Test AddOns folder classification
+- `11e5a98` — Build and test AddOns folder scanner- `235e371` — Test AddOns folder classification
 - `896a639` — Classify AddOns folders conservatively
 - `3572a82` — Add AddOns folder classification API
 - `dd86ca3` — Set next TocPilot runtime slice
