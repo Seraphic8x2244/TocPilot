@@ -1,6 +1,47 @@
 # TocPilot status / handoff
 
 
+## 2026-09-22 v0.1.35 runtime pass / direct DLL architecture approved
+
+- Active branch: `main`.
+- Current published version: `v0.1.35`.
+- Current repository head entering this checkpoint: `3bcbc47e825b1cf95ed394fae07dfd012155acd2` (`Revise README for clarity and feature updates`).
+- Runtime result for `v0.1.35`: **passed**. User confirmed the post-scan list position, **Update New** wording, and popup-free Update New flow look good.
+- Small pending splash visual note: move the plaque and its status text downward by approximately **8 px**; deliberately not implemented before deciding the next feature priority.
+- Development priority changed: implement **GitHub release-backed direct DLL packages** before returning to complex GitAddonsManager adoption.
+- Approved first DLL-package scope:
+  - GitHub only;
+  - latest stable release only;
+  - user explicitly selects one exact `.dll` release asset;
+  - destination is the exact approved filename in the WoW root;
+  - package stores the repository, release mode/policy, exact asset name, target path, installed release/tag, latest release/tag, and owned file;
+  - startup status scanning and **Update New** should treat DLL packages alongside addon packages.
+- Approved DLL install/security behaviour:
+  - DLL packages are an intentional exception to addon/archive staging;
+  - download the selected release asset **directly to its configured final DLL path** rather than creating a staged/temp/renamed DLL;
+  - do not create `.bak` DLLs or rename DLLs as part of the normal update flow;
+  - do not attempt to evade or bypass antivirus scanning;
+  - TocPilot must never add antivirus exclusions, disable security software, or kill WoW automatically;
+  - WoW must be closed / the DLL must be writable before update;
+  - hash/verify the completed file and only then record the new installed release;
+  - if the write is blocked, the file disappears, or verification fails, leave TocPilot's installed-state record unchanged and report that the file may be in use or security software may have blocked it.
+- First-manage trust warning is required:
+  - explain that DLLs contain executable code and should only be managed from projects/publishers the user trusts;
+  - explain that security software may block/quarantine DLL downloads;
+  - state that TocPilot does not alter antivirus settings;
+  - show the exact repository, exact selected asset, and exact destination;
+  - ask once when establishing the managed DLL relationship, not on every routine update.
+- Asset safety rule: future releases must contain the exact configured asset name. Missing/renamed/ambiguous assets become **Needs attention**; TocPilot must not guess a replacement.
+- Validation state:
+  - **Runtime-tested:** v0.1.35 pass confirmed by user.
+  - **Architecture-approved:** direct DLL scope and security behaviour above.
+  - **Implemented:** no DLL code yet.
+  - **CI-tested:** not applicable yet for DLL work.
+- Deferred unchanged: complex GAM multi-root adoption, GitLab/Gitea/OctoWoW expansion, broader release ZIP support, prerelease tracking, arbitrary direct-file destinations, import/export, crash-recovery journal, local-modification detection, and unrelated UI polish.
+- Exact next step: start P3 by generalising the existing GitHub release/self-update parsing into reusable release + asset metadata, extend `PackageRecord` persistence for release/direct-file fields without breaking schema/unknown-field preservation, and add deterministic tests before wiring the Add-package UI or live DLL writes.
+
+
+
 ## v0.1.35 published / Update New and post-scan top reset — 2026-09-22
 
 - Active branch: `main`.

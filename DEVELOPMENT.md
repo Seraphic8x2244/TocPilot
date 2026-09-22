@@ -343,14 +343,28 @@ A package such as a standalone API DLL can conceptually be:
 
 ```text
 Source: GitHub repository
-Mode: Latest release
+Mode: Latest stable release
 Asset: ClassicAPI.dll
 Target: WoW root
 Installed: vX.Y.Z
 Latest: vX.Y.Z
 ```
 
-No special DLL subsystem is required. DLLs are simply direct-file release assets with an appropriate install target.
+DLLs remain normal TocPilot packages for discovery/status/UI purposes, but their install path is deliberately different from addon/archive packages.
+
+For the first direct-DLL milestone:
+
+- GitHub only;
+- latest stable release only;
+- the user selects one exact `.dll` asset name;
+- the configured destination is the exact approved filename in the WoW root;
+- future releases must contain that same asset name; TocPilot must not guess when an asset is renamed or ambiguous;
+- the first time a DLL package is managed, show an explicit trust warning identifying the repository, asset, and destination;
+- explain that DLLs contain executable code, security software may block/quarantine them, and TocPilot will not alter antivirus settings.
+
+Direct DLL installation is an intentional exception to archive staging. TocPilot should download the selected release asset directly to its configured final DLL path, without creating a staged/temp/renamed DLL or a `.bak` DLL. This is specifically to preserve user-controlled exact-path antivirus configuration where present, not to evade antivirus scanning.
+
+TocPilot must never add exclusions, disable security software, or automatically terminate WoW. The DLL must be writable before update. After download, verify the completed file against the expected release digest/checksum when available and only then advance installed state. If the write is blocked, the file disappears, or verification fails, leave package state unchanged and report that the file may be in use or security software may have blocked it.
 
 ### ZIP release assets
 
@@ -693,7 +707,9 @@ Keep a short-lived backup during migrations where appropriate.
 
 ## 15. Install transaction model
 
-Package updates should use staging and commit semantics rather than directly extracting over the live addon.
+Addon/archive package updates should use staging and commit semantics rather than directly extracting over the live addon.
+
+Direct DLL packages are the deliberate exception: they write the verified release payload to the exact approved final DLL path, with no staged/temp/renamed DLL and no automatic antivirus configuration. This trades some crash-atomicity for compatibility with exact-path security-software exclusions and keeps the behaviour simple and explicit.
 
 ### Proposed transaction
 
@@ -864,19 +880,28 @@ Exit criterion:
 
 ### P3 — GitHub releases and direct assets
 
-Deliver:
+First milestone — direct DLL management:
 
-- release browser;
-- latest stable tracking;
-- prerelease option;
-- release-asset selection;
+- generalise the existing TocPilot self-update release parser into reusable GitHub release/asset metadata;
+- latest stable release tracking;
+- exact release-asset selection;
+- persist release policy, exact asset name, target path, installed/latest release identifiers, and owned file;
+- first-manage DLL trust warning;
+- direct download to the exact approved WoW-root DLL path with no staged/temp/renamed DLL;
+- verify the completed file against GitHub's asset digest/checksum when available before updating installed state;
+- integrate DLL status with startup scanning and **Update New**;
+- fail clearly when the DLL is in use or security software blocks/removes it; never change antivirus settings automatically.
+
+Later P3 expansion:
+
+- prerelease tracking;
 - ZIP release installation;
-- direct file/DLL installation to WoW root;
-- update/remove ownership tracking.
+- broader direct-file assets and destinations;
+- richer release browser/details.
 
 Exit criterion:
 
-> A package such as a release-provided DLL can be tracked and updated alongside normal addons.
+> A package such as a release-provided DLL can be explicitly trusted once, tracked, checked, and updated alongside normal addons without TocPilot creating secondary DLL files or altering antivirus configuration.
 
 ### P4 — GitLab
 
