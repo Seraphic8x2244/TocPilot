@@ -1,6 +1,49 @@
 # TocPilot status / handoff
 
 
+## 2026-09-22 startup ordering preserved / first non-modal feedback slice complete
+
+- Active branch: `main`.
+- Published/source version remains `v0.1.33`; no version bump or release was made in this slice.
+- Latest implementation commits:
+  - `de6e90d` — Clean up Update All feedback helper
+  - `aa44ea7` — Route Update All routine feedback in-window
+  - `d944937` — Document startup ordering and modal inventory
+- Startup architecture is unchanged and statically verified:
+  1. create the normal main window hidden;
+  2. show the startup splash in `CheckingAppUpdate`;
+  3. start `StartUpdateCheck(hwnd, true)`;
+  4. only from `WM_TP_CHECK_COMPLETE`, switch the splash to `ScanningAddonUpdates` and call `StartAutoStatusRefresh(hwnd)`;
+  5. complete the sequential addon status scan;
+  6. switch to `AwaitingContinue`;
+  7. preserve the temporary **Click to continue!** gate, which reveals the main window and closes the splash.
+- The splash fallback path is also serialized: if splash creation fails, the main window is shown immediately, but addon scanning still starts only after the app update check completes.
+- Implemented non-modal presentation pattern:
+  - added `SetRoutinePackageFeedback(std::wstring_view)`, backed by the existing main-window package hint;
+  - Update All progress now uses that helper consistently;
+  - Update All with no known updates now reports in-window instead of opening an informational MessageBox;
+  - Update All completion summary now remains in-window instead of opening a completion MessageBox.
+- Modal behavior deliberately retained:
+  - Update All Yes/No confirmation;
+  - unexpected Update All orchestration/internal failure;
+  - destructive remove/uninstall/forget/install confirmations;
+  - ownership/collision/safety refusals and rollback failures;
+  - startup/state/window-creation failures;
+  - updater-helper replacement/relaunch failures after the main UI may have exited.
+- Popup inventory direction for later slices:
+  - good next routine candidates include successful install/uninstall/remove summaries, archive-inspection information, adoption success/no-new-candidate information, optional-launcher missing notices, and other informational-only operation messages;
+  - evaluate warnings case-by-case rather than removing modals based only on icon/type;
+  - keep `TaskDialogIndirect` / `ShowExpandableDialog` where explicit confirmation, expandable diagnostics, or user action is genuinely required.
+- Validation:
+  - **Implemented:** startup sequencing preserved; first Update All routine-feedback migration complete.
+  - **Static-checked:** exact startup call ordering, splash phases/reveal path, modal inventory, and final Update All diff.
+  - **CI-tested:** GitHub Actions Build run `35729181390` passed on exact source head `de6e90d352f886f0b541f561cd1d73112d389bcf`; Windows x64 Release configure/build passed; complete CTest passed **13/13**; executable artifact upload passed.
+  - **Runtime-tested:** not yet for this presentation change. No splash geometry/close behavior was changed in this slice; the v0.1.33 splash remains the latest runtime visual baseline.
+- CI artifact: `TocPilot-windows-x64`, artifact ID `10695055067`, digest `sha256:089febb9116af6940ea82d45c58b263ad8e0590080c8ce5f953cdbcd2ea01511`.
+- Deferred unchanged: splash visual/UI polish, sorting/action-targeting checks, Add Git diagnostics, GitLab/Gitea/OctoWoW expansion, broader release-asset/package-type work, and removal of the temporary splash click gate.
+- Exact next step: runtime-check the new non-modal Update All no-work/completion feedback when convenient; development can meanwhile continue migrating the next clearly routine informational popup class (prefer successful install/uninstall/remove summaries) without changing destructive confirmations or the startup/splash lifecycle.
+
+
 ## 2026-09-22 startup-order / modal inventory checkpoint
 
 - Active branch: `main`.
