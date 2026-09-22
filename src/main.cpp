@@ -1540,6 +1540,39 @@ void SetRoutinePackageFeedback(
         text.c_str());
 }
 
+void ScrollPackageListToTop() {
+    if (!g_packageList) {
+        return;
+    }
+
+    const int topRow =
+        ListView_GetTopIndex(
+            g_packageList);
+
+    if (topRow <= 0) {
+        return;
+    }
+
+    RECT first{};
+    RECT currentTop{};
+
+    if (ListView_GetItemRect(
+            g_packageList,
+            0,
+            &first,
+            LVIR_BOUNDS) &&
+        ListView_GetItemRect(
+            g_packageList,
+            topRow,
+            &currentTop,
+            LVIR_BOUNDS)) {
+        ListView_Scroll(
+            g_packageList,
+            0,
+            first.top - currentTop.top);
+    }
+}
+
 void PopulateBranchSelectorCurrent(
     const tp::PackageRecord& package) {
     if (!g_branchSelector) {
@@ -2890,6 +2923,7 @@ void FinishAutoStatusRefresh(HWND hwnd) {
     }
 
     RefreshPackageStateUi();
+    ScrollPackageListToTop();
 
     std::wstring message =
         L"Status check complete: " +
@@ -3057,50 +3091,29 @@ void FinishUpdateAll() {
     g_updateAllInProgress = false;
     SetWindowTextW(
         g_updateAllButton,
-        L"Update All");
+        L"Update New");
 
     RefreshPackageStateUi();
 
     std::wstring summary =
-        L"Update All finished.\r\n\r\nQueued: " +
-        std::to_wstring(queued) +
-        L"\r\nProcessed: " +
-        std::to_wstring(processed) +
-        L"\r\nUpdated: " +
+        L"Update New finished: " +
         std::to_wstring(g_updateAllProgress.updated) +
-        L"\r\nAlready current: " +
+        L" updated, " +
         std::to_wstring(g_updateAllProgress.current) +
-        L"\r\nFailed: " +
-        std::to_wstring(g_updateAllProgress.failed);
+        L" already current, " +
+        std::to_wstring(g_updateAllProgress.failed) +
+        L" failed.";
 
     if (processed < queued) {
         summary +=
-            L"\r\nRemaining untouched: " +
-            std::to_wstring(queued - processed);
+            L" " +
+            std::to_wstring(queued - processed) +
+            L" remaining untouched.";
     }
 
     if (!g_updateAllProgress.failures.empty()) {
-        summary += L"\r\n\r\nFailures:";
-        constexpr std::size_t maxFailuresShown = 10;
-        const std::size_t shown =
-            std::min<std::size_t>(
-                maxFailuresShown,
-                g_updateAllProgress.failures.size());
-
-        for (std::size_t i = 0; i < shown; ++i) {
-            summary +=
-                L"\r\n- " +
-                g_updateAllProgress.failures[i];
-        }
-
-        if (shown < g_updateAllProgress.failures.size()) {
-            summary +=
-                L"\r\n- ...and " +
-                std::to_wstring(
-                    g_updateAllProgress.failures.size() -
-                    shown) +
-                L" more.";
-        }
+        summary +=
+            L" Review failed rows for details.";
     }
 
     SetRoutinePackageFeedback(summary);
@@ -3124,7 +3137,7 @@ void ContinueUpdateAll(HWND hwnd) {
                 g_updateAllProgress,
                 tp::UpdateAllOutcome::Failed,
                 packageId +
-                    L": package is no longer eligible for Update All.",
+                    L": package is no longer eligible for Update New.",
                 ignored);
             continue;
         }
@@ -3137,7 +3150,7 @@ void ContinueUpdateAll(HWND hwnd) {
             L"Updating...");
 
         const std::wstring message =
-            L"Update All: applying the known update for " +
+            L"Update New: applying the known update for " +
             package.name +
             L". Refresh All is responsible for discovering newer revisions.";
         SetRoutinePackageFeedback(message);
@@ -3166,13 +3179,13 @@ void CompleteUpdateAllStep(
         g_updateAllInProgress = false;
         SetWindowTextW(
             g_updateAllButton,
-            L"Update All");
+            L"Update New");
         UpdatePackageButtons();
 
         MessageBoxW(
             hwnd,
             error.c_str(),
-            L"TocPilot - Update All",
+            L"TocPilot - Update New",
             MB_OK | MB_ICONERROR);
         return;
     }
@@ -3201,24 +3214,6 @@ void StartUpdateAll(HWND hwnd) {
     if (progress.packageIds.empty()) {
         SetRoutinePackageFeedback(
             L"There are no installed addons currently marked Update available. Run Refresh All to check for new revisions.");
-        return;
-    }
-
-    std::wstring prompt =
-        L"Update " +
-        std::to_wstring(progress.packageIds.size()) +
-        L" addon(s) already marked Update available?\r\n\r\n"
-        L"Update All will use the latest revisions already discovered by startup or Refresh All. "
-        L"It will not rescan addons that are currently marked Current. "
-        L"If one package fails, TocPilot will continue with the remaining packages.";
-
-    if (MessageBoxW(
-            hwnd,
-            prompt.c_str(),
-            L"TocPilot - Update All",
-            MB_YESNO |
-                MB_ICONQUESTION |
-                MB_DEFBUTTON2) != IDYES) {
         return;
     }
 
@@ -4787,7 +4782,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
         g_updateAllButton = CreateWindowExW(
             0,
             L"BUTTON",
-            L"Update All",
+            L"Update New",
             WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON,
             20,
             145,
