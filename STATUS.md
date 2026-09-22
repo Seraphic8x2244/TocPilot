@@ -26,13 +26,15 @@
   - `TocPilot.exe` — 2,333,696 bytes; SHA-256 `f37cd224a40c5bd5f77684a5a96ce6bbf9e8c4dbd62996ab6154c9a76eafb097`;
   - `TocPilot.exe.sha256` — 78 bytes; release-asset SHA-256 `b91fd14ec8b8feafc7e207b7b47a8c8a5c9e081d7315c77b37fcf90f40ed4987`.
 - Runtime-tested: `v0.1.35` baseline remains the last user-confirmed runtime pass.
+- Bootstrap/runtime note: `v0.1.36` predates this automatic-update behavior, so moving from `v0.1.36` to `v0.1.37` requires the existing manual **Update Available** action once. Automatic splash application begins when running `v0.1.37` or later.
 - Runtime-untested:
-  - launch published `v0.1.36` and confirm it automatically detects, downloads, verifies, applies, and relaunches into `v0.1.37` during the splash without opening the manual updater window;
-  - confirm the relaunched `v0.1.37` then performs addon/package scanning and reaches **Click to continue!** normally;
+  - one-time manual transition from `v0.1.36` to published `v0.1.37`;
+  - normal `v0.1.37` startup when already current;
+  - automatic splash update from `v0.1.37` to the next published version, which is the first release-to-release path capable of exercising the new behavior;
   - automatic-update failure splash/manual-retry behavior;
   - direct-DLL picker/trust/install/verification/startup-status/Update New paths introduced in `v0.1.36`.
 - Deferred unchanged: direct-DLL Forget/Remove still does not delete the WoW-root DLL; complex GAM multi-root adoption, GitLab/Gitea/OctoWoW expansion, release ZIPs, prerelease tracking, arbitrary direct-file destinations, import/export, crash-recovery journal, local-modification detection, and unrelated UI polish remain deferred.
-- Exact next step: from the currently installed `v0.1.36`, launch TocPilot and runtime-test the automatic splash update to published `v0.1.37`. After the relaunch confirms `v0.1.37`, continue with the direct-DLL runtime test targets already documented below.
+- Exact next step: use the existing manual TocPilot **Update Available** action once to move the installed `v0.1.36` to published `v0.1.37`. Confirm `v0.1.37` launches normally. The next published version after `v0.1.37` will be the first one that can runtime-test automatic splash replacement; direct-DLL runtime testing can continue on `v0.1.37` in the meantime.
 
 
 ## 2026-09-22 automatic splash self-update requested
