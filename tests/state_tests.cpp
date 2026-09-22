@@ -332,6 +332,101 @@ void TestClearInstalledState(
     }
 }
 
+
+void TestReleasePackageRoundTrip(
+    const std::filesystem::path& root) {
+    tp::AppState state;
+    bool created = false;
+    std::wstring error;
+
+    if (!tp::LoadOrCreateState(
+            root,
+            state,
+            created,
+            error)) {
+        Fail("release-package fixture did not load");
+        return;
+    }
+
+    state.packages.clear();
+
+    auto package =
+        tp::MakeRepositoryPackage(
+            L"github",
+            L"Owner/ClassicAPI");
+
+    package.mode =
+        L"release";
+    package.releasePolicy =
+        L"latest_stable";
+    package.asset =
+        L"ClassicAPI.dll";
+    package.target =
+        L"wow_root";
+    package.targetPath =
+        L"ClassicAPI.dll";
+    package.installedRevision =
+        L"v1.2.3";
+    package.latestRevision =
+        L"v1.2.4";
+    package.installedFiles = {
+        L"ClassicAPI.dll"
+    };
+
+    if (!tp::AppendPackage(
+            state,
+            std::move(package),
+            error) ||
+        !tp::SaveState(
+            root,
+            state,
+            error)) {
+        Fail("release-package fixture did not save");
+        return;
+    }
+
+    tp::AppState loaded;
+    created = true;
+
+    if (!tp::LoadOrCreateState(
+            root,
+            loaded,
+            created,
+            error) ||
+        loaded.packages.size() != 1) {
+        Fail("release-package fixture did not reload");
+        return;
+    }
+
+    const auto& actual =
+        loaded.packages[0];
+
+    if (actual.mode != L"release" ||
+        actual.releasePolicy != L"latest_stable" ||
+        actual.asset != L"ClassicAPI.dll" ||
+        actual.target != L"wow_root" ||
+        actual.targetPath != L"ClassicAPI.dll" ||
+        actual.installedRevision != L"v1.2.3" ||
+        actual.latestRevision != L"v1.2.4" ||
+        actual.installedFiles !=
+            std::vector<std::wstring>{L"ClassicAPI.dll"}) {
+        Fail("release/direct-file package fields did not round-trip");
+        return;
+    }
+
+    const std::string saved =
+        ReadAll(tp::StatePath(root));
+
+    if (saved.find("\"release_policy\":\"latest_stable\"") ==
+            std::string::npos ||
+        saved.find("\"asset\":\"ClassicAPI.dll\"") ==
+            std::string::npos ||
+        saved.find("\"target_path\":\"ClassicAPI.dll\"") ==
+            std::string::npos) {
+        Fail("release/direct-file package fields were not serialized");
+    }
+}
+
 void TestUnknownFieldPreservation(
     const std::filesystem::path& root) {
     const std::string json =
@@ -399,6 +494,7 @@ int main() {
         TestCreateAddRoundTrip(root);
         TestRemovePackageRecord(root);
         TestClearInstalledState(root);
+        TestReleasePackageRoundTrip(root);
         TestUnknownFieldPreservation(root);
 
         std::error_code ec;

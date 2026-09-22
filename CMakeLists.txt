@@ -29,6 +29,7 @@ add_executable(TocPilot WIN32
     src/archive.cpp
     src/branch_dialog.cpp
     src/github_api.cpp
+    src/github_release.cpp
     src/git_refs.cpp
     src/install.cpp
     src/main.cpp
@@ -199,6 +200,7 @@ if(BUILD_TESTING)
     add_executable(TocPilotUpdateTests
         tests/update_tests.cpp
         src/update.cpp
+        src/github_release.cpp
     )
     target_compile_features(TocPilotUpdateTests PRIVATE cxx_std_20)
     target_compile_definitions(TocPilotUpdateTests PRIVATE
@@ -219,6 +221,26 @@ if(BUILD_TESTING)
         NAME self-update-live-latest
         COMMAND TocPilotUpdateTests --live-latest
     )
+
+    add_executable(TocPilotGitHubReleaseTests
+        tests/github_release_tests.cpp
+        src/github_release.cpp
+    )
+    target_compile_features(TocPilotGitHubReleaseTests PRIVATE cxx_std_20)
+    target_compile_definitions(TocPilotGitHubReleaseTests PRIVATE
+        UNICODE
+        _UNICODE
+        WIN32_LEAN_AND_MEAN
+        NOMINMAX
+    )
+    target_include_directories(TocPilotGitHubReleaseTests PRIVATE src)
+    target_link_libraries(TocPilotGitHubReleaseTests PRIVATE winhttp)
+
+    if(MSVC)
+        target_compile_options(TocPilotGitHubReleaseTests PRIVATE /W4 /permissive- /utf-8)
+    endif()
+
+    add_test(NAME github-release-metadata COMMAND TocPilotGitHubReleaseTests)
 
     add_executable(TocPilotAdoptionTests
         tests/adoption_tests.cpp

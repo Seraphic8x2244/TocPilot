@@ -21,7 +21,10 @@ struct PackageRecord {
     std::wstring repository;
     std::wstring mode = L"unconfigured";
     std::wstring ref;
+    std::wstring releasePolicy;
+    std::wstring asset;
     std::wstring target = L"addons";
+    std::wstring targetPath;
     std::wstring installedRevision;
     std::wstring latestRevision;
     std::vector<std::wstring> installedFiles;

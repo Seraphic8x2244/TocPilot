@@ -1,4 +1,5 @@
 #include "update.h"
+#include "github_release.h"
 #include "version.h"
 
 #include <windows.h>
@@ -12,7 +13,6 @@
 #include <cwctype>
 #include <filesystem>
 #include <iterator>
-#include <optional>
 #include <string>
 #include <string_view>
 #include <thread>
@@ -26,8 +26,6 @@ constexpr wchar_t kLatestReleaseUrl[] =
     L"https://github.com/Seraphic8x2244/TocPilot/releases/latest";
 constexpr wchar_t kReleaseTagPathPrefix[] =
     L"/Seraphic8x2244/TocPilot/releases/tag/";
-constexpr wchar_t kReleaseDownloadBase[] =
-    L"https://github.com/Seraphic8x2244/TocPilot/releases/download/";
 constexpr wchar_t kUserAgent[] = L"TocPilot/" TOCPILOT_VERSION_W;
 
 struct InternetHandles {
@@ -384,176 +382,6 @@ bool DownloadFile(
     }
 
     return ok;
-}
-
-void SkipWhitespace(const std::string& json, size_t& pos) {
-    while (pos < json.size() &&
-           std::isspace(static_cast<unsigned char>(json[pos]))) {
-        ++pos;
-    }
-}
-
-bool ParseJsonString(
-    const std::string& json,
-    size_t& pos,
-    std::string& value) {
-    SkipWhitespace(json, pos);
-    if (pos >= json.size() || json[pos] != '"') {
-        return false;
-    }
-
-    ++pos;
-    value.clear();
-
-    while (pos < json.size()) {
-        const char ch = json[pos++];
-        if (ch == '"') {
-            return true;
-        }
-
-        if (ch != '\\') {
-            value.push_back(ch);
-            continue;
-        }
-
-        if (pos >= json.size()) {
-            return false;
-        }
-
-        const char escaped = json[pos++];
-        switch (escaped) {
-        case '"': value.push_back('"'); break;
-        case '\\': value.push_back('\\'); break;
-        case '/': value.push_back('/'); break;
-        case 'b': value.push_back('\b'); break;
-        case 'f': value.push_back('\f'); break;
-        case 'n': value.push_back('\n'); break;
-        case 'r': value.push_back('\r'); break;
-        case 't': value.push_back('\t'); break;
-        default:
-            return false;
-        }
-    }
-
-    return false;
-}
-
-std::optional<std::string> JsonStringField(
-    const std::string& object,
-    const std::string& key) {
-    const std::string quotedKey = "\"" + key + "\"";
-    size_t pos = object.find(quotedKey);
-
-    while (pos != std::string::npos) {
-        pos += quotedKey.size();
-        SkipWhitespace(object, pos);
-        if (pos >= object.size() || object[pos] != ':') {
-            pos = object.find(quotedKey, pos);
-            continue;
-        }
-
-        ++pos;
-        SkipWhitespace(object, pos);
-
-        std::string value;
-        if (ParseJsonString(object, pos, value)) {
-            return value;
-        }
-        return std::nullopt;
-    }
-
-    return std::nullopt;
-}
-
-bool ExtractAssets(
-    const std::string& json,
-    ReleaseInfo& release,
-    std::wstring& error) {
-    const size_t assetsKey = json.find("\"assets\"");
-    if (assetsKey == std::string::npos) {
-        error = L"GitHub release response has no assets array.";
-        return false;
-    }
-
-    const size_t arrayStart = json.find('[', assetsKey);
-    if (arrayStart == std::string::npos) {
-        error = L"GitHub release assets array is malformed.";
-        return false;
-    }
-
-    bool inString = false;
-    bool escaped = false;
-    int objectDepth = 0;
-    size_t objectStart = std::string::npos;
-
-    for (size_t i = arrayStart + 1; i < json.size(); ++i) {
-        const char ch = json[i];
-
-        if (inString) {
-            if (escaped) {
-                escaped = false;
-            } else if (ch == '\\') {
-                escaped = true;
-            } else if (ch == '"') {
-                inString = false;
-            }
-            continue;
-        }
-
-        if (ch == '"') {
-            inString = true;
-            continue;
-        }
-
-        if (ch == '{') {
-            if (objectDepth == 0) {
-                objectStart = i;
-            }
-            ++objectDepth;
-            continue;
-        }
-
-        if (ch == '}') {
-            if (objectDepth == 0) {
-                continue;
-            }
-
-            --objectDepth;
-            if (objectDepth != 0 || objectStart == std::string::npos) {
-                continue;
-            }
-
-            const std::string object =
-                json.substr(objectStart, i - objectStart + 1);
-            const auto name = JsonStringField(object, "name");
-            const auto url = JsonStringField(object, "browser_download_url");
-
-            if (name && url) {
-                if (*name == "TocPilot.exe") {
-                    release.assetUrl = Utf8ToWide(*url);
-                    if (const auto digest = JsonStringField(object, "digest")) {
-                        release.assetDigest = Utf8ToWide(*digest);
-                    }
-                } else if (*name == "TocPilot.exe.sha256") {
-                    release.checksumUrl = Utf8ToWide(*url);
-                }
-            }
-
-            objectStart = std::string::npos;
-            continue;
-        }
-
-        if (ch == ']' && objectDepth == 0) {
-            break;
-        }
-    }
-
-    if (release.assetUrl.empty()) {
-        error = L"Latest release has no TocPilot.exe asset.";
-        return false;
-    }
-
-    return true;
 }
 
 struct SemVer {
@@ -1072,20 +900,44 @@ bool CheckLatestRelease(
     release = {};
     state = ReleaseCheckState::NoRelease;
 
-    if (!ResolveLatestReleaseTag(
-            release.tag,
+    GitHubReleaseInfo metadata;
+    if (!FetchLatestStableGitHubRelease(
+            L"Seraphic8x2244/TocPilot",
+            metadata,
             error)) {
         return false;
     }
 
-    release.assetUrl =
-        std::wstring(kReleaseDownloadBase) +
-        release.tag +
-        L"/TocPilot.exe";
-    release.checksumUrl =
-        std::wstring(kReleaseDownloadBase) +
-        release.tag +
-        L"/TocPilot.exe.sha256";
+    SemVer candidate;
+    if (!ParseSemVer(metadata.tag, candidate)) {
+        error =
+            L"Latest GitHub release does not have a valid semantic version tag.";
+        return false;
+    }
+
+    GitHubReleaseAsset executable;
+    if (!FindExactGitHubReleaseAsset(
+            metadata,
+            L"TocPilot.exe",
+            executable,
+            error)) {
+        return false;
+    }
+
+    release.tag = metadata.tag;
+    release.assetUrl = executable.downloadUrl;
+    release.assetDigest = executable.digest;
+
+    GitHubReleaseAsset checksum;
+    std::wstring checksumError;
+    if (FindExactGitHubReleaseAsset(
+            metadata,
+            L"TocPilot.exe.sha256",
+            checksum,
+            checksumError)) {
+        release.checksumUrl =
+            checksum.downloadUrl;
+    }
 
     state = IsNewer(release.tag, TOCPILOT_VERSION_TAG_W)
         ? ReleaseCheckState::UpdateAvailable

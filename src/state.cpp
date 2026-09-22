@@ -839,8 +839,11 @@ std::string SerializePackage(const PackageRecord& package) {
         << "\"repository\":" << EscapeJson(package.repository) << ","
         << "\"mode\":" << EscapeJson(package.mode) << ","
         << "\"ref\":" << JsonStringOrNull(package.ref) << ","
-        << "\"asset\":null,"
+        << "\"release_policy\":"
+        << JsonStringOrNull(package.releasePolicy) << ","
+        << "\"asset\":" << JsonStringOrNull(package.asset) << ","
         << "\"target\":" << EscapeJson(package.target) << ","
+        << "\"target_path\":" << JsonStringOrNull(package.targetPath) << ","
         << "\"installed_revision\":"
         << JsonStringOrNull(package.installedRevision) << ","
         << "\"latest_revision\":"
@@ -857,14 +860,17 @@ std::string MergePackageJson(const PackageRecord& package) {
     }
 
     std::string json = package.sourceJson;
-    const std::array<std::pair<std::string_view, std::string>, 10> values{{
+    const std::array<std::pair<std::string_view, std::string>, 13> values{{
         {"id", EscapeJson(package.id)},
         {"name", EscapeJson(package.name)},
         {"provider", EscapeJson(package.provider)},
         {"repository", EscapeJson(package.repository)},
         {"mode", EscapeJson(package.mode)},
         {"ref", JsonStringOrNull(package.ref)},
+        {"release_policy", JsonStringOrNull(package.releasePolicy)},
+        {"asset", JsonStringOrNull(package.asset)},
         {"target", EscapeJson(package.target)},
+        {"target_path", JsonStringOrNull(package.targetPath)},
         {"installed_revision", JsonStringOrNull(package.installedRevision)},
         {"latest_revision", JsonStringOrNull(package.latestRevision)},
         {"installed_files", JsonStringArray(package.installedFiles)}
@@ -1120,6 +1126,24 @@ bool ParsePackages(
                 objectEnd,
                 "ref",
                 package.ref) ||
+            !GetNullableStringMember(
+                json,
+                objectStart,
+                objectEnd,
+                "release_policy",
+                package.releasePolicy) ||
+            !GetNullableStringMember(
+                json,
+                objectStart,
+                objectEnd,
+                "asset",
+                package.asset) ||
+            !GetNullableStringMember(
+                json,
+                objectStart,
+                objectEnd,
+                "target_path",
+                package.targetPath) ||
             !GetNullableStringMember(
                 json,
                 objectStart,
