@@ -150,6 +150,8 @@ bool g_updateAllInProgress = false;
 bool g_appUpdateInProgress = false;
 bool g_appUpdateCheckInProgress = false;
 bool g_refreshAddonsAfterAppCheck = false;
+bool g_appUpdateStartedFromStartup = false;
+bool g_startupAppUpdateFailed = false;
 bool g_autoStatusRefreshInProgress = false;
 bool g_advancedVisible = false;
 bool g_hasVanillaFixes = false;
@@ -3293,6 +3295,19 @@ void CompleteAutoStatusRefreshStep(
     ContinueAutoStatusRefresh(hwnd);
 }
 
+void SetStartupSplashCompletionPhase() {
+    if (!tp::IsStartupSplashActive()) {
+        return;
+    }
+
+    tp::SetStartupSplashPhase(
+        g_startupAppUpdateFailed
+            ? tp::StartupSplashPhase::
+                  AppUpdateFailed
+            : tp::StartupSplashPhase::
+                  AwaitingContinue);
+}
+
 void FinishAutoStatusRefresh(HWND hwnd) {
     g_autoStatusRefreshInProgress = false;
 
@@ -3330,6 +3345,11 @@ void FinishAutoStatusRefresh(HWND hwnd) {
             L" GitHub rate-limited the check; remaining packages were left at their saved status.";
     }
 
+    if (g_startupAppUpdateFailed) {
+        message +=
+            L" TocPilot self-update failed; open TocPilot after continuing to retry.";
+    }
+
     if (g_packageHint) {
         SetWindowTextW(
             g_packageHint,
@@ -3338,10 +3358,7 @@ void FinishAutoStatusRefresh(HWND hwnd) {
 
     UpdatePackageButtons();
 
-    if (tp::IsStartupSplashActive()) {
-        tp::SetStartupSplashPhase(
-            tp::StartupSplashPhase::AwaitingContinue);
-    }
+    SetStartupSplashCompletionPhase();
 }
 
 void ContinueAutoStatusRefresh(HWND hwnd) {
@@ -3399,10 +3416,7 @@ void ContinueAutoStatusRefresh(HWND hwnd) {
 
 void StartAutoStatusRefresh(HWND hwnd) {
     if (!g_stateReady) {
-        if (tp::IsStartupSplashActive()) {
-            tp::SetStartupSplashPhase(
-                tp::StartupSplashPhase::AwaitingContinue);
-        }
+        SetStartupSplashCompletionPhase();
         return;
     }
 
@@ -3427,10 +3441,7 @@ void StartAutoStatusRefresh(HWND hwnd) {
     }
 
     if (g_autoStatusPackageIds.empty()) {
-        if (tp::IsStartupSplashActive()) {
-            tp::SetStartupSplashPhase(
-                tp::StartupSplashPhase::AwaitingContinue);
-        }
+        SetStartupSplashCompletionPhase();
         return;
     }
 
@@ -4476,6 +4487,9 @@ void StartUpdateCheck(
     g_appUpdateCheckInProgress = true;
     g_refreshAddonsAfterAppCheck =
         refreshAddonsAfter;
+    if (refreshAddonsAfter) {
+        g_startupAppUpdateFailed = false;
+    }
 
     if (g_updateButton) {
         EnableWindow(g_updateButton, FALSE);
@@ -4507,7 +4521,9 @@ void StartUpdateCheck(
     }).detach();
 }
 
-void StartUpdate(HWND hwnd) {
+void StartUpdate(
+    HWND hwnd,
+    bool startedFromStartup = false) {
     if (g_updateAllInProgress ||
         g_packageRefreshInProgress ||
         g_packageInspectInProgress ||
@@ -4520,7 +4536,17 @@ void StartUpdate(HWND hwnd) {
         return;
     }
 
+    g_appUpdateStartedFromStartup =
+        startedFromStartup;
     g_appUpdateInProgress = true;
+
+    if (startedFromStartup &&
+        tp::IsStartupSplashActive()) {
+        tp::SetStartupSplashPhase(
+            tp::StartupSplashPhase::
+                ApplyingAppUpdate);
+    }
+
     UpdatePackageButtons();
     if (g_updateButton) {
         EnableWindow(g_updateButton, FALSE);
@@ -5934,6 +5960,13 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                     L" is available.",
                 L"Update Available",
                 true);
+
+            if (refreshAddonsAfter) {
+                StartUpdate(
+                    hwnd,
+                    true);
+                return 0;
+            }
             break;
 
         case tp::ReleaseCheckState::UpToDate:
@@ -7030,6 +7063,9 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
     case WM_TP_UPDATE_COMPLETE: {
         std::unique_ptr<UpdateResult> result(
             reinterpret_cast<UpdateResult*>(lParam));
+        const bool startedFromStartup =
+            g_appUpdateStartedFromStartup;
+        g_appUpdateStartedFromStartup = false;
 
         if (!result->ok) {
             g_appUpdateInProgress = false;
@@ -7042,6 +7078,25 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                     result->error,
                 L"Retry Update",
                 true);
+
+            if (startedFromStartup) {
+                g_startupAppUpdateFailed = true;
+                if (g_packageHint) {
+                    const std::wstring hint =
+                        L"TocPilot self-update failed: " +
+                        result->error +
+                        L" Startup package scanning will continue; open TocPilot after continuing to retry.";
+                    SetWindowTextW(
+                        g_packageHint,
+                        hint.c_str());
+                }
+                if (tp::IsStartupSplashActive()) {
+                    tp::SetStartupSplashPhase(
+                        tp::StartupSplashPhase::
+                            ScanningAddonUpdates);
+                }
+                StartAutoStatusRefresh(hwnd);
+            }
             return 0;
         }
 

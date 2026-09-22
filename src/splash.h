@@ -6,8 +6,10 @@ namespace tp {
 
 enum class StartupSplashPhase {
     CheckingAppUpdate,
+    ApplyingAppUpdate,
     ScanningAddonUpdates,
-    AwaitingContinue
+    AwaitingContinue,
+    AppUpdateFailed
 };
 
 bool ShowStartupSplash(

@@ -468,14 +468,20 @@ CreateLogoPlaqueShadow(
 std::wstring SplashStatusText() {
     switch (g_phase) {
     case StartupSplashPhase::CheckingAppUpdate:
+    case StartupSplashPhase::ApplyingAppUpdate:
     case StartupSplashPhase::ScanningAddonUpdates: {
-        std::wstring text =
+        const wchar_t* baseText =
             g_phase ==
                     StartupSplashPhase::
                         CheckingAppUpdate
                 ? L"Checking for TocPilot Update"
-                : L"Scanning for Addon Updates";
+                : g_phase ==
+                        StartupSplashPhase::
+                            ApplyingAppUpdate
+                    ? L"Updating TocPilot"
+                    : L"Scanning for Addon Updates";
 
+        std::wstring text = baseText;
         text.append(
             static_cast<std::size_t>(
                 std::clamp(
@@ -488,6 +494,9 @@ std::wstring SplashStatusText() {
 
     case StartupSplashPhase::AwaitingContinue:
         return L"Click to continue!";
+
+    case StartupSplashPhase::AppUpdateFailed:
+        return L"Update failed - click to continue!";
     }
 
     return {};
@@ -705,7 +714,10 @@ void RenderSplash() {
 
         if (g_phase ==
                 StartupSplashPhase::
-                    AwaitingContinue) {
+                    AwaitingContinue ||
+            g_phase ==
+                StartupSplashPhase::
+                    AppUpdateFailed) {
             format.SetAlignment(
                 Gdiplus::
                     StringAlignmentCenter);
@@ -719,7 +731,11 @@ void RenderSplash() {
                         StartupSplashPhase::
                             CheckingAppUpdate
                     ? L"Checking for TocPilot Update..."
-                    : L"Scanning for Addon Updates...";
+                    : g_phase ==
+                            StartupSplashPhase::
+                                ApplyingAppUpdate
+                        ? L"Updating TocPilot..."
+                        : L"Scanning for Addon Updates...";
 
             Gdiplus::RectF measuredText;
             if (graphics.MeasureString(
@@ -828,7 +844,10 @@ void RevealMainWindow() {
 void CloseSplashForContinue() {
     if (g_phase !=
             StartupSplashPhase::
-                AwaitingContinue) {
+                AwaitingContinue &&
+        g_phase !=
+            StartupSplashPhase::
+                AppUpdateFailed) {
         return;
     }
 
@@ -854,7 +873,10 @@ LRESULT CALLBACK SplashWindowProc(
                 kSplashTimerId &&
             g_phase !=
                 StartupSplashPhase::
-                    AwaitingContinue) {
+                    AwaitingContinue &&
+            g_phase !=
+                StartupSplashPhase::
+                    AppUpdateFailed) {
             g_dotCount =
                 g_dotCount >= 3
                     ? 1
@@ -869,9 +891,12 @@ LRESULT CALLBACK SplashWindowProc(
         return 0;
 
     case WM_KEYDOWN:
-        if (g_phase ==
-                StartupSplashPhase::
-                    AwaitingContinue &&
+        if ((g_phase ==
+                 StartupSplashPhase::
+                     AwaitingContinue ||
+             g_phase ==
+                 StartupSplashPhase::
+                     AppUpdateFailed) &&
             (wParam == VK_RETURN ||
              wParam == VK_SPACE)) {
             CloseSplashForContinue();
@@ -880,8 +905,11 @@ LRESULT CALLBACK SplashWindowProc(
 
     case WM_SETCURSOR:
         if (g_phase ==
-            StartupSplashPhase::
-                AwaitingContinue) {
+                StartupSplashPhase::
+                    AwaitingContinue ||
+            g_phase ==
+                StartupSplashPhase::
+                    AppUpdateFailed) {
             SetCursor(
                 LoadCursorW(
                     nullptr,
