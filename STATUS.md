@@ -1,6 +1,23 @@
 # TocPilot status / handoff
 
 
+## 2026-09-22 P3 direct DLL metadata/release foundation started
+
+- Active branch: `main`.
+- Current published/source version: `v0.1.35`.
+- Handoff/head entering implementation: `c2984e164ffe4ac892c6616ab37d7a36ede15749` (`Document direct DLL package design`).
+- Completed before source work: v0.1.35 runtime testing passed; the GitHub latest-stable / exact-DLL-asset / exact-WoW-root direct-write architecture and security boundaries are approved.
+- This implementation slice starts with the exact documented next step: extract reusable GitHub release + asset metadata from the self-update path, persist release/direct-file package fields without changing schema 1 or dropping unknown JSON fields, and add deterministic tests.
+- Direct DLL safety rules remain unchanged for later live-write wiring: exact configured asset only; exact final WoW-root DLL path; one-time trust warning; no staged/temp/renamed/backup DLL; no antivirus changes; verify completed file before advancing installed state; missing/renamed assets become Needs attention.
+- Validation state at this checkpoint:
+  - **Implemented:** documentation checkpoint only.
+  - **Static-checked:** existing self-update contains private release-asset parsing but CheckLatestRelease still constructs asset URLs by convention; PackageRecord currently has no explicit release policy / asset / target-path fields.
+  - **CI-tested:** not yet for this slice.
+  - **Runtime-tested:** v0.1.35 baseline passed; new P3 work not yet built.
+- Deferred unchanged: Add-package DLL UI, first-manage warning UI, live direct DLL writes, startup/Update New DLL execution wiring, complex GAM multi-root adoption, GitLab/Gitea/OctoWoW expansion, release ZIPs, prereleases, arbitrary direct-file destinations, import/export, crash-recovery journal, local-modification detection, and unrelated UI polish.
+- Exact next step: add a reusable GitHub latest-stable release metadata module, make TocPilot self-update use exact returned release assets, extend PackageRecord JSON round-trip for release policy / exact asset / exact target path, and add deterministic parser/state tests.
+
+
 ## 2026-09-22 v0.1.35 runtime pass / direct DLL architecture approved
 
 - Active branch: `main`.
