@@ -1,6 +1,38 @@
 # TocPilot status / handoff
 
 
+## v0.1.35 published / Update New and post-scan top reset — 2026-09-22
+
+- Active branch: `main`.
+- Published/source version: `v0.1.35`.
+- Release tag `v0.1.35` points exactly to `f1a6455634f20b937b9b143c1c45508df2a32504` (`Request v0.1.35 release`).
+- Relevant commits:
+  - `f1a6455` — Request v0.1.35 release
+  - `bcf5987` — Bump TocPilot to v0.1.35
+  - `de4dc45` — Record Update New validation
+  - `b8f84df` — Finish Update New wording
+  - `8a78d2c` — Refine Update New runtime flow
+  - `6e961b2` — Checkpoint v0.1.34 runtime feedback
+- Included runtime-feedback fixes:
+  - primary action renamed **Update All -> Update New**;
+  - clicking **Update New** no longer opens the routine Yes/No confirmation popup;
+  - Update New continues to act only on packages already marked `Update available`;
+  - serious internal orchestration errors, package safety refusals, rollback failures, startup errors, and updater-helper failures remain explicit;
+  - Update New completion is reported as a concise single-line in-window summary;
+  - after addon status scanning finishes and the package ListView is rebuilt/sorted, the viewport is explicitly returned to the first row.
+- Validation:
+  - **Implemented:** changes above.
+  - **Static-checked:** user-facing Update All wording removed from `src/main.cpp`; old confirmation block removed; post-scan top-reset is invoked after list rebuild; serious error modal path remains.
+  - **CI-tested:** exact implementation head `b8f84df97cd377928ed3e02f64787dbdf3dff9d1` passed Build run `35754683701`, Windows x64 Release, and complete CTest **13/13**.
+  - **Release-tested:** Release run `35755126948` passed source-version validation, Windows x64 Release build, complete CTest **13/13**, checksum generation, tag creation/verification, and asset publication.
+  - **Runtime-tested:** pending user self-update/use of `v0.1.35`.
+- Published assets:
+  - `TocPilot.exe` — 2,258,432 bytes; SHA-256 `a5567cdba55611c46e1f30ac4c6473ff3a1528c85f9e3e88536a28360436efda`;
+  - `TocPilot.exe.sha256` — 78 bytes.
+- Exact next step: self-update to `v0.1.35`; confirm the package list is fully at the top after addon scanning, confirm the button reads **Update New**, and confirm clicking it starts the batch without the old confirmation popup.
+
+
+
 ## 2026-09-22 Update New / post-scan viewport implementation complete
 
 - Active branch: `main`.
