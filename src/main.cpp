@@ -164,6 +164,7 @@ std::vector<tp::GitHubBranch> g_branchSelectorBranches;
 tp::UpdateAllProgress g_updateAllProgress;
 std::vector<tp::PackageRefreshStamp> g_packageRefreshStamps;
 std::vector<std::wstring> g_autoStatusPackageIds;
+std::vector<std::wstring> g_packageAttentionIds;
 std::size_t g_autoStatusPosition = 0;
 std::size_t g_autoStatusCurrent = 0;
 std::size_t g_autoStatusUpdates = 0;
@@ -189,9 +190,11 @@ struct UpdateResult {
 
 struct PackageRefreshResult {
     bool ok = false;
+    bool needsAttention = false;
     std::size_t index = 0;
     std::wstring packageId;
     std::wstring branch;
+    std::wstring asset;
     std::wstring remoteSha;
     std::wstring error;
 };
@@ -796,13 +799,48 @@ std::wstring PackageRevisionText(
                 revision.size()));
 }
 
+bool PackageNeedsAttention(
+    std::wstring_view packageId) {
+    return std::find(
+               g_packageAttentionIds.begin(),
+               g_packageAttentionIds.end(),
+               packageId) !=
+        g_packageAttentionIds.end();
+}
+
+void SetPackageNeedsAttention(
+    std::wstring_view packageId,
+    bool needsAttention) {
+    const auto it =
+        std::find(
+            g_packageAttentionIds.begin(),
+            g_packageAttentionIds.end(),
+            packageId);
+
+    if (needsAttention) {
+        if (it ==
+            g_packageAttentionIds.end()) {
+            g_packageAttentionIds.emplace_back(
+                packageId);
+        }
+        return;
+    }
+
+    if (it !=
+        g_packageAttentionIds.end()) {
+        g_packageAttentionIds.erase(it);
+    }
+}
+
 std::wstring PackageStatusText(
     const tp::PackageRecord& package) {
     if (package.mode == L"release") {
         std::wstring error;
         if (!tp::ValidateDirectDllPackage(
                 package,
-                error)) {
+                error) ||
+            PackageNeedsAttention(
+                package.id)) {
             return L"Needs attention";
         }
 
@@ -2613,9 +2651,17 @@ void StartPackageRefresh(
     const auto package =
         g_state.packages[index];
 
-    if (package.provider != L"github" ||
-        package.mode != L"branch" ||
-        package.ref.empty()) {
+    const bool branchPackage =
+        package.provider == L"github" &&
+        package.mode == L"branch" &&
+        !package.ref.empty();
+
+    const bool directDll =
+        tp::IsDirectDllPackage(
+            package);
+
+    if (!branchPackage &&
+        !directDll) {
         return;
     }
 
@@ -2626,31 +2672,113 @@ void StartPackageRefresh(
         L"Checking...");
 
     if (g_packageHint) {
-        const std::wstring message =
+        std::wstring message =
             package.name +
-            L": checking " +
-            package.ref +
-            L" on GitHub. No addon files will be changed.";
+            L": checking ";
+
+        if (directDll) {
+            message +=
+                L"the latest stable GitHub release for exact asset '" +
+                package.asset +
+                L"'. No managed files will be changed.";
+        } else {
+            message +=
+                package.ref +
+                L" on GitHub. No addon files will be changed.";
+        }
 
         SetWindowTextW(
             g_packageHint,
             message.c_str());
     }
 
-    std::thread(
-        [hwnd, index, package]() {
-            auto result =
-                std::make_unique<PackageRefreshResult>();
+    const auto wowRoot =
+        g_root;
 
-            result->index = index;
-            result->packageId = package.id;
-            result->branch = package.ref;
-            result->ok =
-                tp::ResolveGitHubBranchHead(
-                    package.repository,
-                    package.ref,
-                    result->remoteSha,
-                    result->error);
+    std::thread(
+        [hwnd,
+         index,
+         package,
+         branchPackage,
+         directDll,
+         wowRoot]() {
+            auto result =
+                std::make_unique<
+                    PackageRefreshResult>();
+
+            result->index =
+                index;
+            result->packageId =
+                package.id;
+            result->branch =
+                package.ref;
+            result->asset =
+                package.asset;
+
+            if (branchPackage) {
+                result->ok =
+                    tp::ResolveGitHubBranchHead(
+                        package.repository,
+                        package.ref,
+                        result->remoteSha,
+                        result->error);
+            } else if (directDll) {
+                std::wstring configError;
+                if (!tp::ValidateDirectDllPackage(
+                        package,
+                        configError)) {
+                    result->error =
+                        std::move(configError);
+                    result->needsAttention =
+                        true;
+                } else {
+                    std::filesystem::path
+                        target;
+
+                    if (!tp::DirectDllTargetPath(
+                            wowRoot,
+                            package,
+                            target,
+                            result->error)) {
+                        result->needsAttention =
+                            true;
+                    } else if (
+                        !package.installedRevision.empty()) {
+                        std::error_code ec;
+                        const bool present =
+                            std::filesystem::is_regular_file(
+                                target,
+                                ec);
+
+                        if (!present ||
+                            ec) {
+                            result->error =
+                                L"The managed DLL is missing from its exact WoW-root destination. It may have been removed or quarantined.";
+                            result->needsAttention =
+                                true;
+                        }
+                    }
+
+                    if (result->error.empty()) {
+                        tp::DirectDllRelease
+                            release;
+
+                        if (!tp::ResolveLatestDirectDllRelease(
+                                package,
+                                release,
+                                result->error)) {
+                            result->needsAttention =
+                                true;
+                        } else {
+                            result->remoteSha =
+                                std::move(
+                                    release.tag);
+                            result->ok =
+                                true;
+                        }
+                    }
+                }
+            }
 
             if (!PostMessageW(
                     hwnd,
@@ -2943,7 +3071,9 @@ bool IsGitHubRateLimitError(
     std::wstring_view error) {
     return
         error.find(L"rate-limited") !=
-        std::wstring_view::npos;
+            std::wstring_view::npos ||
+        error.find(L"rate limited") !=
+            std::wstring_view::npos;
 }
 
 bool IsAutoStatusCurrentPackage(
@@ -3061,7 +3191,7 @@ void ContinueAutoStatusRefresh(HWND hwnd) {
 
         if (g_packageHint) {
             const std::wstring message =
-                L"Checking addon status " +
+                L"Checking package status " +
                 std::to_wstring(
                     g_autoStatusPosition + 1) +
                 L" of " +
@@ -3069,7 +3199,7 @@ void ContinueAutoStatusRefresh(HWND hwnd) {
                     g_autoStatusPackageIds.size()) +
                 L": " +
                 package.name +
-                L". No addon files will be changed.";
+                L". No managed files will be changed.";
 
             SetWindowTextW(
                 g_packageHint,
@@ -5749,12 +5879,35 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             IsAutoStatusCurrentPackage(
                 result->packageId);
 
-        if (result->index >=
-                g_state.packages.size() ||
-            g_state.packages[result->index].id !=
-                result->packageId ||
-            g_state.packages[result->index].ref !=
-                result->branch) {
+        bool trackingMatches = false;
+
+        if (result->index <
+                g_state.packages.size() &&
+            g_state.packages[
+                result->index].id ==
+                result->packageId) {
+            const auto& tracked =
+                g_state.packages[
+                    result->index];
+
+            if (!result->asset.empty()) {
+                trackingMatches =
+                    tracked.mode ==
+                        L"release" &&
+                    tracked.asset ==
+                        result->asset &&
+                    tracked.targetPath ==
+                        result->asset;
+            } else {
+                trackingMatches =
+                    tracked.mode ==
+                        L"branch" &&
+                    tracked.ref ==
+                        result->branch;
+            }
+        }
+
+        if (!trackingMatches) {
             if (g_packageHint) {
                 SetWindowTextW(
                     g_packageHint,
@@ -5785,13 +5938,25 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             g_state.packages[index].name;
 
         if (!result->ok) {
+            const bool rateLimited =
+                IsGitHubRateLimitError(
+                    result->error);
+
+            SetPackageNeedsAttention(
+                result->packageId,
+                result->needsAttention &&
+                    !rateLimited);
+
             SetPackageRowStatus(
                 index,
-                L"Refresh failed");
+                result->needsAttention &&
+                        !rateLimited
+                    ? L"Needs attention"
+                    : L"Refresh failed");
 
             const std::wstring message =
                 packageName +
-                L": refresh failed - " +
+                L": status check failed - " +
                 result->error;
 
             if (g_packageHint) {
@@ -5805,11 +5970,9 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                     hwnd,
                     tp::UpdateAllOutcome::Failed,
                     message,
-                    IsGitHubRateLimitError(
-                        result->error));
+                    rateLimited);
             } else if (autoStatusStep) {
-                if (IsGitHubRateLimitError(
-                        result->error)) {
+                if (rateLimited) {
                     ++g_autoStatusFailed;
                     g_autoStatusRateLimited =
                         true;
@@ -5828,6 +5991,10 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             }
             return 0;
         }
+
+        SetPackageNeedsAttention(
+            result->packageId,
+            false);
 
         tp::AppState updatedState =
             g_state;
@@ -5931,20 +6098,33 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
         UpdatePackageButtons();
 
         if (g_packageHint) {
-            const std::wstring shortSha =
-                package.latestRevision.substr(
-                    0,
-                    std::min<std::size_t>(
-                        7,
-                        package.latestRevision.size()));
+            std::wstring message;
 
-            const std::wstring message =
-                package.name +
-                L": " +
-                package.ref +
-                L" remote head is " +
-                shortSha +
-                L". No addon files were changed.";
+            if (package.mode ==
+                L"release") {
+                message =
+                    package.name +
+                    L": latest stable release is " +
+                    package.latestRevision +
+                    L" and exact asset '" +
+                    package.asset +
+                    L"' is available. No managed files were changed.";
+            } else {
+                const std::wstring shortSha =
+                    package.latestRevision.substr(
+                        0,
+                        std::min<std::size_t>(
+                            7,
+                            package.latestRevision.size()));
+
+                message =
+                    package.name +
+                    L": " +
+                    package.ref +
+                    L" remote head is " +
+                    shortSha +
+                    L". No addon files were changed.";
+            }
 
             SetWindowTextW(
                 g_packageHint,
