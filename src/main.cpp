@@ -3,6 +3,7 @@
 #include "add_package_dialog.h"
 #include "archive.h"
 #include "branch_dialog.h"
+#include "direct_dll.h"
 #include "github_api.h"
 #include "install.h"
 #include "refresh_freshness.h"
@@ -767,6 +768,15 @@ std::wstring PackageSourceText(
         return package.ref;
     }
 
+    if (package.mode == L"release") {
+        if (package.asset.empty()) {
+            return L"Latest stable";
+        }
+        return
+            L"Latest stable / " +
+            package.asset;
+    }
+
     if (package.provider ==
         L"github") {
         return L"Choose branch";
@@ -788,6 +798,41 @@ std::wstring PackageRevisionText(
 
 std::wstring PackageStatusText(
     const tp::PackageRecord& package) {
+    if (package.mode == L"release") {
+        std::wstring error;
+        if (!tp::ValidateDirectDllPackage(
+                package,
+                error)) {
+            return L"Needs attention";
+        }
+
+        if (package.installedRevision.empty()) {
+            return L"Not installed";
+        }
+
+        std::filesystem::path target;
+        if (!tp::DirectDllTargetPath(
+                g_root,
+                package,
+                target,
+                error)) {
+            return L"Needs attention";
+        }
+
+        std::error_code ec;
+        if (!std::filesystem::is_regular_file(
+                target,
+                ec) ||
+            ec) {
+            return L"Needs attention";
+        }
+
+        return package.installedRevision ==
+                package.latestRevision
+            ? L"Current"
+            : L"Update available";
+    }
+
     if (!PackageBranchMode(package)) {
         return L"Not configured";
     }
@@ -1845,7 +1890,8 @@ void UpdateBranchSelector(
                 selected)];
 
     if (package.provider !=
-        L"github") {
+            L"github" ||
+        package.mode == L"release") {
         ShowWindow(
             g_branchSelector,
             SW_HIDE);
@@ -2055,7 +2101,10 @@ void RequestBranchSelector(
             g_state.packages.size() ||
         g_state.packages[
             packageIndex].provider !=
-            L"github") {
+            L"github" ||
+        g_state.packages[
+            packageIndex].mode ==
+            L"release") {
         return;
     }
 
@@ -2288,7 +2337,8 @@ void UpdatePackageButtons() {
                 static_cast<std::size_t>(row)];
 
         canSetBranch =
-            selectedPackage->provider == L"github";
+            selectedPackage->provider == L"github" &&
+            selectedPackage->mode != L"release";
 
         canRefresh =
             canSetBranch &&
@@ -2296,7 +2346,17 @@ void UpdatePackageButtons() {
             !selectedPackage->ref.empty();
 
         canInspect = canRefresh;
-        canInstall = canRefresh;
+
+        std::wstring directDllError;
+        const bool directDll =
+            tp::ValidateDirectDllPackage(
+                *selectedPackage,
+                directDllError);
+
+        canInstall =
+            canRefresh ||
+            directDll;
+
         canUninstall =
             selectedPackage->target == L"addons" &&
             !selectedPackage->installedRevision.empty() &&
@@ -2342,7 +2402,15 @@ void UpdatePackageButtons() {
     if (g_installPackageButton) {
         const wchar_t* label =
             L"Install Addon";
+
         if (selectedPackage &&
+            selectedPackage->mode == L"release") {
+            label =
+                selectedPackage->installedRevision.empty()
+                    ? L"Install DLL"
+                    : L"Update DLL";
+        } else if (
+            selectedPackage &&
             !selectedPackage->installedRevision.empty()) {
             label =
                 L"Reinstall Addon";
@@ -5292,26 +5360,48 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                     g_state.packages[index];
 
                 std::wstring prompt;
-                if (package.installedRevision.empty()) {
-                    prompt =
-                        L"Install " +
-                        package.name +
-                        L" from " +
-                        package.ref +
-                        L"?";
-                } else {
-                    prompt =
-                        L"Update/reinstall " +
-                        package.name +
-                        L" from " +
-                        package.ref +
-                        L"?";
-                }
 
-                prompt +=
-                    L"\r\n\r\nTocPilot will fully stage and validate the package first, "
-                    L"then replace only addon roots owned by this package. Existing "
-                    L"unowned addon folders will not be overwritten.";
+                if (package.mode ==
+                    L"release") {
+                    prompt =
+                        package.installedRevision.empty()
+                            ? L"Install "
+                            : L"Update/reinstall ";
+                    prompt +=
+                        package.name +
+                        L" from the latest stable GitHub release?";
+
+                    prompt +=
+                        L"\r\n\r\nTocPilot will download only the exact configured asset '" +
+                        package.asset +
+                        L"' directly to:\r\n" +
+                        (g_root /
+                         package.targetPath).wstring() +
+                        L"\r\n\r\nNo staged, temporary, renamed, or backup DLL will be created. "
+                        L"Close WoW before continuing. TocPilot will verify SHA-256 before "
+                        L"recording the installed release and will not change antivirus settings.";
+                } else {
+                    if (package.installedRevision.empty()) {
+                        prompt =
+                            L"Install " +
+                            package.name +
+                            L" from " +
+                            package.ref +
+                            L"?";
+                    } else {
+                        prompt =
+                            L"Update/reinstall " +
+                            package.name +
+                            L" from " +
+                            package.ref +
+                            L"?";
+                    }
+
+                    prompt +=
+                        L"\r\n\r\nTocPilot will fully stage and validate the package first, "
+                        L"then replace only addon roots owned by this package. Existing "
+                        L"unowned addon folders will not be overwritten.";
+                }
 
                 if (MessageBoxW(
                         hwnd,
@@ -5394,6 +5484,35 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
 
             const std::size_t index =
                 updatedState.packages.size() - 1;
+
+            if (updatedState.packages[index].mode ==
+                L"release") {
+                if (!tp::SaveState(
+                        g_root,
+                        updatedState,
+                        error)) {
+                    MessageBoxW(
+                        hwnd,
+                        error.c_str(),
+                        L"TocPilot - Add DLL",
+                        MB_OK | MB_ICONERROR);
+                    return 0;
+                }
+
+                g_state =
+                    std::move(updatedState);
+                g_stateCreated = false;
+                g_stateError.clear();
+
+                RefreshPackageStateUi();
+                SelectPackageRow(index);
+                UpdatePackageButtons();
+
+                StartPackageInstall(
+                    hwnd,
+                    index);
+                return 0;
+            }
 
             tp::BranchSelection selection;
             if (!tp::ShowBranchDialog(
