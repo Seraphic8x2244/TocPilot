@@ -1,6 +1,42 @@
 # TocPilot status / handoff
 
 
+## v0.1.34 published / startup-order and first non-modal feedback runtime build — 2026-09-22
+
+- Active branch: `main`.
+- Published/source version: `v0.1.34`.
+- Release tag `v0.1.34` points exactly to `14e2bf889f1d20d95c8b792cad1cbbfa7dd3cbe8` (`Request v0.1.34 release`).
+- Version-preparation commits:
+  - `f992e91` — Bump TocPilot to v0.1.34
+  - `bca0992` — Checkpoint v0.1.34 publication
+  - `14e2bf8` — Request v0.1.34 release
+- Release workflow run `35750484580` completed successfully.
+- Release pipeline passed:
+  - source-version validation;
+  - Windows x64 Release configure/build;
+  - complete CTest suite **13/13**, including `git-smart-http-live-github` and `self-update-live-latest`;
+  - SHA-256 sidecar generation;
+  - tag creation/verification;
+  - release asset publication.
+- Published assets:
+  - `TocPilot.exe` — 2,260,992 bytes; SHA-256 `14bbd28d44d1e2d5b3cbe19cc291c5cf1bceec03bf4b9fe1bb97d1a6e3161c31`;
+  - `TocPilot.exe.sha256` — 78 bytes.
+- Included behavior:
+  - startup remains TocPilot update check on splash -> addon status scan -> temporary **Click to continue!** gate -> main-window reveal;
+  - Update All routine progress/no-work/completion feedback now stays in-window;
+  - missing/failed sibling WoW.exe and VanillaFixes.exe launches now report in-window;
+  - destructive confirmations, safety refusals, rollback/startup errors, and updater-helper failures remain explicit/modal.
+- Validation:
+  - **Implemented:** source and presentation changes above.
+  - **Static-checked:** startup ordering, splash phases/reveal, final source diff, and retained modal boundaries.
+  - **CI-tested:** Release workflow run `35750484580` passed full Windows x64 Release build and CTest **13/13** on the exact release commit.
+  - **Runtime-tested:** pending user self-update to `v0.1.34` and normal Windows use.
+- Delivery rule for future TocPilot slices: when an update is ready and CI-green, publish the new version so it can be self-updated/runtime-tested rather than leaving the change only on `main`.
+- Deferred unchanged: splash visual/UI polish, temporary click-gate removal, sorting/action-targeting checks, Add Git diagnostics, GitLab/Gitea/OctoWoW expansion, broader package/release-asset work, and unrelated UI polish.
+- Exact next step: launch the currently installed TocPilot, let it self-update to `v0.1.34`, confirm the splash performs the TocPilot update check before addon scanning, then exercise Update All and the WoW/VanillaFixes launch failure paths to confirm the new in-window feedback is readable and non-disruptive.
+
+
+
 ## 2026-09-22 v0.1.34 publication checkpoint
 
 - Active branch: `main`.
@@ -497,8 +533,7 @@
   - `fe4f17f` — Tune splash plaque and stabilize status text
 - The existing release workflow has been triggered by changing `.github/release-version` from `v0.1.27` to `v0.1.28`.
 - That workflow performs source-version validation, Windows x64 Release configure/build, the complete CTest suite, SHA-256 generation, tag creation, and release asset publication in sequence; failed build/tests prevent the tag/release steps from succeeding.
-- Completed in source: smaller/higher plaque, status text moved upward, fixed-origin animated dot rendering, unchanged logo geometry, temporary click gate retained.
-- Untested/runtime pending: confirmation that the release workflow completed successfully; runtime screenshot/visual approval of the new splash; confirmation that dot animation no longer jiggles.
+- Completed in source: smaller/higher plaque, status text moved upward, fixed-origin animated dot rendering, unchanged logo geometry, temporary click gate retained.- Untested/runtime pending: confirmation that the release workflow completed successfully; runtime screenshot/visual approval of the new splash; confirmation that dot animation no longer jiggles.
 - Deferred: removing **Click to continue!** and restoring automatic splash close until runtime approval; human-readable Installed/Latest versions; provider expansion.
 - Exact next step: once `v0.1.28` is published, self-update from `v0.1.27`, relaunch, inspect the splash through both animated status states and **Click to continue!**, then provide a screenshot/feedback before any further geometry or click-gate changes.
 
@@ -997,8 +1032,7 @@
 ## Exact next step
 
 1. Require Windows x64 Release compile + complete CTest pass.
-2. Publish v0.1.24 only through the normal release workflow.
-3. Self-update from v0.1.23 to v0.1.24.
+2. Publish v0.1.24 only through the normal release workflow.3. Self-update from v0.1.23 to v0.1.24.
 4. Verify compact **Remove Addon** and Advanced **Reinstall Addon / Remove Addon** labels.
 5. Verify Advanced buttons are all equal width and resize evenly with the window.
 6. Verify **Branch** cells show an arrow on every GitHub addon and one click opens the dropdown (immediately if cached/loaded, automatically when discovery finishes otherwise).
@@ -1497,8 +1531,7 @@
 - `1a997d0` — Test package refresh freshness cache
 - `79c1f89` — Harden refresh freshness includes
 - `b61a019` — Implement package refresh freshness cache
-- `844a84c` — Add package refresh freshness API
-- `934d20c` — Record startup refresh rate-limit runtime bug
+- `844a84c` — Add package refresh freshness API- `934d20c` — Record startup refresh rate-limit runtime bug
 - `b6ae493` — Request v0.1.16 root mapping fix release
 - `d8ddde8` — Set v0.1.16 application version
 - `6986cc2` — Bump TocPilot to v0.1.16
