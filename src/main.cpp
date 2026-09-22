@@ -847,6 +847,29 @@ void SetPackageNeedsAttention(
     }
 }
 
+bool DirectDllResolutionNeedsAttention(
+    std::wstring_view error) {
+    return
+        error.find(
+            L"exact configured asset") !=
+                std::wstring_view::npos ||
+        error.find(
+            L"more than one asset named") !=
+                std::wstring_view::npos ||
+        error.find(
+            L"no published stable release") !=
+                std::wstring_view::npos ||
+        error.find(
+            L"no usable SHA-256 digest") !=
+                std::wstring_view::npos ||
+        error.find(
+            L"Checksum asset") !=
+                std::wstring_view::npos ||
+        error.find(
+            L"checksum asset") !=
+                std::wstring_view::npos;
+}
+
 std::wstring PackageStatusText(
     const tp::PackageRecord& package) {
     if (package.mode == L"release") {
@@ -2783,7 +2806,8 @@ void StartPackageRefresh(
                                 release,
                                 result->error)) {
                             result->needsAttention =
-                                true;
+                                DirectDllResolutionNeedsAttention(
+                                    result->error);
                         } else {
                             result->remoteSha =
                                 std::move(
@@ -3008,15 +3032,8 @@ void StartDirectDllInstall(
                     release,
                     result->error)) {
                 result->needsAttention =
-                    result->error.find(
-                        L"exact") !=
-                            std::wstring::npos ||
-                    result->error.find(
-                        L"unverifiable") !=
-                            std::wstring::npos ||
-                    result->error.find(
-                        L"Direct DLL") !=
-                            std::wstring::npos;
+                    DirectDllResolutionNeedsAttention(
+                        result->error);
             } else if (
                 !knownReleaseTag.empty() &&
                 release.tag !=

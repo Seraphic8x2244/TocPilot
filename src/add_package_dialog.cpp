@@ -340,12 +340,9 @@ bool PrepareSelectedReleaseDll(
         !context->releaseLoaded ||
         context->releaseRepository !=
             identity.repository) {
-        return LoadLatestStableDllAssets(
-            hwnd,
-            identity,
-            error)
-            ? false
-            : false;
+        error =
+            L"Reload the latest stable release before selecting a DLL.";
+        return false;
     }
 
     const HWND assetControl =
