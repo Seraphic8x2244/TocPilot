@@ -1,5 +1,41 @@
 # TocPilot status / handoff
 
+
+## 2026-09-22 startup-order / modal inventory checkpoint
+
+- Active branch: `main`.
+- Published/source version remains `v0.1.33`; no version bump or release is part of this checkpoint.
+- Baseline handoff commit: `ac29158fe709d4a8a83b76e043c3bc1820276122`.
+- `STATUS.md` and `DEVELOPMENT.md` were read in full before code changes.
+- Static startup-flow audit of the current `main` source:
+  1. the normal main window is created but not shown;
+  2. `ShowStartupSplash(instance, hwnd)` creates/shows the splash in `CheckingAppUpdate`;
+  3. only after splash creation, `StartUpdateCheck(hwnd, true)` starts the asynchronous TocPilot release check;
+  4. `WM_TP_CHECK_COMPLETE` consumes that result and, whether the check succeeds or fails, changes the active splash to `ScanningAddonUpdates` before calling `StartAutoStatusRefresh(hwnd)`;
+  5. the addon status sweep runs sequentially and does not modify addon files;
+  6. when the sweep finishes (or there is no eligible work/state is unavailable), the splash changes to `AwaitingContinue`;
+  7. the temporary **Click to continue!** gate remains the only normal reveal path while the splash exists; clicking/Enter/Space reveals the main window and destroys the splash.
+- Architectural conclusion: the current code already serializes **TocPilot update check on splash -> addon scan -> normal application reveal**. There is no evidence of addon scanning starting before `WM_TP_CHECK_COMPLETE`. Preserve this ordering rather than rewriting the splash lifecycle.
+- Splash fallback: if splash creation fails, the main window is shown immediately, but the same `StartUpdateCheck(hwnd, true)` -> completion -> addon scan serialization still applies.
+- Modal popup inventory (current source):
+  - routine status/information popups include Update All completion/no-work notices, successful uninstall/remove/install summaries, archive-inspection summary, adoption completion/no-new-candidates, missing optional launcher, unsupported-provider notices, and active-operation notices;
+  - destructive confirmations include Update All, uninstall/remove, Forget, and install/reinstall prompts;
+  - important failure/safety popups include ownership/collision refusals, install/uninstall/remove rollback outcomes, state/startup/window-class failures, save failures, and updater-helper replacement/relaunch failures;
+  - `ShowExpandableDialog` uses `TaskDialogIndirect` with a `MessageBoxW` fallback and is currently used for scan/adoption summaries, confirmations, and failures;
+  - updater-helper failures in `src/update.cpp` occur after the main UI may have exited and therefore remain appropriate native modal errors.
+- Smallest safe implementation slice:
+  - keep startup/splash ordering and the temporary click gate unchanged;
+  - establish a small non-modal routine-feedback helper backed by the existing main-window package hint;
+  - first migrate routine **Update All** no-work/completion feedback to that helper;
+  - keep Update All confirmation modal, and keep destructive/safety/rollback/startup/updater failures modal;
+  - defer broad popup replacement until this pattern is built/CI-tested and can be extended operation-by-operation.
+- Validation state at this checkpoint:
+  - implemented: documentation only;
+  - static-checked: startup ordering and modal call-site inventory;
+  - CI-tested: not yet for this new slice;
+  - runtime-tested: not yet; prior v0.1.33 splash visual state remains the latest runtime baseline.
+- Exact next step: implement the small non-modal routine-feedback helper and migrate routine Update All feedback only, then run the Windows x64 Release build and complete CTest suite. Do not alter splash geometry/close behaviour or the **Click to continue!** gate.
+
 ## 2026-09-22 priority reset after v0.1.33
 
 - Active branch: `main`.
