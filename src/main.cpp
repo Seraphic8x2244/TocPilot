@@ -3046,7 +3046,7 @@ bool IsUpdateAllCurrentPackage(
             packageId;
 }
 
-void FinishUpdateAll(HWND hwnd) {
+void FinishUpdateAll() {
     const std::size_t queued =
         g_updateAllProgress.packageIds.size();
     const std::size_t processed =
@@ -3149,7 +3149,7 @@ void ContinueUpdateAll(HWND hwnd) {
         return;
     }
 
-    FinishUpdateAll(hwnd);
+    FinishUpdateAll();
 }
 
 void CompleteUpdateAllStep(
