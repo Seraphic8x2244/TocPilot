@@ -277,7 +277,7 @@ std::wstring PackageHintText() {
         L" package record(s). The Advanced branch dropdown changes tracking; Refresh All checks "
         L"the saved branch head; Inspect previews without live changes; "
         L"Install/Update and Uninstall use staged rollback transactions; "
-        L"Update All checks installed tracked packages and updates only changed branches; "
+        L"Update New applies only installed packages already marked Update available; "
         L"Forget removes only the TocPilot record.";
 }
 
