@@ -1,5 +1,17 @@
 # TocPilot development handoff
 
+## 2026-09-23 v0.3.5 version/status UX implementation
+
+- Active branch: `ux/version-status-v035`.
+- Branch base/main head at start: `4611b68d1ea56107cef27a32a45fb5c21cbbc00c`.
+- Published version: `v0.3.4`; target release: `v0.3.5`.
+- Latest released feature merge/tag target: `d658b8eb409cb5e8d08f2bf647acbe33676a12a6`; v0.3.4 Release workflow #47 passed 17/17 tests.
+- v0.3.5 scope: Advanced-only local TOC `Version`; columns become `Name | Branch | Version | Local SHA | Git SHA | Status`; Compact remains `Name | Status`; steady Status wording becomes title-cased with `Current -> Up To Date`; healthy managed DLL/release rows must sort normally instead of being promoted by the branch-only attention predicate.
+- Version semantics must stay fast/unambiguous: read only local package-owned `.toc` files; one unique nonblank `## Version:` value displays it; no value displays `—`; conflicting values across owned TOCs display `Multiple`; DLL packages display `—`. No tag inference and no network work.
+- Untested: six-column state migration/persistence, TOC parsing/version aggregation, Advanced reorder/lock behavior with new column, branch-selector geometry, compact switching, DLL sort correction, status wording.
+- Deferred: existing runtime backlog and P5 import/export; do not broaden this release.
+- Exact next step: implement the TOC helper and six-column persistence migration first, add tests, then wire the Win32 list and release as v0.3.5 after green CI.
+
 ## 2026-09-23 v0.3.4 published
 
 - Active branch: `main`.
