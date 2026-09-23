@@ -7584,6 +7584,9 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                     tp::UpdateAllOutcome::Failed,
                     message);
             } else {
+                if (replacementStep) {
+                    RefreshPackageStateUi();
+                }
                 UpdatePackageButtons();
             }
             return 0;
@@ -7629,6 +7632,9 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                     L"TocPilot - Install Failed",
                     MB_OK | MB_ICONWARNING);
 
+                if (replacementStep) {
+                    RefreshPackageStateUi();
+                }
                 SelectPackageRow(index);
                 UpdatePackageButtons();
             }
@@ -7680,6 +7686,9 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                     L"TocPilot - Install Failed",
                     MB_OK | MB_ICONERROR);
 
+                if (replacementStep) {
+                    RefreshPackageStateUi();
+                }
                 SelectPackageRow(index);
                 UpdatePackageButtons();
             }
@@ -7787,6 +7796,10 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                             ? MB_ICONWARNING
                             : MB_ICONERROR));
 
+                if (replacementStep &&
+                    rolledBack) {
+                    RefreshPackageStateUi();
+                }
                 SelectPackageRow(index);
                 UpdatePackageButtons();
             }
