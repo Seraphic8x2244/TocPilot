@@ -1,5 +1,22 @@
 # TocPilot development handoff
 
+## 2026-09-23 v0.3.4 published
+
+- Active branch: `main`.
+- Published/source version: `v0.3.4`.
+- PR #4 merge and release tag target: `d658b8eb409cb5e8d08f2bf647acbe33676a12a6`.
+- Release workflow run `35926103920` (#47), Windows x64 job `107401454846`, passed version validation, Release build, **17/17** CTest tests, checksum generation, tag creation, and publication.
+- Latest-stable GitHub Release is `v0.3.4`, draft=false, prerelease=false.
+- Assets:
+  - `TocPilot.exe` — 2,417,664 bytes; SHA-256 `1cc3429c28eae36c0b99a77e48cfe083fb9b81af3e0f1f7c9c0cf0f0592afcf0`;
+  - `TocPilot.exe.sha256` — 78 bytes; release-asset SHA-256 `527a2721bc26d14365d55765347eae371a940c3b7bce0505448b0902cb4ebddf`.
+- Completed/released: orange update rows; green session-updated rows; update/green/normal priority grouping; Refresh All and Update New use visible list order; green clears on refresh/exit; Update New returns to top; no JSON schema/storage-order change.
+- Runtime-confirmed before publication: `v0.3.2 -> v0.3.3` normal startup self-update.
+- Runtime-untested: `v0.3.3 -> v0.3.4` startup self-update; orange/green presentation and live movement; visible-order scan/update; green clearing; final scroll-to-top.
+- Earlier deferred runtime checks remain: column persistence/locking/compact toggle/Branch selector and the listed removal/Add Git edge cases.
+- Deferred/out of scope remains P5 import/export and the broader roadmap items already documented below.
+- Exact next step: launch installed `v0.3.3`, confirm normal automatic update to `v0.3.4`, then runtime-test this UX slice. Do not begin P5 import/export.
+
 ## 2026-09-23 v0.3.4 update-visibility release candidate
 
 - Active branch: `ux/update-status-visibility`; PR #4 targets `main`.
