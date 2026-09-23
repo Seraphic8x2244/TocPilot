@@ -1,5 +1,32 @@
 # TocPilot status / handoff
 
+## 2026-09-23 repository-library implementation start
+
+- Active branch: `main`.
+- Published/source version remains `v0.3.0`.
+- Entering repository head: `ac32cdb56199eb0704b884de5179037bef9dac20` (`Document Atlas repository library example`).
+- Latest completed checkpoints:
+  - automatic startup self-update `v0.1.37 -> v0.3.0` passed runtime testing;
+  - repository source-classification direction is documented;
+  - `Cabro/Atlas` is the reference repository-library shape with sibling `Atlas`, `AtlasLoot`, and `AtlasQuest` addon roots.
+- User has chosen to implement repository-library support before finishing the GitLab runtime pass.
+- First implementation slice is intentionally narrow:
+  - detect multiple sibling installable addon roots from the selected branch using the existing secure archive inspection;
+  - present those roots as independently selectable install units;
+  - store selected children as independently managed TocPilot package records while sharing provider/repository/ref/revision source metadata;
+  - preserve existing single/root-addon behavior;
+  - do not infer dependencies between sibling addons merely because they share a repository.
+- Still untested/open:
+  - GitLab branch-package install/restart/Refresh runtime pass;
+  - empty-default-branch continuation behavior;
+  - repository-library UI/runtime behavior after implementation.
+- Deferred/out of scope:
+  - GitLab release support;
+  - user-uploaded release ZIP/archive executable discovery;
+  - automatic dependency resolution between collection children;
+  - broader collection catalogue/import/export UX.
+- Exact next step: inspect the existing archive/install/state path and implement the minimum end-to-end `Cabro/Atlas` flow, with deterministic tests before runtime validation.
+
 ## 2026-09-23 v0.3.0 automatic self-update runtime pass / Add Git detection design
 
 - Active branch: `main`.
