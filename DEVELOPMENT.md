@@ -1,5 +1,13 @@
 # TocPilot Development Plan
 
+## 2026-09-23 implementation status: v0.3.1 managed-root replacement
+
+The Add Git collision gate is implemented and Windows x64 Release CI-green on source head `71181a629bb9782553a0f296e0d38f31b7137d6d` (Build run `35902647161`, 16/16 tests). Before Add Git persists a package, it now checks whether the prospective `Interface\\AddOns\\<root>` is already owned by another TocPilot package. A single-root managed collision presents an overwrite/cancel decision. The overwrite path stages the new source while the old package remains authoritative, uses the old owned-file set as prior transaction ownership, commits the live replacement, and only then swaps the package record in-place. If state save fails, the live transaction rolls back and the old package record remains authoritative. Unmanaged live addon folders are still refused, and multi-root managed packages are not partially overwritten.
+
+Repository-library selections without collisions keep the existing independent-child queue behavior. A library batch containing a managed-root collision is stopped before any new records are saved; the colliding child must be selected by itself to use the overwrite path. This keeps package ownership non-overlapping without broadening the collection model in this patch.
+
+The source and release marker are now `v0.3.1`. The feature branch's earlier artifact-only handoff was not a product release. After merge, the existing Release workflow must rebuild/test the merged commit and publish direct `TocPilot.exe` plus checksum as GitHub Release `v0.3.1`, which is the artifact the startup self-updater consumes.
+
 ## 2026-09-23 implementation checkpoint: addon-root collision replacement
 
 The repository-library implementation is runtime-gated on one ownership correction before release. A newly added package must not be persisted alongside an existing managed package when both resolve to the same live addon install root. Add Git should detect that collision before committing new package state or beginning installation, then offer an explicit overwrite/replace choice or cancel. Replacement must leave exactly one owner for the install root, remove or transfer the superseded package record coherently, and keep state/filesystem rollback semantics correct if installation fails.
