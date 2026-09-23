@@ -1,5 +1,13 @@
 # TocPilot Development Plan
 
+## 2026-09-23 release status: v0.3.1 published
+
+`v0.3.1` is published from merge commit `7222280319bc4ff2f46eac58dc3686ead78e8895`. Release workflow run `35903180687` rebuilt that exact `main` commit, passed all 16 CTest tests, generated the SHA-256 sidecar, created/verified the `v0.3.1` tag, and published direct `TocPilot.exe` plus `TocPilot.exe.sha256`. The application self-updater can therefore consume this build through its normal latest-stable GitHub Release path.
+
+The release includes the Add Git shallow repository-library flow and the managed addon-root collision replacement gate. Same-root collisions with an existing single-root TocPilot package are resolved by an explicit overwrite/cancel prompt; no duplicate durable package record is created. Replacement is staged while the old package remains authoritative, and ownership/state swaps only after the live transaction commits. State-save failure rolls the filesystem back. Unmanaged live addon roots and partial replacement of multi-root packages remain refused.
+
+Runtime validation still required: automatic `v0.3.0 -> v0.3.1` startup self-update, overwrite/cancel against a real same-root addon collision, and the remaining `Cabro/Atlas` repository-library cases.
+
 ## 2026-09-23 implementation status: v0.3.1 managed-root replacement
 
 The Add Git collision gate is implemented and Windows x64 Release CI-green on source head `71181a629bb9782553a0f296e0d38f31b7137d6d` (Build run `35902647161`, 16/16 tests). Before Add Git persists a package, it now checks whether the prospective `Interface\\AddOns\\<root>` is already owned by another TocPilot package. A single-root managed collision presents an overwrite/cancel decision. The overwrite path stages the new source while the old package remains authoritative, uses the old owned-file set as prior transaction ownership, commits the live replacement, and only then swaps the package record in-place. If state save fails, the live transaction rolls back and the old package record remains authoritative. Unmanaged live addon folders are still refused, and multi-root managed packages are not partially overwritten.
