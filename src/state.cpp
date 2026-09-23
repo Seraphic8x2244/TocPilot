@@ -678,6 +678,75 @@ bool ParseIntegerToken(
     }
 }
 
+bool GetIntegerArrayMember(
+    std::string_view json,
+    std::size_t objectStart,
+    std::size_t objectEnd,
+    std::string_view key,
+    std::vector<int>& values) {
+    values.clear();
+
+    std::size_t start = 0;
+    std::size_t end = 0;
+    if (!FindObjectMember(
+            json,
+            objectStart,
+            objectEnd,
+            key,
+            start,
+            end)) {
+        return true;
+    }
+
+    if (start >= end || json[start] != '[') {
+        return false;
+    }
+
+    std::size_t pos = start + 1;
+    SkipWhitespace(json, pos);
+    if (pos < end && json[pos] == ']') {
+        return true;
+    }
+
+    while (pos < end) {
+        std::size_t itemEnd = 0;
+        if (!SkipJsonValue(
+                json,
+                pos,
+                itemEnd)) {
+            return false;
+        }
+
+        int value = 0;
+        if (!ParseIntegerToken(
+                json.substr(
+                    pos,
+                    itemEnd - pos),
+                value)) {
+            return false;
+        }
+
+        values.push_back(value);
+        pos = itemEnd;
+        SkipWhitespace(json, pos);
+
+        if (pos >= end) {
+            return false;
+        }
+        if (json[pos] == ']') {
+            return true;
+        }
+        if (json[pos] != ',') {
+            return false;
+        }
+
+        ++pos;
+        SkipWhitespace(json, pos);
+    }
+
+    return false;
+}
+
 bool ParseDoubleToken(
     std::string_view token,
     double& value) {
@@ -781,6 +850,20 @@ std::string JsonStringArray(
             stream << ",";
         }
         stream << EscapeJson(values[i]);
+    }
+    stream << "]";
+    return stream.str();
+}
+
+std::string JsonIntegerArray(
+    const std::array<int, 5>& values) {
+    std::ostringstream stream;
+    stream << "[";
+    for (std::size_t i = 0; i < values.size(); ++i) {
+        if (i != 0) {
+            stream << ",";
+        }
+        stream << values[i];
     }
     stream << "]";
     return stream.str();
@@ -943,6 +1026,15 @@ std::string DefaultJson(const AppState& state) {
         << ",\n"
         << "    \"package_sort_ascending\": "
         << (state.settings.packageSortAscending ? "true" : "false")
+        << ",\n"
+        << "    \"package_column_widths\": "
+        << JsonIntegerArray(state.settings.packageColumnWidths)
+        << ",\n"
+        << "    \"package_column_order\": "
+        << JsonIntegerArray(state.settings.packageColumnOrder)
+        << ",\n"
+        << "    \"package_columns_locked\": "
+        << (state.settings.packageColumnsLocked ? "true" : "false")
         << "\n"
         << "  },\n"
         << "  \"packages\": "
@@ -1981,6 +2073,88 @@ bool LoadOrCreateState(
         packageSortColumn = -1;
     }
 
+    std::array<int, 5> packageColumnWidths =
+        kDefaultPackageColumnWidths;
+    std::vector<int> parsedColumnWidths;
+    if (!GetIntegerArrayMember(
+            json,
+            settingsStart,
+            settingsEnd,
+            "package_column_widths",
+            parsedColumnWidths)) {
+        error =
+            L"TocPilot.json has an invalid "
+            L"settings.package_column_widths value.";
+        return false;
+    }
+    if (parsedColumnWidths.size() == packageColumnWidths.size()) {
+        for (std::size_t i = 0;
+             i < packageColumnWidths.size();
+             ++i) {
+            packageColumnWidths[i] =
+                std::clamp(
+                    parsedColumnWidths[i],
+                    40,
+                    2000);
+        }
+    }
+
+    std::array<int, 5> packageColumnOrder =
+        kDefaultPackageColumnOrder;
+    std::vector<int> parsedColumnOrder;
+    if (!GetIntegerArrayMember(
+            json,
+            settingsStart,
+            settingsEnd,
+            "package_column_order",
+            parsedColumnOrder)) {
+        error =
+            L"TocPilot.json has an invalid "
+            L"settings.package_column_order value.";
+        return false;
+    }
+    if (parsedColumnOrder.size() == packageColumnOrder.size()) {
+        std::array<bool, 5> seen{};
+        bool validOrder = true;
+        for (const int column : parsedColumnOrder) {
+            if (column < 0 ||
+                column >= static_cast<int>(seen.size()) ||
+                seen[static_cast<std::size_t>(column)]) {
+                validOrder = false;
+                break;
+            }
+            seen[static_cast<std::size_t>(column)] = true;
+        }
+
+        if (validOrder) {
+            std::copy(
+                parsedColumnOrder.begin(),
+                parsedColumnOrder.end(),
+                packageColumnOrder.begin());
+        }
+    }
+
+    bool packageColumnsLocked = false;
+    std::size_t columnsLockedStart = 0;
+    std::size_t columnsLockedEnd = 0;
+    if (FindObjectMember(
+            json,
+            settingsStart,
+            settingsEnd,
+            "package_columns_locked",
+            columnsLockedStart,
+            columnsLockedEnd) &&
+        !ParseBoolToken(
+            std::string_view(json).substr(
+                columnsLockedStart,
+                columnsLockedEnd - columnsLockedStart),
+            packageColumnsLocked)) {
+        error =
+            L"TocPilot.json has an invalid "
+            L"settings.package_columns_locked value.";
+        return false;
+    }
+
     std::size_t packagesStart = 0;
     std::size_t packagesEnd = 0;
     if (!GetRootMember(
@@ -2011,6 +2185,9 @@ bool LoadOrCreateState(
     state.settings.checkAppUpdates = checkUpdates;
     state.settings.packageSortColumn = packageSortColumn;
     state.settings.packageSortAscending = packageSortAscending;
+    state.settings.packageColumnWidths = packageColumnWidths;
+    state.settings.packageColumnOrder = packageColumnOrder;
+    state.settings.packageColumnsLocked = packageColumnsLocked;
     state.packages = std::move(packages);
     state.sourceJson = std::move(json);
     return true;
@@ -2045,6 +2222,22 @@ bool SaveState(
             json,
             "package_sort_ascending",
             state.settings.packageSortAscending
+                ? "true"
+                : "false") ||
+        !SetSettingsMemberJson(
+            json,
+            "package_column_widths",
+            JsonIntegerArray(
+                state.settings.packageColumnWidths)) ||
+        !SetSettingsMemberJson(
+            json,
+            "package_column_order",
+            JsonIntegerArray(
+                state.settings.packageColumnOrder)) ||
+        !SetSettingsMemberJson(
+            json,
+            "package_columns_locked",
+            state.settings.packageColumnsLocked
                 ? "true"
                 : "false") ||
         !ReplacePackages(json, state)) {
