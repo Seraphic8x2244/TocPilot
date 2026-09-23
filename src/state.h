@@ -61,6 +61,16 @@ bool AppendPackage(
     PackageRecord package,
     std::wstring& error);
 
+std::size_t FindPackageOwningAddonRoot(
+    const AppState& state,
+    std::wstring_view installFolder);
+
+bool ReplacePackageRecord(
+    AppState& state,
+    std::wstring_view existingPackageId,
+    PackageRecord replacement,
+    std::wstring& error);
+
 bool RemovePackageRecord(
     AppState& state,
     std::wstring_view packageId,
