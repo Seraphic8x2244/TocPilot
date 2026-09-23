@@ -1,5 +1,21 @@
 # TocPilot status / handoff
 
+## 2026-09-23 GitLab next / release-ZIP policy locked
+
+- Active branch: `main`.
+- Current published/source version: `v0.1.37`.
+- Repository head entering this checkpoint: `d04fadb9be04271d5cb611f00a09d28de1f4bcd2` (`Record direct DLL runtime results`).
+- Runtime-tested on published `v0.1.37`:
+  - **ClassicAPI direct DLL: passed.**
+  - **Nampower direct DLL: passed.** User added and managed it successfully alongside ClassicAPI.
+- Direct-DLL user-action policy: keep the current Remove/Forget behavior as designed; TocPilot should not add extra second-guessing around an explicit user removal action solely because the package is a DLL.
+- Release-archive security policy is now intentional, not deferred: TocPilot will **not support user-uploaded release ZIP/archive assets** for executable/DLL management. Direct DLL management requires an exact standalone `.dll` release asset. TocPilot will not download, inspect, unpack, or provide an override for release ZIP/7z/rar/bundle assets to locate executable files. This does not change the existing GitHub-generated branch-archive path used for normal addon source revisions under constrained `Interface\\AddOns` extraction.
+- SuperWoW remains unsupported unless it publishes a direct DLL release asset.
+- Completed work remains unchanged otherwise: GitHub branch packages and the exact-release-asset direct-DLL path are implemented; ClassicAPI and Nampower provide real runtime passes for the direct-DLL slice.
+- Untested work still includes the first real automatic startup self-update from `v0.1.37` to a newer published TocPilot version, automatic-update failure behavior, and some direct-DLL failure/edge paths such as an in-use target or a future renamed/missing exact asset.
+- Deferred/non-goals: release ZIP/archive executable handling is a permanent non-goal; prerelease tracking, arbitrary direct-file destinations, import/export, crash-recovery journal, local-modification detection, and unrelated UI polish remain deferred. GitLab is no longer deferred and is the next active milestone. GitHub/GitLab release parity beyond the already-tested GitHub direct-DLL slice remains out of the first GitLab implementation unless explicitly agreed.
+- Exact next step: implement the narrow first GitLab milestone by matching the existing **branch-package** workflow first—normalize public `gitlab.com` repository URLs, list/select branches, resolve branch HEAD, download the exact branch archive, reuse the existing secure addon archive inspection/install transaction, and integrate refresh/update state. Preserve all existing GitHub and direct-DLL behavior. Do not add GitLab release/DLL support in this first slice without separate agreement.
+
 ## 2026-09-23 direct DLL runtime result
 
 - Runtime-tested on published `v0.1.37`:
