@@ -595,7 +595,6 @@ int main() {
             std::vector<tp::AddonCandidate> candidates;
 
             tp::AddonCandidate root;
-            root.repositoryRelativePath = {};
             root.installFolder = L"Root";
             candidates.push_back(root);
 
