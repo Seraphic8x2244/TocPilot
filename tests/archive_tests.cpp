@@ -591,6 +591,33 @@ int main() {
             }
         }
 
+        {
+            std::vector<tp::AddonCandidate> candidates;
+
+            tp::AddonCandidate root;
+            root.repositoryRelativePath = {};
+            root.installFolder = L"Root";
+            candidates.push_back(root);
+
+            tp::AddonCandidate embedded;
+            embedded.repositoryRelativePath =
+                std::filesystem::path(L"Embedded") /
+                L"Deep";
+            embedded.installFolder = L"Deep";
+            candidates.push_back(embedded);
+
+            std::wstring error;
+            if (!tp::SelectRepositoryAddonCandidate(
+                    L".",
+                    candidates,
+                    error) ||
+                candidates.size() != 1 ||
+                !candidates[0].repositoryRelativePath.empty() ||
+                candidates[0].installFolder != L"Root") {
+                Fail("explicit repository-root candidate selection failed");
+            }
+        }
+
         const auto badZipPath =
             temp / L"unsafe.zip";
 
