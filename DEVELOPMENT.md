@@ -1,13 +1,14 @@
 # TocPilot Development Plan
 
-## 2026-09-23 v0.3.2 removal confirmation implementation
+## 2026-09-23 release status: v0.3.2 published
 
-The first P5 UX/safety slice is implementation-complete on `feature/removal-dialog`. Source/application/release marker are `v0.3.2`; authoritative tested source head `8d0590a1f9587cce83d5acceef21e931373dd6e7` passed PR Build run `35908713351` (#517), including the Windows x64 Release build and **17/17** CTest tests.
+`v0.3.2` is published from merge commit `7030810f4c6994b69c9ec9fab9844749f2bdeefa`. Release workflow run `35909133183` (#45) rebuilt that exact commit, passed all **17/17** CTest tests, generated the SHA-256 sidecar, created/verified the direct `v0.3.2` tag, and published `TocPilot.exe` plus `TocPilot.exe.sha256`. GitHub's latest-stable endpoint reports `v0.3.2`, so normal TocPilot self-update discovery can consume it.
 
-Installed addon Uninstall and Remove now use the existing native expandable TaskDialog helper. The compact view shows owned-root and recorded-file counts and defaults to No. Expanding **Show details** lists the exact TocPilot-owned addon roots and every recorded installed file. Uninstall retains the package record and branch tracking; Remove deletes the package record after removing owned files. Record-only removal explicitly states that only TocPilot state is being removed. Existing ownership checks, transaction commit/rollback behavior, and state-save semantics are unchanged.
+This release completes the first P5 UX/safety slice. Installed addon Remove and Uninstall confirmations use the existing native expandable TaskDialog: compact counts by default, No as the default action, and an expandable exact list of TocPilot-owned addon roots and recorded files. Record-only removal clearly states that only package state is removed. Existing ownership, transaction, rollback, and state-save semantics were not changed.
 
-Published `v0.3.1` runtime confirmation currently covers root addon Add Git, repository-library/multi-addon selection, no-TOC DLL fallback, and direct DLL discovery. Remaining v0.3.1 runtime checks plus the new v0.3.2 removal dialog are deferred until the user can test them. The exact next step is to merge PR #2 and verify the normal main-branch Release workflow publishes self-updatable `v0.3.2`.
+Runtime confirmation is intentionally deferred while the user cannot test: the v0.3.2 removal dialog, single-nested Add Git, same-root managed overwrite/cancel, mixed-layout refusal, and terminal no-supported-content cases. Already confirmed in the prior runtime pass: root addon, multi-addon/repository-library selection, no-TOC DLL fallback, and direct DLL discovery.
 
+The next roadmap item is P5 column persistence/reordering/locking. Keep that as an isolated slice; import/export, package-edit flow, local-modification handling, richer diagnostics, and provider/catalogue expansion remain deferred.
 
 ## 2026-09-23 release status: v0.3.1 published
 
