@@ -2,9 +2,9 @@
 
 ## 2026-09-23 repository-library implementation start
 
-- Active branch: `main`.
+- Active branch: `feature/repository-libraries`.
 - Published/source version remains `v0.3.0`.
-- Entering repository head: `ac32cdb56199eb0704b884de5179037bef9dac20` (`Document Atlas repository library example`).
+- Branch base / entering repository head: `14c52dde9be96c76bba7392d0e801a50c99ee9b2` (`Start repository library implementation`).
 - Latest completed checkpoints:
   - automatic startup self-update `v0.1.37 -> v0.3.0` passed runtime testing;
   - repository source-classification direction is documented;
