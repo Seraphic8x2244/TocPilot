@@ -1361,6 +1361,10 @@ bool SelectRepositoryAddonCandidate(
         candidates.begin(),
         candidates.end(),
         [&](const AddonCandidate& candidate) {
+            if (normalized == L".") {
+                return candidate.repositoryRelativePath.empty();
+            }
+
             return Lower(
                        candidate.repositoryRelativePath
                            .generic_wstring()) ==
