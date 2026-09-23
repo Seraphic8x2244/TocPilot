@@ -295,13 +295,16 @@ int main() {
                 Fail("ambiguous root-addon ZIP extraction failed");
             } else {
                 std::vector<tp::AddonCandidate> candidates;
-                if (tp::DetectGitHubAddonCandidates(
+                if (!tp::DetectGitHubAddonCandidates(
                         ambiguousExtracted,
                         L"Owner/Repo",
                         {},
                         candidates,
-                        error)) {
-                    Fail("ambiguous GitHub root-addon layout was accepted");
+                        error) ||
+                    candidates.size() != 1 ||
+                    candidates[0].installFolder !=
+                        L"Repo") {
+                    Fail("root addon with a differently named .toc was not mapped to the repository name");
                 }
             }
         }
@@ -351,13 +354,16 @@ int main() {
                 candidates.clear();
                 error.clear();
 
-                if (tp::DetectGitHubAddonCandidates(
+                if (!tp::DetectGitHubAddonCandidates(
                         preservedRootExtracted,
                         L"Seraphic8x2244/pfUI-VendorTweaks",
                         {},
                         candidates,
-                        error)) {
-                    Fail("fresh ambiguous root-addon layout was accepted");
+                        error) ||
+                    candidates.size() != 1 ||
+                    candidates[0].installFolder !=
+                        L"pfUI-VendorTweaks") {
+                    Fail("fresh root addon was not mapped to the repository name");
                 }
             }
         }
@@ -427,10 +433,10 @@ int main() {
         }
 
         {
-            const auto extracted =
+            const auto shallowExtracted1 =
                 temp / L"shallow-root";
             const auto wrapper =
-                extracted / L"Owner-Root-deadbeef";
+                shallowExtracted1 / L"Owner-Root-deadbeef";
             std::filesystem::create_directories(
                 wrapper / L"Embedded" / L"Deep",
                 ec);
@@ -443,7 +449,7 @@ int main() {
             tp::RepositoryAddonLayout layout;
             std::wstring error;
             if (!tp::DetectShallowRepositoryAddonLayout(
-                    extracted,
+                    shallowExtracted1,
                     L"GitHub",
                     L"Owner/Root",
                     layout,
@@ -458,10 +464,10 @@ int main() {
         }
 
         {
-            const auto extracted =
+            const auto shallowExtracted2 =
                 temp / L"shallow-single";
             const auto wrapper =
-                extracted / L"Owner-Collection-deadbeef";
+                shallowExtracted2 / L"Owner-Collection-deadbeef";
             std::filesystem::create_directories(
                 wrapper / L"Only" / L"Modules" / L"Deep",
                 ec);
@@ -474,7 +480,7 @@ int main() {
             tp::RepositoryAddonLayout layout;
             std::wstring error;
             if (!tp::DetectShallowRepositoryAddonLayout(
-                    extracted,
+                    shallowExtracted2,
                     L"GitHub",
                     L"Owner/Collection",
                     layout,
@@ -489,10 +495,10 @@ int main() {
         }
 
         {
-            const auto extracted =
+            const auto shallowExtracted3 =
                 temp / L"shallow-library";
             const auto wrapper =
-                extracted / L"Cabro-Atlas-deadbeef";
+                shallowExtracted3 / L"Cabro-Atlas-deadbeef";
             std::filesystem::create_directories(
                 wrapper / L"Atlas",
                 ec);
@@ -512,7 +518,7 @@ int main() {
             tp::RepositoryAddonLayout layout;
             std::wstring error;
             if (!tp::DetectShallowRepositoryAddonLayout(
-                    extracted,
+                    shallowExtracted3,
                     L"GitHub",
                     L"Cabro/Atlas",
                     layout,
@@ -531,10 +537,10 @@ int main() {
         }
 
         {
-            const auto extracted =
+            const auto shallowExtracted4 =
                 temp / L"shallow-mixed";
             const auto wrapper =
-                extracted / L"Owner-Mixed-deadbeef";
+                shallowExtracted4 / L"Owner-Mixed-deadbeef";
             std::filesystem::create_directories(
                 wrapper / L"Child",
                 ec);
@@ -546,7 +552,7 @@ int main() {
             tp::RepositoryAddonLayout layout;
             std::wstring error;
             if (!tp::DetectShallowRepositoryAddonLayout(
-                    extracted,
+                    shallowExtracted4,
                     L"GitHub",
                     L"Owner/Mixed",
                     layout,
@@ -559,10 +565,10 @@ int main() {
         }
 
         {
-            const auto extracted =
+            const auto shallowExtracted5 =
                 temp / L"shallow-deep-only";
             const auto wrapper =
-                extracted / L"Owner-Deep-deadbeef";
+                shallowExtracted5 / L"Owner-Deep-deadbeef";
             std::filesystem::create_directories(
                 wrapper / L"Top" / L"Deep",
                 ec);
@@ -573,7 +579,7 @@ int main() {
             tp::RepositoryAddonLayout layout;
             std::wstring error;
             if (!tp::DetectShallowRepositoryAddonLayout(
-                    extracted,
+                    shallowExtracted5,
                     L"GitHub",
                     L"Owner/Deep",
                     layout,
