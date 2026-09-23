@@ -1,5 +1,34 @@
 # TocPilot status / handoff
 
+## 2026-09-23 v0.3.1 published / managed-root overwrite runtime handoff
+
+- Active branch: `main`.
+- Published/source version: `v0.3.1`.
+- Release tag `v0.3.1` points exactly to merge commit `7222280319bc4ff2f46eac58dc3686ead78e8895` (`Merge Add Git repository libraries and collision replacement`).
+- GitHub Release workflow run `35903180687` (#44) passed source-version validation, Windows x64 Release build, the complete **16/16** CTest suite, SHA-256 sidecar generation, tag creation/verification, and release asset publication.
+- Published release: `https://github.com/Seraphic8x2244/TocPilot/releases/tag/v0.3.1`.
+- Published assets:
+  - `TocPilot.exe` — 2,403,840 bytes; GitHub asset SHA-256 `f1f1fe4f3d428e847ee3d03b6e7872cb71cd19c8a047ec545944fd0887fb53bd`;
+  - `TocPilot.exe.sha256` — 78 bytes; release-asset SHA-256 `839eb7343263fb3be1555495139d135f45e3b76be3965bcc079308a015f82cff`.
+- This corrects the previous artifact-only handoff: installed `v0.3.0` TocPilot instances can now discover `v0.3.1` through the normal stable GitHub Release self-update path.
+- Managed addon-root collision fix included in this release:
+  - Add Git checks the prospective addon root before persisting a new package record.
+  - If another installed TocPilot package already owns that single addon root, TocPilot prompts **Overwrite existing** / cancel rather than creating two overlapping package records.
+  - Choosing cancel leaves the old package/files/state untouched.
+  - Choosing overwrite stages and validates the replacement while the old package remains the sole durable owner; only after the live transaction commits successfully does TocPilot replace the old package record in-place with the new package and ownership.
+  - State-save failure rolls the live filesystem back to the previous addon and keeps the old package record authoritative.
+  - Replacement preparation/commit failures restore the old row/status immediately; Refresh is not required to make the old record visible again.
+  - Existing unmanaged addon folders are still refused rather than overwritten.
+  - Packages owning multiple addon roots are not partially overwritten.
+  - Repository-library multi-selection remains supported for non-colliding roots; a batch containing a managed-root collision is stopped before saving anything and the colliding child must be selected alone to use overwrite.
+- Repository-library/shallow Add Git behavior from the prior feature work is also included in `v0.3.1`: root + one-level `.toc` classification, root/single-child/library/mixed/no-addon outcomes, explicit root/child source paths, sequential child installs, and GitHub standalone-DLL fallback only after no addon is found.
+- Runtime-untested after publication:
+  - automatic startup self-update `v0.3.0 -> v0.3.1`;
+  - the new overwrite/cancel dialog against a real same-root addon collision;
+  - remaining real-repository library cases such as `Cabro/Atlas` subset installation and later refresh/update.
+- Deferred/out of scope remains: GitLab release support, release-archive executable discovery, arbitrary-depth repository catalogue discovery, dependency resolution between library children, and broader collection UX.
+- Exact next step: launch an installed `v0.3.0` and confirm it automatically updates to published `v0.3.1`. Then reproduce the same-name/same-root Add Git case: choose **No** first and confirm the existing package remains unchanged with exactly one record; retry and choose **Yes**, then confirm the old package is replaced in-place, exactly one record remains, the new addon is installed immediately, and no Refresh is required. After that continue the `Cabro/Atlas` repository-library runtime pass.
+
 ## 2026-09-23 v0.3.1 collision gate CI-green / release pending
 
 - Active branch: `feature/repository-libraries`.
