@@ -15,6 +15,19 @@ struct AddonCandidate {
     std::vector<std::filesystem::path> tocFiles;
 };
 
+enum class RepositoryAddonLayoutKind {
+    None,
+    RootAddon,
+    SingleNestedAddon,
+    RepositoryLibrary,
+    MixedAmbiguous
+};
+
+struct RepositoryAddonLayout {
+    RepositoryAddonLayoutKind kind = RepositoryAddonLayoutKind::None;
+    std::vector<AddonCandidate> candidates;
+};
+
 struct ArchiveInspection {
     std::filesystem::path stagingDirectory;
     std::filesystem::path archivePath;
@@ -72,6 +85,13 @@ bool ExtractZipSecure(
 bool DetectAddonCandidates(
     const std::filesystem::path& extractedRoot,
     std::vector<AddonCandidate>& candidates,
+    std::wstring& error);
+
+bool DetectShallowRepositoryAddonLayout(
+    const std::filesystem::path& extractedRoot,
+    std::wstring_view providerName,
+    std::wstring_view repository,
+    RepositoryAddonLayout& layout,
     std::wstring& error);
 
 bool DetectRepositoryAddonCandidates(
