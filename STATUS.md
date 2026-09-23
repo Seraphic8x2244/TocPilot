@@ -1,5 +1,17 @@
 # TocPilot status / handoff
 
+## 2026-09-23 P5 column layout implementation start
+
+- Active development branch: `feature/column-layout`.
+- Published/source version remains `v0.3.2`; no version bump or release work is part of this slice.
+- Branch base / latest pre-feature main commit: `81b53edd2647f6244a7cb31898e8132be91a70e3` (`Document v0.3.2 published release`).
+- Published release remains `v0.3.2` at `7030810f4c6994b69c9ec9fab9844749f2bdeefa`.
+- Completed before this slice: compact expandable removal confirmation and the earlier P0-P4 / repository-library work documented below.
+- Runtime checks still deferred: v0.3.2 removal confirmation UI; single-nested Add Git; same-root managed-addon overwrite/cancel; mixed root+child refusal; terminal no-supported-content cases.
+- Deferred/out of scope for this branch: import/export, package editing, local-modification detection/backups, richer diagnostics, and the other broader collection/provider items already listed below.
+- P5 scope for this branch only: package-list column width persistence, column reordering persistence, and an explicit layout lock/unlock control that prevents resizing/reordering while locked. Existing sort persistence remains intact.
+- Exact next step: extend the existing state settings and package-list header handling for validated persisted widths/order/lock state, add deterministic state round-trip coverage, then wire the native list-view/header behavior and run the full Windows x64 test suite before considering runtime validation.
+
 ## 2026-09-23 v0.3.2 published / P5 removal confirmation handoff
 
 - Active product branch: `main`.

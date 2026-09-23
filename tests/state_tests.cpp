@@ -141,6 +141,21 @@ void TestCreateAddRoundTrip(
     state.settings.textScale = 1.25;
     state.settings.packageSortColumn = 4;
     state.settings.packageSortAscending = false;
+    state.settings.packageColumnWidths = {
+        260,
+        310,
+        125,
+        130,
+        170
+    };
+    state.settings.packageColumnOrder = {
+        4,
+        0,
+        1,
+        2,
+        3
+    };
+    state.settings.packageColumnsLocked = true;
 
     if (!tp::SaveState(root, state, error)) {
         Fail("SaveState failed");
@@ -170,8 +185,55 @@ void TestCreateAddRoundTrip(
         loaded.packages[0].installedFiles != installedFiles ||
         loaded.settings.textScale != 1.25 ||
         loaded.settings.packageSortColumn != 4 ||
-        loaded.settings.packageSortAscending) {
+        loaded.settings.packageSortAscending ||
+        loaded.settings.packageColumnWidths !=
+            std::array<int, 5>{260, 310, 125, 130, 170} ||
+        loaded.settings.packageColumnOrder !=
+            std::array<int, 5>{4, 0, 1, 2, 3} ||
+        !loaded.settings.packageColumnsLocked) {
         Fail("round-trip state values did not match");
+    }
+}
+
+void TestColumnLayoutValidation(
+    const std::filesystem::path& root) {
+    const std::string json =
+        "{\n"
+        "  \"schema\": 1,\n"
+        "  \"settings\": {"
+        "\"text_scale\": 1.0,"
+        "\"check_app_updates\": true,"
+        "\"package_column_widths\":[10,300,5000,115,150],"
+        "\"package_column_order\":[0,0,1,2,3],"
+        "\"package_columns_locked\":true"
+        "},\n"
+        "  \"packages\": []\n"
+        "}\n";
+
+    if (!WriteAll(tp::StatePath(root), json)) {
+        Fail("could not write column-layout validation fixture");
+        return;
+    }
+
+    tp::AppState state;
+    bool created = true;
+    std::wstring error;
+    if (!tp::LoadOrCreateState(
+            root,
+            state,
+            created,
+            error)) {
+        Fail("column-layout validation fixture did not load");
+        return;
+    }
+
+    if (created ||
+        state.settings.packageColumnWidths !=
+            std::array<int, 5>{40, 300, 2000, 115, 150} ||
+        state.settings.packageColumnOrder !=
+            tp::kDefaultPackageColumnOrder ||
+        !state.settings.packageColumnsLocked) {
+        Fail("column-layout validation did not normalize persisted values");
     }
 }
 
@@ -918,6 +980,7 @@ int main() {
         Fail("could not create temporary test directory");
     } else {
         TestCreateAddRoundTrip(root);
+        TestColumnLayoutValidation(root);
         TestRemovePackageRecord(root);
         TestPackageOwnerReplacement(root);
         TestClearInstalledState(root);

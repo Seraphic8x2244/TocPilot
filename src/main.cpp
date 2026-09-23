@@ -56,6 +56,7 @@ constexpr UINT WM_TP_PACKAGE_INSTALL_COMPLETE = WM_APP + 5;
 constexpr UINT WM_TP_BRANCHES_READY = WM_APP + 6;
 constexpr UINT WM_TP_POSITION_BRANCH_SELECTOR = WM_APP + 7;
 constexpr UINT WM_TP_DLL_INSTALL_COMPLETE = WM_APP + 8;
+constexpr UINT WM_TP_SAVE_COLUMN_LAYOUT = WM_APP + 9;
 
 constexpr int IDC_WOW_STATUS = 1002;
 constexpr int IDC_GITHUB_STATUS = 1003;
@@ -79,6 +80,7 @@ constexpr int IDC_TOCPILOT_UPDATE = 1021;
 constexpr int IDC_TOCPILOT_GITHUB = 1022;
 constexpr int IDC_TOCPILOT_RELEASES = 1023;
 constexpr int IDC_BRANCH_SELECTOR = 1024;
+constexpr int IDC_LOCK_COLUMNS = 1025;
 
 constexpr int kCompactWindowWidth = 590;
 constexpr int kDefaultWindowHeight = 480;
@@ -125,6 +127,7 @@ HWND g_removePackageButton = nullptr;
 HWND g_addPackageButton = nullptr;
 HWND g_adoptGitButton = nullptr;
 HWND g_advancedButton = nullptr;
+HWND g_lockColumnsButton = nullptr;
 HWND g_tocPilotButton = nullptr;
 HWND g_tocPilotWindow = nullptr;
 HWND g_tocPilotUpdateStatus = nullptr;
@@ -493,6 +496,126 @@ int WindowWidthForClient(
 
 void PositionBranchSelector();
 
+bool PackageColumnLayoutLocked() {
+    return
+        !g_stateReady ||
+        g_state.settings.packageColumnsLocked;
+}
+
+void UpdatePackageColumnLockUi() {
+    const bool locked =
+        PackageColumnLayoutLocked();
+    const bool editingEnabled =
+        g_stateReady &&
+        g_advancedVisible &&
+        !locked;
+
+    if (g_lockColumnsButton) {
+        SendMessageW(
+            g_lockColumnsButton,
+            BM_SETCHECK,
+            locked
+                ? BST_CHECKED
+                : BST_UNCHECKED,
+            0);
+        EnableWindow(
+            g_lockColumnsButton,
+            g_stateReady
+                ? TRUE
+                : FALSE);
+    }
+
+    if (g_packageList) {
+        ListView_SetExtendedListViewStyleEx(
+            g_packageList,
+            LVS_EX_HEADERDRAGDROP,
+            editingEnabled
+                ? LVS_EX_HEADERDRAGDROP
+                : 0);
+    }
+}
+
+void ApplyPackageColumnOrder() {
+    if (!g_packageList) {
+        return;
+    }
+
+    std::array<int, 5> order =
+        g_stateReady
+            ? g_state.settings.packageColumnOrder
+            : tp::kDefaultPackageColumnOrder;
+
+    ListView_SetColumnOrderArray(
+        g_packageList,
+        static_cast<int>(order.size()),
+        order.data());
+}
+
+void SaveCurrentPackageColumnLayout() {
+    if (!g_packageList ||
+        !g_stateReady ||
+        !g_advancedVisible ||
+        PackageColumnLayoutLocked()) {
+        return;
+    }
+
+    std::array<int, 5> widths{};
+    for (int column = 0;
+         column < static_cast<int>(widths.size());
+         ++column) {
+        widths[static_cast<std::size_t>(column)] =
+            std::clamp(
+                ListView_GetColumnWidth(
+                    g_packageList,
+                    column),
+                40,
+                2000);
+    }
+
+    std::array<int, 5> order{};
+    if (!ListView_GetColumnOrderArray(
+            g_packageList,
+            static_cast<int>(order.size()),
+            order.data())) {
+        return;
+    }
+
+    const bool changed =
+        widths !=
+            g_state.settings.packageColumnWidths ||
+        order !=
+            g_state.settings.packageColumnOrder;
+
+    if (!changed) {
+        return;
+    }
+
+    g_state.settings.packageColumnWidths =
+        widths;
+    g_state.settings.packageColumnOrder =
+        order;
+
+    std::wstring saveError;
+    if (!tp::SaveState(
+            g_root,
+            g_state,
+            saveError)) {
+        g_stateError = saveError;
+        return;
+    }
+
+    for (int column = 0;
+         column < static_cast<int>(widths.size());
+         ++column) {
+        ListView_SetColumnWidth(
+            g_packageList,
+            column,
+            widths[
+                static_cast<std::size_t>(
+                    column)]);
+    }
+}
+
 void ResizeListColumns() {
     if (!g_packageList) {
         return;
@@ -536,39 +659,21 @@ void ResizeListColumns() {
         return;
     }
 
-    const int nameWidth = 240;
-    const int branchWidth = 300;
-    const int installedWidth = 115;
-    const int latestWidth = 115;
-    const int statusWidth =
-        std::max(
-            150,
-            width -
-                nameWidth -
-                branchWidth -
-                installedWidth -
-                latestWidth);
+    const auto widths =
+        g_stateReady
+            ? g_state.settings.packageColumnWidths
+            : tp::kDefaultPackageColumnWidths;
 
-    ListView_SetColumnWidth(
-        g_packageList,
-        0,
-        nameWidth);
-    ListView_SetColumnWidth(
-        g_packageList,
-        1,
-        branchWidth);
-    ListView_SetColumnWidth(
-        g_packageList,
-        2,
-        installedWidth);
-    ListView_SetColumnWidth(
-        g_packageList,
-        3,
-        latestWidth);
-    ListView_SetColumnWidth(
-        g_packageList,
-        4,
-        statusWidth);
+    for (int column = 0;
+         column < static_cast<int>(widths.size());
+         ++column) {
+        ListView_SetColumnWidth(
+            g_packageList,
+            column,
+            widths[
+                static_cast<std::size_t>(
+                    column)]);
+    }
 }
 
 void LayoutControls(HWND hwnd) {
@@ -734,6 +839,21 @@ void LayoutControls(HWND hwnd) {
             listTop + listHeight + 8,
             height - 54);
 
+    if (g_lockColumnsButton) {
+        ShowWindow(
+            g_lockColumnsButton,
+            g_advancedVisible
+                ? SW_SHOW
+                : SW_HIDE);
+        MoveWindow(
+            g_lockColumnsButton,
+            20,
+            iconY + 6,
+            140,
+            28,
+            TRUE);
+    }
+
     if (g_launchWowButton) {
         ShowWindow(g_launchWowButton, SW_SHOW);
         MoveWindow(
@@ -771,6 +891,8 @@ void AddPackageListColumns() {
         column.iSubItem = index;
         ListView_InsertColumn(g_packageList, index, &column);
     }
+
+    ApplyPackageColumnOrder();
 }
 
 std::wstring ProviderLabel(const std::wstring& provider) {
@@ -5570,6 +5692,7 @@ void ToggleAdvanced(HWND hwnd) {
             SWP_NOZORDER |
             SWP_NOACTIVATE);
 
+    UpdatePackageColumnLockUi();
     LayoutControls(hwnd);
     UpdatePackageButtons();
 }
@@ -5795,6 +5918,23 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             GetModuleHandleW(nullptr),
             nullptr);
 
+        g_lockColumnsButton = CreateWindowExW(
+            0,
+            L"BUTTON",
+            L"Lock columns",
+            WS_CHILD | WS_TABSTOP |
+                BS_AUTOCHECKBOX,
+            0,
+            0,
+            140,
+            28,
+            hwnd,
+            reinterpret_cast<HMENU>(
+                static_cast<INT_PTR>(
+                    IDC_LOCK_COLUMNS)),
+            GetModuleHandleW(nullptr),
+            nullptr);
+
         EnableWindow(g_updateAllButton, FALSE);
         EnableWindow(g_refreshPackagesButton, FALSE);
         EnableWindow(g_inspectPackageButton, FALSE);
@@ -5877,6 +6017,8 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             LVS_EX_FULLROWSELECT |
                 LVS_EX_DOUBLEBUFFER |
                 LVS_EX_LABELTIP);
+
+        UpdatePackageColumnLockUi();
 
         SetWindowSubclass(
             g_packageList,
@@ -5982,6 +6124,11 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
         PositionBranchSelector();
         return 0;
 
+    case WM_TP_SAVE_COLUMN_LAYOUT:
+        SaveCurrentPackageColumnLayout();
+        PositionBranchSelector();
+        return 0;
+
     case WM_GETMINMAXINFO: {
         auto* info =
             reinterpret_cast<MINMAXINFO*>(
@@ -6031,18 +6178,43 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             g_packageList &&
             header->hwndFrom ==
                 ListView_GetHeader(
-                    g_packageList) &&
-            (header->code ==
-                 HDN_ITEMCHANGEDW ||
-             header->code ==
-                 HDN_TRACKW ||
-             header->code ==
-                 HDN_ENDTRACKW)) {
-            PostMessageW(
-                hwnd,
-                WM_TP_POSITION_BRANCH_SELECTOR,
-                0,
-                0);
+                    g_packageList)) {
+            if ((!g_advancedVisible ||
+                 PackageColumnLayoutLocked()) &&
+                (header->code ==
+                     HDN_BEGINTRACKW ||
+                 header->code ==
+                     HDN_BEGINDRAG ||
+                 header->code ==
+                     HDN_DIVIDERDBLCLICKW)) {
+                return TRUE;
+            }
+
+            if (header->code ==
+                    HDN_ENDTRACKW ||
+                header->code ==
+                    HDN_ENDDRAG) {
+                PostMessageW(
+                    hwnd,
+                    WM_TP_SAVE_COLUMN_LAYOUT,
+                    0,
+                    0);
+            }
+
+            if (header->code ==
+                    HDN_ITEMCHANGEDW ||
+                header->code ==
+                    HDN_TRACKW ||
+                header->code ==
+                    HDN_ENDTRACKW ||
+                header->code ==
+                    HDN_ENDDRAG) {
+                PostMessageW(
+                    hwnd,
+                    WM_TP_POSITION_BRANCH_SELECTOR,
+                    0,
+                    0);
+            }
         }
 
         if (header &&
@@ -6098,6 +6270,38 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
         if (LOWORD(wParam) == IDC_ADVANCED &&
             HIWORD(wParam) == BN_CLICKED) {
             ToggleAdvanced(hwnd);
+            return 0;
+        }
+
+        if (LOWORD(wParam) == IDC_LOCK_COLUMNS &&
+            HIWORD(wParam) == BN_CLICKED) {
+            if (g_stateReady &&
+                g_lockColumnsButton) {
+                const bool previous =
+                    g_state.settings.packageColumnsLocked;
+                const bool locked =
+                    SendMessageW(
+                        g_lockColumnsButton,
+                        BM_GETCHECK,
+                        0,
+                        0) ==
+                    BST_CHECKED;
+
+                g_state.settings.packageColumnsLocked =
+                    locked;
+
+                std::wstring saveError;
+                if (!tp::SaveState(
+                        g_root,
+                        g_state,
+                        saveError)) {
+                    g_state.settings.packageColumnsLocked =
+                        previous;
+                    g_stateError = saveError;
+                }
+
+                UpdatePackageColumnLockUi();
+            }
             return 0;
         }
 
