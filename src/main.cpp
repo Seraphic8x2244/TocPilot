@@ -6473,6 +6473,155 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                 return 0;
             }
 
+            std::size_t replacementOwnerIndex =
+                g_state.packages.size();
+
+            for (const auto& package :
+                 packagesToAdd) {
+                const std::size_t ownerIndex =
+                    tp::FindPackageOwningAddonRoot(
+                        g_state,
+                        package.name);
+
+                if (ownerIndex <
+                    g_state.packages.size()) {
+                    const auto& owner =
+                        g_state.packages[
+                            ownerIndex];
+
+                    if (CompareInsensitive(
+                            owner.id,
+                            package.id) == 0) {
+                        MessageBoxW(
+                            hwnd,
+                            L"This addon is already managed by TocPilot.",
+                            L"TocPilot - Add Git",
+                            MB_OK |
+                                MB_ICONINFORMATION);
+                        return 0;
+                    }
+
+                    if (packagesToAdd.size() != 1) {
+                        const std::wstring message =
+                            L"The selected repository-library set includes addon root '" +
+                            package.name +
+                            L"', which is already owned by '" +
+                            owner.name +
+                            L"'.\r\n\r\nTocPilot will not create overlapping package records. Select that colliding addon by itself if you want to overwrite the existing managed addon.";
+                        MessageBoxW(
+                            hwnd,
+                            message.c_str(),
+                            L"TocPilot - Existing Addon",
+                            MB_OK |
+                                MB_ICONWARNING);
+                        return 0;
+                    }
+
+                    const std::wstring ownedRoot =
+                        SingleOwnedAddonRoot(
+                            owner);
+
+                    if (ownedRoot.empty() ||
+                        CompareInsensitive(
+                            ownedRoot,
+                            package.name) != 0) {
+                        const std::wstring message =
+                            L"Addon root '" +
+                            package.name +
+                            L"' is owned by a package that manages more than one addon root. TocPilot will not partially overwrite that package. Remove or reconfigure the existing package first.";
+                        MessageBoxW(
+                            hwnd,
+                            message.c_str(),
+                            L"TocPilot - Existing Addon",
+                            MB_OK |
+                                MB_ICONWARNING);
+                        return 0;
+                    }
+
+                    replacementOwnerIndex =
+                        ownerIndex;
+                    continue;
+                }
+
+                std::error_code existsError;
+                const auto liveRoot =
+                    g_root /
+                    L"Interface" /
+                    L"AddOns" /
+                    package.name;
+
+                const bool liveExists =
+                    std::filesystem::exists(
+                        liveRoot,
+                        existsError);
+
+                if (existsError) {
+                    const std::wstring message =
+                        L"Could not inspect the existing addon folder before install: " +
+                        liveRoot.wstring();
+                    MessageBoxW(
+                        hwnd,
+                        message.c_str(),
+                        L"TocPilot - Add Git",
+                        MB_OK |
+                            MB_ICONERROR);
+                    return 0;
+                }
+
+                if (liveExists) {
+                    const std::wstring message =
+                        L"Addon root '" +
+                        package.name +
+                        L"' already exists in Interface\\AddOns but is not owned by a TocPilot package. TocPilot will not overwrite an unmanaged addon folder. Remove it or adopt/manage it first, then retry.";
+                    MessageBoxW(
+                        hwnd,
+                        message.c_str(),
+                        L"TocPilot - Existing Unmanaged Addon",
+                        MB_OK |
+                            MB_ICONWARNING);
+                    return 0;
+                }
+            }
+
+            if (replacementOwnerIndex <
+                g_state.packages.size()) {
+                const auto& owner =
+                    g_state.packages[
+                        replacementOwnerIndex];
+                const auto& replacement =
+                    packagesToAdd.front();
+
+                const std::wstring prompt =
+                    L"Addon root '" +
+                    replacement.name +
+                    L"' is already managed by:\r\n\r\n" +
+                    owner.name +
+                    L"  (" +
+                    owner.repository +
+                    L")\r\n\r\nOverwrite the existing managed addon with:\r\n\r\n" +
+                    replacement.name +
+                    L"  (" +
+                    replacement.repository +
+                    L")?\r\n\r\nYes = stage and validate the new package, replace the live addon, then transfer TocPilot ownership only after the transaction succeeds.\r\nNo = keep the existing addon unchanged.";
+
+                if (MessageBoxW(
+                        hwnd,
+                        prompt.c_str(),
+                        L"TocPilot - Overwrite Existing Addon?",
+                        MB_YESNO |
+                            MB_ICONWARNING |
+                            MB_DEFBUTTON2) != IDYES) {
+                    return 0;
+                }
+
+                StartPackageReplacementInstall(
+                    hwnd,
+                    std::move(
+                        packagesToAdd.front()),
+                    replacementOwnerIndex);
+                return 0;
+            }
+
             tp::AppState updatedState =
                 g_state;
             std::vector<std::size_t>
