@@ -23,8 +23,8 @@ If a second WoW installation needs management, copy TocPilot into that installat
 TocPilot manages **packages**, not local Git repositories. A package can be:
 
 - a GitHub or GitLab repository branch;
-- a GitHub or GitLab release asset;
-- a ZIP containing one or more addons;
+- a supported GitHub or GitLab release asset;
+- a source-revision archive used internally for addon installation;
 - a standalone file such as a DLL installed into the WoW root;
 - potentially other simple downloadable artifacts later.
 
@@ -60,8 +60,9 @@ This removes the need for hidden `.git` directories and avoids local Git branch/
 5. **Release-aware**
    - Browse repository releases.
    - Follow the latest stable release.
-   - Select a release asset when multiple assets exist.
-   - Support direct files such as `ClassicAPI.dll` as naturally as addon ZIPs.
+   - Select a supported release asset when multiple assets exist.
+   - Support exact standalone files such as `ClassicAPI.dll`.
+   - Do not download or unpack user-uploaded release ZIP/archive assets to locate executable files.
 
 6. **Safe package ownership**
    - TocPilot records which files it installed.
@@ -95,7 +96,8 @@ The initial TocPilot design will **not** attempt to be:
 - a CurseForge/Wago client;
 - a multi-WoW-directory profile manager;
 - a source-code editor;
-- a general package manager for arbitrary Windows software.
+- a general package manager for arbitrary Windows software;
+- a downloader/unpacker for user-uploaded release ZIP, 7z, RAR, installer, or bundle assets used to locate DLL/executable payloads. Direct DLL management requires an exact standalone DLL release asset.
 
 It also does not need to preserve Git history locally. TocPilot only needs enough remote metadata to answer:
 
@@ -908,9 +910,12 @@ First milestone — direct DLL management:
 Later P3 expansion:
 
 - prerelease tracking;
-- ZIP release installation;
 - broader direct-file assets and destinations;
 - richer release browser/details.
+
+Intentional P3 non-goal:
+
+- user-uploaded release ZIP/archive installation for DLL/executable payloads. TocPilot will not download, inspect, extract, or provide an override for these archives. This restriction does not affect provider-generated source/branch archives used by the constrained addon installation path.
 
 Exit criterion:
 
@@ -918,12 +923,21 @@ Exit criterion:
 
 ### P4 — GitLab
 
-Deliver feature parity for public GitLab repositories:
+Implement public `gitlab.com` support incrementally.
 
-- branches;
-- branch archive;
-- releases/assets where provider API permits;
-- update tracking.
+First slice:
+
+- normalize public GitLab repository URLs;
+- list/select branches;
+- resolve branch HEAD commit;
+- download the selected branch archive;
+- reuse the existing secure addon archive inspection/install transaction;
+- integrate startup/Refresh/update tracking without changing GitHub behavior.
+
+Later parity, only after the branch slice is runtime-proven:
+
+- supported releases/direct assets where provider API and TocPilot's existing trust model permit;
+- no user-uploaded release ZIP/archive executable handling.
 
 ### P5 — UX and safety refinement
 
