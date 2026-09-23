@@ -1513,6 +1513,131 @@ bool AppendPackage(
     return true;
 }
 
+std::size_t FindPackageOwningAddonRoot(
+    const AppState& state,
+    std::wstring_view installFolder) {
+    if (installFolder.empty()) {
+        return state.packages.size();
+    }
+
+    constexpr std::wstring_view prefix =
+        L"Interface/AddOns/";
+
+    for (std::size_t index = 0;
+         index < state.packages.size();
+         ++index) {
+        const auto& package =
+            state.packages[index];
+
+        if (package.target != L"addons") {
+            continue;
+        }
+
+        for (auto owned :
+             package.installedFiles) {
+            std::replace(
+                owned.begin(),
+                owned.end(),
+                L'\\',
+                L'/');
+
+            if (owned.size() <=
+                    prefix.size() ||
+                !EqualsInsensitive(
+                    std::wstring_view(owned).substr(
+                        0,
+                        prefix.size()),
+                    prefix)) {
+                continue;
+            }
+
+            const std::size_t slash =
+                owned.find(
+                    L'/',
+                    prefix.size());
+
+            if (slash ==
+                    std::wstring::npos ||
+                slash ==
+                    prefix.size()) {
+                continue;
+            }
+
+            const std::wstring_view root =
+                std::wstring_view(owned).substr(
+                    prefix.size(),
+                    slash -
+                        prefix.size());
+
+            if (EqualsInsensitive(
+                    root,
+                    installFolder)) {
+                return index;
+            }
+        }
+    }
+
+    return state.packages.size();
+}
+
+bool ReplacePackageRecord(
+    AppState& state,
+    std::wstring_view existingPackageId,
+    PackageRecord replacement,
+    std::wstring& error) {
+    error.clear();
+
+    if (replacement.id.empty() ||
+        replacement.name.empty() ||
+        replacement.provider.empty() ||
+        replacement.repository.empty()) {
+        error =
+            L"The replacement package source is incomplete and was not saved.";
+        return false;
+    }
+
+    std::size_t existingIndex =
+        state.packages.size();
+
+    for (std::size_t index = 0;
+         index < state.packages.size();
+         ++index) {
+        const auto& existing =
+            state.packages[index];
+
+        if (EqualsInsensitive(
+                existing.id,
+                existingPackageId)) {
+            existingIndex = index;
+            continue;
+        }
+
+        if (EqualsInsensitive(
+                existing.id,
+                replacement.id)) {
+            error =
+                L"The replacement package is already managed by TocPilot.";
+            return false;
+        }
+    }
+
+    if (existingIndex ==
+        state.packages.size()) {
+        error =
+            L"The package being replaced no longer exists.";
+        return false;
+    }
+
+    if (replacement.sourceJson.empty()) {
+        replacement.sourceJson =
+            SerializePackage(replacement);
+    }
+
+    state.packages[existingIndex] =
+        std::move(replacement);
+    return true;
+}
+
 bool RemovePackageRecord(
     AppState& state,
     std::wstring_view packageId,
