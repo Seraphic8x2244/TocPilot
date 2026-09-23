@@ -10,6 +10,7 @@
 #include "install.h"
 #include "library_dialog.h"
 #include "refresh_freshness.h"
+#include "removal_prompt.h"
 #include "state.h"
 #include "splash.h"
 #include "update.h"
@@ -4137,26 +4138,22 @@ void UninstallPackage(
         return;
     }
 
-    std::wstring prompt =
-        L"Uninstall " +
-        package.name +
-        L"?\r\n\r\nTocPilot will remove " +
-        std::to_wstring(
-            plan.obsoleteInstallFolders.size()) +
-        L" owned addon root(s) containing " +
-        std::to_wstring(
-            package.installedFiles.size()) +
-        L" recorded file(s).\r\n\r\n"
-        L"The package record and branch tracking will remain in TocPilot. "
-        L"The separate Forget action stays non-destructive.";
+    const auto prompt =
+        tp::BuildRemovalPrompt(
+            package.name,
+            tp::RemovalAction::Uninstall,
+            plan,
+            package.installedFiles);
 
-    if (MessageBoxW(
+    if (tp::ShowExpandableDialog(
             hwnd,
-            prompt.c_str(),
-            L"TocPilot - Uninstall Package",
-            MB_YESNO |
-                MB_ICONWARNING |
-                MB_DEFBUTTON2) != IDYES) {
+            prompt.title,
+            prompt.instruction,
+            prompt.content,
+            prompt.details,
+            tp::DialogIcon::Warning,
+            tp::DialogButtons::YesNo,
+            IDNO) != IDYES) {
         return;
     }
 
@@ -4320,18 +4317,20 @@ void RemovePackage(
         !package.installedFiles.empty();
 
     if (!hasInstalledFiles) {
-        const std::wstring prompt =
+        const std::wstring instruction =
             L"Remove " +
             package.name +
             L" from TocPilot?";
 
-        if (MessageBoxW(
+        if (tp::ShowExpandableDialog(
                 hwnd,
-                prompt.c_str(),
                 L"TocPilot - Remove Addon",
-                MB_YESNO |
-                    MB_ICONWARNING |
-                    MB_DEFBUTTON2) != IDYES) {
+                instruction,
+                L"No TocPilot-owned addon files are currently installed. This removes only the package record.",
+                L"",
+                tp::DialogIcon::Warning,
+                tp::DialogButtons::YesNo,
+                IDNO) != IDYES) {
             return;
         }
 
@@ -4403,21 +4402,22 @@ void RemovePackage(
         return;
     }
 
-    std::wstring prompt =
-        L"Remove " +
-        package.name +
-        L"?\r\n\r\nTocPilot will remove " +
-        std::to_wstring(
-            plan.obsoleteInstallFolders.size()) +
-        L" owned addon root(s) and delete this addon from TocPilot.";
+    const auto prompt =
+        tp::BuildRemovalPrompt(
+            package.name,
+            tp::RemovalAction::Remove,
+            plan,
+            package.installedFiles);
 
-    if (MessageBoxW(
+    if (tp::ShowExpandableDialog(
             hwnd,
-            prompt.c_str(),
-            L"TocPilot - Remove Addon",
-            MB_YESNO |
-                MB_ICONWARNING |
-                MB_DEFBUTTON2) != IDYES) {
+            prompt.title,
+            prompt.instruction,
+            prompt.content,
+            prompt.details,
+            tp::DialogIcon::Warning,
+            tp::DialogButtons::YesNo,
+            IDNO) != IDYES) {
         return;
     }
 
