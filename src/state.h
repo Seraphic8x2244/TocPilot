@@ -23,6 +23,7 @@ struct PackageRecord {
     std::wstring ref;
     std::wstring releasePolicy;
     std::wstring asset;
+    std::wstring sourcePath;
     std::wstring target = L"addons";
     std::wstring targetPath;
     std::wstring installedRevision;
@@ -48,6 +49,12 @@ std::filesystem::path StatePath(const std::filesystem::path& wowRoot);
 PackageRecord MakeRepositoryPackage(
     std::wstring provider,
     std::wstring repository);
+
+PackageRecord MakeRepositoryAddonPackage(
+    std::wstring provider,
+    std::wstring repository,
+    std::wstring sourcePath,
+    std::wstring name);
 
 bool AppendPackage(
     AppState& state,
