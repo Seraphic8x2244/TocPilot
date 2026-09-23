@@ -1,5 +1,22 @@
 # TocPilot status / handoff
 
+## 2026-09-23 v0.3.0 automatic self-update runtime pass / Add Git detection design
+
+- Active branch: `main`.
+- Published/source version remains `v0.3.0`.
+- Entering repository head: `c9d1f07a909a5d8d5daa6a8858d86335c86ea284` (`Record empty default branch runtime edge case`).
+- **Automatic startup self-update passed at runtime:** user confirmed an installed `v0.1.37` automatically detected published `v0.3.0`, completed the startup self-update/replacement path, and the updated TocPilot ran successfully.
+- This closes the first real release-to-release runtime test of the automatic startup updater introduced in `v0.1.37`.
+- GitLab branch-package install/restart/Refresh runtime confirmation remains pending.
+- Near-term Add Git UX direction: move from a manual source-mode choice toward repository inspection/detection. The desired detectable source/content classes are:
+  - **root addon** — a branch/revision containing one installable addon rooted at the repository;
+  - **direct DLL release** — currently only where the existing GitHub latest-stable exact-standalone-`.dll` trust/verification path applies;
+  - **repository library / multi-addon repository** — a branch/revision exposing multiple independent installable addon roots.
+- Detection should be capability-based rather than assuming the classes are always mutually exclusive; for example, a repository can contain addon source while also publishing a supported direct DLL release.
+- Preserve scope boundaries: do not add GitLab release support and do not add release ZIP/archive executable discovery.
+- The empty-default-branch finding remains open: changing a never-installed package to a usable branch currently requires an explicit **Install Addon** action.
+- Exact next step before repository-collection implementation: finish the GitLab branch runtime pass, then design the Add Git repository-inspection/result UI and define how a multi-addon repository maps to TocPilot package records/collections.
+
 ## 2026-09-23 empty-default-branch runtime edge case
 
 - Active branch: `main`.
