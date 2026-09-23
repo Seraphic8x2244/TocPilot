@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <filesystem>
 #include <string>
 #include <string_view>
@@ -7,11 +8,32 @@
 
 namespace tp {
 
+inline constexpr std::array<int, 5> kDefaultPackageColumnWidths{
+    240,
+    300,
+    115,
+    115,
+    150
+};
+
+inline constexpr std::array<int, 5> kDefaultPackageColumnOrder{
+    0,
+    1,
+    2,
+    3,
+    4
+};
+
 struct AppSettings {
     double textScale = 1.0;
     bool checkAppUpdates = true;
     int packageSortColumn = -1;
     bool packageSortAscending = true;
+    std::array<int, 5> packageColumnWidths =
+        kDefaultPackageColumnWidths;
+    std::array<int, 5> packageColumnOrder =
+        kDefaultPackageColumnOrder;
+    bool packageColumnsLocked = false;
 };
 
 struct PackageRecord {
