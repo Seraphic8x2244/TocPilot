@@ -1,3 +1,15 @@
+# TocPilot development notes
+
+## 2026-09-23 active P5 slice: compact removal confirmation
+
+- Branch: `feature/removal-dialog`.
+- Base: `main` at `f85cb59c470219f0167e30d532c5953ea34dc369`; published application version remains `v0.3.1`.
+- Runtime-confirmed `v0.3.1` Add Git paths now include root addon, repository-library/multi-addon, no-addon DLL fallback, and direct DLL discovery. Remaining runtime checks are deferred while this development slice proceeds.
+- This slice implements only the first P5 UX/safety item: a compact removal confirmation UI with an expandable exact owned-file/root list for installed addon packages.
+- Preserve existing removal semantics: Uninstall removes owned files but retains the package record; Remove deletes owned files and the package record; both retain the current transactional rollback and ownership checks.
+- Do not fold in later P5 work or deferred provider/catalogue features during this slice.
+- Exact implementation sequence: reusable native removal dialog -> wire Uninstall and Remove -> focused deterministic helper coverage where practical -> full Windows x64 Release CI.
+
 # TocPilot Development Plan
 
 ## 2026-09-23 release status: v0.3.1 published
