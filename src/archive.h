@@ -10,6 +10,7 @@ namespace tp {
 
 struct AddonCandidate {
     std::filesystem::path sourceRelativePath;
+    std::filesystem::path repositoryRelativePath;
     std::wstring installFolder;
     std::vector<std::filesystem::path> tocFiles;
 };
@@ -85,6 +86,14 @@ bool DetectGitHubAddonCandidates(
     const std::filesystem::path& extractedRoot,
     std::wstring_view repository,
     std::wstring_view existingInstallFolder,
+    std::vector<AddonCandidate>& candidates,
+    std::wstring& error);
+
+bool IsRepositoryLibrary(
+    const std::vector<AddonCandidate>& candidates);
+
+bool SelectRepositoryAddonCandidate(
+    std::wstring_view sourcePath,
     std::vector<AddonCandidate>& candidates,
     std::wstring& error);
 
