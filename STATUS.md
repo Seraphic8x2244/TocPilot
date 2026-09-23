@@ -1,23 +1,27 @@
 # TocPilot status / handoff
 
-## 2026-09-23 v0.3.2 removal-dialog CI-green / release pending
+## 2026-09-23 v0.3.2 published / P5 removal confirmation handoff
 
-- Active branch: `feature/removal-dialog`; base `main` was `f85cb59c470219f0167e30d532c5953ea34dc369`.
-- Source/application/release-marker version is now `v0.3.2`. Published stable version remains `v0.3.1` until PR #2 is merged and the main-branch Release workflow succeeds.
-- Authoritative tested source head: `8d0590a1f9587cce83d5acceef21e931373dd6e7`.
-- PR Build run `35908713351` (#517), Windows x64 job `107342819515`, passed Configure, Release build, the full **17/17** CTest suite, and artifact upload. New test: `removal-prompt-model`.
-- P5 removal UX implemented:
-  - installed addon **Uninstall** and **Remove** confirmations now use the existing compact native expandable dialog;
-  - the collapsed view shows exact owned-root and recorded-file counts;
-  - **Show details** lists every TocPilot-owned `Interface\\AddOns\\<root>` plus every recorded installed file;
-  - default action remains **No**;
-  - Uninstall retains the package record/tracking, while Remove deletes the package record after owned files are removed;
-  - record-only removal uses the same compact confirmation and explicitly states that no addon files are being removed.
-- Filesystem ownership, install/removal transaction, rollback, and state-save semantics were not changed in this slice.
-- Runtime-confirmed on published `v0.3.1`: root addon Add Git, multi-addon repository selection, no-TOC GitHub DLL fallback, and direct DLL discovery.
-- Runtime-untested/deferred: the new removal dialog itself; single-nested Add Git; same-root managed-addon overwrite/cancel; mixed root+child refusal; terminal no-supported-content cases.
-- Deferred/out of scope remains: GitLab release support, release-archive executable discovery, arbitrary-depth repository catalogue discovery, dependency resolution between library children, broader collection UX, and later P5 items (column persistence/reordering/locking, import/export, package edit, local-modification handling, richer diagnostics).
-- Exact next step: merge PR #2 after this handoff update, verify the main-branch Release workflow publishes `v0.3.2` from the exact merge commit with direct `TocPilot.exe` + SHA-256 sidecar, then record the published release on `main`.
+- Active product branch: `main`.
+- Published/source version: `v0.3.2`.
+- Release tag `v0.3.2` points directly to merge commit `7030810f4c6994b69c9ec9fab9844749f2bdeefa` (`Merge compact expandable removal confirmation`).
+- GitHub Release workflow run `35909133183` (#45), Windows x64 release job `107344225208`, passed source-version validation, Release build, the complete **17/17** CTest suite, SHA-256 sidecar generation, tag creation/verification, and asset publication.
+- Published release: `https://github.com/Seraphic8x2244/TocPilot/releases/tag/v0.3.2`; GitHub latest-stable now reports `v0.3.2` with draft=false and prerelease=false.
+- Published assets:
+  - `TocPilot.exe` — 2,408,960 bytes; SHA-256 `871e5fc4c9bf102b9045d6b3644fa0bed6daac01bb2a7185ba15574a05fd2c51`;
+  - `TocPilot.exe.sha256` — 78 bytes; release-asset SHA-256 `41c0434fe07b4d5dbf424c7bb474ad10b84493c0b2e5c5a1729f0b1229db71c5`.
+- P5 removal UX included:
+  - installed addon Uninstall and Remove use the compact native expandable TaskDialog;
+  - collapsed view shows owned-root and recorded-file counts and defaults to No;
+  - Show details lists every TocPilot-owned addon root and every recorded installed file;
+  - Uninstall retains package/tracking; Remove deletes package state after owned files are removed;
+  - record-only removal explicitly states that no addon files are being removed.
+- Filesystem ownership, transaction, rollback, and state-save semantics are unchanged from v0.3.1.
+- Runtime-confirmed from the prior v0.3.1 pass: root addon Add Git, repository-library/multi-addon selection, no-TOC GitHub DLL fallback, and direct DLL discovery.
+- Runtime-untested/deferred until the user can test: v0.3.2 removal confirmation UI; single-nested Add Git; same-root managed-addon overwrite/cancel; mixed root+child refusal; terminal no-supported-content cases.
+- Deferred/out of scope remains: GitLab release support, release-archive executable discovery, arbitrary-depth repository catalogue discovery, dependency resolution between library children, broader collection UX.
+- Next development item in roadmap order: P5 column persistence/reordering/locking. Do not fold import/export, package editing, local-modification detection, or richer diagnostics into that slice.
+- Exact next step: start a fresh development branch from the post-release docs-only `main` head and inspect the current package-list column/sort state before implementing only P5 column persistence/reordering/locking.
 
 ## 2026-09-23 v0.3.1 published / managed-root overwrite runtime handoff
 
