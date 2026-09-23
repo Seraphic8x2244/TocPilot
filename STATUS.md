@@ -1,5 +1,23 @@
 # TocPilot status / handoff
 
+## 2026-09-23 v0.3.5 version/status UX implementation
+
+- Active branch: `ux/version-status-v035`, branched from docs-current `main` head `4611b68d1ea56107cef27a32a45fb5c21cbbc00c`.
+- Published/source baseline: `v0.3.4`; intended next release: `v0.3.5`.
+- Latest released code merge/tag target remains `d658b8eb409cb5e8d08f2bf647acbe33676a12a6` (`v0.3.4`).
+- Completed before this slice: v0.3.4 visible-order Refresh All/Update New, orange update rows, green session-updated rows, and Update New scroll-to-top; release CI passed 17/17 tests.
+- Scope for v0.3.5 only:
+  - add Advanced-only `Version` between Branch and revision columns;
+  - derive Version strictly from locally installed package-owned `.toc` metadata, with no network lookup;
+  - rename Advanced revision columns to `Local SHA` and `Git SHA`;
+  - rename steady Status labels to `Up To Date`, `Update Available`, `Not Installed`, `Not Configured`, and `Needs Attention`;
+  - keep Compact mode `Name | Status` only;
+  - fix the v0.3.4 sorting regression where healthy release/DLL packages are treated as attention rows merely because they are not branch-mode packages.
+- Untested work in this slice: local TOC-version extraction across single/multiple owned addon roots; six-column Advanced persistence/migration from existing five-column v0.3.4 state; branch-selector positioning after the extra column; compact/Advanced switching; DLL normal-sort behavior; renamed statuses.
+- Previously deferred runtime work remains deferred: existing column persistence/Lock columns tests, removal confirmation, Add Git edge cases, and other handoff items below.
+- Deferred/out of scope remains: P5 import/export, tag-to-version inference, remote TOC inspection, package editing, local-modification detection/backups, and broader roadmap work.
+- Exact next step: implement/test local TOC Version extraction and migrate the persisted Advanced column layout from five to six columns without breaking schema-1 v0.3.4 state; then update Win32 list layout/sorting/status labels, run full Windows CI, merge, and publish `v0.3.5` through the normal Release workflow.
+
 ## 2026-09-23 v0.3.4 published / update-visibility runtime handoff
 
 - Active product branch: `main`.
