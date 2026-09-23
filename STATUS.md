@@ -1,5 +1,20 @@
 # TocPilot status / handoff
 
+## 2026-09-23 empty-default-branch runtime edge case
+
+- Active branch: `main`.
+- Published/source version remains `v0.3.0`.
+- Entering repository head: `f43064d99e790f19e72f8d5fb7610f77daa2bffc` (`Record v0.3.0 release handoff`).
+- Runtime observation: adding a branch package whose repository default branch contains no installable addon can leave a newly tracked package uninstalled. The inspected reproduction is `Seraphic8x2244/WanderingGaia`: GitHub reports `main` as the default branch; `main` currently contains only `README.md`, while `dev` contains `WanderingGaia.toc` and the addon sources.
+- Current Add Package flow is internally consistent: the branch dialog preselects the provider's default branch, saves the selected branch, then immediately starts installation. Selecting `main` therefore reaches archive inspection and correctly fails because that branch has no addon root.
+- Current inline/Advanced branch selector only calls `SetPackageBranch` and saves the new tracked branch. It does not call the install path. Therefore changing this never-installed package from `main` to `dev` leaves it uninstalled until the user explicitly clicks **Install Addon**.
+- This is a UX/continuation gap rather than evidence that branch discovery itself cannot enumerate `dev`; the branch loader enumerates advertised refs and the modal allows selecting any returned branch.
+- Candidate narrow behavior change: after a successful inline branch change, automatically continue installation only when `installedRevision` is empty. Preserve explicit user action for already-installed packages when switching branches.
+- Automatic `v0.1.37 -> v0.3.0` startup self-update runtime confirmation is still pending.
+- GitLab branch-package install/restart/Refresh runtime confirmation is still pending.
+- GitLab release support remains out of scope. Release ZIP/archive executable handling remains an intentional non-goal.
+- Exact next step: decide whether to implement/test the narrow never-installed branch-change continuation before repository-collection design; do not broaden provider/release scope.
+
 ## 2026-09-23 v0.3.0 published / GitLab branch runtime handoff
 
 - Active branch: `main`.
