@@ -1,5 +1,28 @@
 # TocPilot status / handoff
 
+## 2026-09-23 v0.3.3 published / P5 column layout handoff
+
+- Active product branch: `main`.
+- Published/source version: `v0.3.3`.
+- Release tag `v0.3.3` points exactly to commit `60f8cf680821db5ea88789c15c1f35f94f014d74` (`Publish v0.3.3`).
+- GitHub Release workflow run `35920885122` (#46), Windows x64 release job `107384232317`, passed source-version validation, Release build, the complete **17/17** CTest suite, SHA-256 sidecar generation, tag creation/verification, and release asset publication.
+- Published release: `https://github.com/Seraphic8x2244/TocPilot/releases/tag/v0.3.3`; GitHub latest-stable reports `v0.3.3` with draft=false and prerelease=false.
+- Published assets:
+  - `TocPilot.exe` — 2,416,128 bytes; SHA-256 `df3a2c1d39f9378a9e8174f90e29078db394e6ff6c41276449b8d48a7d27bb14`;
+  - `TocPilot.exe.sha256` — 78 bytes; release-asset SHA-256 `7fa14dc10b2645c0ce4d68b70b9a23d690c313f2a307a580bf33050385edc25e`.
+- v0.3.3 includes the P5 package-list column layout slice:
+  - Advanced column widths persist;
+  - display order persists/restores;
+  - persisted widths/order are validated;
+  - **Lock columns** persists and blocks resize/reorder/divider autosizing;
+  - unlocked Advanced mode supports native resize/reorder;
+  - compact mode is layout-read-only and does not overwrite the saved Advanced layout;
+  - existing sort persistence remains unchanged.
+- Runtime-untested/deferred for this feature: automatic self-update from v0.3.2 to v0.3.3; resize/reorder persistence across restart; lock/unlock interaction; compact/Advanced toggling after custom layout; Branch selector positioning after reorder.
+- Previously deferred runtime checks remain: v0.3.2 removal confirmation UI; single-nested Add Git; same-root managed-addon overwrite/cancel; mixed root+child refusal; terminal no-supported-content cases.
+- Deferred/out of scope remains: P5 import/export, package editing, ambiguous archive-mapping improvements, local-modification detection/backups, richer diagnostics, GitLab release support, release-archive executable discovery, arbitrary-depth repository catalogue discovery, dependency resolution between library children, and broader collection UX.
+- Exact next step: launch installed v0.3.2 and confirm normal startup self-update to published v0.3.3. Then exercise the four column-layout runtime checks above. Do not start P5 import/export until that runtime pass is complete.
+
 ## 2026-09-23 P5 column layout merged / runtime deferred
 
 - Active product branch: `main`.
