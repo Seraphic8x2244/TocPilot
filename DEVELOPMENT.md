@@ -265,10 +265,11 @@ Stored state includes:
 
 At minimum:
 
-- repository/archive ZIP -> one or more addon directories;
-- release ZIP -> one or more addon directories;
-- direct DLL -> WoW root;
+- provider-generated branch/source ZIP -> one or more addon directories;
+- exact standalone DLL release asset -> WoW root;
 - direct file -> explicitly selected safe relative destination.
+
+User-uploaded release ZIP/archive assets are not an install type. TocPilot does not download or unpack them to locate executable payloads.
 
 Never allow a remote archive to write outside the WoW root.
 
@@ -376,20 +377,22 @@ Implemented behaviour follows the rules above: resolve latest stable first; pres
 
 For checksum verification TocPilot uses a valid GitHub release-asset `digest` when present, otherwise it requires the exact `<asset>.sha256` release asset. The DLL install is refused if TocPilot cannot obtain an expected SHA-256.
 
-The new DLL UI and real final-path write/update path remain runtime-untested until `v0.1.36` is published and exercised in a WoW installation. Direct-DLL deletion/uninstall is not part of this slice: forgetting a DLL package does not delete its WoW-root DLL.
+The direct-DLL path is runtime-proven on published `v0.1.37` with ClassicAPI and Nampower. Direct-DLL removal behavior remains as currently implemented; TocPilot does not add extra second-guessing around an explicit user action solely because the package is a DLL.
 
 
-### ZIP release assets
+### Release archive assets
 
-If a selected release asset is a ZIP, TocPilot should inspect its contents and offer or infer an addon installation mapping.
+User-uploaded release ZIP, 7z, RAR, installer, and bundle assets are intentionally unsupported for executable/DLL management. TocPilot will not download, inspect, unpack, or offer an override for these assets to locate executable files.
+
+Provider-generated branch/source archives are a separate package path and remain supported for constrained addon installation into `Interface\\AddOns`.
 
 ---
 
 ## 9. Addon/archive layout detection
 
-Repository archives and release ZIPs vary.
+Provider-generated repository/source archives vary.
 
-TocPilot should not assume every archive has exactly one folder with exactly one addon.
+TocPilot should not assume every source archive has exactly one folder with exactly one addon.
 
 ### Detection strategy
 
@@ -829,10 +832,13 @@ Later optional assets:
 
 Use semantic versions.
 
-Development bootstrap:
+Milestone interpretation:
 
-- `v0.1.0` — self-updater bootstrap;
-- `v0.1.1` — self-update validation target.
+- `0.1.x` — bootstrap, self-update, and basic package-management foundations;
+- `0.2.x` — artwork/UI phase. This work was historically completed while releases still carried `0.1.x` numbers, so no published `0.2.x` series is required retroactively;
+- `0.3.x` — direct DLL management, GitLab support, and repository-collection work.
+
+`v0.3.0` is the first release adopting this milestone numbering explicitly. Repository collections are part of the `0.3.x` scope but are not pulled into the first GitLab branch implementation unless separately designed and agreed.
 
 Remain in `0.x` while core install/state formats can still change substantially.
 
@@ -934,6 +940,16 @@ First slice:
 - reuse the existing secure addon archive inspection/install transaction;
 - integrate startup/Refresh/update tracking without changing GitHub behavior.
 
+First-slice implementation status — 2026-09-23:
+
+- public `gitlab.com` repository URL normalization supports nested groups;
+- the branch picker and inline branch selector use the provider-generic Git smart-HTTP branch list/HEAD resolver;
+- GitLab branch archives download from the public repository archive API at the exact resolved commit SHA, with LFS blob expansion disabled;
+- GitLab archives reuse the existing secure ZIP inspection, addon-root mapping, ownership, staging, rollback, and install transaction;
+- package state mutators, startup/Refresh, install, **Update New**, and **Update All** now accept GitLab branch packages alongside GitHub branch packages;
+- implementation is complete through `ce6e708848b6ac776732a6753cbe60cedf43ec39`;
+- runtime validation in a real WoW installation remains pending.
+
 Later parity, only after the branch slice is runtime-proven:
 
 - supported releases/direct assets where provider API and TocPilot's existing trust model permit;
@@ -980,7 +996,7 @@ Maintain test fixtures for:
 - repository with multiple addon folders;
 - branch with long branch name;
 - branch switch that removes obsolete files;
-- release ZIP;
+- provider-generated source ZIP;
 - direct DLL asset;
 - nested archive;
 - malicious `../` archive path;

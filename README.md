@@ -19,8 +19,10 @@ SuperLightWeight, portable World of Warcraft addon and release manager.
 - Automatically self updates
 
 ## In Active Development
-- Release/asset tracking (repos that have multiple addons bundled)
-- Direct DLL/file management (nampower, superwow, classicAPI etc)
+- GitLab branch tracking runtime validation
+- Repository collections / grouped repository management
+- Release/asset tracking
+- Direct DLL/file management for exact standalone DLL release assets (Nampower, ClassicAPI)
 
 ## License
 

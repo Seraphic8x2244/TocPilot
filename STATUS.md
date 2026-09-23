@@ -1,5 +1,34 @@
 # TocPilot status / handoff
 
+## 2026-09-23 GitLab branch integration complete / v0.3.0 source bump
+
+- Active branch: `main`.
+- Published version entering this checkpoint: `v0.1.37`.
+- Source version is now `v0.3.0`.
+- Version-series intent is now explicit:
+  - `0.1.x` = bootstrap/basic package-management foundations;
+  - `0.2.x` = artwork/UI phase, historically completed while published versions still remained in `0.1.x`;
+  - `0.3.x` = DLL management, GitLab, and repository-collection work.
+- GitLab branch support is implemented through `ce6e708848b6ac776732a6753cbe60cedf43ec39` (`Complete GitLab branch integration`):
+  - public `gitlab.com` URLs, including nested groups, normalize through the existing provider parser;
+  - GitHub and GitLab share the provider-generic smart-HTTP branch list/HEAD resolver;
+  - exact resolved GitLab commit archives use GitLab's public repository archive API with LFS blob expansion disabled;
+  - GitLab packages reuse the existing secure ZIP inspection, addon-root mapping, ownership checks, staging, rollback, and install transaction;
+  - Add Package, modal and inline branch selection, startup/Refresh, Inspect, Install, state persistence, **Update New**, and **Update All** accept GitLab branch packages;
+  - provider rate-limit handling is generic for branch packages;
+  - GitHub branch and GitHub direct-DLL behavior remain unchanged.
+- Validation before the version bump:
+  - `d678224a` Build run `35857340546` passed Windows x64 Release build, complete CTest, and executable artifact upload;
+  - follow-up `ce6e7088` added the remaining state/UI/update-all GitLab wiring and deterministic GitLab state/update-all coverage.
+- Runtime-untested:
+  - adding/installing a real GitLab branch package;
+  - restart/startup status for a managed GitLab package;
+  - Refresh All / Update New for GitLab;
+  - the first real automatic startup self-update from installed `v0.1.37` to `v0.3.0`.
+- Security/non-goal unchanged: user-uploaded release ZIP/archive assets are not supported for executable/DLL management. SuperWoW remains unsupported unless it publishes a direct standalone DLL release asset.
+- Repository collections belong to the `0.3.x` milestone but are not implemented by this GitLab slice; their behavior remains to be designed separately.
+- Exact next step: require a CI-green `v0.3.0` source build, then publish `v0.3.0`. Runtime-test automatic `v0.1.37 -> v0.3.0` startup replacement first, then add a real public GitLab addon and exercise install/restart/Refresh/Update New before expanding GitLab release support or starting repository collections.
+
 ## 2026-09-23 GitLab next / release-ZIP policy locked
 
 - Active branch: `main`.
