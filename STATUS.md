@@ -1,5 +1,16 @@
 # TocPilot status / handoff
 
+## 2026-09-23 P5 removal-dialog development checkpoint
+
+- Active branch: `feature/removal-dialog`, created from `main` head `f85cb59c470219f0167e30d532c5953ea34dc369`.
+- Published version remains `v0.3.1`; release/tag commit remains `7222280319bc4ff2f46eac58dc3686ead78e8895`. No release/version bump is planned for this development checkpoint.
+- Newly runtime-confirmed on published `v0.3.1`: normal/root addon Add Git flow, multi-addon repository selection, no-TOC GitHub DLL fallback, and direct DLL discovery.
+- Still runtime-untested and explicitly deferred while development continues: single-nested addon Add Git flow, same-root managed-addon overwrite/cancel, mixed root+child refusal, and terminal no-supported-content cases.
+- Next roadmap slice: P5 UX/safety refinement, first item only — replace the current Remove/Uninstall count-only message boxes with a compact confirmation dialog that can expand to show the exact TocPilot-owned addon roots/files affected. Keep existing transaction, rollback, ownership, and state semantics unchanged.
+- Deferred/out of scope remains: GitLab release support, release-archive executable discovery, arbitrary-depth repository catalogue discovery, dependency resolution between library children, broader collection UX, and later P5 items (column persistence/reordering/locking, import/export, package edit, local-modification handling) until this slice is complete.
+- Untested work for this slice: none yet; source changes have not started.
+- Exact next step: implement the compact reusable removal confirmation dialog, wire it into both Uninstall and Remove for installed addon packages, add deterministic non-UI helper coverage where practical, then run the full Windows x64 Release CI suite before deciding on the next release.
+
 ## 2026-09-23 v0.3.1 published / managed-root overwrite runtime handoff
 
 - Active branch: `main`.
