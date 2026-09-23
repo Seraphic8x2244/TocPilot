@@ -10,8 +10,22 @@ namespace tp {
 
 struct AddonCandidate {
     std::filesystem::path sourceRelativePath;
+    std::filesystem::path repositoryRelativePath;
     std::wstring installFolder;
     std::vector<std::filesystem::path> tocFiles;
+};
+
+enum class RepositoryAddonLayoutKind {
+    None,
+    RootAddon,
+    SingleNestedAddon,
+    RepositoryLibrary,
+    MixedAmbiguous
+};
+
+struct RepositoryAddonLayout {
+    RepositoryAddonLayoutKind kind = RepositoryAddonLayoutKind::None;
+    std::vector<AddonCandidate> candidates;
 };
 
 struct ArchiveInspection {
@@ -73,6 +87,13 @@ bool DetectAddonCandidates(
     std::vector<AddonCandidate>& candidates,
     std::wstring& error);
 
+bool DetectShallowRepositoryAddonLayout(
+    const std::filesystem::path& extractedRoot,
+    std::wstring_view providerName,
+    std::wstring_view repository,
+    RepositoryAddonLayout& layout,
+    std::wstring& error);
+
 bool DetectRepositoryAddonCandidates(
     const std::filesystem::path& extractedRoot,
     std::wstring_view providerName,
@@ -85,6 +106,14 @@ bool DetectGitHubAddonCandidates(
     const std::filesystem::path& extractedRoot,
     std::wstring_view repository,
     std::wstring_view existingInstallFolder,
+    std::vector<AddonCandidate>& candidates,
+    std::wstring& error);
+
+bool IsRepositoryLibrary(
+    const std::vector<AddonCandidate>& candidates);
+
+bool SelectRepositoryAddonCandidate(
+    std::wstring_view sourcePath,
     std::vector<AddonCandidate>& candidates,
     std::wstring& error);
 

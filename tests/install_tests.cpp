@@ -587,6 +587,104 @@ int main() {
     }
 
     {
+        const auto replacementRoot =
+            temp / L"ReplacementWoW";
+        const auto addOns =
+            replacementRoot /
+            L"Interface" /
+            L"AddOns";
+        const auto extracted =
+            temp / L"replacement-extracted";
+
+        WriteText(
+            addOns /
+                L"Shared/Shared.toc",
+            "old");
+        WriteText(
+            addOns /
+                L"Shared/old.lua",
+            "old file");
+        WriteText(
+            extracted /
+                L"repo/Shared/Shared.toc",
+            "new");
+        WriteText(
+            extracted /
+                L"repo/Shared/new.lua",
+            "new file");
+
+        const std::vector<std::wstring> priorFiles{
+            L"Interface/AddOns/Shared/Shared.toc",
+            L"Interface/AddOns/Shared/old.lua"
+        };
+
+        tp::AddonInstallPlan plan;
+        std::wstring error;
+        if (!tp::BuildAddonInstallPlan(
+                replacementRoot,
+                L"github:NewOwner/Shared",
+                extracted,
+                {Candidate(
+                    L"repo/Shared",
+                    L"Shared")},
+                priorFiles,
+                {},
+                plan,
+                error)) {
+            Fail("managed replacement plan was rejected");
+        } else {
+            tp::AddonInstallTransaction transaction;
+            if (!tp::PrepareAddonInstallTransaction(
+                    plan,
+                    transaction,
+                    error)) {
+                Fail("managed replacement preparation failed");
+            } else if (
+                ReadText(
+                    addOns /
+                    L"Shared/Shared.toc") !=
+                    "old" ||
+                !Exists(
+                    addOns /
+                    L"Shared/old.lua")) {
+                Fail("managed replacement preparation changed live files");
+            } else if (!tp::CommitAddonInstallTransaction(
+                           transaction,
+                           error)) {
+                Fail("managed replacement commit failed");
+            } else if (
+                ReadText(
+                    addOns /
+                    L"Shared/Shared.toc") !=
+                    "new" ||
+                Exists(
+                    addOns /
+                    L"Shared/old.lua") ||
+                !Exists(
+                    addOns /
+                    L"Shared/new.lua")) {
+                Fail("managed replacement commit did not replace the owned root");
+            } else if (!tp::RollbackAddonInstallTransaction(
+                           transaction,
+                           error)) {
+                Fail("managed replacement rollback failed");
+            } else if (
+                ReadText(
+                    addOns /
+                    L"Shared/Shared.toc") !=
+                    "old" ||
+                !Exists(
+                    addOns /
+                    L"Shared/old.lua") ||
+                Exists(
+                    addOns /
+                    L"Shared/new.lua")) {
+                Fail("managed replacement rollback did not restore the old owner files");
+            }
+        }
+    }
+
+    {
         const auto otherRoot =
             temp / L"OtherOwnerWoW";
         const auto extracted =

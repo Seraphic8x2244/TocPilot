@@ -254,6 +254,178 @@ void TestRemovePackageRecord(
     }
 }
 
+void TestPackageOwnerReplacement(
+    const std::filesystem::path& root) {
+    tp::AppState state;
+    bool created = false;
+    std::wstring error;
+
+    if (!tp::LoadOrCreateState(
+            root,
+            state,
+            created,
+            error)) {
+        Fail("package-owner replacement fixture did not load");
+        return;
+    }
+
+    state.packages.clear();
+
+    auto oldPackage =
+        tp::MakeRepositoryPackage(
+            L"github",
+            L"OldOwner/Shared");
+    auto otherPackage =
+        tp::MakeRepositoryPackage(
+            L"github",
+            L"Owner/Other");
+
+    const std::wstring oldRevision =
+        L"1111111111111111111111111111111111111111";
+    const std::wstring otherRevision =
+        L"2222222222222222222222222222222222222222";
+
+    if (!tp::SetPackageBranch(
+            oldPackage,
+            L"main",
+            oldRevision,
+            error) ||
+        !tp::SetPackageInstalledState(
+            oldPackage,
+            oldRevision,
+            {
+                L"Interface/AddOns/Shared/Shared.toc",
+                L"Interface/AddOns/Shared/main.lua",
+                L"Interface/AddOns/SharedExtra/SharedExtra.toc"
+            },
+            error) ||
+        !tp::SetPackageBranch(
+            otherPackage,
+            L"main",
+            otherRevision,
+            error) ||
+        !tp::SetPackageInstalledState(
+            otherPackage,
+            otherRevision,
+            {L"Interface/AddOns/Other/Other.toc"},
+            error) ||
+        !tp::AppendPackage(
+            state,
+            oldPackage,
+            error) ||
+        !tp::AppendPackage(
+            state,
+            otherPackage,
+            error)) {
+        Fail("package-owner replacement fixture setup failed");
+        return;
+    }
+
+    if (tp::FindPackageOwningAddonRoot(
+            state,
+            L"shared") != 0 ||
+        tp::FindPackageOwningAddonRoot(
+            state,
+            L"SharedExtra") != 0 ||
+        tp::FindPackageOwningAddonRoot(
+            state,
+            L"OTHER") != 1 ||
+        tp::FindPackageOwningAddonRoot(
+            state,
+            L"Missing") !=
+            state.packages.size()) {
+        Fail("addon-root owner lookup returned the wrong package");
+        return;
+    }
+
+    auto replacement =
+        tp::MakeRepositoryPackage(
+            L"github",
+            L"NewOwner/Shared");
+    replacement.sourcePath = L".";
+
+    const std::wstring newRevision =
+        L"3333333333333333333333333333333333333333";
+
+    if (!tp::SetPackageBranch(
+            replacement,
+            L"master",
+            newRevision,
+            error) ||
+        !tp::SetPackageInstalledState(
+            replacement,
+            newRevision,
+            {
+                L"Interface/AddOns/Shared/Shared.toc",
+                L"Interface/AddOns/Shared/new.lua"
+            },
+            error) ||
+        !tp::ReplacePackageRecord(
+            state,
+            oldPackage.id,
+            replacement,
+            error)) {
+        Fail("managed addon owner could not be replaced");
+        return;
+    }
+
+    if (state.packages.size() != 2 ||
+        state.packages[0].repository !=
+            L"NewOwner/Shared" ||
+        state.packages[0].installedRevision !=
+            newRevision ||
+        tp::FindPackageOwningAddonRoot(
+            state,
+            L"Shared") != 0 ||
+        tp::FindPackageOwningAddonRoot(
+            state,
+            L"SharedExtra") !=
+            state.packages.size()) {
+        Fail("replacement did not transfer addon-root ownership cleanly");
+        return;
+    }
+
+    auto duplicate =
+        tp::MakeRepositoryPackage(
+            L"github",
+            L"Owner/Other");
+
+    if (tp::ReplacePackageRecord(
+            state,
+            replacement.id,
+            std::move(duplicate),
+            error)) {
+        Fail("replacement accepted an id already owned by another package");
+        return;
+    }
+
+    if (!tp::SaveState(
+            root,
+            state,
+            error)) {
+        Fail("replacement state could not be saved");
+        return;
+    }
+
+    tp::AppState loaded;
+    created = true;
+    if (!tp::LoadOrCreateState(
+            root,
+            loaded,
+            created,
+            error) ||
+        loaded.packages.size() != 2 ||
+        loaded.packages[0].repository !=
+            L"NewOwner/Shared" ||
+        loaded.packages[0].installedRevision !=
+            newRevision ||
+        loaded.packages[1].repository !=
+            L"Owner/Other") {
+        Fail("replacement state did not round-trip");
+    }
+}
+
+
 void TestClearInstalledState(
     const std::filesystem::path& root) {
     tp::AppState state;
@@ -374,6 +546,157 @@ void TestGitLabBranchMutators() {
         package.installedRevision != installed ||
         package.latestRevision != latest) {
         Fail("GitLab branch latest revision could not be refreshed");
+    }
+}
+
+void TestRepositoryChildPackages(
+    const std::filesystem::path& root) {
+    tp::AppState state;
+    bool created = false;
+    std::wstring error;
+
+    if (!tp::LoadOrCreateState(
+            root,
+            state,
+            created,
+            error)) {
+        Fail("repository-child fixture did not load");
+        return;
+    }
+
+    state.packages.clear();
+
+    auto atlas =
+        tp::MakeRepositoryAddonPackage(
+            L"github",
+            L"Cabro/Atlas",
+            L"Atlas",
+            L"Atlas");
+    auto loot =
+        tp::MakeRepositoryAddonPackage(
+            L"github",
+            L"Cabro/Atlas",
+            L"AtlasLoot",
+            L"AtlasLoot");
+
+    if (atlas.id == loot.id ||
+        atlas.sourcePath != L"Atlas" ||
+        loot.sourcePath != L"AtlasLoot") {
+        Fail("repository child package identities were not unique");
+        return;
+    }
+
+    const std::wstring revision =
+        L"0123456789abcdef0123456789abcdef01234567";
+
+    if (!tp::SetPackageBranch(
+            atlas,
+            L"master",
+            revision,
+            error) ||
+        !tp::SetPackageBranch(
+            loot,
+            L"master",
+            revision,
+            error) ||
+        !tp::AppendPackage(
+            state,
+            std::move(atlas),
+            error) ||
+        !tp::AppendPackage(
+            state,
+            std::move(loot),
+            error) ||
+        !tp::SaveState(
+            root,
+            state,
+            error)) {
+        Fail("repository child packages could not be saved");
+        return;
+    }
+
+    tp::AppState loaded;
+    created = true;
+    if (!tp::LoadOrCreateState(
+            root,
+            loaded,
+            created,
+            error) ||
+        loaded.packages.size() != 2 ||
+        loaded.packages[0].sourcePath != L"Atlas" ||
+        loaded.packages[1].sourcePath != L"AtlasLoot" ||
+        loaded.packages[0].repository != L"Cabro/Atlas" ||
+        loaded.packages[1].repository != L"Cabro/Atlas") {
+        Fail("repository child package paths did not round-trip");
+        return;
+    }
+
+    const std::string saved =
+        ReadAll(tp::StatePath(root));
+    if (saved.find("\"source_path\":\"Atlas\"") ==
+            std::string::npos ||
+        saved.find("\"source_path\":\"AtlasLoot\"") ==
+            std::string::npos) {
+        Fail("repository child source paths were not serialized");
+    }
+}
+
+void TestRepositoryRootSourcePath(
+    const std::filesystem::path& root) {
+    tp::AppState state;
+    bool created = false;
+    std::wstring error;
+
+    if (!tp::LoadOrCreateState(
+            root,
+            state,
+            created,
+            error)) {
+        Fail("repository-root source-path fixture did not load");
+        return;
+    }
+
+    state.packages.clear();
+
+    auto package =
+        tp::MakeRepositoryPackage(
+            L"github",
+            L"Owner/RootAddon");
+    package.sourcePath = L".";
+
+    if (!tp::SetPackageBranch(
+            package,
+            L"main",
+            L"0123456789abcdef0123456789abcdef01234567",
+            error) ||
+        !tp::AppendPackage(
+            state,
+            std::move(package),
+            error) ||
+        !tp::SaveState(
+            root,
+            state,
+            error)) {
+        Fail("repository-root source-path fixture could not be saved");
+        return;
+    }
+
+    tp::AppState loaded;
+    created = true;
+
+    if (!tp::LoadOrCreateState(
+            root,
+            loaded,
+            created,
+            error) ||
+        loaded.packages.size() != 1 ||
+        loaded.packages[0].id !=
+            L"github:Owner/RootAddon" ||
+        loaded.packages[0].sourcePath !=
+            L"." ||
+        loaded.packages[0].ref !=
+            L"main") {
+        Fail("explicit repository-root source path did not round-trip");
     }
 }
 
@@ -596,8 +919,11 @@ int main() {
     } else {
         TestCreateAddRoundTrip(root);
         TestRemovePackageRecord(root);
+        TestPackageOwnerReplacement(root);
         TestClearInstalledState(root);
         TestGitLabBranchMutators();
+        TestRepositoryChildPackages(root);
+        TestRepositoryRootSourcePath(root);
         TestReleasePackageRoundTrip(root);
         TestReleaseTrackingMutators(root);
         TestUnknownFieldPreservation(root);

@@ -23,6 +23,7 @@ struct PackageRecord {
     std::wstring ref;
     std::wstring releasePolicy;
     std::wstring asset;
+    std::wstring sourcePath;
     std::wstring target = L"addons";
     std::wstring targetPath;
     std::wstring installedRevision;
@@ -49,9 +50,25 @@ PackageRecord MakeRepositoryPackage(
     std::wstring provider,
     std::wstring repository);
 
+PackageRecord MakeRepositoryAddonPackage(
+    std::wstring provider,
+    std::wstring repository,
+    std::wstring sourcePath,
+    std::wstring name);
+
 bool AppendPackage(
     AppState& state,
     PackageRecord package,
+    std::wstring& error);
+
+std::size_t FindPackageOwningAddonRoot(
+    const AppState& state,
+    std::wstring_view installFolder);
+
+bool ReplacePackageRecord(
+    AppState& state,
+    std::wstring_view existingPackageId,
+    PackageRecord replacement,
     std::wstring& error);
 
 bool RemovePackageRecord(

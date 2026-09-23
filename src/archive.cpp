@@ -75,6 +75,28 @@ std::wstring Lower(std::wstring value) {
     return value;
 }
 
+std::filesystem::path RepositoryRelativePath(
+    const std::filesystem::path& sourceRelativePath) {
+    auto it = sourceRelativePath.begin();
+    const auto end = sourceRelativePath.end();
+
+    if (it == end) {
+        return {};
+    }
+
+    // Provider-generated source archives always place repository contents
+    // under one generated wrapper directory. Persist paths below that wrapper
+    // so child-package identity remains stable when the commit changes.
+    ++it;
+
+    std::filesystem::path result;
+    for (; it != end; ++it) {
+        result /= *it;
+    }
+
+    return result;
+}
+
 bool IsReservedWindowsName(std::wstring_view segment) {
     std::wstring stem(segment);
     const auto dot = stem.find(L'.');
@@ -933,6 +955,299 @@ bool DetectAddonCandidates(
     return true;
 }
 
+bool DetectShallowRepositoryAddonLayout(
+    const std::filesystem::path& extractedRoot,
+    std::wstring_view providerName,
+    std::wstring_view repository,
+    RepositoryAddonLayout& layout,
+    std::wstring& error) {
+    layout = {};
+    error.clear();
+
+    std::error_code ec;
+    if (!std::filesystem::is_directory(
+            extractedRoot,
+            ec) ||
+        ec) {
+        error =
+            L"Extracted staging directory is not readable.";
+        return false;
+    }
+
+    const std::size_t slash =
+        repository.find_last_of(L'/');
+    const std::wstring repositoryName =
+        slash == std::wstring_view::npos
+            ? std::wstring(repository)
+            : std::wstring(repository.substr(slash + 1));
+
+    if (repositoryName.empty()) {
+        error =
+            std::wstring(providerName) +
+            L" repository name is empty.";
+        return false;
+    }
+
+    std::filesystem::path repositoryRoot;
+    std::size_t wrapperDirectoryCount = 0;
+
+    std::filesystem::directory_iterator rootIt(
+        extractedRoot,
+        std::filesystem::directory_options::skip_permission_denied,
+        ec);
+    const std::filesystem::directory_iterator end;
+
+    if (ec) {
+        error =
+            L"Could not enumerate extracted staging directory: " +
+            std::to_wstring(ec.value());
+        return false;
+    }
+
+    while (rootIt != end) {
+        const auto entry = *rootIt;
+        ec.clear();
+        const auto status =
+            entry.symlink_status(ec);
+
+        if (ec) {
+            error =
+                L"Could not inspect extracted archive wrapper: " +
+                std::to_wstring(ec.value());
+            return false;
+        }
+
+        if (std::filesystem::is_symlink(status)) {
+            error =
+                L"Extracted staging unexpectedly contains a symbolic link.";
+            return false;
+        }
+
+        if (std::filesystem::is_directory(status)) {
+            ++wrapperDirectoryCount;
+            repositoryRoot = entry.path();
+        }
+
+        rootIt.increment(ec);
+        if (ec) {
+            error =
+                L"Could not continue enumerating extracted staging directory: " +
+                std::to_wstring(ec.value());
+            return false;
+        }
+    }
+
+    if (wrapperDirectoryCount != 1) {
+        error =
+            std::wstring(providerName) +
+            L" source archive did not contain exactly one repository wrapper directory.";
+        return false;
+    }
+
+    const auto wrapperRelative =
+        repositoryRoot.lexically_relative(
+            extractedRoot);
+
+    if (wrapperRelative.empty() ||
+        wrapperRelative.native().starts_with(
+            L"..")) {
+        error =
+            L"Repository archive wrapper is outside the extraction root.";
+        return false;
+    }
+
+    auto collectDirectTocs =
+        [&](const std::filesystem::path& directory,
+            std::vector<std::filesystem::path>& tocFiles) {
+            tocFiles.clear();
+
+            std::filesystem::directory_iterator it(
+                directory,
+                std::filesystem::directory_options::skip_permission_denied,
+                ec);
+
+            if (ec) {
+                error =
+                    L"Could not enumerate repository directory: " +
+                    std::to_wstring(ec.value());
+                return false;
+            }
+
+            while (it != end) {
+                const auto entry = *it;
+                ec.clear();
+                const auto status =
+                    entry.symlink_status(ec);
+
+                if (ec) {
+                    error =
+                        L"Could not inspect repository entry: " +
+                        std::to_wstring(ec.value());
+                    return false;
+                }
+
+                if (std::filesystem::is_symlink(status)) {
+                    error =
+                        L"Extracted staging unexpectedly contains a symbolic link.";
+                    return false;
+                }
+
+                if (std::filesystem::is_regular_file(status) &&
+                    IsTocExtension(entry.path())) {
+                    tocFiles.push_back(
+                        entry.path().filename());
+                }
+
+                it.increment(ec);
+                if (ec) {
+                    error =
+                        L"Could not continue enumerating repository directory: " +
+                        std::to_wstring(ec.value());
+                    return false;
+                }
+            }
+
+            std::sort(
+                tocFiles.begin(),
+                tocFiles.end(),
+                [](const auto& left,
+                   const auto& right) {
+                    return Lower(left.wstring()) <
+                        Lower(right.wstring());
+                });
+            return true;
+        };
+
+    std::vector<std::filesystem::path> rootTocs;
+    if (!collectDirectTocs(
+            repositoryRoot,
+            rootTocs)) {
+        return false;
+    }
+
+    std::vector<AddonCandidate> childCandidates;
+
+    std::filesystem::directory_iterator childIt(
+        repositoryRoot,
+        std::filesystem::directory_options::skip_permission_denied,
+        ec);
+
+    if (ec) {
+        error =
+            L"Could not enumerate repository root: " +
+            std::to_wstring(ec.value());
+        return false;
+    }
+
+    while (childIt != end) {
+        const auto entry = *childIt;
+        ec.clear();
+        const auto status =
+            entry.symlink_status(ec);
+
+        if (ec) {
+            error =
+                L"Could not inspect repository root entry: " +
+                std::to_wstring(ec.value());
+            return false;
+        }
+
+        if (std::filesystem::is_symlink(status)) {
+            error =
+                L"Extracted staging unexpectedly contains a symbolic link.";
+            return false;
+        }
+
+        if (std::filesystem::is_directory(status)) {
+            std::vector<std::filesystem::path> tocFiles;
+            if (!collectDirectTocs(
+                    entry.path(),
+                    tocFiles)) {
+                return false;
+            }
+
+            if (!tocFiles.empty()) {
+                AddonCandidate candidate;
+                candidate.sourceRelativePath =
+                    wrapperRelative /
+                    entry.path().filename();
+                candidate.repositoryRelativePath =
+                    entry.path().filename();
+                candidate.installFolder =
+                    entry.path().filename().wstring();
+                candidate.tocFiles =
+                    std::move(tocFiles);
+                childCandidates.push_back(
+                    std::move(candidate));
+            }
+        }
+
+        childIt.increment(ec);
+        if (ec) {
+            error =
+                L"Could not continue enumerating repository root: " +
+                std::to_wstring(ec.value());
+            return false;
+        }
+    }
+
+    std::sort(
+        childCandidates.begin(),
+        childCandidates.end(),
+        [](const AddonCandidate& left,
+           const AddonCandidate& right) {
+            return Lower(
+                       left.repositoryRelativePath
+                           .generic_wstring()) <
+                Lower(
+                       right.repositoryRelativePath
+                           .generic_wstring());
+        });
+
+    const bool hasRootAddon =
+        !rootTocs.empty();
+    const bool hasChildAddons =
+        !childCandidates.empty();
+
+    if (hasRootAddon) {
+        AddonCandidate rootCandidate;
+        rootCandidate.sourceRelativePath =
+            wrapperRelative;
+        rootCandidate.installFolder =
+            repositoryName;
+        rootCandidate.tocFiles =
+            std::move(rootTocs);
+        layout.candidates.push_back(
+            std::move(rootCandidate));
+    }
+
+    layout.candidates.insert(
+        layout.candidates.end(),
+        std::make_move_iterator(
+            childCandidates.begin()),
+        std::make_move_iterator(
+            childCandidates.end()));
+
+    if (hasRootAddon && hasChildAddons) {
+        layout.kind =
+            RepositoryAddonLayoutKind::MixedAmbiguous;
+    } else if (hasRootAddon) {
+        layout.kind =
+            RepositoryAddonLayoutKind::RootAddon;
+    } else if (layout.candidates.size() == 1) {
+        layout.kind =
+            RepositoryAddonLayoutKind::SingleNestedAddon;
+    } else if (layout.candidates.size() > 1) {
+        layout.kind =
+            RepositoryAddonLayoutKind::RepositoryLibrary;
+    } else {
+        layout.kind =
+            RepositoryAddonLayoutKind::None;
+    }
+
+    return true;
+}
+
 bool DetectRepositoryAddonCandidates(
     const std::filesystem::path& extractedRoot,
     std::wstring_view providerName,
@@ -962,15 +1277,18 @@ bool DetectRepositoryAddonCandidates(
     }
 
     for (auto& candidate : candidates) {
+        candidate.repositoryRelativePath =
+            RepositoryRelativePath(
+                candidate.sourceRelativePath);
+
         const auto parent =
             candidate.sourceRelativePath.parent_path();
 
-        // Provider-generated source archives add a generated top-level
-        // wrapper. If .toc files live directly in the repository root,
-        // generic detection sees that wrapper as the addon folder. Never
-        // install that generated name. For the safe automatic
-        // case, require a root-level .toc whose stem matches the repository
-        // name and use that repository name as the real install folder.
+        // Provider-generated source archives add one generated top-level
+        // wrapper. Recursive install validation sees a repository-root addon as
+        // that wrapper directory. Discovery has already classified this shape,
+        // so map the root deterministically to the repository name instead of
+        // ever installing the generated wrapper name.
         if (!parent.empty()) {
             continue;
         }
@@ -978,34 +1296,13 @@ bool DetectRepositoryAddonCandidates(
         if (!existingInstallFolder.empty() &&
             candidates.size() == 1) {
             // An already-installed/adopted single-root package has authoritative
-            // ownership for its live addon folder. Preserve that root even if a
-            // later repository cleanup changes the root-level .toc stem.
+            // ownership for its live addon folder.
             candidate.installFolder =
                 std::wstring(existingInstallFolder);
-            continue;
+        } else {
+            candidate.installFolder =
+                repositoryName;
         }
-
-        bool matchingToc = false;
-        for (const auto& toc : candidate.tocFiles) {
-            if (Lower(toc.stem().wstring()) ==
-                Lower(repositoryName)) {
-                matchingToc = true;
-                break;
-            }
-        }
-
-        if (!matchingToc) {
-            error =
-                std::wstring(providerName) +
-                L" repository-root addon layout is ambiguous. "
-                L"TocPilot will not install the generated archive wrapper "
-                L"folder automatically.";
-            candidates.clear();
-            return false;
-        }
-
-        candidate.installFolder =
-            repositoryName;
     }
 
     return true;
@@ -1024,6 +1321,69 @@ bool DetectGitHubAddonCandidates(
         existingInstallFolder,
         candidates,
         error);
+}
+
+bool IsRepositoryLibrary(
+    const std::vector<AddonCandidate>& candidates) {
+    if (candidates.size() < 2) {
+        return false;
+    }
+
+    for (const auto& candidate : candidates) {
+        if (candidate.repositoryRelativePath.empty() ||
+            !candidate.repositoryRelativePath.parent_path().empty()) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+bool SelectRepositoryAddonCandidate(
+    std::wstring_view sourcePath,
+    std::vector<AddonCandidate>& candidates,
+    std::wstring& error) {
+    error.clear();
+
+    if (sourcePath.empty()) {
+        return true;
+    }
+
+    std::wstring normalized(sourcePath);
+    std::replace(
+        normalized.begin(),
+        normalized.end(),
+        L'\\',
+        L'/');
+    normalized = Lower(std::move(normalized));
+
+    const auto it = std::find_if(
+        candidates.begin(),
+        candidates.end(),
+        [&](const AddonCandidate& candidate) {
+            if (normalized == L".") {
+                return candidate.repositoryRelativePath.empty();
+            }
+
+            return Lower(
+                       candidate.repositoryRelativePath
+                           .generic_wstring()) ==
+                normalized;
+        });
+
+    if (it == candidates.end()) {
+        error =
+            L"Configured addon path was not found in this repository revision: " +
+            std::wstring(sourcePath);
+        candidates.clear();
+        return false;
+    }
+
+    AddonCandidate selected = *it;
+    candidates.clear();
+    candidates.push_back(
+        std::move(selected));
+    return true;
 }
 
 } // namespace tp

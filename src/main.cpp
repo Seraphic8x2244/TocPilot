@@ -8,6 +8,7 @@
 #include "git_refs.h"
 #include "gitlab_api.h"
 #include "install.h"
+#include "library_dialog.h"
 #include "refresh_freshness.h"
 #include "state.h"
 #include "splash.h"
@@ -170,6 +171,8 @@ tp::UpdateAllProgress g_updateAllProgress;
 std::vector<tp::PackageRefreshStamp> g_packageRefreshStamps;
 std::vector<std::wstring> g_autoStatusPackageIds;
 std::vector<std::wstring> g_packageAttentionIds;
+std::vector<std::size_t> g_addGitInstallQueue;
+std::size_t g_addGitInstallQueuePosition = 0;
 std::size_t g_autoStatusPosition = 0;
 std::size_t g_autoStatusCurrent = 0;
 std::size_t g_autoStatusUpdates = 0;
@@ -230,6 +233,8 @@ struct PackageInstallResult {
     std::wstring packageName;
     std::wstring branch;
     std::wstring remoteSha;
+    std::wstring replacedPackageId;
+    tp::PackageRecord replacementPackage;
     std::uint64_t downloadedBytes = 0;
     tp::ArchiveInspection inspection;
     tp::AddonInstallTransaction transaction;
@@ -865,11 +870,18 @@ bool DetectPackageAddonCandidates(
     std::wstring_view existingInstallFolder,
     std::vector<tp::AddonCandidate>& candidates,
     std::wstring& error) {
-    return tp::DetectRepositoryAddonCandidates(
-        extractedRoot,
-        ProviderLabel(package.provider),
-        package.repository,
-        existingInstallFolder,
+    if (!tp::DetectRepositoryAddonCandidates(
+            extractedRoot,
+            ProviderLabel(package.provider),
+            package.repository,
+            existingInstallFolder,
+            candidates,
+            error)) {
+        return false;
+    }
+
+    return tp::SelectRepositoryAddonCandidate(
+        package.sourcePath,
         candidates,
         error);
 }
@@ -883,6 +895,76 @@ bool CleanupPackageStaging(
         package.provider,
         package.repository,
         error);
+}
+
+bool InspectAddGitRepositoryLayout(
+    const tp::PackageRecord& package,
+    tp::RepositoryAddonLayout& layout,
+    std::wstring& error) {
+    layout = {};
+    error.clear();
+
+    if (!SupportedBranchProvider(
+            package.provider) ||
+        package.mode != L"branch" ||
+        package.ref.empty() ||
+        package.latestRevision.empty()) {
+        error =
+            L"Add Git repository inspection requires a selected branch revision.";
+        return false;
+    }
+
+    tp::ArchiveInspection inspection;
+    std::uint64_t downloadedBytes = 0;
+
+    if (!ResetPackageStaging(
+            package,
+            g_root,
+            inspection.stagingDirectory,
+            error)) {
+        return false;
+    }
+
+    inspection.archivePath =
+        inspection.stagingDirectory /
+        L"archive.zip";
+    inspection.extractedRoot =
+        inspection.stagingDirectory /
+        L"extracted";
+
+    bool ok =
+        DownloadPackageBranchArchive(
+            package,
+            package.latestRevision,
+            inspection.archivePath,
+            downloadedBytes,
+            error) &&
+        tp::ExtractZipSecure(
+            inspection.archivePath,
+            inspection.extractedRoot,
+            inspection.entryCount,
+            inspection.totalUncompressedBytes,
+            error) &&
+        tp::DetectShallowRepositoryAddonLayout(
+            inspection.extractedRoot,
+            ProviderLabel(package.provider),
+            package.repository,
+            layout,
+            error);
+
+    std::wstring cleanupError;
+    if (!CleanupPackageStaging(
+            package,
+            g_root,
+            cleanupError) &&
+        ok) {
+        error =
+            L"Repository inspection succeeded, but staging cleanup failed: " +
+            cleanupError;
+        ok = false;
+    }
+
+    return ok;
 }
 
 bool PackageBranchMode(
@@ -3362,6 +3444,262 @@ void StartPackageInstall(
             result.release();
         })
         .detach();
+}
+
+void StartPackageReplacementInstall(
+    HWND hwnd,
+    tp::PackageRecord replacementPackage,
+    std::size_t ownerIndex) {
+    if (ownerIndex >= g_state.packages.size()) {
+        return;
+    }
+
+    if (!SupportedBranchProvider(
+            replacementPackage.provider) ||
+        replacementPackage.mode != L"branch" ||
+        replacementPackage.ref.empty()) {
+        return;
+    }
+
+    const auto replacedPackage =
+        g_state.packages[ownerIndex];
+
+    if (replacedPackage.target != L"addons" ||
+        replacedPackage.installedFiles.empty()) {
+        return;
+    }
+
+    const std::wstring existingInstallFolder =
+        SingleOwnedAddonRoot(
+            replacedPackage);
+
+    if (existingInstallFolder.empty()) {
+        return;
+    }
+
+    std::vector<std::wstring> otherInstalledFiles;
+    for (std::size_t i = 0;
+         i < g_state.packages.size();
+         ++i) {
+        if (i == ownerIndex ||
+            g_state.packages[i].target != L"addons") {
+            continue;
+        }
+
+        const auto& files =
+            g_state.packages[i].installedFiles;
+        otherInstalledFiles.insert(
+            otherInstalledFiles.end(),
+            files.begin(),
+            files.end());
+    }
+
+    g_packageInstallInProgress = true;
+    UpdatePackageButtons();
+    SetPackageRowStatus(
+        ownerIndex,
+        L"Preparing replacement...");
+
+    if (g_packageHint) {
+        const std::wstring message =
+            replacementPackage.name +
+            L": staging and validating the replacement from " +
+            replacementPackage.ref +
+            L". The existing managed addon and package record stay in place until the replacement commit succeeds.";
+
+        SetWindowTextW(
+            g_packageHint,
+            message.c_str());
+    }
+
+    const auto wowRoot = g_root;
+    const auto replacedInstalledFiles =
+        replacedPackage.installedFiles;
+    const auto replacedPackageId =
+        replacedPackage.id;
+
+    std::thread(
+        [hwnd,
+         ownerIndex,
+         replacementPackage =
+             std::move(replacementPackage),
+         replacedInstalledFiles,
+         replacedPackageId,
+         existingInstallFolder,
+         otherInstalledFiles =
+             std::move(otherInstalledFiles),
+         wowRoot]() mutable {
+            auto result =
+                std::make_unique<PackageInstallResult>();
+
+            result->index = ownerIndex;
+            result->packageId =
+                replacementPackage.id;
+            result->packageName =
+                replacementPackage.name;
+            result->branch =
+                replacementPackage.ref;
+            result->remoteSha =
+                replacementPackage.latestRevision;
+            result->replacedPackageId =
+                replacedPackageId;
+            result->replacementPackage =
+                replacementPackage;
+
+            if (result->remoteSha.empty() &&
+                !ResolvePackageBranchHead(
+                    replacementPackage,
+                    result->remoteSha,
+                    result->error)) {
+                result->ok = false;
+            } else if (!ResetPackageStaging(
+                    replacementPackage,
+                    wowRoot,
+                    result->inspection.stagingDirectory,
+                    result->error)) {
+                result->ok = false;
+            } else {
+                result->inspection.archivePath =
+                    result->inspection.stagingDirectory /
+                    L"archive.zip";
+
+                result->inspection.extractedRoot =
+                    result->inspection.stagingDirectory /
+                    L"extracted";
+
+                if (!DownloadPackageBranchArchive(
+                        replacementPackage,
+                        result->remoteSha,
+                        result->inspection.archivePath,
+                        result->downloadedBytes,
+                        result->error)) {
+                    result->ok = false;
+                } else if (!tp::ExtractZipSecure(
+                        result->inspection.archivePath,
+                        result->inspection.extractedRoot,
+                        result->inspection.entryCount,
+                        result->inspection.totalUncompressedBytes,
+                        result->error)) {
+                    result->ok = false;
+                } else if (!DetectPackageAddonCandidates(
+                        replacementPackage,
+                        result->inspection.extractedRoot,
+                        existingInstallFolder,
+                        result->inspection.candidates,
+                        result->error)) {
+                    result->ok = false;
+                } else {
+                    tp::AddonInstallPlan plan;
+                    if (!tp::BuildAddonInstallPlan(
+                            wowRoot,
+                            replacementPackage.id,
+                            result->inspection.extractedRoot,
+                            result->inspection.candidates,
+                            replacedInstalledFiles,
+                            otherInstalledFiles,
+                            plan,
+                            result->error)) {
+                        result->ok = false;
+                    } else if (!tp::PrepareAddonInstallTransaction(
+                            plan,
+                            result->transaction,
+                            result->error)) {
+                        result->ok = false;
+                    } else {
+                        result->ok = true;
+                    }
+                }
+            }
+
+            if (!PostMessageW(
+                    hwnd,
+                    WM_TP_PACKAGE_INSTALL_COMPLETE,
+                    0,
+                    reinterpret_cast<LPARAM>(
+                        result.get()))) {
+                return;
+            }
+
+            result.release();
+        })
+        .detach();
+}
+
+bool IsAddGitInstallQueueCurrent(
+    std::size_t index) {
+    return
+        g_addGitInstallQueuePosition <
+            g_addGitInstallQueue.size() &&
+        g_addGitInstallQueue[
+            g_addGitInstallQueuePosition] ==
+            index;
+}
+
+void ClearAddGitInstallQueue() {
+    g_addGitInstallQueue.clear();
+    g_addGitInstallQueuePosition = 0;
+}
+
+void StartAddGitInstallQueue(
+    HWND hwnd,
+    std::vector<std::size_t> indices) {
+    ClearAddGitInstallQueue();
+
+    if (indices.empty()) {
+        return;
+    }
+
+    g_addGitInstallQueue =
+        std::move(indices);
+    g_addGitInstallQueuePosition = 0;
+
+    const std::size_t index =
+        g_addGitInstallQueue.front();
+
+    if (index >= g_state.packages.size()) {
+        ClearAddGitInstallQueue();
+        return;
+    }
+
+    StartPackageInstall(
+        hwnd,
+        index,
+        g_state.packages[index].latestRevision);
+}
+
+bool ContinueAddGitInstallQueue(
+    HWND hwnd,
+    std::size_t completedIndex) {
+    if (!IsAddGitInstallQueueCurrent(
+            completedIndex)) {
+        return false;
+    }
+
+    ++g_addGitInstallQueuePosition;
+
+    if (g_addGitInstallQueuePosition >=
+        g_addGitInstallQueue.size()) {
+        ClearAddGitInstallQueue();
+        return false;
+    }
+
+    const std::size_t nextIndex =
+        g_addGitInstallQueue[
+            g_addGitInstallQueuePosition];
+
+    if (nextIndex >=
+        g_state.packages.size()) {
+        ClearAddGitInstallQueue();
+        return false;
+    }
+
+    SelectPackageRow(nextIndex);
+    StartPackageInstall(
+        hwnd,
+        nextIndex,
+        g_state.packages[nextIndex]
+            .latestRevision);
+    return true;
 }
 
 std::size_t FindPackageIndexById(
@@ -5914,75 +6252,402 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
 
         if (LOWORD(wParam) == IDC_ADD_PACKAGE &&
             HIWORD(wParam) == BN_CLICKED) {
-            tp::PackageRecord package;
+            tp::PackageRecord repositoryPackage;
             if (!tp::ShowAddPackageDialog(
                     hwnd,
-                    package)) {
-                return 0;
-            }
-
-            tp::AppState updatedState =
-                g_state;
-            std::wstring error;
-
-            if (!tp::AppendPackage(
-                    updatedState,
-                    std::move(package),
-                    error)) {
-                MessageBoxW(
-                    hwnd,
-                    error.c_str(),
-                    L"TocPilot - Add Git",
-                    MB_OK | MB_ICONWARNING);
-                return 0;
-            }
-
-            const std::size_t index =
-                updatedState.packages.size() - 1;
-
-            if (updatedState.packages[index].mode ==
-                L"release") {
-                if (!tp::SaveState(
-                        g_root,
-                        updatedState,
-                        error)) {
-                    MessageBoxW(
-                        hwnd,
-                        error.c_str(),
-                        L"TocPilot - Add DLL",
-                        MB_OK | MB_ICONERROR);
-                    return 0;
-                }
-
-                g_state =
-                    std::move(updatedState);
-                g_stateCreated = false;
-                g_stateError.clear();
-
-                RefreshPackageStateUi();
-                SelectPackageRow(index);
-                UpdatePackageButtons();
-
-                StartPackageInstall(
-                    hwnd,
-                    index);
+                    repositoryPackage)) {
                 return 0;
             }
 
             tp::BranchSelection selection;
             if (!tp::ShowBranchDialog(
                     hwnd,
-                    updatedState.packages[index],
+                    repositoryPackage,
                     selection)) {
                 return 0;
             }
 
+            std::wstring error;
             if (!tp::SetPackageBranch(
-                    updatedState.packages[index],
+                    repositoryPackage,
                     std::move(selection.name),
                     std::move(selection.sha),
-                    error) ||
-                !tp::SaveState(
+                    error)) {
+                MessageBoxW(
+                    hwnd,
+                    error.c_str(),
+                    L"TocPilot - Add Git",
+                    MB_OK | MB_ICONERROR);
+                return 0;
+            }
+
+            if (g_packageHint) {
+                const std::wstring message =
+                    repositoryPackage.name +
+                    L": inspecting " +
+                    repositoryPackage.ref +
+                    L" at repository root + one directory level...";
+                SetWindowTextW(
+                    g_packageHint,
+                    message.c_str());
+                UpdateWindow(hwnd);
+            }
+
+            tp::RepositoryAddonLayout layout;
+            if (!InspectAddGitRepositoryLayout(
+                    repositoryPackage,
+                    layout,
+                    error)) {
+                MessageBoxW(
+                    hwnd,
+                    error.c_str(),
+                    L"TocPilot - Add Git Inspection Failed",
+                    MB_OK | MB_ICONWARNING);
+                return 0;
+            }
+
+            if (layout.kind ==
+                tp::RepositoryAddonLayoutKind::MixedAmbiguous) {
+                MessageBoxW(
+                    hwnd,
+                    L"Repository layout is ambiguous: TocPilot found both repository-root .toc files and immediate child addon roots. TocPilot will not guess which roots belong together.",
+                    L"TocPilot - Add Git",
+                    MB_OK | MB_ICONWARNING);
+                return 0;
+            }
+
+            if (layout.kind ==
+                tp::RepositoryAddonLayoutKind::None) {
+                if (repositoryPackage.provider ==
+                    L"github") {
+                    tp::PackageRecord dllPackage;
+                    bool supportedDllFound = false;
+                    std::wstring dllError;
+
+                    if (tp::ShowDirectDllFallbackDialog(
+                            hwnd,
+                            repositoryPackage.repository,
+                            dllPackage,
+                            supportedDllFound,
+                            dllError)) {
+                        tp::AppState updatedState =
+                            g_state;
+
+                        if (!tp::AppendPackage(
+                                updatedState,
+                                std::move(dllPackage),
+                                error) ||
+                            !tp::SaveState(
+                                g_root,
+                                updatedState,
+                                error)) {
+                            MessageBoxW(
+                                hwnd,
+                                error.c_str(),
+                                L"TocPilot - Add DLL",
+                                MB_OK | MB_ICONERROR);
+                            return 0;
+                        }
+
+                        const std::size_t index =
+                            updatedState.packages.size() - 1;
+
+                        g_state =
+                            std::move(updatedState);
+                        g_stateCreated = false;
+                        g_stateError.clear();
+
+                        RefreshPackageStateUi();
+                        SelectPackageRow(index);
+                        UpdatePackageButtons();
+                        StartPackageInstall(
+                            hwnd,
+                            index);
+                        return 0;
+                    }
+
+                    if (supportedDllFound) {
+                        return 0;
+                    }
+                }
+
+                MessageBoxW(
+                    hwnd,
+                    L"No addon or supported DLL found",
+                    L"TocPilot - Add Git",
+                    MB_OK | MB_ICONINFORMATION);
+                return 0;
+            }
+
+            std::vector<tp::PackageRecord>
+                packagesToAdd;
+
+            auto makeChildPackage =
+                [&](const tp::AddonCandidate& candidate,
+                    tp::PackageRecord& child) {
+                    child =
+                        tp::MakeRepositoryAddonPackage(
+                            repositoryPackage.provider,
+                            repositoryPackage.repository,
+                            candidate.repositoryRelativePath
+                                .generic_wstring(),
+                            candidate.installFolder);
+
+                    return tp::SetPackageBranch(
+                        child,
+                        repositoryPackage.ref,
+                        repositoryPackage.latestRevision,
+                        error);
+                };
+
+            if (layout.kind ==
+                tp::RepositoryAddonLayoutKind::RootAddon) {
+                // Persist an explicit root marker so recursive install
+                // validation selects only the repository root candidate.
+                // Its subtree is still copied in full, including embedded
+                // libraries or modules with their own .toc files.
+                repositoryPackage.sourcePath =
+                    L".";
+                packagesToAdd.push_back(
+                    repositoryPackage);
+            } else if (
+                layout.kind ==
+                tp::RepositoryAddonLayoutKind::SingleNestedAddon) {
+                tp::PackageRecord child;
+                if (!makeChildPackage(
+                        layout.candidates.front(),
+                        child)) {
+                    MessageBoxW(
+                        hwnd,
+                        error.c_str(),
+                        L"TocPilot - Add Git",
+                        MB_OK | MB_ICONERROR);
+                    return 0;
+                }
+                packagesToAdd.push_back(
+                    std::move(child));
+            } else {
+                std::vector<std::size_t>
+                    selectedIndices;
+
+                if (!tp::ShowRepositoryLibraryDialog(
+                        hwnd,
+                        repositoryPackage.repository,
+                        repositoryPackage.ref,
+                        layout.candidates,
+                        selectedIndices)) {
+                    return 0;
+                }
+
+                for (const auto candidateIndex :
+                     selectedIndices) {
+                    if (candidateIndex >=
+                        layout.candidates.size()) {
+                        MessageBoxW(
+                            hwnd,
+                            L"The repository-library selection changed unexpectedly.",
+                            L"TocPilot - Add Git",
+                            MB_OK | MB_ICONERROR);
+                        return 0;
+                    }
+
+                    tp::PackageRecord child;
+                    if (!makeChildPackage(
+                            layout.candidates[
+                                candidateIndex],
+                            child)) {
+                        MessageBoxW(
+                            hwnd,
+                            error.c_str(),
+                            L"TocPilot - Add Git",
+                            MB_OK | MB_ICONERROR);
+                        return 0;
+                    }
+
+                    packagesToAdd.push_back(
+                        std::move(child));
+                }
+            }
+
+            if (packagesToAdd.empty()) {
+                return 0;
+            }
+
+            std::size_t replacementOwnerIndex =
+                g_state.packages.size();
+
+            for (const auto& package :
+                 packagesToAdd) {
+                const std::size_t ownerIndex =
+                    tp::FindPackageOwningAddonRoot(
+                        g_state,
+                        package.name);
+
+                if (ownerIndex <
+                    g_state.packages.size()) {
+                    const auto& owner =
+                        g_state.packages[
+                            ownerIndex];
+
+                    if (CompareInsensitive(
+                            owner.id,
+                            package.id) == 0) {
+                        MessageBoxW(
+                            hwnd,
+                            L"This addon is already managed by TocPilot.",
+                            L"TocPilot - Add Git",
+                            MB_OK |
+                                MB_ICONINFORMATION);
+                        return 0;
+                    }
+
+                    if (packagesToAdd.size() != 1) {
+                        const std::wstring message =
+                            L"The selected repository-library set includes addon root '" +
+                            package.name +
+                            L"', which is already owned by '" +
+                            owner.name +
+                            L"'.\r\n\r\nTocPilot will not create overlapping package records. Select that colliding addon by itself if you want to overwrite the existing managed addon.";
+                        MessageBoxW(
+                            hwnd,
+                            message.c_str(),
+                            L"TocPilot - Existing Addon",
+                            MB_OK |
+                                MB_ICONWARNING);
+                        return 0;
+                    }
+
+                    const std::wstring ownedRoot =
+                        SingleOwnedAddonRoot(
+                            owner);
+
+                    if (ownedRoot.empty() ||
+                        CompareInsensitive(
+                            ownedRoot,
+                            package.name) != 0) {
+                        const std::wstring message =
+                            L"Addon root '" +
+                            package.name +
+                            L"' is owned by a package that manages more than one addon root. TocPilot will not partially overwrite that package. Remove or reconfigure the existing package first.";
+                        MessageBoxW(
+                            hwnd,
+                            message.c_str(),
+                            L"TocPilot - Existing Addon",
+                            MB_OK |
+                                MB_ICONWARNING);
+                        return 0;
+                    }
+
+                    replacementOwnerIndex =
+                        ownerIndex;
+                    continue;
+                }
+
+                std::error_code existsError;
+                const auto liveRoot =
+                    g_root /
+                    L"Interface" /
+                    L"AddOns" /
+                    package.name;
+
+                const bool liveExists =
+                    std::filesystem::exists(
+                        liveRoot,
+                        existsError);
+
+                if (existsError) {
+                    const std::wstring message =
+                        L"Could not inspect the existing addon folder before install: " +
+                        liveRoot.wstring();
+                    MessageBoxW(
+                        hwnd,
+                        message.c_str(),
+                        L"TocPilot - Add Git",
+                        MB_OK |
+                            MB_ICONERROR);
+                    return 0;
+                }
+
+                if (liveExists) {
+                    const std::wstring message =
+                        L"Addon root '" +
+                        package.name +
+                        L"' already exists in Interface\\AddOns but is not owned by a TocPilot package. TocPilot will not overwrite an unmanaged addon folder. Remove it or adopt/manage it first, then retry.";
+                    MessageBoxW(
+                        hwnd,
+                        message.c_str(),
+                        L"TocPilot - Existing Unmanaged Addon",
+                        MB_OK |
+                            MB_ICONWARNING);
+                    return 0;
+                }
+            }
+
+            if (replacementOwnerIndex <
+                g_state.packages.size()) {
+                const auto& owner =
+                    g_state.packages[
+                        replacementOwnerIndex];
+                const auto& replacement =
+                    packagesToAdd.front();
+
+                const std::wstring prompt =
+                    L"Addon root '" +
+                    replacement.name +
+                    L"' is already managed by:\r\n\r\n" +
+                    owner.name +
+                    L"  (" +
+                    owner.repository +
+                    L")\r\n\r\nOverwrite the existing managed addon with:\r\n\r\n" +
+                    replacement.name +
+                    L"  (" +
+                    replacement.repository +
+                    L")?\r\n\r\nYes = stage and validate the new package, replace the live addon, then transfer TocPilot ownership only after the transaction succeeds.\r\nNo = keep the existing addon unchanged.";
+
+                if (MessageBoxW(
+                        hwnd,
+                        prompt.c_str(),
+                        L"TocPilot - Overwrite Existing Addon?",
+                        MB_YESNO |
+                            MB_ICONWARNING |
+                            MB_DEFBUTTON2) != IDYES) {
+                    return 0;
+                }
+
+                StartPackageReplacementInstall(
+                    hwnd,
+                    std::move(
+                        packagesToAdd.front()),
+                    replacementOwnerIndex);
+                return 0;
+            }
+
+            tp::AppState updatedState =
+                g_state;
+            std::vector<std::size_t>
+                installIndices;
+            installIndices.reserve(
+                packagesToAdd.size());
+
+            for (auto& package :
+                 packagesToAdd) {
+                if (!tp::AppendPackage(
+                        updatedState,
+                        std::move(package),
+                        error)) {
+                    MessageBoxW(
+                        hwnd,
+                        error.c_str(),
+                        L"TocPilot - Add Git",
+                        MB_OK | MB_ICONWARNING);
+                    return 0;
+                }
+
+                installIndices.push_back(
+                    updatedState.packages.size() - 1);
+            }
+
+            if (!tp::SaveState(
                     g_root,
                     updatedState,
                     error)) {
@@ -6000,12 +6665,23 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             g_stateError.clear();
 
             RefreshPackageStateUi();
-            SelectPackageRow(index);
+            SelectPackageRow(
+                installIndices.front());
             UpdatePackageButtons();
 
-            StartPackageInstall(
-                hwnd,
-                index);
+            if (installIndices.size() > 1) {
+                StartAddGitInstallQueue(
+                    hwnd,
+                    std::move(installIndices));
+            } else {
+                const std::size_t index =
+                    installIndices.front();
+                StartPackageInstall(
+                    hwnd,
+                    index,
+                    g_state.packages[index]
+                        .latestRevision);
+            }
             return 0;
         }
 
@@ -6865,16 +7541,29 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
 
         g_packageInstallInProgress = false;
 
+        const bool replacementStep =
+            !result->replacedPackageId.empty();
+        const bool addGitQueueStep =
+            !replacementStep &&
+            IsAddGitInstallQueueCurrent(
+                result->index);
         const bool updateAllStep =
+            !replacementStep &&
             IsUpdateAllCurrentPackage(
                 result->packageId);
 
-        if (result->index >=
+        const bool trackingChanged =
+            result->index >=
                 g_state.packages.size() ||
-            g_state.packages[result->index].id !=
-                result->packageId ||
-            g_state.packages[result->index].ref !=
-                result->branch) {
+            (replacementStep
+                ? g_state.packages[result->index].id !=
+                    result->replacedPackageId
+                : g_state.packages[result->index].id !=
+                        result->packageId ||
+                    g_state.packages[result->index].ref !=
+                        result->branch);
+
+        if (trackingChanged) {
             const std::wstring message =
                 result->packageId +
                 L": install result was discarded because package tracking changed.";
@@ -6885,12 +7574,19 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                     L"Install result was discarded because package tracking changed. Live addons were not committed.");
             }
 
+            if (addGitQueueStep) {
+                ClearAddGitInstallQueue();
+            }
+
             if (updateAllStep) {
                 CompleteUpdateAllStep(
                     hwnd,
                     tp::UpdateAllOutcome::Failed,
                     message);
             } else {
+                if (replacementStep) {
+                    RefreshPackageStateUi();
+                }
                 UpdatePackageButtons();
             }
             return 0;
@@ -6898,7 +7594,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
 
         const auto index = result->index;
         const std::wstring packageName =
-            g_state.packages[index].name;
+            result->packageName;
 
         if (!result->ok) {
             SetPackageRowStatus(
@@ -6914,6 +7610,10 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                 SetWindowTextW(
                     g_packageHint,
                     message.c_str());
+            }
+
+            if (addGitQueueStep) {
+                ClearAddGitInstallQueue();
             }
 
             if (updateAllStep) {
@@ -6932,6 +7632,9 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                     L"TocPilot - Install Failed",
                     MB_OK | MB_ICONWARNING);
 
+                if (replacementStep) {
+                    RefreshPackageStateUi();
+                }
                 SelectPackageRow(index);
                 UpdatePackageButtons();
             }
@@ -6961,6 +7664,10 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                     message.c_str());
             }
 
+            if (addGitQueueStep) {
+                ClearAddGitInstallQueue();
+            }
+
             if (updateAllStep) {
                 const bool rollbackFailed =
                     error.find(
@@ -6979,6 +7686,9 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                     L"TocPilot - Install Failed",
                     MB_OK | MB_ICONERROR);
 
+                if (replacementStep) {
+                    RefreshPackageStateUi();
+                }
                 SelectPackageRow(index);
                 UpdatePackageButtons();
             }
@@ -6986,11 +7696,33 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
         }
 
         tp::AppState updatedState = g_state;
-        if (!tp::SetPackageInstalledState(
-                updatedState.packages[index],
-                result->remoteSha,
-                result->transaction.plan.desiredInstalledFiles,
-                error) ||
+        bool statePrepared = false;
+
+        if (replacementStep) {
+            auto replacement =
+                result->replacementPackage;
+
+            statePrepared =
+                tp::SetPackageInstalledState(
+                    replacement,
+                    result->remoteSha,
+                    result->transaction.plan.desiredInstalledFiles,
+                    error) &&
+                tp::ReplacePackageRecord(
+                    updatedState,
+                    result->replacedPackageId,
+                    std::move(replacement),
+                    error);
+        } else {
+            statePrepared =
+                tp::SetPackageInstalledState(
+                    updatedState.packages[index],
+                    result->remoteSha,
+                    result->transaction.plan.desiredInstalledFiles,
+                    error);
+        }
+
+        if (!statePrepared ||
             !tp::SaveState(
                 g_root,
                 updatedState,
@@ -7028,6 +7760,10 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                     message.c_str());
             }
 
+            if (addGitQueueStep) {
+                ClearAddGitInstallQueue();
+            }
+
             if (updateAllStep) {
                 CompleteUpdateAllStep(
                     hwnd,
@@ -7060,6 +7796,10 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                             ? MB_ICONWARNING
                             : MB_ICONERROR));
 
+                if (replacementStep &&
+                    rolledBack) {
+                    RefreshPackageStateUi();
+                }
                 SelectPackageRow(index);
                 UpdatePackageButtons();
             }
@@ -7095,6 +7835,15 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                 tp::UpdateAllOutcome::Updated,
                 {});
             return 0;
+        }
+
+        if (addGitQueueStep) {
+            RefreshPackageStateUi();
+            if (ContinueAddGitInstallQueue(
+                    hwnd,
+                    index)) {
+                return 0;
+            }
         }
 
         RefreshPackageStateUi();
@@ -7152,6 +7901,12 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                 L"\r\nObsolete roots removed: " +
                 std::to_wstring(
                     result->transaction.plan.obsoleteInstallFolders.size());
+        }
+
+        if (replacementStep) {
+            summary +=
+                L"\r\nReplaced managed package: " +
+                result->replacedPackageId;
         }
 
         if (!cleanupOk) {

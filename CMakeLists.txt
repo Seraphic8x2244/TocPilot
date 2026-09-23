@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.24)
 
-project(TocPilot VERSION 0.3.0 LANGUAGES C CXX)
+project(TocPilot VERSION 0.3.1 LANGUAGES C CXX)
 
 # miniz 3.1.2, pinned from richgel999/miniz commit
 # 77d0dce8627735138c51770d1799a1ef48f2117d.
@@ -34,6 +34,7 @@ add_executable(TocPilot WIN32
     src/git_refs.cpp
     src/gitlab_api.cpp
     src/install.cpp
+    src/library_dialog.cpp
     src/main.cpp
     src/provider.cpp
     src/refresh_freshness.cpp

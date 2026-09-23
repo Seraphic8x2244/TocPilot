@@ -1,5 +1,19 @@
 # TocPilot Development Plan
 
+## 2026-09-23 implementation status: v0.3.1 managed-root replacement
+
+The Add Git collision gate is implemented and Windows x64 Release CI-green on source head `71181a629bb9782553a0f296e0d38f31b7137d6d` (Build run `35902647161`, 16/16 tests). Before Add Git persists a package, it now checks whether the prospective `Interface\\AddOns\\<root>` is already owned by another TocPilot package. A single-root managed collision presents an overwrite/cancel decision. The overwrite path stages the new source while the old package remains authoritative, uses the old owned-file set as prior transaction ownership, commits the live replacement, and only then swaps the package record in-place. If state save fails, the live transaction rolls back and the old package record remains authoritative. Unmanaged live addon folders are still refused, and multi-root managed packages are not partially overwritten.
+
+Repository-library selections without collisions keep the existing independent-child queue behavior. A library batch containing a managed-root collision is stopped before any new records are saved; the colliding child must be selected by itself to use the overwrite path. This keeps package ownership non-overlapping without broadening the collection model in this patch.
+
+The source and release marker are now `v0.3.1`. The feature branch's earlier artifact-only handoff was not a product release. After merge, the existing Release workflow must rebuild/test the merged commit and publish direct `TocPilot.exe` plus checksum as GitHub Release `v0.3.1`, which is the artifact the startup self-updater consumes.
+
+## 2026-09-23 implementation checkpoint: addon-root collision replacement
+
+The repository-library implementation is runtime-gated on one ownership correction before release. A newly added package must not be persisted alongside an existing managed package when both resolve to the same live addon install root. Add Git should detect that collision before committing new package state or beginning installation, then offer an explicit overwrite/replace choice or cancel. Replacement must leave exactly one owner for the install root, remove or transfer the superseded package record coherently, and keep state/filesystem rollback semantics correct if installation fails.
+
+The last fully green code baseline remains `2a43e2f9ec7eae25d56488ed3cba589bdf42971e`; branch commits after it through the checkpoint are documentation-only. After implementing and testing this gate, the next `0.3.x` build must go through the existing GitHub Release workflow rather than being handed off only as a pull-request artifact, because TocPilot self-update discovers direct `TocPilot.exe` assets from published GitHub releases.
+
 ## 1. Project summary
 
 **TocPilot** is a lightweight, portable World of Warcraft addon and release manager.
@@ -275,19 +289,36 @@ Never allow a remote archive to write outside the WoW root.
 
 ### Repository inspection and source classification
 
-The Add Git flow should evolve from manual mode selection toward inspecting a repository and presenting the installable capabilities TocPilot actually detects.
+**Implementation status — 2026-09-23:** implemented on `feature/repository-libraries`. Add Git now stages the selected branch first, runs a dedicated root + one-level shallow classifier, persists explicit root/child source selection, presents the repository-library selector for multiple immediate child addons, and only reaches GitHub latest-stable standalone-DLL fallback after a no-addon result. The older recursive archive detector remains for post-selection install validation and is no longer the library classifier. Windows x64 Release CI passed on code baseline `2a43e2f9` with 16/16 CTest tests passing; real-repository runtime testing is the remaining gate before merge/release.
 
-Initial content/capability classes:
 
-- **root addon** — the selected branch/revision contains one installable addon rooted at the repository;
-- **repository library / multi-addon repository** — the selected branch/revision contains multiple independent installable addon roots;
-- **direct DLL release** — the existing GitHub latest-stable release path exposes one or more exact standalone `.dll` assets that satisfy TocPilot's current direct-DLL trust and verification rules.
+The Add Git flow should evolve from manual source-mode selection toward a small deterministic inspection pipeline.
 
-These are capabilities, not necessarily mutually exclusive repository identities. A repository may contain addon source and also publish a supported standalone DLL release. The UI should show what was detected and let the user choose the intended package/install target when more than one supported capability is present rather than silently guessing.
+For the first implementation, addon discovery is intentionally shallow. After removing the provider-generated archive wrapper, TocPilot inspects only:
 
-Branch/source classification should reuse the secure archive inspection and addon-root detection already used by installation rather than inventing a separate looser detector. A repository library needs an explicit package/collection design before implementation so TocPilot can distinguish “install these addon roots together as one package” from “offer several independently manageable addons from one repository.”
+- `.toc` files directly in the repository root; and
+- `.toc` files directly inside each immediate child directory.
 
-Direct DLL detection remains GitHub-only until GitLab release support is separately designed and agreed. This classification work must not add GitLab release support or user-uploaded release ZIP/archive executable discovery.
+Do **not** recursively search arbitrary repository depth when deciding whether a repository is an addon or repository library. Deeper recursion can find embedded libraries, test fixtures, archived copies, modules, or other non-installable material and would make automatic classification unpredictable. Once an addon root has been selected, TocPilot still installs/copies that selected root's full subtree normally.
+
+The Add Git decision tree is:
+
+1. resolve the selected branch/revision;
+2. inspect repository root plus one directory level for addon `.toc` files;
+3. if a root-level `.toc` exists, classify the repository as a **root addon**;
+4. if no root-level `.toc` exists and exactly one immediate child contains a `.toc`, classify it as a **single nested addon**;
+5. if no root-level `.toc` exists and multiple immediate children contain `.toc` files, classify it as a **repository library** and let the user select one, several, or all detected addon roots;
+6. if no addon `.toc` is found, then and only then check the latest stable release for a supported exact standalone `.dll` asset;
+7. if a supported standalone DLL is found, offer the existing direct-DLL package path;
+8. otherwise return a concise **No addon or supported DLL found** result.
+
+If root-level addon files and immediate-child addon roots coexist, treat the layout as mixed/ambiguous and present it explicitly rather than silently guessing which roots belong together.
+
+The DLL fallback must preserve the existing security boundary: exact standalone `.dll` release assets only. TocPilot must not inspect ZIP/7z/RAR/installer/bundle release assets for executable payloads.
+
+The DLL fallback remains GitHub-only for now because GitLab release support is still out of scope. A GitLab repository with no detected addon roots should stop at a concise no-addon result rather than adding GitLab release handling as part of this rework.
+
+This shallow classifier is an Add Git/discovery rule. The existing recursive archive detector may remain internally for legacy install validation where needed, but it must not drive repository-library classification.
 
 #### Concrete repository-library example: Cabro/Atlas
 
@@ -299,7 +330,7 @@ Direct DLL detection remains GitHub-only until GitLab release support is separat
 
 TocPilot should classify this shape as a repository library rather than collapsing the entire repository into a single opaque addon package. The repository/branch is the shared source container, while each detected top-level addon root is a selectable install unit. The UI should be able to offer one, several, or all detected addons from that repository.
 
-A repository library is therefore distinct from a normal multi-root package whose addon folders are inseparable parts of one logical package. Initial automatic classification can use the structural signal of multiple sibling installable addon roots, but TocPilot should not assume those siblings are dependencies of one another merely because they share a repository. Dependency metadata in their `.toc` files can be shown or used for warnings later, but collection membership and addon dependency are separate concepts.
+A repository library is therefore distinct from a normal multi-root package whose addon folders are inseparable parts of one logical package. For the first implementation, multiple immediate child directories with direct `.toc` files are the structural signal for a library. TocPilot should not assume those siblings are dependencies of one another merely because they share a repository. Dependency metadata in their `.toc` files can be shown or used for warnings later, but collection membership and addon dependency are separate concepts.
 
 ---
 
@@ -424,15 +455,20 @@ TocPilot should not assume every source archive has exactly one folder with exac
 
 ### Detection strategy
 
-After secure extraction to a staging directory:
+After secure extraction to a staging directory, separate **repository classification** from **install validation**.
 
-1. ignore provider-generated wrapper/root directories;
-2. recursively identify directories containing one or more WoW `.toc` files;
-3. identify plausible addon roots;
-4. group related addon directories when the archive clearly ships multiple addons;
-5. present a preview when the structure is ambiguous.
+For Add Git classification:
 
-Common cases should require no manual intervention.
+1. ignore the provider-generated wrapper/root directory;
+2. inspect the repository root for `.toc` files;
+3. inspect only immediate child directories for `.toc` files directly inside them;
+4. classify root addon / single nested addon / repository library from that shallow shape;
+5. do not recursively discover deeper addon candidates for automatic library classification;
+6. if no addon is found, allow the GitHub-only latest-stable standalone-DLL fallback described above.
+
+For installation, TocPilot may still recurse inside the selected addon root to copy and validate its contents. Existing recursive candidate logic may also remain as a compatibility/validation tool for already-managed packages, but it should not silently broaden the Add Git classification result.
+
+Common repository shapes should require no manual intervention.
 
 ### Multiple addon folders
 

@@ -1,31 +1,121 @@
 # TocPilot status / handoff
 
-## 2026-09-23 repository-library implementation start
+## 2026-09-23 v0.3.1 collision gate CI-green / release pending
 
-- Active branch: `main`.
+- Active branch: `feature/repository-libraries`.
+- Source/application version is now `v0.3.1`; `.github/release-version` is also `v0.3.1`.
+- Final tested source head before this documentation-only update: `71181a629bb9782553a0f296e0d38f31b7137d6d`.
+- Windows x64 Release CI: Build run `35902647161` (#508) passed configure, Release build, all **16/16** CTest tests, and executable artifact upload.
+- CI artifact: `TocPilot-windows-x64`, artifact ID `10769722904`, ZIP digest `sha256:880ce3696991959755a01c5c8ffcd05e892dd61c4461f53fce940b05051b87f7`.
+- Completed collision fix:
+  - Add Git checks the prospective addon install root before saving the new package record.
+  - If a different installed TocPilot package already owns that root, TocPilot offers **Overwrite existing** via an explicit Yes/No gate instead of saving two overlapping package records.
+  - The existing package remains the sole durable owner while the replacement is downloaded, extracted, validated, and transaction-prepared.
+  - The replacement transaction treats the old package's single addon root as prior owned state, excludes that owner from the conflicting-owner set, and can therefore replace the live root safely.
+  - Only after the live commit succeeds does TocPilot set the new installed state and replace the old package record in-place; state-save failure rolls the filesystem back to the old addon and leaves the old record authoritative.
+  - Replacement preparation/commit failures immediately restore the old row/status rather than requiring Refresh.
+  - Existing unmanaged addon folders remain protected: Add Git refuses to overwrite them.
+  - A package that owns multiple addon roots is not partially overwritten; the user must remove/reconfigure it first.
+  - Repository-library multi-select remains supported when roots do not collide. If a multi-selection contains an already-owned root, TocPilot blocks the batch and asks the user to select the colliding child by itself for replacement.
+- Added deterministic coverage:
+  - case-insensitive managed addon-root owner lookup, including multi-root ownership discovery;
+  - in-place package-record replacement and duplicate-ID refusal;
+  - managed-root replacement transaction preparation/commit/rollback restoring old files on rollback.
+- Release correction: the earlier repository-library build was only a PR artifact. The next deployment must be the actual GitHub `v0.3.1` Release with direct `TocPilot.exe`, so installed `v0.3.0` can discover it through startup self-update.
+- Runtime-untested: the new overwrite/cancel dialog and end-to-end replacement against a real WoW install; remaining repository-library real-repo cases from the prior handoff also still need runtime coverage.
+- Deferred/out of scope remains: GitLab release support, release-archive executable discovery, arbitrary-depth repository catalogue discovery, dependency resolution between library children, and broader collection UX.
+- Exact next step: merge the green feature PR to `main`. The changed `.github/release-version` must trigger the repository Release workflow; verify that exact merged commit rebuilds/tests green and publishes GitHub Release `v0.3.1` with direct `TocPilot.exe` + checksum. Then runtime-test automatic `v0.3.0 -> v0.3.1` self-update and reproduce the same-name Add Git case: choose No first (old package remains unchanged), retry and choose Yes (old package is replaced in-place, exactly one record remains, new addon is installed immediately without Refresh).
+
+## 2026-09-23 runtime collision bug / release correction checkpoint
+
+- Active branch: `feature/repository-libraries`.
+- Source/application version is still `v0.3.0`; no new GitHub Release has been published for the repository-library work yet.
+- Current branch head entering this fix: `bcffe23cb3e7644e68d522abea5f9c3bae58ba4d`.
+- Last fully CI-green code baseline remains `2a43e2f9ec7eae25d56488ed3cba589bdf42971e`; later commits through `bcffe23c` are documentation-only.
+- Completed before this checkpoint: shallow Add Git repository classification, repository-library selection, persisted child/root source paths, sequential library-child installs, and GitHub standalone-DLL fallback after a no-addon result.
+- Newly reported runtime defect: adding a package whose addon install folder/name collides with an existing managed/installed addon can leave two TocPilot package records visible at once. The second package does not actually install; uninstalling the older package can leave stale UI/state until Refresh, after which the old record disappears but the new package is still not installed.
+- Required behavior: detect the ownership/install-folder collision before saving/installing the new package and gate it with an explicit **Overwrite existing** / cancel decision. Do not allow two managed records to ambiguously own the same addon root. The overwrite path must safely transfer/remove old ownership before the replacement install and preserve rollback/state correctness on failure.
+- Release correction: the previous validation produced only a pull-request CI artifact. TocPilot's normal deployment workflow requires a GitHub Release with direct `TocPilot.exe` so the app's self-updater can discover it.
+- Untested work entering this fix: collision replacement UI and transaction behavior; runtime repository-library installation remains only partially exercised.
+- Deferred/out of scope remains: GitLab release support, archive/bundle executable discovery, arbitrary-depth repository catalogue discovery, dependency resolution between library children, and broader collection UX.
+- Exact next step: inspect package identity/ownership collision handling and Add Git save/install ordering, implement a deterministic overwrite/cancel gate with tests, run the full Windows x64 Release CI suite, then bump/publish the next `0.3.x` GitHub Release only from the green tested commit.
+
+## 2026-09-23 Add Git shallow detector implementation
+
+- Active branch: `feature/repository-libraries`.
+- Source/application version remains `v0.3.0`; this is development work, not a release/version bump.
+- Resumed from handoff commit: `b1258c56887a87dc0cd4ca4cb34bf7cf45c188b0`.
+- Final tested code head before this documentation-only handoff update: `2a43e2f9ec7eae25d56488ed3cba589bdf42971e`.
+- Relevant implementation commits in this pass:
+  - `88dbc9fa` / `dc56c8f6` / `e40bd1dc`: shallow repository-layout type, implementation, and detector tests;
+  - `01dcf4b6`: branch install/inspect honors persisted repository child `source_path`;
+  - `281ea3a4` / `2edc5ca1`: remove the user-selectable DLL bypass and reuse the exact-DLL/trust UI only as Add Git fallback;
+  - `c748f01f` / `48f19df0`: wire branch -> shallow inspection -> root/single/library/no-addon classification and compile the repository-library dialog;
+  - `5ce588dc`: fix shallow inspection compile ordering;
+  - `b7d7c730`: align legacy root-addon tests with the structural root-`.toc` rule;
+  - `20c82dbc` / `f5991cce` / `706e9d50`: explicit repository-root selection so deeper embedded `.toc` files are subtree contents rather than independent addon roots;
+  - `89be1a9c`: serialize multi-child repository-library installs and fix queue completion ownership;
+  - `1e354a9c`: state round-trip coverage for the explicit root source marker;
+  - `2a43e2f9`: MSVC-compatible root-selection test fixture; no production-code change.
+- Implemented Add Git behavior:
+  - choose repository, then branch;
+  - stage that exact branch revision without changing live addons;
+  - inspect only repository root plus one immediate directory level for direct `.toc` files;
+  - classify root addon, one nested addon, repository library, mixed/ambiguous, or no addon;
+  - root addons persist `source_path: "."` so recursive install validation selects only the root candidate while copying its full subtree;
+  - nested/library children persist their immediate child path and install independently;
+  - repository libraries show the multi-select child dialog and install selected children serially because they share repository staging;
+  - mixed root+child layouts stop without guessing;
+  - only a no-addon GitHub result enters latest-stable standalone-DLL fallback; GitLab does not use release fallback;
+  - when no supported result is selected/found, the Add Git path ends with `No addon or supported DLL found`.
+- Final code/build baseline: `2a43e2f9ec7eae25d56488ed3cba589bdf42971e`.
+  - GitHub Actions run `35897888628`, attempt 2, Windows x64 Release: build passed, all 16/16 CTest tests passed, artifact upload passed.
+  - CI artifact: `TocPilot-windows-x64`, artifact ID `10768347261`.
+  - Artifact ZIP SHA-256: `185f4ca2920d41c2b1163aa0ba47eed0eb844b46f5f2a7b5f05588dfc7351235`.
+  - Extracted `TocPilot.exe` SHA-256: `d39849ec017a2cbecb6f82b8bbbe102444105fd22f1730a8bb83adae3d028496`.
+  - The first attempt on the same code head built successfully and passed 15/16 tests; only the pre-existing live GitHub latest-release test was rate-limited. After the burst of CI runs drained, attempt 2 passed that live test as well.
+- Untested at runtime: native Add Git dialogs and end-to-end installation against real repositories, especially `Cabro/Atlas` multi-selection, a normal root addon, a single nested addon, GitHub DLL fallback, GitLab no-release fallback, mixed-layout refusal, and update/refresh behavior after adding individual library children.
+- Deferred/out of scope remains: GitLab releases, release-archive executable discovery, arbitrary-depth repository catalogue discovery, dependency resolution between library children, and broader collection UX.
+- Exact next step: runtime-test the CI artifact from code baseline `2a43e2f9`. Start with `Cabro/Atlas`: Add Git -> select `master` -> verify the library dialog lists `Atlas`, `AtlasLoot`, and `AtlasQuest`; select a subset and verify each selected child becomes its own package/install while unselected children remain untouched. Then test one root-addon repository with deeper embedded `.toc` content, one single-child repository, GitHub no-addon DLL fallback, GitLab no-addon behavior, and mixed-layout refusal.
+## 2026-09-23 repository-library / Add Git detector handoff
+
+- Active branch: `feature/repository-libraries`.
 - Published/source version remains `v0.3.0`.
-- Entering repository head: `ac32cdb56199eb0704b884de5179037bef9dac20` (`Document Atlas repository library example`).
-- Latest completed checkpoints:
+- Latest documentation commit entering this handoff: `c8b6ae6c0878723dd0860320048c0801f2187454` (`Define shallow Add Git detection pipeline`).
+- Latest implementation commits on this branch before the documentation update:
+  - `3a2c760cac9ef3133a5a87a37349374318c58021` — `Implement repository library selection dialog`;
+  - `5b6c365edff5568c391d32a265437b89e7bf418c` — `Add repository library selection dialog`;
+  - `993016a0f4ea91195304c536136f1679eb22250c` — `Test repository child package state`;
+  - `0ec3a5b5d33578d34cc576dbb36df11ed38e8bf6` — `Test repository library detection`;
+  - `ad83548ee7fa09dd8d619796e57be90f4bf01997` — `Detect repository library child paths`;
+  - `ff06e13167991316941e2a9522647b3653e86dcb` / `82094287679c8df4cd22d0cb974d2301d86e76e0` — repository-relative child path/state groundwork.
+- Completed/decided:
   - automatic startup self-update `v0.1.37 -> v0.3.0` passed runtime testing;
-  - repository source-classification direction is documented;
-  - `Cabro/Atlas` is the reference repository-library shape with sibling `Atlas`, `AtlasLoot`, and `AtlasQuest` addon roots.
-- User has chosen to implement repository-library support before finishing the GitLab runtime pass.
-- First implementation slice is intentionally narrow:
-  - detect multiple sibling installable addon roots from the selected branch using the existing secure archive inspection;
-  - present those roots as independently selectable install units;
-  - store selected children as independently managed TocPilot package records while sharing provider/repository/ref/revision source metadata;
-  - preserve existing single/root-addon behavior;
-  - do not infer dependencies between sibling addons merely because they share a repository.
-- Still untested/open:
-  - GitLab branch-package install/restart/Refresh runtime pass;
-  - empty-default-branch continuation behavior;
-  - repository-library UI/runtime behavior after implementation.
+  - `Cabro/Atlas` remains the reference repository-library example;
+  - the Add Git classifier is now intentionally **shallow and deterministic**: after removing the provider archive wrapper, inspect repository-root `.toc` files and only immediate child directories for direct `.toc` files;
+  - root `.toc` -> root addon;
+  - no root `.toc` + one child addon -> single nested addon;
+  - no root `.toc` + multiple child addons -> repository library with selectable children;
+  - do not recursively search arbitrary repository depth for library classification;
+  - once a child addon is selected, its full subtree is still installed normally;
+  - if no addon `.toc` is found, GitHub may fall through to the existing latest-stable exact-standalone-`.dll` release path;
+  - if neither addon nor supported DLL is found, return a concise `No addon or supported DLL found` result;
+  - DLL fallback remains standalone-`.dll` only: no release ZIP/7z/RAR/installer/bundle executable discovery;
+  - GitLab release support remains out of scope, so GitLab repositories with no detected addon stop at the no-addon result.
+- Important implementation note: the current feature branch contains partial library code written before the shallow classifier was finalized. Reconcile/simplify that code to the root-plus-one-level rule rather than continuing broader recursive library inference.
+- Untested/open:
+  - feature branch has not yet been Windows/CI/runtime validated as a complete Add Git flow;
+  - repository-library selection/install/update/remove semantics need end-to-end verification;
+  - mixed layouts containing both root-level and immediate-child addon roots need an explicit non-guessing UI/result;
+  - GitLab branch-package install/restart/Refresh runtime pass remains pending;
+  - empty-default-branch continuation behavior remains open.
 - Deferred/out of scope:
   - GitLab release support;
-  - user-uploaded release ZIP/archive executable discovery;
-  - automatic dependency resolution between collection children;
-  - broader collection catalogue/import/export UX.
-- Exact next step: inspect the existing archive/install/state path and implement the minimum end-to-end `Cabro/Atlas` flow, with deterministic tests before runtime validation.
+  - release archive executable discovery;
+  - automatic dependency resolution between library children;
+  - recursive arbitrary-depth repository catalogue discovery;
+  - broader collection import/export/catalogue UX.
+- Exact next step: review the current `feature/repository-libraries` diff, replace any recursive library-classification assumptions with the documented root-plus-one-level classifier, wire the Add Git flow to branch -> shallow inspect -> addon/library result -> GitHub DLL fallback only when no addon is found, then run deterministic tests/CI before runtime testing with `Cabro/Atlas` and the Vanilla GitLab addon collection.
 
 ## 2026-09-23 v0.3.0 automatic self-update runtime pass / Add Git detection design
 
