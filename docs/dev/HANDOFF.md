@@ -1,5 +1,22 @@
 # TocPilot development handoff
 
+## 2026-09-23 v0.3.5 published
+
+- Active branch: `main`.
+- Published/source version: `v0.3.5`.
+- PR #5 merge and release tag target: `1d3050f4bc755e7b8be0762d3f6e6afe738f1525`.
+- Final feature head before merge: `13b71f7a8cbfa628338e161c452cf7caaa5d6978`; PR Build run `35931674431` (#541), Windows x64 job `107419423256`, passed Release build and **17/17** CTest tests.
+- Release workflow run `35932008997` (#48), Windows x64 job `107420500944`, passed source-version validation, Release build, **17/17** tests, checksum generation, tag creation, and publication.
+- Latest-stable release is `v0.3.5`, draft=false, prerelease=false.
+- Assets:
+  - `TocPilot.exe` — 2,425,856 bytes; SHA-256 `7b6756d80cd115dec2c6ec38c258adb10a6cb5b6e8d91ad3dca883ca1b29db9b`;
+  - `TocPilot.exe.sha256` — 78 bytes; asset SHA-256 `e2b459a74ff0f449efbd1eac201a0c372ba7f3b0305316019cba0bfd4b7fd6c5`.
+- Completed/released: Advanced-only local TOC Version; `Local SHA`/`Git SHA` headers; Compact remains Name/Status; title-cased steady statuses with `Up To Date`; safe five-to-six-column width/order/sort migration; healthy managed DLL/release rows return to normal sorting.
+- Version semantics: local package-owned TOCs only; one unique value -> value; none -> `—`; disagreement -> `Multiple`; DLL -> `—`; no network/tag inference.
+- Runtime-untested: `v0.3.4 -> v0.3.5` self-update; real TOC Version display; migration/persistence/Lock columns with six columns; compact/Advanced switching; Branch selector geometry; renamed statuses; DLL normal-sort behavior.
+- Earlier deferred runtime items remain unchanged, and P5 import/export remains deferred.
+- Exact next step: runtime-test the published v0.3.5 through normal self-update, then exercise the six-column UX and sorting. Do not start P5 import/export.
+
 ## 2026-09-23 v0.3.5 version/status UX implementation
 
 - Active branch: `ux/version-status-v035`.
