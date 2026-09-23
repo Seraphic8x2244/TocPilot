@@ -1,5 +1,11 @@
 # TocPilot Development Plan
 
+## 2026-09-23 implementation checkpoint: addon-root collision replacement
+
+The repository-library implementation is runtime-gated on one ownership correction before release. A newly added package must not be persisted alongside an existing managed package when both resolve to the same live addon install root. Add Git should detect that collision before committing new package state or beginning installation, then offer an explicit overwrite/replace choice or cancel. Replacement must leave exactly one owner for the install root, remove or transfer the superseded package record coherently, and keep state/filesystem rollback semantics correct if installation fails.
+
+The last fully green code baseline remains `2a43e2f9ec7eae25d56488ed3cba589bdf42971e`; branch commits after it through the checkpoint are documentation-only. After implementing and testing this gate, the next `0.3.x` build must go through the existing GitHub Release workflow rather than being handed off only as a pull-request artifact, because TocPilot self-update discovers direct `TocPilot.exe` assets from published GitHub releases.
+
 ## 1. Project summary
 
 **TocPilot** is a lightweight, portable World of Warcraft addon and release manager.
