@@ -6221,6 +6221,12 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
 
             if (layout.kind ==
                 tp::RepositoryAddonLayoutKind::RootAddon) {
+                // Persist an explicit root marker so recursive install
+                // validation selects only the repository root candidate.
+                // Its subtree is still copied in full, including embedded
+                // libraries or modules with their own .toc files.
+                repositoryPackage.sourcePath =
+                    L".";
                 packagesToAdd.push_back(
                     repositoryPackage);
             } else if (
