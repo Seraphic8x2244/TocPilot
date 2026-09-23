@@ -1508,14 +1508,18 @@ bool SetPackageBranch(
     std::wstring& error) {
     error.clear();
 
-    if (package.provider != L"github") {
+    const bool supportedProvider =
+        package.provider == L"github" ||
+        package.provider == L"gitlab";
+
+    if (!supportedProvider) {
         error =
-            L"Branch selection is currently available for GitHub packages only.";
+            L"Branch selection is not available for this package provider.";
         return false;
     }
     if (branch.empty() || remoteSha.empty()) {
         error =
-            L"GitHub did not provide a valid branch and commit SHA.";
+            L"The repository provider did not provide a valid branch and commit SHA.";
         return false;
     }
 
@@ -1532,7 +1536,8 @@ bool SetPackageLatestRevision(
     error.clear();
 
     const bool branchPackage =
-        package.provider == L"github" &&
+        (package.provider == L"github" ||
+         package.provider == L"gitlab") &&
         package.mode == L"branch" &&
         !package.ref.empty();
 
@@ -1547,14 +1552,14 @@ bool SetPackageLatestRevision(
     if (!branchPackage &&
         !directReleasePackage) {
         error =
-            L"Only configured GitHub branch or latest-stable direct-release packages can be refreshed.";
+            L"Only configured GitHub/GitLab branch or latest-stable GitHub direct-release packages can be refreshed.";
         return false;
     }
 
     if (remoteRevision.empty()) {
         error =
             branchPackage
-                ? L"GitHub did not provide a valid branch commit SHA."
+                ? L"The repository provider did not provide a valid branch commit SHA."
                 : L"GitHub did not provide a valid release tag.";
         return false;
     }
@@ -1572,7 +1577,8 @@ bool SetPackageInstalledState(
     error.clear();
 
     const bool branchPackage =
-        package.provider == L"github" &&
+        (package.provider == L"github" ||
+         package.provider == L"gitlab") &&
         package.mode == L"branch" &&
         !package.ref.empty();
 
@@ -1587,7 +1593,7 @@ bool SetPackageInstalledState(
     if (!branchPackage &&
         !directReleasePackage) {
         error =
-            L"Only configured GitHub branch or latest-stable direct-release packages can be installed.";
+            L"Only configured GitHub/GitLab branch or latest-stable GitHub direct-release packages can be installed.";
         return false;
     }
 

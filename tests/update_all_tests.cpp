@@ -139,11 +139,12 @@ int main() {
     auto progress =
         tp::MakeUpdateAllProgress(state);
 
-    if (progress.packageIds.size() != 2 ||
+    if (progress.packageIds.size() != 3 ||
         progress.packageIds[0] != update.id ||
-        progress.packageIds[1] !=
+        progress.packageIds[1] != gitlab.id ||
+        progress.packageIds[2] !=
             directDll.id) {
-        Fail("Update All should queue known addon and DLL updates");
+        Fail("Update All should queue known GitHub/GitLab addon and DLL updates");
     }
 
     if (!tp::UpdateAllHasCurrent(progress) ||
@@ -162,11 +163,23 @@ int main() {
 
     if (!tp::UpdateAllHasCurrent(progress) ||
         tp::UpdateAllCurrentPackageId(progress) !=
-            directDll.id ||
+            gitlab.id ||
         progress.updated != 1 ||
         progress.current != 0 ||
         progress.failed != 0) {
-        Fail("Update All did not advance from addon to DLL update");
+        Fail("Update All did not advance from GitHub to GitLab addon update");
+    }
+
+    if (!tp::CompleteUpdateAllItem(
+            progress,
+            tp::UpdateAllOutcome::Updated,
+            {},
+            error) ||
+        !tp::UpdateAllHasCurrent(progress) ||
+        tp::UpdateAllCurrentPackageId(progress) !=
+            directDll.id ||
+        progress.updated != 2) {
+        Fail("Update All did not advance from GitLab addon to DLL update");
     }
 
     if (!tp::CompleteUpdateAllItem(
@@ -175,7 +188,7 @@ int main() {
             {},
             error) ||
         tp::UpdateAllHasCurrent(progress) ||
-        progress.updated != 2) {
+        progress.updated != 3) {
         Fail("Update All could not record the DLL update");
     }
 

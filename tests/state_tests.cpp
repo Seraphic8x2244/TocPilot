@@ -333,6 +333,50 @@ void TestClearInstalledState(
 }
 
 
+void TestGitLabBranchMutators() {
+    tp::PackageRecord package =
+        tp::MakeRepositoryPackage(
+            L"gitlab",
+            L"group/subgroup/Addon");
+
+    std::wstring error;
+    const std::wstring installed =
+        L"1111111111111111111111111111111111111111";
+    const std::wstring latest =
+        L"2222222222222222222222222222222222222222";
+
+    if (!tp::SetPackageBranch(
+            package,
+            L"main",
+            installed,
+            error) ||
+        package.mode != L"branch" ||
+        package.ref != L"main" ||
+        package.latestRevision != installed) {
+        Fail("GitLab branch state could not be configured");
+        return;
+    }
+
+    if (!tp::SetPackageInstalledState(
+            package,
+            installed,
+            {L"Interface/AddOns/Addon/Addon.toc"},
+            error) ||
+        package.installedRevision != installed) {
+        Fail("GitLab branch installed state could not be recorded");
+        return;
+    }
+
+    if (!tp::SetPackageLatestRevision(
+            package,
+            latest,
+            error) ||
+        package.installedRevision != installed ||
+        package.latestRevision != latest) {
+        Fail("GitLab branch latest revision could not be refreshed");
+    }
+}
+
 void TestReleasePackageRoundTrip(
     const std::filesystem::path& root) {
     tp::AppState state;
@@ -553,6 +597,7 @@ int main() {
         TestCreateAddRoundTrip(root);
         TestRemovePackageRecord(root);
         TestClearInstalledState(root);
+        TestGitLabBranchMutators();
         TestReleasePackageRoundTrip(root);
         TestReleaseTrackingMutators(root);
         TestUnknownFieldPreservation(root);

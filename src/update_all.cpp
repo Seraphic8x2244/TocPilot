@@ -6,11 +6,14 @@ namespace tp {
 
 bool IsUpdateAllCandidate(const PackageRecord& package) {
     const bool branchAddon =
+        (package.provider == L"github" ||
+         package.provider == L"gitlab") &&
         package.mode == L"branch" &&
         !package.ref.empty() &&
         package.target == L"addons";
 
     const bool directDll =
+        package.provider == L"github" &&
         package.mode == L"release" &&
         package.releasePolicy == L"latest_stable" &&
         !package.asset.empty() &&
@@ -21,7 +24,6 @@ bool IsUpdateAllCandidate(const PackageRecord& package) {
             package.targetPath;
 
     return
-        package.provider == L"github" &&
         (branchAddon || directDll) &&
         !package.installedRevision.empty() &&
         !package.installedFiles.empty();

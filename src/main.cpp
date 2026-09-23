@@ -165,7 +165,7 @@ std::wstring g_branchSelectorOpenPackageId;
 std::uint64_t g_branchSelectorGeneration = 0;
 std::wstring g_branchSelectorPackageId;
 std::wstring g_branchSelectorDefaultBranch;
-std::vector<tp::GitHubBranch> g_branchSelectorBranches;
+std::vector<tp::GitRemoteBranch> g_branchSelectorBranches;
 tp::UpdateAllProgress g_updateAllProgress;
 std::vector<tp::PackageRefreshStamp> g_packageRefreshStamps;
 std::vector<std::wstring> g_autoStatusPackageIds;
@@ -208,7 +208,7 @@ struct BranchLoadResult {
     bool ok = false;
     std::uint64_t generation = 0;
     std::wstring packageId;
-    tp::GitHubRepositoryInfo info;
+    tp::GitRemoteRepositoryInfo info;
     std::wstring error;
 };
 
@@ -888,6 +888,8 @@ bool CleanupPackageStaging(
 bool PackageBranchMode(
     const tp::PackageRecord& package) {
     return
+        SupportedBranchProvider(
+            package.provider) &&
         package.mode == L"branch" &&
         !package.ref.empty();
 }
@@ -1997,8 +1999,8 @@ void StartBranchSelectorLoad(
     const auto package =
         g_state.packages[index];
 
-    if (package.provider !=
-        L"github") {
+    if (!SupportedBranchProvider(
+            package.provider)) {
         return;
     }
 
@@ -2026,11 +2028,21 @@ void StartBranchSelectorLoad(
                 generation;
             result->packageId =
                 package.id;
-            result->ok =
-                tp::FetchGitHubRepositoryInfo(
-                    package.repository,
-                    result->info,
-                    result->error);
+            const std::wstring host =
+                BranchProviderHost(
+                    package.provider);
+
+            if (host.empty()) {
+                result->error =
+                    L"Unsupported branch package provider.";
+            } else {
+                result->ok =
+                    tp::FetchPublicGitRepositoryInfo(
+                        host,
+                        package.repository,
+                        result->info,
+                        result->error);
+            }
 
             if (!PostMessageW(
                     hwnd,
@@ -2077,8 +2089,8 @@ void UpdateBranchSelector(
             static_cast<std::size_t>(
                 selected)];
 
-    if (package.provider !=
-            L"github" ||
+    if (!SupportedBranchProvider(
+            package.provider) ||
         package.mode == L"release") {
         ShowWindow(
             g_branchSelector,
@@ -3365,7 +3377,7 @@ std::size_t FindPackageIndexById(
     return g_state.packages.size();
 }
 
-bool IsGitHubRateLimitError(
+bool IsProviderRateLimitError(
     std::wstring_view error) {
     return
         error.find(L"rate-limited") !=
@@ -3456,7 +3468,7 @@ void FinishAutoStatusRefresh(HWND hwnd) {
 
     if (g_autoStatusRateLimited) {
         message +=
-            L" GitHub rate-limited the check; remaining packages were left at their saved status.";
+            L" A package provider rate-limited the check; remaining packages were left at their saved status.";
     }
 
     if (g_startupAppUpdateFailed) {
@@ -6259,7 +6271,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
 
         if (!result->ok) {
             const bool rateLimited =
-                IsGitHubRateLimitError(
+                IsProviderRateLimitError(
                     result->error);
 
             SetPackageNeedsAttention(
@@ -6714,7 +6726,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                     hwnd,
                     tp::UpdateAllOutcome::Failed,
                     message,
-                    IsGitHubRateLimitError(
+                    IsProviderRateLimitError(
                         result->error));
             } else {
                 MessageBoxW(
