@@ -175,6 +175,7 @@ tp::UpdateAllProgress g_updateAllProgress;
 std::vector<tp::PackageRefreshStamp> g_packageRefreshStamps;
 std::vector<std::wstring> g_autoStatusPackageIds;
 std::vector<std::wstring> g_packageAttentionIds;
+std::vector<std::wstring> g_sessionUpdatedPackageIds;
 std::vector<std::size_t> g_addGitInstallQueue;
 std::size_t g_addGitInstallQueuePosition = 0;
 std::size_t g_autoStatusPosition = 0;
@@ -1366,6 +1367,50 @@ std::wstring PackageBranchSuffix(
         L")";
 }
 
+bool PackageHasUpdateAvailable(
+    const tp::PackageRecord& package) {
+    return
+        !package.installedRevision.empty() &&
+        !package.latestRevision.empty() &&
+        package.installedRevision !=
+            package.latestRevision;
+}
+
+bool PackageUpdatedThisSession(
+    std::wstring_view packageId) {
+    return std::find(
+               g_sessionUpdatedPackageIds.begin(),
+               g_sessionUpdatedPackageIds.end(),
+               packageId) !=
+        g_sessionUpdatedPackageIds.end();
+}
+
+void MarkPackageUpdatedThisSession(
+    std::wstring_view packageId) {
+    if (!PackageUpdatedThisSession(packageId)) {
+        g_sessionUpdatedPackageIds.emplace_back(
+            packageId);
+    }
+}
+
+void ClearSessionUpdatedPackages() {
+    g_sessionUpdatedPackageIds.clear();
+}
+
+COLORREF PackageRowTextColour(
+    const tp::PackageRecord& package) {
+    if (PackageHasUpdateAvailable(package)) {
+        return RGB(205, 105, 0);
+    }
+
+    if (PackageUpdatedThisSession(
+            package.id)) {
+        return RGB(0, 128, 0);
+    }
+
+    return GetSysColor(COLOR_WINDOWTEXT);
+}
+
 LRESULT HandlePackageListCustomDraw(
     LPARAM lParam) {
     auto* draw =
@@ -1418,6 +1463,24 @@ LRESULT HandlePackageListCustomDraw(
         g_state.packages[
             packageIndex];
 
+    const bool selected =
+        (ListView_GetItemState(
+             g_packageList,
+             displayRow,
+             LVIS_SELECTED) &
+         LVIS_SELECTED) != 0;
+    const bool focused =
+        GetFocus() ==
+        g_packageList;
+    const COLORREF rowTextColour =
+        selected
+            ? GetSysColor(
+                focused
+                    ? COLOR_HIGHLIGHTTEXT
+                    : COLOR_WINDOWTEXT)
+            : PackageRowTextColour(
+                package);
+
     const bool drawName =
         draw->iSubItem == 0;
     const bool drawBranch =
@@ -1428,6 +1491,8 @@ LRESULT HandlePackageListCustomDraw(
 
     if (!drawName &&
         !drawBranch) {
+        draw->clrText =
+            rowTextColour;
         return CDRF_DODEFAULT;
     }
 
@@ -1458,26 +1523,12 @@ LRESULT HandlePackageListCustomDraw(
         }
     }
 
-    const bool selected =
-        (ListView_GetItemState(
-             g_packageList,
-             displayRow,
-             LVIS_SELECTED) &
-         LVIS_SELECTED) != 0;
-    const bool focused =
-        GetFocus() ==
-        g_packageList;
-
     const int backgroundIndex =
         selected
             ? (focused
                 ? COLOR_HIGHLIGHT
                 : COLOR_BTNFACE)
             : COLOR_WINDOW;
-    const int textIndex =
-        selected && focused
-            ? COLOR_HIGHLIGHTTEXT
-            : COLOR_WINDOWTEXT;
 
     FillRect(
         draw->nmcd.hdc,
@@ -1490,7 +1541,7 @@ LRESULT HandlePackageListCustomDraw(
         TRANSPARENT);
     SetTextColor(
         draw->nmcd.hdc,
-        GetSysColor(textIndex));
+        rowTextColour);
 
     HFONT normal =
         g_uiFont
@@ -1737,13 +1788,35 @@ void RebuildPackageViewOrder() {
             const auto& right =
                 g_state.packages[rightIndex];
 
-            const bool leftAttention =
-                PackageNeedsAttention(left);
-            const bool rightAttention =
-                PackageNeedsAttention(right);
+            const auto priority =
+                [](const tp::PackageRecord& package) {
+                    if (PackageHasUpdateAvailable(
+                            package)) {
+                        return 0;
+                    }
 
-            if (leftAttention != rightAttention) {
-                return leftAttention;
+                    if (PackageUpdatedThisSession(
+                            package.id)) {
+                        return 1;
+                    }
+
+                    if (PackageNeedsAttention(
+                            package)) {
+                        return 2;
+                    }
+
+                    return 3;
+                };
+
+            const int leftPriority =
+                priority(left);
+            const int rightPriority =
+                priority(right);
+
+            if (leftPriority !=
+                rightPriority) {
+                return leftPriority <
+                    rightPriority;
             }
 
             if (g_packageSortColumn < 0) {
@@ -4017,9 +4090,18 @@ void StartAutoStatusRefresh(HWND hwnd) {
     }
 
     g_autoStatusPackageIds.clear();
+    ClearSessionUpdatedPackages();
+    RefreshPackageStateUi();
 
-    for (const auto& package :
-         g_state.packages) {
+    for (const std::size_t index :
+         g_packageViewOrder) {
+        if (index >=
+            g_state.packages.size()) {
+            continue;
+        }
+
+        const auto& package =
+            g_state.packages[index];
         if (tp::IsUpdateAllCandidate(
                 package)) {
             g_autoStatusPackageIds.push_back(
@@ -4028,6 +4110,7 @@ void StartAutoStatusRefresh(HWND hwnd) {
     }
 
     if (g_autoStatusPackageIds.empty()) {
+        ScrollPackageListToTop();
         SetStartupSplashCompletionPhase();
         return;
     }
@@ -4072,6 +4155,7 @@ void FinishUpdateAll() {
         L"Update New");
 
     RefreshPackageStateUi();
+    ScrollPackageListToTop();
 
     std::wstring summary =
         L"Update New finished: " +
@@ -4188,6 +4272,35 @@ void StartUpdateAll(HWND hwnd) {
 
     auto progress =
         tp::MakeUpdateAllProgress(g_state);
+
+    if (!progress.packageIds.empty()) {
+        std::vector<std::wstring>
+            visiblePackageIds;
+        visiblePackageIds.reserve(
+            progress.packageIds.size());
+
+        for (const std::size_t index :
+             g_packageViewOrder) {
+            if (index >=
+                g_state.packages.size()) {
+                continue;
+            }
+
+            const auto& id =
+                g_state.packages[index].id;
+            if (std::find(
+                    progress.packageIds.begin(),
+                    progress.packageIds.end(),
+                    id) !=
+                progress.packageIds.end()) {
+                visiblePackageIds.push_back(
+                    id);
+            }
+        }
+
+        progress.packageIds =
+            std::move(visiblePackageIds);
+    }
 
     if (progress.packageIds.empty()) {
         SetRoutinePackageFeedback(
@@ -7575,6 +7688,10 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             result->index;
         const auto& currentPackage =
             g_state.packages[index];
+        const bool wasUpdate =
+            !currentPackage.installedRevision.empty() &&
+            currentPackage.installedRevision !=
+                result->resolvedTag;
 
         if (!result->ok) {
             if (result->needsAttention) {
@@ -7677,10 +7794,13 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             result->packageId,
             false);
 
+        if (wasUpdate) {
+            MarkPackageUpdatedThisSession(
+                result->packageId);
+        }
+
         if (updateAllStep) {
-            SetPackageRowStatus(
-                index,
-                L"Current");
+            RefreshPackageStateUi();
             CompleteUpdateAllStep(
                 hwnd,
                 tp::UpdateAllOutcome::Updated,
@@ -7799,6 +7919,14 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
         const auto index = result->index;
         const std::wstring packageName =
             result->packageName;
+        const bool wasUpdate =
+            !replacementStep &&
+            !addGitQueueStep &&
+            !g_state.packages[index]
+                 .installedRevision.empty() &&
+            g_state.packages[index]
+                    .installedRevision !=
+                result->remoteSha;
 
         if (!result->ok) {
             SetPackageRowStatus(
@@ -8030,10 +8158,13 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                 g_root,
                 stagingCleanupError);
 
+        if (wasUpdate) {
+            MarkPackageUpdatedThisSession(
+                installedPackage.id);
+        }
+
         if (updateAllStep) {
-            SetPackageRowStatus(
-                index,
-                L"Current");
+            RefreshPackageStateUi();
             CompleteUpdateAllStep(
                 hwnd,
                 tp::UpdateAllOutcome::Updated,
