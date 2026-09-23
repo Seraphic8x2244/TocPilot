@@ -1,5 +1,15 @@
 # TocPilot Development Plan
 
+## 2026-09-23 release status: v0.3.5 published
+
+`v0.3.5` is published from merge commit `1d3050f4bc755e7b8be0762d3f6e6afe738f1525`. Release workflow run `35932008997` (#48) rebuilt that exact merged `main` commit, validated the source version, passed all **17/17** CTest tests, generated the SHA-256 sidecar, created/verified tag `v0.3.5`, and published direct `TocPilot.exe` plus `TocPilot.exe.sha256`. GitHub latest-stable reports `v0.3.5`.
+
+Advanced mode now displays `Name | Branch | Version | Local SHA | Git SHA | Status`, while Compact remains `Name | Status`. Version is strictly local installed TOC metadata, with no extra network resolution: one unique nonblank owned `## Version:` value is displayed, no value becomes `—`, conflicting owned TOCs become `Multiple`, and DLL packages show `—`. Existing five-column layout state migrates to six columns while preserving prior widths/order and remapping persisted sort semantics.
+
+Steady Status text is now `Up To Date`, `Update Available`, `Not Installed`, `Not Configured`, or `Needs Attention`. The release also fixes the v0.3.4 sorting regression where healthy release/DLL packages were treated as attention rows simply because they were not branch-mode packages.
+
+Runtime validation now required: automatic `v0.3.4 -> v0.3.5` startup self-update, Version values on real addons, six-column persistence/Lock/compact/Branch-selector behavior, renamed statuses, and healthy DLL normal sorting. P5 import/export remains deferred until the pending runtime pass is complete.
+
 ## 2026-09-23 implementation checkpoint: v0.3.5 version/status UX
 
 The next release is intentionally narrow. Advanced mode gains a local-only `Version` column, producing `Name | Branch | Version | Local SHA | Git SHA | Status`; Compact remains `Name | Status`. Version is not inferred from Git tags or remote archives: TocPilot reads only installed package-owned `.toc` files and displays a single unique nonblank `## Version:` value, `—` when absent, or `Multiple` when owned TOCs disagree. This keeps refresh cost and meaning deterministic.
