@@ -362,6 +362,70 @@ int main() {
             }
         }
 
+        const auto libraryZipPath =
+            temp / L"repository-library.zip";
+        const auto libraryExtracted =
+            temp / L"repository-library-extracted";
+
+        if (!WriteFixtureZip(
+                libraryZipPath,
+                {
+                    {"Cabro-Atlas-deadbeef/Atlas/Atlas.toc",
+                     "## Interface: 11200\n## Title: Atlas\n"},
+                    {"Cabro-Atlas-deadbeef/Atlas/Atlas.lua",
+                     "print('Atlas')\n"},
+                    {"Cabro-Atlas-deadbeef/AtlasLoot/AtlasLoot.toc",
+                     "## Interface: 11200\n## Title: AtlasLoot\n"},
+                    {"Cabro-Atlas-deadbeef/AtlasQuest/AtlasQuest.toc",
+                     "## Interface: 11200\n## Title: AtlasQuest\n"}
+                })) {
+            Fail("could not create repository-library ZIP fixture");
+        } else {
+            std::size_t entries = 0;
+            std::uint64_t bytes = 0;
+            std::wstring error;
+
+            if (!tp::ExtractZipSecure(
+                    libraryZipPath,
+                    libraryExtracted,
+                    entries,
+                    bytes,
+                    error)) {
+                Fail("repository-library ZIP extraction failed");
+            } else {
+                std::vector<tp::AddonCandidate> candidates;
+                if (!tp::DetectGitHubAddonCandidates(
+                        libraryExtracted,
+                        L"Cabro/Atlas",
+                        {},
+                        candidates,
+                        error)) {
+                    Fail("repository-library candidate detection failed");
+                } else if (
+                    candidates.size() != 3 ||
+                    candidates[0].repositoryRelativePath !=
+                        std::filesystem::path(L"Atlas") ||
+                    candidates[1].repositoryRelativePath !=
+                        std::filesystem::path(L"AtlasLoot") ||
+                    candidates[2].repositoryRelativePath !=
+                        std::filesystem::path(L"AtlasQuest") ||
+                    !tp::IsRepositoryLibrary(candidates)) {
+                    Fail("repository-library sibling roots were not classified correctly");
+                } else if (
+                    !tp::SelectRepositoryAddonCandidate(
+                        L"AtlasLoot",
+                        candidates,
+                        error) ||
+                    candidates.size() != 1 ||
+                    candidates[0].installFolder !=
+                        L"AtlasLoot" ||
+                    candidates[0].repositoryRelativePath !=
+                        std::filesystem::path(L"AtlasLoot")) {
+                    Fail("repository-library child selection failed");
+                }
+            }
+        }
+
         const auto badZipPath =
             temp / L"unsafe.zip";
 
