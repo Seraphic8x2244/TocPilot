@@ -1052,11 +1052,11 @@ Deliver:
 Current implementation status — 2026-09-23:
 
 - compact removal confirmation is published in `v0.3.2`;
-- column persistence/reordering/locking is merged to `main` at `291b8a4617fc11503cec103f43bf7420ba13bb6e`;
+- column persistence/reordering/locking is published in `v0.3.3`; the implementation merged to `main` at `291b8a4617fc11503cec103f43bf7420ba13bb6e`, and release tag `v0.3.3` points to `60f8cf680821db5ea88789c15c1f35f94f014d74`;
 - the exact feature head `e7185c320fc9d212367e43ede88f8a2b81a2a100` passed Windows x64 Release CI and all **17/17** tests in Build run `35910573538` (#522);
 - schema-1 settings now persist validated five-column widths/order plus the layout lock while preserving backward-compatible defaults for existing state;
 - column resize/reorder is available only in unlocked Advanced mode; compact mode is layout-read-only and does not overwrite the saved Advanced layout;
-- native runtime validation of width/order persistence, lock behavior, Advanced/compact toggling, and the in-cell Branch selector after reorder remains deferred;
+- Release workflow #46 for `v0.3.3` passed the complete 17/17 test suite and published direct `TocPilot.exe` plus checksum; native runtime validation of self-update, width/order persistence, lock behavior, Advanced/compact toggling, and the in-cell Branch selector after reorder remains deferred;
 - import/export and the remaining P5 items below it have not been started by this slice.
 
 ---
