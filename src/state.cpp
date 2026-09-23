@@ -842,6 +842,7 @@ std::string SerializePackage(const PackageRecord& package) {
         << "\"release_policy\":"
         << JsonStringOrNull(package.releasePolicy) << ","
         << "\"asset\":" << JsonStringOrNull(package.asset) << ","
+        << "\"source_path\":" << JsonStringOrNull(package.sourcePath) << ","
         << "\"target\":" << EscapeJson(package.target) << ","
         << "\"target_path\":" << JsonStringOrNull(package.targetPath) << ","
         << "\"installed_revision\":"
@@ -860,7 +861,7 @@ std::string MergePackageJson(const PackageRecord& package) {
     }
 
     std::string json = package.sourceJson;
-    const std::array<std::pair<std::string_view, std::string>, 13> values{{
+    const std::array<std::pair<std::string_view, std::string>, 14> values{{
         {"id", EscapeJson(package.id)},
         {"name", EscapeJson(package.name)},
         {"provider", EscapeJson(package.provider)},
@@ -869,6 +870,7 @@ std::string MergePackageJson(const PackageRecord& package) {
         {"ref", JsonStringOrNull(package.ref)},
         {"release_policy", JsonStringOrNull(package.releasePolicy)},
         {"asset", JsonStringOrNull(package.asset)},
+        {"source_path", JsonStringOrNull(package.sourcePath)},
         {"target", EscapeJson(package.target)},
         {"target_path", JsonStringOrNull(package.targetPath)},
         {"installed_revision", JsonStringOrNull(package.installedRevision)},
@@ -1138,6 +1140,12 @@ bool ParsePackages(
                 objectEnd,
                 "asset",
                 package.asset) ||
+            !GetNullableStringMember(
+                json,
+                objectStart,
+                objectEnd,
+                "source_path",
+                package.sourcePath) ||
             !GetNullableStringMember(
                 json,
                 objectStart,
@@ -1445,6 +1453,35 @@ PackageRecord MakeRepositoryPackage(
     return package;
 }
 
+PackageRecord MakeRepositoryAddonPackage(
+    std::wstring provider,
+    std::wstring repository,
+    std::wstring sourcePath,
+    std::wstring name) {
+    PackageRecord package =
+        MakeRepositoryPackage(
+            std::move(provider),
+            std::move(repository));
+
+    std::replace(
+        sourcePath.begin(),
+        sourcePath.end(),
+        L'\\',
+        L'/');
+
+    package.sourcePath =
+        std::move(sourcePath);
+    package.name =
+        std::move(name);
+    package.id =
+        package.provider + L":" +
+        package.repository + L":addon:" +
+        package.sourcePath;
+    package.sourceJson =
+        SerializePackage(package);
+    return package;
+}
+
 bool AppendPackage(
     AppState& state,
     PackageRecord package,
@@ -1463,7 +1500,7 @@ bool AppendPackage(
     for (const auto& existing : state.packages) {
         if (EqualsInsensitive(existing.id, package.id)) {
             error =
-                L"This repository is already managed by TocPilot.";
+                L"This package is already managed by TocPilot.";
             return false;
         }
     }
