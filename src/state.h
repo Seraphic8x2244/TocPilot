@@ -8,20 +8,22 @@
 
 namespace tp {
 
-inline constexpr std::array<int, 5> kDefaultPackageColumnWidths{
+inline constexpr std::array<int, 6> kDefaultPackageColumnWidths{
     240,
     300,
+    110,
     115,
     115,
     150
 };
 
-inline constexpr std::array<int, 5> kDefaultPackageColumnOrder{
+inline constexpr std::array<int, 6> kDefaultPackageColumnOrder{
     0,
     1,
     2,
     3,
-    4
+    4,
+    5
 };
 
 struct AppSettings {
@@ -29,9 +31,9 @@ struct AppSettings {
     bool checkAppUpdates = true;
     int packageSortColumn = -1;
     bool packageSortAscending = true;
-    std::array<int, 5> packageColumnWidths =
+    std::array<int, 6> packageColumnWidths =
         kDefaultPackageColumnWidths;
-    std::array<int, 5> packageColumnOrder =
+    std::array<int, 6> packageColumnOrder =
         kDefaultPackageColumnOrder;
     bool packageColumnsLocked = false;
 };

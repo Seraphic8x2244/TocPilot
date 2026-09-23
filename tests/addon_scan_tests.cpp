@@ -86,6 +86,108 @@ const tp::AddonFolderInfo* Find(
     return nullptr;
 }
 
+void TestInstalledPackageTocVersion() {
+    const auto root =
+        MakeTempRoot();
+
+    if (root.empty()) {
+        Fail("could not create TOC version fixture");
+        return;
+    }
+
+    const auto addons =
+        root /
+        L"Interface" /
+        L"AddOns";
+
+    if (!WriteAll(
+            addons /
+                L"Single" /
+                L"Single.toc",
+            "## Interface: 11200\n## Version: 1.2.3\n") ||
+        !WriteAll(
+            addons /
+                L"SameA" /
+                L"SameA.toc",
+            "## Version: 2.0\n") ||
+        !WriteAll(
+            addons /
+                L"SameB" /
+                L"SameB.toc",
+            "## version: 2.0\n") ||
+        !WriteAll(
+            addons /
+                L"Different" /
+                L"Different.toc",
+            "## Version: 3.0\n") ||
+        !WriteAll(
+            addons /
+                L"NoVersion" /
+                L"NoVersion.toc",
+            "## Interface: 11200\n")) {
+        Fail("could not create TOC version files");
+        return;
+    }
+
+    tp::PackageRecord package;
+    package.target = L"addons";
+    package.installedFiles = {
+        L"Interface/AddOns/Single/Single.toc"
+    };
+
+    if (tp::InstalledPackageTocVersion(
+            root,
+            package) != L"1.2.3") {
+        Fail("single TOC version was not read");
+    }
+
+    package.installedFiles = {
+        L"Interface/AddOns/SameA/SameA.toc",
+        L"Interface/AddOns/SameB/SameB.toc"
+    };
+
+    if (tp::InstalledPackageTocVersion(
+            root,
+            package) != L"2.0") {
+        Fail("matching TOC versions were not collapsed");
+    }
+
+    package.installedFiles.push_back(
+        L"Interface/AddOns/Different/Different.toc");
+
+    if (tp::InstalledPackageTocVersion(
+            root,
+            package) != L"Multiple") {
+        Fail("conflicting TOC versions were not reported");
+    }
+
+    package.installedFiles = {
+        L"Interface/AddOns/NoVersion/NoVersion.toc"
+    };
+
+    if (tp::InstalledPackageTocVersion(
+            root,
+            package) != L"—") {
+        Fail("missing TOC version did not produce em dash");
+    }
+
+    package.target = L"wow-root";
+    package.installedFiles = {
+        L"nampower.dll"
+    };
+
+    if (tp::InstalledPackageTocVersion(
+            root,
+            package) != L"—") {
+        Fail("non-addon package reported a TOC version");
+    }
+
+    std::error_code ec;
+    std::filesystem::remove_all(
+        root,
+        ec);
+}
+
 void TestClassification() {
     const auto root =
         MakeTempRoot();
@@ -216,6 +318,7 @@ void TestClassification() {
 } // namespace
 
 int main() {
+    TestInstalledPackageTocVersion();
     TestClassification();
 
     if (failures != 0) {

@@ -31,6 +31,10 @@ bool ScanAddonFolders(
     std::vector<AddonFolderInfo>& folders,
     std::wstring& error);
 
+std::wstring InstalledPackageTocVersion(
+    const std::filesystem::path& wowRoot,
+    const PackageRecord& package);
+
 const wchar_t* AddonFolderKindLabel(AddonFolderKind kind);
 
 } // namespace tp
