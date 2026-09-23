@@ -4292,7 +4292,24 @@ void StartUpdateAll(HWND hwnd) {
                     progress.packageIds.begin(),
                     progress.packageIds.end(),
                     id) !=
-                progress.packageIds.end()) {
+                    progress.packageIds.end() &&
+                std::find(
+                    visiblePackageIds.begin(),
+                    visiblePackageIds.end(),
+                    id) ==
+                    visiblePackageIds.end()) {
+                visiblePackageIds.push_back(
+                    id);
+            }
+        }
+
+        for (const auto& id :
+             progress.packageIds) {
+            if (std::find(
+                    visiblePackageIds.begin(),
+                    visiblePackageIds.end(),
+                    id) ==
+                visiblePackageIds.end()) {
                 visiblePackageIds.push_back(
                     id);
             }
