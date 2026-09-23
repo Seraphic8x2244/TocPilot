@@ -426,6 +426,165 @@ int main() {
             }
         }
 
+        {
+            const auto extracted =
+                temp / L"shallow-root";
+            const auto wrapper =
+                extracted / L"Owner-Root-deadbeef";
+            std::filesystem::create_directories(
+                wrapper / L"Embedded" / L"Deep",
+                ec);
+            std::ofstream(wrapper / L"Root.toc")
+                << "## Interface: 11200\n";
+            std::ofstream(
+                wrapper / L"Embedded" / L"Deep" / L"Deep.toc")
+                << "## Interface: 11200\n";
+
+            tp::RepositoryAddonLayout layout;
+            std::wstring error;
+            if (!tp::DetectShallowRepositoryAddonLayout(
+                    extracted,
+                    L"GitHub",
+                    L"Owner/Root",
+                    layout,
+                    error) ||
+                layout.kind !=
+                    tp::RepositoryAddonLayoutKind::RootAddon ||
+                layout.candidates.size() != 1 ||
+                !layout.candidates[0].repositoryRelativePath.empty() ||
+                layout.candidates[0].installFolder != L"Root") {
+                Fail("shallow root addon classification failed");
+            }
+        }
+
+        {
+            const auto extracted =
+                temp / L"shallow-single";
+            const auto wrapper =
+                extracted / L"Owner-Collection-deadbeef";
+            std::filesystem::create_directories(
+                wrapper / L"Only" / L"Modules" / L"Deep",
+                ec);
+            std::ofstream(wrapper / L"Only" / L"Only.toc")
+                << "## Interface: 11200\n";
+            std::ofstream(
+                wrapper / L"Only" / L"Modules" / L"Deep" / L"Deep.toc")
+                << "## Interface: 11200\n";
+
+            tp::RepositoryAddonLayout layout;
+            std::wstring error;
+            if (!tp::DetectShallowRepositoryAddonLayout(
+                    extracted,
+                    L"GitHub",
+                    L"Owner/Collection",
+                    layout,
+                    error) ||
+                layout.kind !=
+                    tp::RepositoryAddonLayoutKind::SingleNestedAddon ||
+                layout.candidates.size() != 1 ||
+                layout.candidates[0].repositoryRelativePath !=
+                    std::filesystem::path(L"Only")) {
+                Fail("shallow single nested addon classification failed");
+            }
+        }
+
+        {
+            const auto extracted =
+                temp / L"shallow-library";
+            const auto wrapper =
+                extracted / L"Cabro-Atlas-deadbeef";
+            std::filesystem::create_directories(
+                wrapper / L"Atlas",
+                ec);
+            std::filesystem::create_directories(
+                wrapper / L"AtlasLoot",
+                ec);
+            std::filesystem::create_directories(
+                wrapper / L"AtlasQuest",
+                ec);
+            std::ofstream(wrapper / L"Atlas" / L"Atlas.toc")
+                << "## Interface: 11200\n";
+            std::ofstream(wrapper / L"AtlasLoot" / L"AtlasLoot.toc")
+                << "## Interface: 11200\n";
+            std::ofstream(wrapper / L"AtlasQuest" / L"AtlasQuest.toc")
+                << "## Interface: 11200\n";
+
+            tp::RepositoryAddonLayout layout;
+            std::wstring error;
+            if (!tp::DetectShallowRepositoryAddonLayout(
+                    extracted,
+                    L"GitHub",
+                    L"Cabro/Atlas",
+                    layout,
+                    error) ||
+                layout.kind !=
+                    tp::RepositoryAddonLayoutKind::RepositoryLibrary ||
+                layout.candidates.size() != 3 ||
+                layout.candidates[0].repositoryRelativePath !=
+                    std::filesystem::path(L"Atlas") ||
+                layout.candidates[1].repositoryRelativePath !=
+                    std::filesystem::path(L"AtlasLoot") ||
+                layout.candidates[2].repositoryRelativePath !=
+                    std::filesystem::path(L"AtlasQuest")) {
+                Fail("shallow repository library classification failed");
+            }
+        }
+
+        {
+            const auto extracted =
+                temp / L"shallow-mixed";
+            const auto wrapper =
+                extracted / L"Owner-Mixed-deadbeef";
+            std::filesystem::create_directories(
+                wrapper / L"Child",
+                ec);
+            std::ofstream(wrapper / L"Mixed.toc")
+                << "## Interface: 11200\n";
+            std::ofstream(wrapper / L"Child" / L"Child.toc")
+                << "## Interface: 11200\n";
+
+            tp::RepositoryAddonLayout layout;
+            std::wstring error;
+            if (!tp::DetectShallowRepositoryAddonLayout(
+                    extracted,
+                    L"GitHub",
+                    L"Owner/Mixed",
+                    layout,
+                    error) ||
+                layout.kind !=
+                    tp::RepositoryAddonLayoutKind::MixedAmbiguous ||
+                layout.candidates.size() != 2) {
+                Fail("shallow mixed repository classification failed");
+            }
+        }
+
+        {
+            const auto extracted =
+                temp / L"shallow-deep-only";
+            const auto wrapper =
+                extracted / L"Owner-Deep-deadbeef";
+            std::filesystem::create_directories(
+                wrapper / L"Top" / L"Deep",
+                ec);
+            std::ofstream(
+                wrapper / L"Top" / L"Deep" / L"Deep.toc")
+                << "## Interface: 11200\n";
+
+            tp::RepositoryAddonLayout layout;
+            std::wstring error;
+            if (!tp::DetectShallowRepositoryAddonLayout(
+                    extracted,
+                    L"GitHub",
+                    L"Owner/Deep",
+                    layout,
+                    error) ||
+                layout.kind !=
+                    tp::RepositoryAddonLayoutKind::None ||
+                !layout.candidates.empty()) {
+                Fail("deep-only repository was not ignored by shallow classification");
+            }
+        }
+
         const auto badZipPath =
             temp / L"unsafe.zip";
 
