@@ -139,21 +139,23 @@ void TestCreateAddRoundTrip(
     }
 
     state.settings.textScale = 1.25;
-    state.settings.packageSortColumn = 4;
+    state.settings.packageSortColumn = 5;
     state.settings.packageSortAscending = false;
     state.settings.packageColumnWidths = {
         260,
         310,
+        105,
         125,
         130,
         170
     };
     state.settings.packageColumnOrder = {
-        4,
+        5,
         0,
         1,
         2,
-        3
+        3,
+        4
     };
     state.settings.packageColumnsLocked = true;
 
@@ -184,14 +186,60 @@ void TestCreateAddRoundTrip(
         loaded.packages[0].latestRevision != installedSha ||
         loaded.packages[0].installedFiles != installedFiles ||
         loaded.settings.textScale != 1.25 ||
-        loaded.settings.packageSortColumn != 4 ||
+        loaded.settings.packageSortColumn != 5 ||
         loaded.settings.packageSortAscending ||
         loaded.settings.packageColumnWidths !=
-            std::array<int, 5>{260, 310, 125, 130, 170} ||
+            std::array<int, 6>{260, 310, 105, 125, 130, 170} ||
         loaded.settings.packageColumnOrder !=
-            std::array<int, 5>{4, 0, 1, 2, 3} ||
+            std::array<int, 6>{5, 0, 1, 2, 3, 4} ||
         !loaded.settings.packageColumnsLocked) {
         Fail("round-trip state values did not match");
+    }
+}
+
+void TestLegacyFiveColumnLayoutMigration(
+    const std::filesystem::path& root) {
+    const std::string json =
+        "{\n"
+        "  \"schema\": 1,\n"
+        "  \"settings\": {"
+        "\"text_scale\": 1.0,"
+        "\"check_app_updates\": true,"
+        "\"package_sort_column\":4,"
+        "\"package_sort_ascending\":false,"
+        "\"package_column_widths\":[260,310,125,130,170],"
+        "\"package_column_order\":[4,0,1,2,3],"
+        "\"package_columns_locked\":true"
+        "},\n"
+        "  \"packages\": []\n"
+        "}\n";
+
+    if (!WriteAll(tp::StatePath(root), json)) {
+        Fail("could not write legacy column-layout fixture");
+        return;
+    }
+
+    tp::AppState state;
+    bool created = true;
+    std::wstring error;
+    if (!tp::LoadOrCreateState(
+            root,
+            state,
+            created,
+            error)) {
+        Fail("legacy column-layout fixture did not load");
+        return;
+    }
+
+    if (created ||
+        state.settings.packageSortColumn != 5 ||
+        state.settings.packageSortAscending ||
+        state.settings.packageColumnWidths !=
+            std::array<int, 6>{260, 310, 110, 125, 130, 170} ||
+        state.settings.packageColumnOrder !=
+            std::array<int, 6>{5, 0, 1, 2, 3, 4} ||
+        !state.settings.packageColumnsLocked) {
+        Fail("legacy five-column layout did not migrate");
     }
 }
 
@@ -203,8 +251,8 @@ void TestColumnLayoutValidation(
         "  \"settings\": {"
         "\"text_scale\": 1.0,"
         "\"check_app_updates\": true,"
-        "\"package_column_widths\":[10,300,5000,115,150],"
-        "\"package_column_order\":[0,0,1,2,3],"
+        "\"package_column_widths\":[10,300,5000,115,115,150],"
+        "\"package_column_order\":[0,0,1,2,3,4],"
         "\"package_columns_locked\":true"
         "},\n"
         "  \"packages\": []\n"
@@ -229,7 +277,7 @@ void TestColumnLayoutValidation(
 
     if (created ||
         state.settings.packageColumnWidths !=
-            std::array<int, 5>{40, 300, 2000, 115, 150} ||
+            std::array<int, 6>{40, 300, 2000, 115, 115, 150} ||
         state.settings.packageColumnOrder !=
             tp::kDefaultPackageColumnOrder ||
         !state.settings.packageColumnsLocked) {
@@ -980,7 +1028,8 @@ int main() {
         Fail("could not create temporary test directory");
     } else {
         TestCreateAddRoundTrip(root);
-        TestColumnLayoutValidation(root);
+        TestLegacyFiveColumnLayoutMigration(root);
+    TestColumnLayoutValidation(root);
         TestRemovePackageRecord(root);
         TestPackageOwnerReplacement(root);
         TestClearInstalledState(root);
