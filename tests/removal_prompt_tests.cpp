@@ -1,5 +1,6 @@
 #include "removal_prompt.h"
 
+#include <cstdlib>
 #include <iostream>
 #include <string>
 
