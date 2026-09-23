@@ -1,5 +1,14 @@
 # TocPilot Development Plan
 
+## 2026-09-23 v0.3.2 removal confirmation implementation
+
+The first P5 UX/safety slice is implementation-complete on `feature/removal-dialog`. Source/application/release marker are `v0.3.2`; authoritative tested source head `8d0590a1f9587cce83d5acceef21e931373dd6e7` passed PR Build run `35908713351` (#517), including the Windows x64 Release build and **17/17** CTest tests.
+
+Installed addon Uninstall and Remove now use the existing native expandable TaskDialog helper. The compact view shows owned-root and recorded-file counts and defaults to No. Expanding **Show details** lists the exact TocPilot-owned addon roots and every recorded installed file. Uninstall retains the package record and branch tracking; Remove deletes the package record after removing owned files. Record-only removal explicitly states that only TocPilot state is being removed. Existing ownership checks, transaction commit/rollback behavior, and state-save semantics are unchanged.
+
+Published `v0.3.1` runtime confirmation currently covers root addon Add Git, repository-library/multi-addon selection, no-TOC DLL fallback, and direct DLL discovery. Remaining v0.3.1 runtime checks plus the new v0.3.2 removal dialog are deferred until the user can test them. The exact next step is to merge PR #2 and verify the normal main-branch Release workflow publishes self-updatable `v0.3.2`.
+
+
 ## 2026-09-23 release status: v0.3.1 published
 
 `v0.3.1` is published from merge commit `7222280319bc4ff2f46eac58dc3686ead78e8895`. Release workflow run `35903180687` rebuilt that exact `main` commit, passed all 16 CTest tests, generated the SHA-256 sidecar, created/verified the `v0.3.1` tag, and published direct `TocPilot.exe` plus `TocPilot.exe.sha256`. The application self-updater can therefore consume this build through its normal latest-stable GitHub Release path.

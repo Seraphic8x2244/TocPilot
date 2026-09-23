@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.24)
 
-project(TocPilot VERSION 0.3.1 LANGUAGES C CXX)
+project(TocPilot VERSION 0.3.2 LANGUAGES C CXX)
 
 # miniz 3.1.2, pinned from richgel999/miniz commit
 # 77d0dce8627735138c51770d1799a1ef48f2117d.
@@ -38,6 +38,7 @@ add_executable(TocPilot WIN32
     src/main.cpp
     src/provider.cpp
     src/refresh_freshness.cpp
+    src/removal_prompt.cpp
     src/state.cpp
     src/splash.cpp
     src/update.cpp
@@ -337,5 +338,18 @@ if(BUILD_TESTING)
     endif()
 
     add_test(NAME package-refresh-freshness COMMAND TocPilotRefreshFreshnessTests)
+
+    add_executable(TocPilotRemovalPromptTests
+        tests/removal_prompt_tests.cpp
+        src/removal_prompt.cpp
+    )
+    target_compile_features(TocPilotRemovalPromptTests PRIVATE cxx_std_20)
+    target_include_directories(TocPilotRemovalPromptTests PRIVATE src)
+
+    if(MSVC)
+        target_compile_options(TocPilotRemovalPromptTests PRIVATE /W4 /permissive- /utf-8)
+    endif()
+
+    add_test(NAME removal-prompt-model COMMAND TocPilotRemovalPromptTests)
 
 endif()

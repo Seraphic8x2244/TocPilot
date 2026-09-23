@@ -1,5 +1,24 @@
 # TocPilot status / handoff
 
+## 2026-09-23 v0.3.2 removal-dialog CI-green / release pending
+
+- Active branch: `feature/removal-dialog`; base `main` was `f85cb59c470219f0167e30d532c5953ea34dc369`.
+- Source/application/release-marker version is now `v0.3.2`. Published stable version remains `v0.3.1` until PR #2 is merged and the main-branch Release workflow succeeds.
+- Authoritative tested source head: `8d0590a1f9587cce83d5acceef21e931373dd6e7`.
+- PR Build run `35908713351` (#517), Windows x64 job `107342819515`, passed Configure, Release build, the full **17/17** CTest suite, and artifact upload. New test: `removal-prompt-model`.
+- P5 removal UX implemented:
+  - installed addon **Uninstall** and **Remove** confirmations now use the existing compact native expandable dialog;
+  - the collapsed view shows exact owned-root and recorded-file counts;
+  - **Show details** lists every TocPilot-owned `Interface\\AddOns\\<root>` plus every recorded installed file;
+  - default action remains **No**;
+  - Uninstall retains the package record/tracking, while Remove deletes the package record after owned files are removed;
+  - record-only removal uses the same compact confirmation and explicitly states that no addon files are being removed.
+- Filesystem ownership, install/removal transaction, rollback, and state-save semantics were not changed in this slice.
+- Runtime-confirmed on published `v0.3.1`: root addon Add Git, multi-addon repository selection, no-TOC GitHub DLL fallback, and direct DLL discovery.
+- Runtime-untested/deferred: the new removal dialog itself; single-nested Add Git; same-root managed-addon overwrite/cancel; mixed root+child refusal; terminal no-supported-content cases.
+- Deferred/out of scope remains: GitLab release support, release-archive executable discovery, arbitrary-depth repository catalogue discovery, dependency resolution between library children, broader collection UX, and later P5 items (column persistence/reordering/locking, import/export, package edit, local-modification handling, richer diagnostics).
+- Exact next step: merge PR #2 after this handoff update, verify the main-branch Release workflow publishes `v0.3.2` from the exact merge commit with direct `TocPilot.exe` + SHA-256 sidecar, then record the published release on `main`.
+
 ## 2026-09-23 v0.3.1 published / managed-root overwrite runtime handoff
 
 - Active branch: `main`.
