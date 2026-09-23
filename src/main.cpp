@@ -7392,19 +7392,29 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
 
         g_packageInstallInProgress = false;
 
+        const bool replacementStep =
+            !result->replacedPackageId.empty();
         const bool addGitQueueStep =
+            !replacementStep &&
             IsAddGitInstallQueueCurrent(
                 result->index);
         const bool updateAllStep =
+            !replacementStep &&
             IsUpdateAllCurrentPackage(
                 result->packageId);
 
-        if (result->index >=
+        const bool trackingChanged =
+            result->index >=
                 g_state.packages.size() ||
-            g_state.packages[result->index].id !=
-                result->packageId ||
-            g_state.packages[result->index].ref !=
-                result->branch) {
+            (replacementStep
+                ? g_state.packages[result->index].id !=
+                    result->replacedPackageId
+                : g_state.packages[result->index].id !=
+                        result->packageId ||
+                    g_state.packages[result->index].ref !=
+                        result->branch);
+
+        if (trackingChanged) {
             const std::wstring message =
                 result->packageId +
                 L": install result was discarded because package tracking changed.";
@@ -7432,7 +7442,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
 
         const auto index = result->index;
         const std::wstring packageName =
-            g_state.packages[index].name;
+            result->packageName;
 
         if (!result->ok) {
             SetPackageRowStatus(
@@ -7528,11 +7538,33 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
         }
 
         tp::AppState updatedState = g_state;
-        if (!tp::SetPackageInstalledState(
-                updatedState.packages[index],
-                result->remoteSha,
-                result->transaction.plan.desiredInstalledFiles,
-                error) ||
+        bool statePrepared = false;
+
+        if (replacementStep) {
+            auto replacement =
+                result->replacementPackage;
+
+            statePrepared =
+                tp::SetPackageInstalledState(
+                    replacement,
+                    result->remoteSha,
+                    result->transaction.plan.desiredInstalledFiles,
+                    error) &&
+                tp::ReplacePackageRecord(
+                    updatedState,
+                    result->replacedPackageId,
+                    std::move(replacement),
+                    error);
+        } else {
+            statePrepared =
+                tp::SetPackageInstalledState(
+                    updatedState.packages[index],
+                    result->remoteSha,
+                    result->transaction.plan.desiredInstalledFiles,
+                    error);
+        }
+
+        if (!statePrepared ||
             !tp::SaveState(
                 g_root,
                 updatedState,
@@ -7707,6 +7739,12 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                 L"\r\nObsolete roots removed: " +
                 std::to_wstring(
                     result->transaction.plan.obsoleteInstallFolders.size());
+        }
+
+        if (replacementStep) {
+            summary +=
+                L"\r\nReplaced managed package: " +
+                result->replacedPackageId;
         }
 
         if (!cleanupOk) {
