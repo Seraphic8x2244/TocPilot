@@ -275,7 +275,7 @@ Never allow a remote archive to write outside the WoW root.
 
 ### Repository inspection and source classification
 
-**Implementation status — 2026-09-23:** implemented on `feature/repository-libraries`. Add Git now stages the selected branch first, runs a dedicated root + one-level shallow classifier, persists explicit root/child source selection, presents the repository-library selector for multiple immediate child addons, and only reaches GitHub latest-stable standalone-DLL fallback after a no-addon result. The older recursive archive detector remains for post-selection install validation and is no longer the library classifier. Final Windows CI and real-repository runtime testing are still required before merge/release.
+**Implementation status — 2026-09-23:** implemented on `feature/repository-libraries`. Add Git now stages the selected branch first, runs a dedicated root + one-level shallow classifier, persists explicit root/child source selection, presents the repository-library selector for multiple immediate child addons, and only reaches GitHub latest-stable standalone-DLL fallback after a no-addon result. The older recursive archive detector remains for post-selection install validation and is no longer the library classifier. Windows x64 Release CI passed on code baseline `2a43e2f9` with 16/16 CTest tests passing; real-repository runtime testing is the remaining gate before merge/release.
 
 
 The Add Git flow should evolve from manual source-mode selection toward a small deterministic inspection pipeline.
