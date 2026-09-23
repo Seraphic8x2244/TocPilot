@@ -1,6 +1,7 @@
 #include "addon_scan.h"
 
 #include <algorithm>
+#include <cctype>
 #include <cwctype>
 #include <fstream>
 #include <set>
