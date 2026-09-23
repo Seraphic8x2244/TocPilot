@@ -1,5 +1,21 @@
 # TocPilot status / handoff
 
+## 2026-09-23 shallow Add Git reconciliation in progress
+
+- Active branch: `feature/repository-libraries`.
+- Published/source version remains `v0.3.0`.
+- Resumed from handoff commit: `b1258c56887a87dc0cd4ca4cb34bf7cf45c188b0` (`Record Add Git detector handoff`).
+- Reconciliation findings completed before code changes:
+  - the branch is exactly 11 commits ahead of `main` and was not behind at resume time;
+  - the current Add Git flow still uses the old manual normal-branch versus DLL checkbox path, then saves a branch package and immediately installs it;
+  - repository-child state support and a repository-library selection dialog exist on the feature branch, but the dialog is not included in `CMakeLists.txt` and is not wired into `main.cpp`;
+  - the existing `DetectRepositoryAddonCandidates` still starts from the recursive archive detector, so it must not be used as the Add Git library classifier;
+  - selected child `source_path` is persisted but the current install/inspect path does not yet filter candidates by it.
+- Required implementation now locked to the documented shallow pipeline: inspect only repository root plus one directory deep for direct `.toc` files; classify root addon / single nested addon / repository library; treat mixed root + child layouts as ambiguous; only when no addon exists may GitHub fall through to latest-stable standalone `.dll`; otherwise return `No addon or supported DLL found`.
+- Untested while this checkpoint is in progress: all new shallow classification, library selection/install sequencing, automatic DLL fallback, and the complete Add Git runtime path.
+- Deferred/out of scope remains unchanged: GitLab releases, release-archive executable discovery, arbitrary-depth repository catalogue discovery, dependency resolution between library children, and broader collection UX.
+- Exact next step: add a dedicated shallow repository-layout detector and deterministic tests, wire `source_path` filtering into branch install/inspect, then replace the Add Git manual DLL mode with branch -> shallow inspect -> addon/library result -> GitHub standalone-DLL fallback. Run CI before producing a runtime build.
+
 ## 2026-09-23 repository-library / Add Git detector handoff
 
 - Active branch: `feature/repository-libraries`.
