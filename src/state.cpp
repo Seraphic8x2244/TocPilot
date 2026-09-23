@@ -855,8 +855,9 @@ std::string JsonStringArray(
     return stream.str();
 }
 
+template <std::size_t N>
 std::string JsonIntegerArray(
-    const std::array<int, 5>& values) {
+    const std::array<int, N>& values) {
     std::ostringstream stream;
     stream << "[";
     for (std::size_t i = 0; i < values.size(); ++i) {
