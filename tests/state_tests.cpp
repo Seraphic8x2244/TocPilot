@@ -469,6 +469,65 @@ void TestRepositoryChildPackages(
     }
 }
 
+void TestRepositoryRootSourcePath(
+    const std::filesystem::path& root) {
+    tp::AppState state;
+    bool created = false;
+    std::wstring error;
+
+    if (!tp::LoadOrCreateState(
+            root,
+            state,
+            created,
+            error)) {
+        Fail("repository-root source-path fixture did not load");
+        return;
+    }
+
+    state.packages.clear();
+
+    auto package =
+        tp::MakeRepositoryPackage(
+            L"github",
+            L"Owner/RootAddon");
+    package.sourcePath = L".";
+
+    if (!tp::SetPackageBranch(
+            package,
+            L"main",
+            L"0123456789abcdef0123456789abcdef01234567",
+            error) ||
+        !tp::AppendPackage(
+            state,
+            std::move(package),
+            error) ||
+        !tp::SaveState(
+            root,
+            state,
+            error)) {
+        Fail("repository-root source-path fixture could not be saved");
+        return;
+    }
+
+    tp::AppState loaded;
+    created = true;
+
+    if (!tp::LoadOrCreateState(
+            root,
+            loaded,
+            created,
+            error) ||
+        loaded.packages.size() != 1 ||
+        loaded.packages[0].id !=
+            L"github:Owner/RootAddon" ||
+        loaded.packages[0].sourcePath !=
+            L"." ||
+        loaded.packages[0].ref !=
+            L"main") {
+        Fail("explicit repository-root source path did not round-trip");
+    }
+}
+
 void TestReleasePackageRoundTrip(
     const std::filesystem::path& root) {
     tp::AppState state;
@@ -691,6 +750,7 @@ int main() {
         TestClearInstalledState(root);
         TestGitLabBranchMutators();
         TestRepositoryChildPackages(root);
+        TestRepositoryRootSourcePath(root);
         TestReleasePackageRoundTrip(root);
         TestReleaseTrackingMutators(root);
         TestUnknownFieldPreservation(root);
