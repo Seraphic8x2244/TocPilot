@@ -1,21 +1,36 @@
 # TocPilot status / handoff
 
-## 2026-09-23 shallow Add Git reconciliation in progress
+## 2026-09-23 Add Git shallow detector implementation
 
 - Active branch: `feature/repository-libraries`.
-- Published/source version remains `v0.3.0`.
-- Resumed from handoff commit: `b1258c56887a87dc0cd4ca4cb34bf7cf45c188b0` (`Record Add Git detector handoff`).
-- Reconciliation findings completed before code changes:
-  - the branch is exactly 11 commits ahead of `main` and was not behind at resume time;
-  - the current Add Git flow still uses the old manual normal-branch versus DLL checkbox path, then saves a branch package and immediately installs it;
-  - repository-child state support and a repository-library selection dialog exist on the feature branch, but the dialog is not included in `CMakeLists.txt` and is not wired into `main.cpp`;
-  - the existing `DetectRepositoryAddonCandidates` still starts from the recursive archive detector, so it must not be used as the Add Git library classifier;
-  - selected child `source_path` is persisted but the current install/inspect path does not yet filter candidates by it.
-- Required implementation now locked to the documented shallow pipeline: inspect only repository root plus one directory deep for direct `.toc` files; classify root addon / single nested addon / repository library; treat mixed root + child layouts as ambiguous; only when no addon exists may GitHub fall through to latest-stable standalone `.dll`; otherwise return `No addon or supported DLL found`.
-- Untested while this checkpoint is in progress: all new shallow classification, library selection/install sequencing, automatic DLL fallback, and the complete Add Git runtime path.
-- Deferred/out of scope remains unchanged: GitLab releases, release-archive executable discovery, arbitrary-depth repository catalogue discovery, dependency resolution between library children, and broader collection UX.
-- Exact next step: add a dedicated shallow repository-layout detector and deterministic tests, wire `source_path` filtering into branch install/inspect, then replace the Add Git manual DLL mode with branch -> shallow inspect -> addon/library result -> GitHub standalone-DLL fallback. Run CI before producing a runtime build.
-
+- Source/application version remains `v0.3.0`; this is development work, not a release/version bump.
+- Resumed from handoff commit: `b1258c56887a87dc0cd4ca4cb34bf7cf45c188b0`.
+- Current implementation head before this documentation update: `1e354a9c12a010e7e5912567c951b8e60159202f`.
+- Relevant implementation commits in this pass:
+  - `88dbc9fa` / `dc56c8f6` / `e40bd1dc`: shallow repository-layout type, implementation, and detector tests;
+  - `01dcf4b6`: branch install/inspect honors persisted repository child `source_path`;
+  - `281ea3a4` / `2edc5ca1`: remove the user-selectable DLL bypass and reuse the exact-DLL/trust UI only as Add Git fallback;
+  - `c748f01f` / `48f19df0`: wire branch -> shallow inspection -> root/single/library/no-addon classification and compile the repository-library dialog;
+  - `5ce588dc`: fix shallow inspection compile ordering;
+  - `b7d7c730`: align legacy root-addon tests with the structural root-`.toc` rule;
+  - `20c82dbc` / `f5991cce` / `706e9d50`: explicit repository-root selection so deeper embedded `.toc` files are subtree contents rather than independent addon roots;
+  - `89be1a9c`: serialize multi-child repository-library installs and fix queue completion ownership;
+  - `1e354a9c`: state round-trip coverage for the explicit root source marker.
+- Implemented Add Git behavior:
+  - choose repository, then branch;
+  - stage that exact branch revision without changing live addons;
+  - inspect only repository root plus one immediate directory level for direct `.toc` files;
+  - classify root addon, one nested addon, repository library, mixed/ambiguous, or no addon;
+  - root addons persist `source_path: "."` so recursive install validation selects only the root candidate while copying its full subtree;
+  - nested/library children persist their immediate child path and install independently;
+  - repository libraries show the multi-select child dialog and install selected children serially because they share repository staging;
+  - mixed root+child layouts stop without guessing;
+  - only a no-addon GitHub result enters latest-stable standalone-DLL fallback; GitLab does not use release fallback;
+  - when no supported result is selected/found, the Add Git path ends with `No addon or supported DLL found`.
+- CI: draft PR #1 (`feature/repository-libraries` -> `main`) exists only to exercise the Windows x64 Release build/CTest workflow on feature commits. Earlier runs exposed and drove fixes for obsolete root-name assertions and queue/compile wiring. A final head run is still required before a runtime build is handed out.
+- Untested at runtime: native Add Git dialogs and end-to-end installation against real repositories, especially `Cabro/Atlas` multi-selection, a normal root addon, a single nested addon, GitHub DLL fallback, GitLab no-release fallback, mixed-layout refusal, and update/refresh behavior after adding individual library children.
+- Deferred/out of scope remains: GitLab releases, release-archive executable discovery, arbitrary-depth repository catalogue discovery, dependency resolution between library children, and broader collection UX.
+- Exact next step: require the latest Windows x64 Release CI run to build and pass the complete CTest suite; then use that exact CI artifact for runtime testing. First runtime targets: `Cabro/Atlas` library selection, one root-addon repository with embedded/deeper content, one single-child repository, and one no-addon GitHub repository with/without a standalone latest-stable `.dll`.
 ## 2026-09-23 repository-library / Add Git detector handoff
 
 - Active branch: `feature/repository-libraries`.
