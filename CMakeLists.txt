@@ -34,6 +34,7 @@ add_executable(TocPilot WIN32
     src/git_refs.cpp
     src/gitlab_api.cpp
     src/install.cpp
+    src/library_dialog.cpp
     src/main.cpp
     src/provider.cpp
     src/refresh_freshness.cpp
