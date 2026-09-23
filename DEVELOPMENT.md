@@ -273,6 +273,22 @@ User-uploaded release ZIP/archive assets are not an install type. TocPilot does 
 
 Never allow a remote archive to write outside the WoW root.
 
+### Repository inspection and source classification
+
+The Add Git flow should evolve from manual mode selection toward inspecting a repository and presenting the installable capabilities TocPilot actually detects.
+
+Initial content/capability classes:
+
+- **root addon** — the selected branch/revision contains one installable addon rooted at the repository;
+- **repository library / multi-addon repository** — the selected branch/revision contains multiple independent installable addon roots;
+- **direct DLL release** — the existing GitHub latest-stable release path exposes one or more exact standalone `.dll` assets that satisfy TocPilot's current direct-DLL trust and verification rules.
+
+These are capabilities, not necessarily mutually exclusive repository identities. A repository may contain addon source and also publish a supported standalone DLL release. The UI should show what was detected and let the user choose the intended package/install target when more than one supported capability is present rather than silently guessing.
+
+Branch/source classification should reuse the secure archive inspection and addon-root detection already used by installation rather than inventing a separate looser detector. A repository library needs an explicit package/collection design before implementation so TocPilot can distinguish “install these addon roots together as one package” from “offer several independently manageable addons from one repository.”
+
+Direct DLL detection remains GitHub-only until GitLab release support is separately designed and agreed. This classification work must not add GitLab release support or user-uploaded release ZIP/archive executable discovery.
+
 ---
 
 ## 7. Branch support
@@ -972,6 +988,8 @@ Deliver:
 ## 21. Testing strategy
 
 ### Self-update tests
+
+Runtime checkpoint: automatic startup replacement from installed `v0.1.37` to published `v0.3.0` passed user runtime testing on 2026-09-23.
 
 Mandatory before package work:
 
