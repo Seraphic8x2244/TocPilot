@@ -1,5 +1,26 @@
 # TocPilot status / handoff
 
+## 2026-09-23 v0.3.4 update-visibility release candidate
+
+- Active branch: `ux/update-status-visibility`; PR #4 targets `main`.
+- Current published version remains `v0.3.3`; intended next release is `v0.3.4`.
+- Latest CI-tested code head before this documentation checkpoint: `c688906f67a5acf0f15a4f99ef48161eb448314b` (`Preserve update queue candidates`).
+- PR Build run `35924738730` (#533), Windows x64 job `107397001537`, passed configure, Release build, the complete **17/17** CTest suite, and executable artifact upload.
+- Completed in this release candidate:
+  - package rows with a known update render orange;
+  - packages successfully updated during the current TocPilot session render green;
+  - remaining orange updates stay above green just-updated rows, with normal rows below under the selected sort;
+  - the green state is in-memory only and is cleared by Refresh All or app exit;
+  - Refresh All builds its status-check queue from the current visible package order rather than persisted JSON array order;
+  - Update New processes eligible packages in the current visible package order while preserving any unmatched candidates defensively;
+  - Update New returns the package list to the top when the batch finishes;
+  - selected rows retain normal Windows selection colours;
+  - no TocPilot.json schema/storage ordering changes were introduced.
+- Runtime-untested for v0.3.4: normal startup self-update from installed `v0.3.3`; orange/green row rendering; visible-order Refresh All; visible-order Update New; green-session clearing; top-of-list behavior after Update New.
+- Previously deferred runtime checks remain: Advanced width/order persistence, Lock columns, compact/Advanced toggling, Branch selector positioning after reorder, v0.3.2 removal confirmation, single-nested Add Git, same-root overwrite/cancel, mixed root+child refusal, and terminal no-supported-content cases.
+- Deferred/out of scope remains: P5 import/export, package editing, ambiguous archive-mapping improvements, local-modification detection/backups, richer diagnostics, GitLab release support, release-archive executable discovery, arbitrary-depth repository catalogue discovery, dependency resolution between library children, and broader collection UX.
+- Exact next step: bump source and release marker to `v0.3.4`, let PR CI validate the versioned source, merge PR #4 to `main`, then allow the existing Release workflow to rebuild/test/publish `v0.3.4`. Runtime-test it only through the normal installed `v0.3.3 -> v0.3.4` self-update path.
+
 ## 2026-09-23 v0.3.3 published / P5 column layout handoff
 
 - Active product branch: `main`.

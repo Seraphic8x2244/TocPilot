@@ -1,5 +1,17 @@
 # TocPilot development handoff
 
+## 2026-09-23 v0.3.4 update-visibility release candidate
+
+- Active branch: `ux/update-status-visibility`; PR #4 targets `main`.
+- Published version is still `v0.3.3`; intended release is `v0.3.4`.
+- Latest CI-tested code head before this documentation checkpoint: `c688906f67a5acf0f15a4f99ef48161eb448314b`.
+- PR Build run `35924738730` (#533), Windows x64 job `107397001537`, passed Release build and all **17/17** CTest tests.
+- Completed: orange update-available row text; green session-only successfully-updated row text; update/green/normal priority grouping; Refresh All and Update New queueing from visible order; defensive preservation of Update New candidates; Update New scroll-to-top completion; no JSON schema or persisted package-order changes.
+- Untested/runtime-gated: installed `v0.3.3 -> v0.3.4` automatic startup self-update; row colours; live movement from orange to green during Update New; visible-order processing; green clearing on Refresh All/app exit; final scroll-to-top.
+- Previously deferred runtime checks remain unchanged: package-list column persistence/locking/compact toggle/Branch selector, removal confirmation, Add Git collision/library edge cases.
+- Deferred/out of scope remains: P5 import/export and the broader roadmap items already listed below.
+- Exact next step: bump `CMakeLists.txt`, `src/version.h`, and `.github/release-version` to `v0.3.4`; require green PR CI; merge PR #4; let the existing push-to-main Release workflow publish `v0.3.4`; then runtime-test via normal self-update.
+
 ## 2026-09-23 v0.3.3 published
 
 - Active branch: `main`.
