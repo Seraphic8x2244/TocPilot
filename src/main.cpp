@@ -865,11 +865,18 @@ bool DetectPackageAddonCandidates(
     std::wstring_view existingInstallFolder,
     std::vector<tp::AddonCandidate>& candidates,
     std::wstring& error) {
-    return tp::DetectRepositoryAddonCandidates(
-        extractedRoot,
-        ProviderLabel(package.provider),
-        package.repository,
-        existingInstallFolder,
+    if (!tp::DetectRepositoryAddonCandidates(
+            extractedRoot,
+            ProviderLabel(package.provider),
+            package.repository,
+            existingInstallFolder,
+            candidates,
+            error)) {
+        return false;
+    }
+
+    return tp::SelectRepositoryAddonCandidate(
+        package.sourcePath,
         candidates,
         error);
 }
