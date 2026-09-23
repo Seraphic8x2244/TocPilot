@@ -1,16 +1,27 @@
 # TocPilot status / handoff
 
-## 2026-09-23 P5 column layout implementation start
+## 2026-09-23 P5 column layout merged / runtime deferred
 
-- Active development branch: `feature/column-layout`.
-- Published/source version remains `v0.3.2`; no version bump or release work is part of this slice.
-- Branch base / latest pre-feature main commit: `81b53edd2647f6244a7cb31898e8132be91a70e3` (`Document v0.3.2 published release`).
-- Published release remains `v0.3.2` at `7030810f4c6994b69c9ec9fab9844749f2bdeefa`.
-- Completed before this slice: compact expandable removal confirmation and the earlier P0-P4 / repository-library work documented below.
-- Runtime checks still deferred: v0.3.2 removal confirmation UI; single-nested Add Git; same-root managed-addon overwrite/cancel; mixed root+child refusal; terminal no-supported-content cases.
-- Deferred/out of scope for this branch: import/export, package editing, local-modification detection/backups, richer diagnostics, and the other broader collection/provider items already listed below.
-- P5 scope for this branch only: package-list column width persistence, column reordering persistence, and an explicit layout lock/unlock control that prevents resizing/reordering while locked. Existing sort persistence remains intact.
-- Exact next step: extend the existing state settings and package-list header handling for validated persisted widths/order/lock state, add deterministic state round-trip coverage, then wire the native list-view/header behavior and run the full Windows x64 test suite before considering runtime validation.
+- Active product branch: `main`.
+- Published/source version remains `v0.3.2`; this P5 slice does not bump or publish a release.
+- P5 column persistence/reordering/locking merged through PR #3 at `291b8a4617fc11503cec103f43bf7420ba13bb6e` (`Merge P5 column layout persistence`).
+- Exact CI-tested feature head: `e7185c320fc9d212367e43ede88f8a2b81a2a100` (`Restrict column layout editing to Advanced mode`).
+- PR Build run `35910573538` (#522), Windows x64 Release job `107349067397`, passed configure/build, the complete **17/17** CTest suite, and executable artifact upload.
+- CI artifact: `TocPilot-windows-x64`, artifact ID `10773685439`, ZIP digest `sha256:2139c465d6ad073fbf32979d41eb7a5981c35198f530d2cd9458d831f15e8acd`.
+- Completed in this slice:
+  - advanced package-list column widths persist in `TocPilot.json`;
+  - column display order persists and restores on startup;
+  - persisted widths are clamped and persisted order is validated as a complete five-column permutation;
+  - legacy state files without the new fields keep sensible defaults under schema 1;
+  - Advanced mode exposes a persisted **Lock columns** checkbox;
+  - unlocked Advanced mode permits native header resize/reorder and saves the result after the interaction;
+  - locked layout blocks resize, drag reorder, and divider double-click sizing;
+  - compact mode remains read-only and continues to show its existing Name/Status layout without overwriting the saved Advanced layout;
+  - existing package sort persistence is unchanged.
+- Runtime-untested/deferred for this slice: native resize/reorder persistence across restart; lock/unlock interaction; compact/Advanced toggling after a custom layout; Branch selector positioning after column reorder.
+- Previously deferred runtime checks remain deferred: v0.3.2 removal confirmation UI; single-nested Add Git; same-root managed-addon overwrite/cancel; mixed root+child refusal; terminal no-supported-content cases.
+- Deferred/out of scope remains: P5 import/export, package editing, ambiguous archive-mapping improvements, local-modification detection/backups, richer diagnostics, GitLab release support, release-archive executable discovery, arbitrary-depth repository catalogue discovery, dependency resolution between library children, and broader collection UX.
+- Exact next step: stop this implementation slice here. When runtime testing is practical, exercise the four column-layout interactions above. The next roadmap implementation item after that is P5 import/export, but do not start it as part of this column-layout work.
 
 ## 2026-09-23 v0.3.2 published / P5 removal confirmation handoff
 
