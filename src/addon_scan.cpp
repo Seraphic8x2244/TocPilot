@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cwctype>
+#include <fstream>
 #include <set>
 #include <string_view>
 #include <system_error>
@@ -272,7 +273,175 @@ bool CollectOneLevelAddonRoots(
     return true;
 }
 
+std::string_view TrimAscii(
+    std::string_view value) {
+    while (!value.empty() &&
+           (value.front() == ' ' ||
+            value.front() == '\t' ||
+            value.front() == '\r' ||
+            value.front() == '\n')) {
+        value.remove_prefix(1);
+    }
+
+    while (!value.empty() &&
+           (value.back() == ' ' ||
+            value.back() == '\t' ||
+            value.back() == '\r' ||
+            value.back() == '\n')) {
+        value.remove_suffix(1);
+    }
+
+    return value;
+}
+
+bool StartsWithAsciiInsensitive(
+    std::string_view value,
+    std::string_view prefix) {
+    if (value.size() < prefix.size()) {
+        return false;
+    }
+
+    for (std::size_t i = 0;
+         i < prefix.size();
+         ++i) {
+        const unsigned char left =
+            static_cast<unsigned char>(
+                value[i]);
+        const unsigned char right =
+            static_cast<unsigned char>(
+                prefix[i]);
+
+        if (std::tolower(left) !=
+            std::tolower(right)) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+std::wstring TocVersionFromFile(
+    const std::filesystem::path& path) {
+    std::ifstream stream(
+        path,
+        std::ios::binary);
+
+    if (!stream) {
+        return {};
+    }
+
+    std::string line;
+    constexpr std::string_view prefix =
+        "## Version:";
+
+    while (std::getline(stream, line)) {
+        std::string_view view =
+            TrimAscii(line);
+
+        if (!StartsWithAsciiInsensitive(
+                view,
+                prefix)) {
+            continue;
+        }
+
+        view.remove_prefix(
+            prefix.size());
+        view = TrimAscii(view);
+
+        if (view.empty()) {
+            return {};
+        }
+
+        std::wstring version;
+        version.reserve(view.size());
+
+        for (const unsigned char ch :
+             view) {
+            version.push_back(
+                static_cast<wchar_t>(
+                    ch));
+        }
+
+        return version;
+    }
+
+    return {};
+}
+
+bool IsTocPath(
+    const std::filesystem::path& path) {
+    std::wstring extension =
+        path.extension().wstring();
+
+    std::transform(
+        extension.begin(),
+        extension.end(),
+        extension.begin(),
+        [](wchar_t ch) {
+            return static_cast<wchar_t>(
+                std::towlower(ch));
+        });
+
+    return extension == L".toc";
+}
+
 } // namespace
+
+std::wstring InstalledPackageTocVersion(
+    const std::filesystem::path& wowRoot,
+    const PackageRecord& package) {
+    if (package.target != L"addons" ||
+        package.installedFiles.empty()) {
+        return L"—";
+    }
+
+    std::set<std::wstring>
+        versions;
+
+    for (const auto& owned :
+         package.installedFiles) {
+        const std::filesystem::path relative(
+            owned);
+
+        if (relative.empty() ||
+            relative.is_absolute() ||
+            !IsTocPath(relative)) {
+            continue;
+        }
+
+        bool escapesRoot = false;
+        for (const auto& component :
+             relative) {
+            if (component == L"..") {
+                escapesRoot = true;
+                break;
+            }
+        }
+
+        if (escapesRoot) {
+            continue;
+        }
+
+        const std::wstring version =
+            TocVersionFromFile(
+                wowRoot /
+                relative);
+
+        if (!version.empty()) {
+            versions.insert(version);
+
+            if (versions.size() > 1) {
+                return L"Multiple";
+            }
+        }
+    }
+
+    if (versions.empty()) {
+        return L"—";
+    }
+
+    return *versions.begin();
+}
 
 const wchar_t* AddonFolderKindLabel(
     AddonFolderKind kind) {
