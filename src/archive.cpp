@@ -75,6 +75,28 @@ std::wstring Lower(std::wstring value) {
     return value;
 }
 
+std::filesystem::path RepositoryRelativePath(
+    const std::filesystem::path& sourceRelativePath) {
+    auto it = sourceRelativePath.begin();
+    const auto end = sourceRelativePath.end();
+
+    if (it == end) {
+        return {};
+    }
+
+    // Provider-generated source archives always place repository contents
+    // under one generated wrapper directory. Persist paths below that wrapper
+    // so child-package identity remains stable when the commit changes.
+    ++it;
+
+    std::filesystem::path result;
+    for (; it != end; ++it) {
+        result /= *it;
+    }
+
+    return result;
+}
+
 bool IsReservedWindowsName(std::wstring_view segment) {
     std::wstring stem(segment);
     const auto dot = stem.find(L'.');
@@ -962,6 +984,10 @@ bool DetectRepositoryAddonCandidates(
     }
 
     for (auto& candidate : candidates) {
+        candidate.repositoryRelativePath =
+            RepositoryRelativePath(
+                candidate.sourceRelativePath);
+
         const auto parent =
             candidate.sourceRelativePath.parent_path();
 
@@ -1024,6 +1050,65 @@ bool DetectGitHubAddonCandidates(
         existingInstallFolder,
         candidates,
         error);
+}
+
+bool IsRepositoryLibrary(
+    const std::vector<AddonCandidate>& candidates) {
+    if (candidates.size() < 2) {
+        return false;
+    }
+
+    for (const auto& candidate : candidates) {
+        if (candidate.repositoryRelativePath.empty() ||
+            !candidate.repositoryRelativePath.parent_path().empty()) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+bool SelectRepositoryAddonCandidate(
+    std::wstring_view sourcePath,
+    std::vector<AddonCandidate>& candidates,
+    std::wstring& error) {
+    error.clear();
+
+    if (sourcePath.empty()) {
+        return true;
+    }
+
+    std::wstring normalized(sourcePath);
+    std::replace(
+        normalized.begin(),
+        normalized.end(),
+        L'\\',
+        L'/');
+    normalized = Lower(std::move(normalized));
+
+    const auto it = std::find_if(
+        candidates.begin(),
+        candidates.end(),
+        [&](const AddonCandidate& candidate) {
+            return Lower(
+                       candidate.repositoryRelativePath
+                           .generic_wstring()) ==
+                normalized;
+        });
+
+    if (it == candidates.end()) {
+        error =
+            L"Configured addon path was not found in this repository revision: " +
+            std::wstring(sourcePath);
+        candidates.clear();
+        return false;
+    }
+
+    AddonCandidate selected = *it;
+    candidates.clear();
+    candidates.push_back(
+        std::move(selected));
+    return true;
 }
 
 } // namespace tp
