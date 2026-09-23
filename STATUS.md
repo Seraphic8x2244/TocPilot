@@ -5,7 +5,7 @@
 - Active branch: `feature/repository-libraries`.
 - Source/application version remains `v0.3.0`; this is development work, not a release/version bump.
 - Resumed from handoff commit: `b1258c56887a87dc0cd4ca4cb34bf7cf45c188b0`.
-- Current implementation head before this documentation update: `1e354a9c12a010e7e5912567c951b8e60159202f`.
+- Final tested code head before this documentation-only handoff update: `2a43e2f9ec7eae25d56488ed3cba589bdf42971e`.
 - Relevant implementation commits in this pass:
   - `88dbc9fa` / `dc56c8f6` / `e40bd1dc`: shallow repository-layout type, implementation, and detector tests;
   - `01dcf4b6`: branch install/inspect honors persisted repository child `source_path`;
@@ -15,7 +15,8 @@
   - `b7d7c730`: align legacy root-addon tests with the structural root-`.toc` rule;
   - `20c82dbc` / `f5991cce` / `706e9d50`: explicit repository-root selection so deeper embedded `.toc` files are subtree contents rather than independent addon roots;
   - `89be1a9c`: serialize multi-child repository-library installs and fix queue completion ownership;
-  - `1e354a9c`: state round-trip coverage for the explicit root source marker.
+  - `1e354a9c`: state round-trip coverage for the explicit root source marker;
+  - `2a43e2f9`: MSVC-compatible root-selection test fixture; no production-code change.
 - Implemented Add Git behavior:
   - choose repository, then branch;
   - stage that exact branch revision without changing live addons;
@@ -27,10 +28,15 @@
   - mixed root+child layouts stop without guessing;
   - only a no-addon GitHub result enters latest-stable standalone-DLL fallback; GitLab does not use release fallback;
   - when no supported result is selected/found, the Add Git path ends with `No addon or supported DLL found`.
-- CI: draft PR #1 (`feature/repository-libraries` -> `main`) exists only to exercise the Windows x64 Release build/CTest workflow on feature commits. Earlier runs exposed and drove fixes for obsolete root-name assertions and queue/compile wiring. A final head run is still required before a runtime build is handed out.
+- Final code/build baseline: `2a43e2f9ec7eae25d56488ed3cba589bdf42971e`.
+  - GitHub Actions run `35897888628`, attempt 2, Windows x64 Release: build passed, all 16/16 CTest tests passed, artifact upload passed.
+  - CI artifact: `TocPilot-windows-x64`, artifact ID `10768347261`.
+  - Artifact ZIP SHA-256: `185f4ca2920d41c2b1163aa0ba47eed0eb844b46f5f2a7b5f05588dfc7351235`.
+  - Extracted `TocPilot.exe` SHA-256: `d39849ec017a2cbecb6f82b8bbbe102444105fd22f1730a8bb83adae3d028496`.
+  - The first attempt on the same code head built successfully and passed 15/16 tests; only the pre-existing live GitHub latest-release test was rate-limited. After the burst of CI runs drained, attempt 2 passed that live test as well.
 - Untested at runtime: native Add Git dialogs and end-to-end installation against real repositories, especially `Cabro/Atlas` multi-selection, a normal root addon, a single nested addon, GitHub DLL fallback, GitLab no-release fallback, mixed-layout refusal, and update/refresh behavior after adding individual library children.
 - Deferred/out of scope remains: GitLab releases, release-archive executable discovery, arbitrary-depth repository catalogue discovery, dependency resolution between library children, and broader collection UX.
-- Exact next step: require the latest Windows x64 Release CI run to build and pass the complete CTest suite; then use that exact CI artifact for runtime testing. First runtime targets: `Cabro/Atlas` library selection, one root-addon repository with embedded/deeper content, one single-child repository, and one no-addon GitHub repository with/without a standalone latest-stable `.dll`.
+- Exact next step: runtime-test the CI artifact from code baseline `2a43e2f9`. Start with `Cabro/Atlas`: Add Git -> select `master` -> verify the library dialog lists `Atlas`, `AtlasLoot`, and `AtlasQuest`; select a subset and verify each selected child becomes its own package/install while unselected children remain untouched. Then test one root-addon repository with deeper embedded `.toc` content, one single-child repository, GitHub no-addon DLL fallback, GitLab no-addon behavior, and mixed-layout refusal.
 ## 2026-09-23 repository-library / Add Git detector handoff
 
 - Active branch: `feature/repository-libraries`.
