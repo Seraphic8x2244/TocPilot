@@ -1,5 +1,49 @@
 # TocPilot status / handoff
 
+## 2026-09-23 v0.3.0 published / GitLab branch runtime handoff
+
+- Active branch: `main`.
+- Published/source version: `v0.3.0`.
+- Release tag `v0.3.0` points exactly to `4867065cb9ca165d0c2d51c509812e27d1578384` (`Request v0.3.0 release`).
+- Version-series intent:
+  - `0.1.x` = bootstrap/basic package-management foundations;
+  - `0.2.x` = artwork/UI phase, historically completed while published versions still remained in `0.1.x`;
+  - `0.3.x` = DLL management, GitLab, and repository-collection work.
+- Relevant GitLab/version commits:
+  - `637756cf355e6824da5cbe8f7ca4e246b6711115` — GitLab archive interface;
+  - `1604f404e3194837001320de8e95948526e8012c` — GitLab exact-commit archive download;
+  - `d678224aee8c43bd7980cdef3eb7dae0b20f63e3` — public GitLab branch package wiring;
+  - `ce6e708848b6ac776732a6753cbe60cedf43ec39` — complete GitLab state/UI/Refresh/Update New integration;
+  - `21a8aa9839fa237a751747123d6f1fbbf647dee8` — source/docs bump to `v0.3.0`;
+  - `4867065cb9ca165d0c2d51c509812e27d1578384` — release request/tag target.
+- Completed GitLab first slice:
+  - public `gitlab.com` repository URLs, including nested groups;
+  - provider-generic Git smart-HTTP branch listing/default/HEAD resolution;
+  - modal and inline branch selectors for GitLab;
+  - exact resolved commit ZIP download through GitLab's public repository archive API with LFS blob expansion disabled;
+  - reuse of TocPilot's existing secure ZIP path checks, size limits, addon-root detection, provider-specific staging, ownership checks, rollback, and install transaction;
+  - Add Package, Inspect, Install, state persistence, startup/Refresh, **Update New**, and **Update All** support GitLab branch packages;
+  - GitHub branch and direct-DLL behavior preserved.
+- Direct-DLL runtime state entering `v0.3.0`: ClassicAPI and Nampower passed on published `v0.1.37`.
+- Release-archive policy remains a hard non-goal: TocPilot does not download, inspect, extract, or provide an override for user-uploaded release ZIP/7z/RAR/installer/bundle assets to locate executable/DLL payloads. SuperWoW remains unsupported unless it publishes a direct standalone DLL release asset.
+- Validation:
+  - `d678224a` Build run `35857340546`: passed Windows x64 Release build, complete CTest, and artifact upload;
+  - `ce6e7088` Build run `35857609359`: passed Windows x64 Release build, complete CTest, and artifact upload;
+  - `21a8aa98` (`v0.3.0` source bump) Build run `35857979676`: passed Windows x64 Release build, complete CTest, and artifact upload;
+  - release-request Build run `35858294260`: passed;
+  - Release run `35858294315`: passed source-version validation, Windows x64 Release build, complete CTest, checksum generation, tag creation/verification, and asset publication.
+- Published assets:
+  - `TocPilot.exe` — 2,344,448 bytes; SHA-256 `7f7b09a7541c1acc1b4681b43e1100e49d39238c86d559a9eada1ca9e5e60b1f`;
+  - `TocPilot.exe.sha256` — 78 bytes; release-asset SHA-256 `abaedd0b7dc3363e9f195df0788274190d55eadf44dc8a86d75ef2575c902747`.
+- Runtime-untested:
+  - automatic startup replacement from installed `v0.1.37` to published `v0.3.0`;
+  - first real GitLab Add Package -> branch selection -> install path;
+  - GitLab restart/startup status and Refresh All;
+  - GitLab **Update New** after a tracked branch actually advances;
+  - GitLab archive/API failure and rate-limit presentation in a real installation.
+- Deferred/next-series work unchanged: GitLab release/direct-asset parity is deferred until the branch slice is runtime-proven; prerelease tracking, arbitrary direct-file destinations, import/export, crash-recovery journal, local-modification detection, and unrelated UI polish remain deferred. Repository collections are part of the `0.3.x` milestone but have not been designed or implemented yet.
+- Exact next step: launch the installed `v0.1.37` and confirm the startup splash automatically downloads/verifies/replaces it with `v0.3.0`, relaunches, and completes package scanning. Then add a real public GitLab addon, verify branch selection/install/restart/Refresh All, and record those runtime results. After that runtime pass, begin repository-collection design rather than expanding GitLab release support.
+
 ## 2026-09-23 GitLab branch integration complete / v0.3.0 source bump
 
 - Active branch: `main`.
