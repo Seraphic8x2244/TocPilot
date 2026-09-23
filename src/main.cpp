@@ -93,6 +93,7 @@ constexpr int kCompactNameColumnMinWidth = 220;
 constexpr int kCompactStatusColumnMinWidth = 150;
 constexpr int kAdvancedNameColumnMinWidth = 240;
 constexpr int kAdvancedBranchColumnMinWidth = 300;
+constexpr int kAdvancedVersionColumnMinWidth = 110;
 constexpr int kAdvancedInstalledColumnMinWidth = 115;
 constexpr int kAdvancedLatestColumnMinWidth = 115;
 constexpr int kAdvancedStatusColumnMinWidth = 150;
@@ -176,6 +177,7 @@ std::vector<tp::PackageRefreshStamp> g_packageRefreshStamps;
 std::vector<std::wstring> g_autoStatusPackageIds;
 std::vector<std::wstring> g_packageAttentionIds;
 std::vector<std::wstring> g_sessionUpdatedPackageIds;
+std::vector<std::wstring> g_packageLocalVersions;
 std::vector<std::size_t> g_addGitInstallQueue;
 std::size_t g_addGitInstallQueuePosition = 0;
 std::size_t g_autoStatusPosition = 0;
@@ -455,6 +457,7 @@ int RequiredClientWidth(
         advanced
             ? kAdvancedNameColumnMinWidth +
                 kAdvancedBranchColumnMinWidth +
+                kAdvancedVersionColumnMinWidth +
                 kAdvancedInstalledColumnMinWidth +
                 kAdvancedLatestColumnMinWidth +
                 kAdvancedStatusColumnMinWidth
@@ -541,7 +544,7 @@ void ApplyPackageColumnOrder() {
         return;
     }
 
-    std::array<int, 5> order =
+    std::array<int, 6> order =
         g_stateReady
             ? g_state.settings.packageColumnOrder
             : tp::kDefaultPackageColumnOrder;
@@ -560,7 +563,7 @@ void SaveCurrentPackageColumnLayout() {
         return;
     }
 
-    std::array<int, 5> widths{};
+    std::array<int, 6> widths{};
     for (int column = 0;
          column < static_cast<int>(widths.size());
          ++column) {
@@ -573,7 +576,7 @@ void SaveCurrentPackageColumnLayout() {
                 2000);
     }
 
-    std::array<int, 5> order{};
+    std::array<int, 6> order{};
     if (!ListView_GetColumnOrderArray(
             g_packageList,
             static_cast<int>(order.size()),
@@ -656,6 +659,10 @@ void ResizeListColumns() {
         ListView_SetColumnWidth(
             g_packageList,
             4,
+            0);
+        ListView_SetColumnWidth(
+            g_packageList,
+            5,
             statusWidth);
         return;
     }
@@ -873,11 +880,12 @@ void AddPackageListColumns() {
         int width;
     };
 
-    constexpr std::array<ColumnSpec, 5> columns{{
+    constexpr std::array<ColumnSpec, 6> columns{{
         {L"Name", 180},
         {L"Branch", 250},
-        {L"Installed", 115},
-        {L"Latest", 115},
+        {L"Version", 110},
+        {L"Local SHA", 115},
+        {L"Git SHA", 115},
         {L"Status", 140}
     }};
 
@@ -1199,11 +1207,11 @@ std::wstring PackageStatusText(
                 error) ||
             PackageNeedsAttention(
                 package.id)) {
-            return L"Needs attention";
+            return L"Needs Attention";
         }
 
         if (package.installedRevision.empty()) {
-            return L"Not installed";
+            return L"Not Installed";
         }
 
         std::filesystem::path target;
@@ -1212,7 +1220,7 @@ std::wstring PackageStatusText(
                 package,
                 target,
                 error)) {
-            return L"Needs attention";
+            return L"Needs Attention";
         }
 
         std::error_code ec;
@@ -1220,27 +1228,27 @@ std::wstring PackageStatusText(
                 target,
                 ec) ||
             ec) {
-            return L"Needs attention";
+            return L"Needs Attention";
         }
 
         return package.installedRevision ==
                 package.latestRevision
-            ? L"Current"
-            : L"Update available";
+            ? L"Up To Date"
+            : L"Update Available";
     }
 
     if (!PackageBranchMode(package)) {
-        return L"Not configured";
+        return L"Not Configured";
     }
 
     if (package.installedRevision.empty()) {
-        return L"Not installed";
+        return L"Not Installed";
     }
 
     return package.installedRevision ==
             package.latestRevision
-        ? L"Current"
-        : L"Update available";
+        ? L"Up To Date"
+        : L"Update Available";
 }
 
 int CompareInsensitive(
@@ -1739,27 +1747,68 @@ LRESULT HandlePackageListCustomDraw(
 
 bool PackageNeedsAttention(
     const tp::PackageRecord& package) {
+    if (package.mode == L"release") {
+        return
+            PackageNeedsAttention(
+                package.id) ||
+            package.installedRevision.empty() ||
+            package.latestRevision.empty();
+    }
+
     return
         !PackageBranchMode(package) ||
         package.installedRevision.empty() ||
-        package.latestRevision.empty() ||
-        package.installedRevision !=
-            package.latestRevision;
+        package.latestRevision.empty();
+}
+
+void RefreshPackageLocalVersionCache() {
+    g_packageLocalVersions.assign(
+        g_state.packages.size(),
+        L"—");
+
+    if (!g_advancedVisible &&
+        g_packageSortColumn != 2) {
+        return;
+    }
+
+    for (std::size_t index = 0;
+         index < g_state.packages.size();
+         ++index) {
+        g_packageLocalVersions[index] =
+            tp::InstalledPackageTocVersion(
+                g_root,
+                g_state.packages[index]);
+    }
 }
 
 std::wstring PackageColumnText(
-    const tp::PackageRecord& package,
+    std::size_t packageIndex,
     int column) {
+    if (packageIndex >=
+        g_state.packages.size()) {
+        return {};
+    }
+
+    const auto& package =
+        g_state.packages[packageIndex];
+
     switch (column) {
     case 0:
         return PackageDisplayName(package);
     case 1:
         return PackageSourceText(package);
     case 2:
-        return package.installedRevision;
+        return
+            packageIndex <
+                    g_packageLocalVersions.size()
+                ? g_packageLocalVersions[
+                    packageIndex]
+                : L"—";
     case 3:
-        return package.latestRevision;
+        return package.installedRevision;
     case 4:
+        return package.latestRevision;
+    case 5:
         return PackageStatusText(package);
     default:
         return {};
@@ -1767,6 +1816,8 @@ std::wstring PackageColumnText(
 }
 
 void RebuildPackageViewOrder() {
+    RefreshPackageLocalVersionCache();
+
     g_packageViewOrder.clear();
     g_packageViewOrder.reserve(
         g_state.packages.size());
@@ -1826,10 +1877,10 @@ void RebuildPackageViewOrder() {
             int comparison =
                 CompareInsensitive(
                     PackageColumnText(
-                        left,
+                        leftIndex,
                         g_packageSortColumn),
                     PackageColumnText(
-                        right,
+                        rightIndex,
                         g_packageSortColumn));
 
             if (comparison == 0) {
@@ -1963,6 +2014,12 @@ void PopulatePackageList() {
         const std::wstring source =
             PackageSourceText(
                 package);
+        const std::wstring version =
+            packageIndex <
+                    g_packageLocalVersions.size()
+                ? g_packageLocalVersions[
+                    packageIndex]
+                : L"—";
         const std::wstring installed =
             PackageRevisionText(
                 package.installedRevision);
@@ -1984,17 +2041,23 @@ void PopulatePackageList() {
             row,
             2,
             const_cast<LPWSTR>(
-                installed.c_str()));
+                version.c_str()));
         ListView_SetItemText(
             g_packageList,
             row,
             3,
             const_cast<LPWSTR>(
-                latest.c_str()));
+                installed.c_str()));
         ListView_SetItemText(
             g_packageList,
             row,
             4,
+            const_cast<LPWSTR>(
+                latest.c_str()));
+        ListView_SetItemText(
+            g_packageList,
+            row,
+            5,
             const_cast<LPWSTR>(
                 status.c_str()));
     }
@@ -2751,7 +2814,7 @@ LRESULT CALLBACK PackageListSubclassProc(
 void SortPackageListByColumn(
     int column) {
     if (column < 0 ||
-        column >= 5) {
+        column >= 6) {
         return;
     }
 
@@ -2986,7 +3049,7 @@ void SetPackageRowStatus(
     ListView_SetItemText(
         g_packageList,
         row,
-        4,
+        5,
         const_cast<LPWSTR>(
             text.c_str()));
 }
@@ -3366,7 +3429,7 @@ void StartDirectDllInstall(
             true);
         SetPackageRowStatus(
             index,
-            L"Needs attention");
+            L"Needs Attention");
 
         if (g_packageHint) {
             const std::wstring message =
@@ -7293,7 +7356,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                 index,
                 result->needsAttention &&
                         !rateLimited
-                    ? L"Needs attention"
+                    ? L"Needs Attention"
                     : L"Refresh failed");
 
             const std::wstring message =
@@ -7404,7 +7467,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             if (updateAvailable) {
                 SetPackageRowStatus(
                     index,
-                    L"Update available");
+                    L"Update Available");
                 StartPackageInstall(
                     hwnd,
                     index,
@@ -7414,7 +7477,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
 
             SetPackageRowStatus(
                 index,
-                L"Current");
+                L"Up To Date");
             CompleteUpdateAllStep(
                 hwnd,
                 tp::UpdateAllOutcome::Current,
@@ -7426,8 +7489,8 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             SetPackageRowStatus(
                 index,
                 updateAvailable
-                    ? L"Update available"
-                    : L"Current");
+                    ? L"Update Available"
+                    : L"Up To Date");
             CompleteAutoStatusRefreshStep(
                 hwnd,
                 true,
@@ -7720,7 +7783,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             SetPackageRowStatus(
                 index,
                 result->needsAttention
-                    ? L"Needs attention"
+                    ? L"Needs Attention"
                     : L"DLL update failed");
 
             const std::wstring message =
