@@ -1,31 +1,44 @@
 # TocPilot status / handoff
 
-## 2026-09-23 repository-library implementation start
+## 2026-09-23 repository-library / Add Git detector handoff
 
 - Active branch: `feature/repository-libraries`.
 - Published/source version remains `v0.3.0`.
-- Branch base / entering repository head: `14c52dde9be96c76bba7392d0e801a50c99ee9b2` (`Start repository library implementation`).
-- Latest completed checkpoints:
+- Latest documentation commit entering this handoff: `c8b6ae6c0878723dd0860320048c0801f2187454` (`Define shallow Add Git detection pipeline`).
+- Latest implementation commits on this branch before the documentation update:
+  - `3a2c760cac9ef3133a5a87a37349374318c58021` — `Implement repository library selection dialog`;
+  - `5b6c365edff5568c391d32a265437b89e7bf418c` — `Add repository library selection dialog`;
+  - `993016a0f4ea91195304c536136f1679eb22250c` — `Test repository child package state`;
+  - `0ec3a5b5d33578d34cc576dbb36df11ed38e8bf6` — `Test repository library detection`;
+  - `ad83548ee7fa09dd8d619796e57be90f4bf01997` — `Detect repository library child paths`;
+  - `ff06e13167991316941e2a9522647b3653e86dcb` / `82094287679c8df4cd22d0cb974d2301d86e76e0` — repository-relative child path/state groundwork.
+- Completed/decided:
   - automatic startup self-update `v0.1.37 -> v0.3.0` passed runtime testing;
-  - repository source-classification direction is documented;
-  - `Cabro/Atlas` is the reference repository-library shape with sibling `Atlas`, `AtlasLoot`, and `AtlasQuest` addon roots.
-- User has chosen to implement repository-library support before finishing the GitLab runtime pass.
-- First implementation slice is intentionally narrow:
-  - detect multiple sibling installable addon roots from the selected branch using the existing secure archive inspection;
-  - present those roots as independently selectable install units;
-  - store selected children as independently managed TocPilot package records while sharing provider/repository/ref/revision source metadata;
-  - preserve existing single/root-addon behavior;
-  - do not infer dependencies between sibling addons merely because they share a repository.
-- Still untested/open:
-  - GitLab branch-package install/restart/Refresh runtime pass;
-  - empty-default-branch continuation behavior;
-  - repository-library UI/runtime behavior after implementation.
+  - `Cabro/Atlas` remains the reference repository-library example;
+  - the Add Git classifier is now intentionally **shallow and deterministic**: after removing the provider archive wrapper, inspect repository-root `.toc` files and only immediate child directories for direct `.toc` files;
+  - root `.toc` -> root addon;
+  - no root `.toc` + one child addon -> single nested addon;
+  - no root `.toc` + multiple child addons -> repository library with selectable children;
+  - do not recursively search arbitrary repository depth for library classification;
+  - once a child addon is selected, its full subtree is still installed normally;
+  - if no addon `.toc` is found, GitHub may fall through to the existing latest-stable exact-standalone-`.dll` release path;
+  - if neither addon nor supported DLL is found, return a concise `No addon or supported DLL found` result;
+  - DLL fallback remains standalone-`.dll` only: no release ZIP/7z/RAR/installer/bundle executable discovery;
+  - GitLab release support remains out of scope, so GitLab repositories with no detected addon stop at the no-addon result.
+- Important implementation note: the current feature branch contains partial library code written before the shallow classifier was finalized. Reconcile/simplify that code to the root-plus-one-level rule rather than continuing broader recursive library inference.
+- Untested/open:
+  - feature branch has not yet been Windows/CI/runtime validated as a complete Add Git flow;
+  - repository-library selection/install/update/remove semantics need end-to-end verification;
+  - mixed layouts containing both root-level and immediate-child addon roots need an explicit non-guessing UI/result;
+  - GitLab branch-package install/restart/Refresh runtime pass remains pending;
+  - empty-default-branch continuation behavior remains open.
 - Deferred/out of scope:
   - GitLab release support;
-  - user-uploaded release ZIP/archive executable discovery;
-  - automatic dependency resolution between collection children;
-  - broader collection catalogue/import/export UX.
-- Exact next step: inspect the existing archive/install/state path and implement the minimum end-to-end `Cabro/Atlas` flow, with deterministic tests before runtime validation.
+  - release archive executable discovery;
+  - automatic dependency resolution between library children;
+  - recursive arbitrary-depth repository catalogue discovery;
+  - broader collection import/export/catalogue UX.
+- Exact next step: review the current `feature/repository-libraries` diff, replace any recursive library-classification assumptions with the documented root-plus-one-level classifier, wire the Add Git flow to branch -> shallow inspect -> addon/library result -> GitHub DLL fallback only when no addon is found, then run deterministic tests/CI before runtime testing with `Cabro/Atlas` and the Vanilla GitLab addon collection.
 
 ## 2026-09-23 v0.3.0 automatic self-update runtime pass / Add Git detection design
 
