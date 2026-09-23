@@ -26,8 +26,12 @@ constexpr int IDC_DLL_ASSET = 2007;
 struct DialogContext {
     PackageRecord* package = nullptr;
     bool accepted = false;
+    bool dllOnly = false;
     bool releaseLoaded = false;
+    bool supportedDllFound = false;
+    std::wstring initialRepository;
     std::wstring releaseRepository;
+    std::wstring loadError;
     GitHubReleaseInfo release;
 };
 
@@ -518,8 +522,7 @@ void ValidateAndAccept(
         return;
     }
 
-    if (ReleaseDllChecked(
-            hwnd)) {
+    if (context->dllOnly) {
         if (identity.provider !=
             ProviderKind::GitHub) {
             SetWindowTextW(
@@ -537,10 +540,14 @@ void ValidateAndAccept(
                     hwnd,
                     identity,
                     error)) {
+                context->loadError = error;
                 SetWindowTextW(
                     result,
                     (L"DLL package not added: " +
                      error).c_str());
+            } else {
+                context->supportedDllFound = true;
+                context->loadError.clear();
             }
             return;
         }
@@ -777,8 +784,77 @@ LRESULT CALLBACK DialogProc(
         SetControlFont(close);
         SetControlFont(result);
 
-        UpdateDllControls(hwnd);
-        SetFocus(edit);
+        DialogContext* context =
+            Context(hwnd);
+
+        if (context &&
+            context->dllOnly) {
+            SetWindowTextW(
+                intro,
+                L"No addon was found on the selected branch. TocPilot can fall back to an exact standalone DLL from the latest stable GitHub release.");
+            const std::wstring repositoryUrl =
+                L"https://github.com/" +
+                context->initialRepository;
+            SetWindowTextW(
+                edit,
+                repositoryUrl.c_str());
+            EnableWindow(
+                edit,
+                FALSE);
+            ShowWindow(
+                dll,
+                SW_HIDE);
+            SendMessageW(
+                dll,
+                BM_SETCHECK,
+                BST_CHECKED,
+                0);
+            SetWindowTextW(
+                result,
+                L"Checking the latest stable GitHub release for standalone DLL assets...");
+            UpdateDllControls(hwnd);
+
+            RepositoryIdentity identity;
+            std::wstring error;
+            if (!NormalizeRepositoryUrl(
+                    repositoryUrl,
+                    identity,
+                    error) ||
+                !LoadLatestStableDllAssets(
+                    hwnd,
+                    identity,
+                    error)) {
+                context->loadError = error;
+                SetWindowTextW(
+                    result,
+                    (L"No supported DLL was loaded: " +
+                     error).c_str());
+            } else {
+                context->supportedDllFound =
+                    true;
+                context->loadError.clear();
+            }
+
+            SetFocus(asset);
+        } else {
+            SetWindowTextW(
+                intro,
+                L"Paste a public GitHub or GitLab repository URL. TocPilot will ask for a branch, inspect only the repository root plus one directory level for addon .toc files, and classify the result automatically.");
+            SetWindowTextW(
+                result,
+                L"Continue to choose a branch. DLL fallback is checked only when that branch contains no detected addon.");
+            ShowWindow(
+                dll,
+                SW_HIDE);
+            ShowWindow(
+                assetLabel,
+                SW_HIDE);
+            ShowWindow(
+                asset,
+                SW_HIDE);
+            UpdateDllControls(hwnd);
+            SetFocus(edit);
+        }
         return 0;
     }
 
@@ -872,13 +948,10 @@ bool EnsureDialogClass() {
     return true;
 }
 
-} // namespace
-
-bool ShowAddPackageDialog(
+bool RunPackageDialog(
     HWND owner,
-    PackageRecord& package) {
-    package = {};
-
+    const wchar_t* title,
+    DialogContext& context) {
     if (!EnsureDialogClass()) {
         MessageBoxW(
             owner,
@@ -924,16 +997,12 @@ bool ShowAddPackageDialog(
              height) /
                 2);
 
-    DialogContext context;
-    context.package =
-        &package;
-
     HWND dialog =
         CreateWindowExW(
             WS_EX_DLGMODALFRAME |
                 WS_EX_CONTROLPARENT,
             kClassName,
-            L"Add Package",
+            title,
             WS_CAPTION |
                 WS_SYSMENU |
                 WS_POPUP,
@@ -999,6 +1068,53 @@ bool ShowAddPackageDialog(
         TRUE);
     SetActiveWindow(owner);
     return context.accepted;
+}
+
+} // namespace
+
+bool ShowAddPackageDialog(
+    HWND owner,
+    PackageRecord& package) {
+    package = {};
+
+    DialogContext context;
+    context.package =
+        &package;
+
+    return RunPackageDialog(
+        owner,
+        L"Add Git Repository",
+        context);
+}
+
+bool ShowDirectDllFallbackDialog(
+    HWND owner,
+    std::wstring_view repository,
+    PackageRecord& package,
+    bool& supportedDllFound,
+    std::wstring& error) {
+    package = {};
+    supportedDllFound = false;
+    error.clear();
+
+    DialogContext context;
+    context.package =
+        &package;
+    context.dllOnly = true;
+    context.initialRepository =
+        std::wstring(repository);
+
+    const bool accepted =
+        RunPackageDialog(
+            owner,
+            L"Add Git - DLL Fallback",
+            context);
+
+    supportedDllFound =
+        context.supportedDllFound;
+    error =
+        std::move(context.loadError);
+    return accepted;
 }
 
 } // namespace tp
