@@ -289,6 +289,18 @@ Branch/source classification should reuse the secure archive inspection and addo
 
 Direct DLL detection remains GitHub-only until GitLab release support is separately designed and agreed. This classification work must not add GitLab release support or user-uploaded release ZIP/archive executable discovery.
 
+#### Concrete repository-library example: Cabro/Atlas
+
+`https://github.com/Cabro/Atlas` is a representative repository library. Its `master` branch has three sibling top-level addon roots:
+
+- `Atlas/Atlas.toc`
+- `AtlasLoot/AtlasLoot.toc`
+- `AtlasQuest/AtlasQuest.toc`
+
+TocPilot should classify this shape as a repository library rather than collapsing the entire repository into a single opaque addon package. The repository/branch is the shared source container, while each detected top-level addon root is a selectable install unit. The UI should be able to offer one, several, or all detected addons from that repository.
+
+A repository library is therefore distinct from a normal multi-root package whose addon folders are inseparable parts of one logical package. Initial automatic classification can use the structural signal of multiple sibling installable addon roots, but TocPilot should not assume those siblings are dependencies of one another merely because they share a repository. Dependency metadata in their `.toc` files can be shown or used for warnings later, but collection membership and addon dependency are separate concepts.
+
 ---
 
 ## 7. Branch support
