@@ -1,5 +1,31 @@
 # TocPilot status / handoff
 
+## 2026-09-23 v0.3.1 collision gate CI-green / release pending
+
+- Active branch: `feature/repository-libraries`.
+- Source/application version is now `v0.3.1`; `.github/release-version` is also `v0.3.1`.
+- Final tested source head before this documentation-only update: `71181a629bb9782553a0f296e0d38f31b7137d6d`.
+- Windows x64 Release CI: Build run `35902647161` (#508) passed configure, Release build, all **16/16** CTest tests, and executable artifact upload.
+- CI artifact: `TocPilot-windows-x64`, artifact ID `10769722904`, ZIP digest `sha256:880ce3696991959755a01c5c8ffcd05e892dd61c4461f53fce940b05051b87f7`.
+- Completed collision fix:
+  - Add Git checks the prospective addon install root before saving the new package record.
+  - If a different installed TocPilot package already owns that root, TocPilot offers **Overwrite existing** via an explicit Yes/No gate instead of saving two overlapping package records.
+  - The existing package remains the sole durable owner while the replacement is downloaded, extracted, validated, and transaction-prepared.
+  - The replacement transaction treats the old package's single addon root as prior owned state, excludes that owner from the conflicting-owner set, and can therefore replace the live root safely.
+  - Only after the live commit succeeds does TocPilot set the new installed state and replace the old package record in-place; state-save failure rolls the filesystem back to the old addon and leaves the old record authoritative.
+  - Replacement preparation/commit failures immediately restore the old row/status rather than requiring Refresh.
+  - Existing unmanaged addon folders remain protected: Add Git refuses to overwrite them.
+  - A package that owns multiple addon roots is not partially overwritten; the user must remove/reconfigure it first.
+  - Repository-library multi-select remains supported when roots do not collide. If a multi-selection contains an already-owned root, TocPilot blocks the batch and asks the user to select the colliding child by itself for replacement.
+- Added deterministic coverage:
+  - case-insensitive managed addon-root owner lookup, including multi-root ownership discovery;
+  - in-place package-record replacement and duplicate-ID refusal;
+  - managed-root replacement transaction preparation/commit/rollback restoring old files on rollback.
+- Release correction: the earlier repository-library build was only a PR artifact. The next deployment must be the actual GitHub `v0.3.1` Release with direct `TocPilot.exe`, so installed `v0.3.0` can discover it through startup self-update.
+- Runtime-untested: the new overwrite/cancel dialog and end-to-end replacement against a real WoW install; remaining repository-library real-repo cases from the prior handoff also still need runtime coverage.
+- Deferred/out of scope remains: GitLab release support, release-archive executable discovery, arbitrary-depth repository catalogue discovery, dependency resolution between library children, and broader collection UX.
+- Exact next step: merge the green feature PR to `main`. The changed `.github/release-version` must trigger the repository Release workflow; verify that exact merged commit rebuilds/tests green and publishes GitHub Release `v0.3.1` with direct `TocPilot.exe` + checksum. Then runtime-test automatic `v0.3.0 -> v0.3.1` self-update and reproduce the same-name Add Git case: choose No first (old package remains unchanged), retry and choose Yes (old package is replaced in-place, exactly one record remains, new addon is installed immediately without Refresh).
+
 ## 2026-09-23 runtime collision bug / release correction checkpoint
 
 - Active branch: `feature/repository-libraries`.
