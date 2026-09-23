@@ -225,6 +225,50 @@ int main() {
             }
         }
 
+        const auto gitLabRootZipPath =
+            temp / L"gitlab-root-addon.zip";
+        const auto gitLabRootExtracted =
+            temp / L"gitlab-root-addon-extracted";
+
+        if (!WriteFixtureZip(
+                gitLabRootZipPath,
+                {
+                    {"pfUI-deadbeef/pfUI.toc",
+                     "## Interface: 11200\n## Title: pfUI\n"},
+                    {"pfUI-deadbeef/pfUI.lua",
+                     "print('pfUI')\n"}
+                })) {
+            Fail("could not create GitLab root-addon ZIP fixture");
+        } else {
+            std::size_t entries = 0;
+            std::uint64_t bytes = 0;
+            std::wstring error;
+
+            if (!tp::ExtractZipSecure(
+                    gitLabRootZipPath,
+                    gitLabRootExtracted,
+                    entries,
+                    bytes,
+                    error)) {
+                Fail("GitLab root-addon ZIP extraction failed");
+            } else {
+                std::vector<tp::AddonCandidate> candidates;
+                if (!tp::DetectRepositoryAddonCandidates(
+                        gitLabRootExtracted,
+                        L"GitLab",
+                        L"group/subgroup/pfUI",
+                        {},
+                        candidates,
+                        error)) {
+                    Fail("GitLab root-addon mapping failed");
+                } else if (
+                    candidates.size() != 1 ||
+                    candidates[0].installFolder != L"pfUI") {
+                    Fail("GitLab root-addon mapping returned the wrapper name");
+                }
+            }
+        }
+
         const auto ambiguousZipPath =
             temp / L"ambiguous-root-addon.zip";
         const auto ambiguousExtracted =

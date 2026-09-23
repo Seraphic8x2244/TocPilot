@@ -23,6 +23,24 @@ struct ArchiveInspection {
     std::vector<AddonCandidate> candidates;
 };
 
+std::filesystem::path ProviderPackageStagingDirectory(
+    const std::filesystem::path& wowRoot,
+    std::wstring_view provider,
+    std::wstring_view repository);
+
+bool ResetProviderPackageStaging(
+    const std::filesystem::path& wowRoot,
+    std::wstring_view provider,
+    std::wstring_view repository,
+    std::filesystem::path& stagingDirectory,
+    std::wstring& error);
+
+bool CleanupProviderPackageStaging(
+    const std::filesystem::path& wowRoot,
+    std::wstring_view provider,
+    std::wstring_view repository,
+    std::wstring& error);
+
 std::filesystem::path GitHubPackageStagingDirectory(
     const std::filesystem::path& wowRoot,
     std::wstring_view repository);
@@ -52,6 +70,14 @@ bool ExtractZipSecure(
 
 bool DetectAddonCandidates(
     const std::filesystem::path& extractedRoot,
+    std::vector<AddonCandidate>& candidates,
+    std::wstring& error);
+
+bool DetectRepositoryAddonCandidates(
+    const std::filesystem::path& extractedRoot,
+    std::wstring_view providerName,
+    std::wstring_view repository,
+    std::wstring_view existingInstallFolder,
     std::vector<AddonCandidate>& candidates,
     std::wstring& error);
 

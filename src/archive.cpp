@@ -227,11 +227,13 @@ std::wstring CandidateKey(
 
 } // namespace
 
-std::filesystem::path GitHubPackageStagingDirectory(
+std::filesystem::path ProviderPackageStagingDirectory(
     const std::filesystem::path& wowRoot,
+    std::wstring_view provider,
     std::wstring_view repository) {
     const std::wstring leaf =
-        L"github-" +
+        SanitizeStagingComponent(provider) +
+        L"-" +
         SanitizeStagingComponent(repository);
 
     return wowRoot /
@@ -241,16 +243,23 @@ std::filesystem::path GitHubPackageStagingDirectory(
         leaf;
 }
 
-bool ResetGitHubPackageStaging(
+bool ResetProviderPackageStaging(
     const std::filesystem::path& wowRoot,
+    std::wstring_view provider,
     std::wstring_view repository,
     std::filesystem::path& stagingDirectory,
     std::wstring& error) {
     error.clear();
 
+    if (provider.empty()) {
+        error = L"Package provider is empty.";
+        return false;
+    }
+
     stagingDirectory =
-        GitHubPackageStagingDirectory(
+        ProviderPackageStagingDirectory(
             wowRoot,
+            provider,
             repository);
 
     const auto stagingRoot =
@@ -297,15 +306,22 @@ bool ResetGitHubPackageStaging(
     return true;
 }
 
-bool CleanupGitHubPackageStaging(
+bool CleanupProviderPackageStaging(
     const std::filesystem::path& wowRoot,
+    std::wstring_view provider,
     std::wstring_view repository,
     std::wstring& error) {
     error.clear();
 
+    if (provider.empty()) {
+        error = L"Package provider is empty.";
+        return false;
+    }
+
     const auto stagingDirectory =
-        GitHubPackageStagingDirectory(
+        ProviderPackageStagingDirectory(
             wowRoot,
+            provider,
             repository);
 
     std::error_code ec;
@@ -321,6 +337,39 @@ bool CleanupGitHubPackageStaging(
     }
 
     return true;
+}
+
+std::filesystem::path GitHubPackageStagingDirectory(
+    const std::filesystem::path& wowRoot,
+    std::wstring_view repository) {
+    return ProviderPackageStagingDirectory(
+        wowRoot,
+        L"github",
+        repository);
+}
+
+bool ResetGitHubPackageStaging(
+    const std::filesystem::path& wowRoot,
+    std::wstring_view repository,
+    std::filesystem::path& stagingDirectory,
+    std::wstring& error) {
+    return ResetProviderPackageStaging(
+        wowRoot,
+        L"github",
+        repository,
+        stagingDirectory,
+        error);
+}
+
+bool CleanupGitHubPackageStaging(
+    const std::filesystem::path& wowRoot,
+    std::wstring_view repository,
+    std::wstring& error) {
+    return CleanupProviderPackageStaging(
+        wowRoot,
+        L"github",
+        repository,
+        error);
 }
 
 bool SafeArchiveRelativePath(
@@ -884,8 +933,9 @@ bool DetectAddonCandidates(
     return true;
 }
 
-bool DetectGitHubAddonCandidates(
+bool DetectRepositoryAddonCandidates(
     const std::filesystem::path& extractedRoot,
+    std::wstring_view providerName,
     std::wstring_view repository,
     std::wstring_view existingInstallFolder,
     std::vector<AddonCandidate>& candidates,
@@ -906,7 +956,8 @@ bool DetectGitHubAddonCandidates(
 
     if (repositoryName.empty()) {
         error =
-            L"GitHub repository name is empty.";
+            std::wstring(providerName) +
+            L" repository name is empty.";
         return false;
     }
 
@@ -914,10 +965,10 @@ bool DetectGitHubAddonCandidates(
         const auto parent =
             candidate.sourceRelativePath.parent_path();
 
-        // GitHub zipball archives always add a generated top-level wrapper
-        // such as Shagu-pfUI-b2f6df8. If .toc files live directly in the
-        // repository root, generic detection sees that wrapper as the addon
-        // folder. Never install that generated name. For the safe automatic
+        // Provider-generated source archives add a generated top-level
+        // wrapper. If .toc files live directly in the repository root,
+        // generic detection sees that wrapper as the addon folder. Never
+        // install that generated name. For the safe automatic
         // case, require a root-level .toc whose stem matches the repository
         // name and use that repository name as the real install folder.
         if (!parent.empty()) {
@@ -945,7 +996,8 @@ bool DetectGitHubAddonCandidates(
 
         if (!matchingToc) {
             error =
-                L"GitHub repository-root addon layout is ambiguous. "
+                std::wstring(providerName) +
+                L" repository-root addon layout is ambiguous. "
                 L"TocPilot will not install the generated archive wrapper "
                 L"folder automatically.";
             candidates.clear();
@@ -957,6 +1009,21 @@ bool DetectGitHubAddonCandidates(
     }
 
     return true;
+}
+
+bool DetectGitHubAddonCandidates(
+    const std::filesystem::path& extractedRoot,
+    std::wstring_view repository,
+    std::wstring_view existingInstallFolder,
+    std::vector<AddonCandidate>& candidates,
+    std::wstring& error) {
+    return DetectRepositoryAddonCandidates(
+        extractedRoot,
+        L"GitHub",
+        repository,
+        existingInstallFolder,
+        candidates,
+        error);
 }
 
 } // namespace tp

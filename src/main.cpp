@@ -5,6 +5,8 @@
 #include "branch_dialog.h"
 #include "direct_dll.h"
 #include "github_api.h"
+#include "git_refs.h"
+#include "gitlab_api.h"
 #include "install.h"
 #include "refresh_freshness.h"
 #include "state.h"
@@ -775,6 +777,114 @@ std::wstring ProviderLabel(const std::wstring& provider) {
     return provider;
 }
 
+bool SupportedBranchProvider(
+    const std::wstring& provider) {
+    return
+        provider == L"github" ||
+        provider == L"gitlab";
+}
+
+std::wstring BranchProviderHost(
+    const std::wstring& provider) {
+    if (provider == L"github") {
+        return L"github.com";
+    }
+    if (provider == L"gitlab") {
+        return L"gitlab.com";
+    }
+    return {};
+}
+
+bool ResolvePackageBranchHead(
+    const tp::PackageRecord& package,
+    std::wstring& remoteSha,
+    std::wstring& error) {
+    const std::wstring host =
+        BranchProviderHost(
+            package.provider);
+
+    if (host.empty()) {
+        error =
+            L"Unsupported branch package provider.";
+        return false;
+    }
+
+    return tp::ResolvePublicGitBranchHead(
+        host,
+        package.repository,
+        package.ref,
+        remoteSha,
+        error);
+}
+
+bool ResetPackageStaging(
+    const tp::PackageRecord& package,
+    const std::filesystem::path& wowRoot,
+    std::filesystem::path& stagingDirectory,
+    std::wstring& error) {
+    return tp::ResetProviderPackageStaging(
+        wowRoot,
+        package.provider,
+        package.repository,
+        stagingDirectory,
+        error);
+}
+
+bool DownloadPackageBranchArchive(
+    const tp::PackageRecord& package,
+    std::wstring_view remoteSha,
+    const std::filesystem::path& destination,
+    std::uint64_t& downloadedBytes,
+    std::wstring& error) {
+    if (package.provider == L"github") {
+        return tp::DownloadGitHubArchive(
+            package.repository,
+            remoteSha,
+            destination,
+            downloadedBytes,
+            error);
+    }
+
+    if (package.provider == L"gitlab") {
+        return tp::DownloadGitLabArchive(
+            package.repository,
+            remoteSha,
+            destination,
+            downloadedBytes,
+            error);
+    }
+
+    error =
+        L"Unsupported branch package provider.";
+    return false;
+}
+
+bool DetectPackageAddonCandidates(
+    const tp::PackageRecord& package,
+    const std::filesystem::path& extractedRoot,
+    std::wstring_view existingInstallFolder,
+    std::vector<tp::AddonCandidate>& candidates,
+    std::wstring& error) {
+    return tp::DetectRepositoryAddonCandidates(
+        extractedRoot,
+        ProviderLabel(package.provider),
+        package.repository,
+        existingInstallFolder,
+        candidates,
+        error);
+}
+
+bool CleanupPackageStaging(
+    const tp::PackageRecord& package,
+    const std::filesystem::path& wowRoot,
+    std::wstring& error) {
+    return tp::CleanupProviderPackageStaging(
+        wowRoot,
+        package.provider,
+        package.repository,
+        error);
+}
+
 bool PackageBranchMode(
     const tp::PackageRecord& package) {
     return
@@ -797,8 +907,8 @@ std::wstring PackageSourceText(
             package.asset;
     }
 
-    if (package.provider ==
-        L"github") {
+    if (SupportedBranchProvider(
+            package.provider)) {
         return L"Choose branch";
     }
 
@@ -2415,7 +2525,8 @@ void UpdatePackageButtons() {
                 static_cast<std::size_t>(row)];
 
         canSetBranch =
-            selectedPackage->provider == L"github" &&
+            SupportedBranchProvider(
+                selectedPackage->provider) &&
             selectedPackage->mode != L"release";
 
         canRefresh =
@@ -2692,7 +2803,8 @@ void StartPackageRefresh(
         g_state.packages[index];
 
     const bool branchPackage =
-        package.provider == L"github" &&
+        SupportedBranchProvider(
+            package.provider) &&
         package.mode == L"branch" &&
         !package.ref.empty();
 
@@ -2724,7 +2836,10 @@ void StartPackageRefresh(
         } else {
             message +=
                 package.ref +
-                L" on GitHub. No addon files will be changed.";
+                L" on " +
+                ProviderLabel(
+                    package.provider) +
+                L". No addon files will be changed.";
         }
 
         SetWindowTextW(
@@ -2757,9 +2872,8 @@ void StartPackageRefresh(
 
             if (branchPackage) {
                 result->ok =
-                    tp::ResolveGitHubBranchHead(
-                        package.repository,
-                        package.ref,
+                    ResolvePackageBranchHead(
+                        package,
                         result->remoteSha,
                         result->error);
             } else if (directDll) {
@@ -2845,7 +2959,8 @@ void StartPackageInspection(
     const auto package =
         g_state.packages[index];
 
-    if (package.provider != L"github" ||
+    if (!SupportedBranchProvider(
+            package.provider) ||
         package.mode != L"branch" ||
         package.ref.empty()) {
         return;
@@ -2880,15 +2995,14 @@ void StartPackageInspection(
             result->packageId = package.id;
             result->branch = package.ref;
 
-            if (!tp::ResolveGitHubBranchHead(
-                    package.repository,
-                    package.ref,
+            if (!ResolvePackageBranchHead(
+                    package,
                     result->remoteSha,
                     result->error)) {
                 result->ok = false;
-            } else if (!tp::ResetGitHubPackageStaging(
+            } else if (!ResetPackageStaging(
+                    package,
                     wowRoot,
-                    package.repository,
                     result->inspection.stagingDirectory,
                     result->error)) {
                 result->ok = false;
@@ -2901,8 +3015,8 @@ void StartPackageInspection(
                     result->inspection.stagingDirectory /
                     L"extracted";
 
-                if (!tp::DownloadGitHubArchive(
-                        package.repository,
+                if (!DownloadPackageBranchArchive(
+                        package,
                         result->remoteSha,
                         result->inspection.archivePath,
                         result->downloadedBytes,
@@ -2915,9 +3029,9 @@ void StartPackageInspection(
                         result->inspection.totalUncompressedBytes,
                         result->error)) {
                     result->ok = false;
-                } else if (!tp::DetectGitHubAddonCandidates(
+                } else if (!DetectPackageAddonCandidates(
+                        package,
                         result->inspection.extractedRoot,
-                        package.repository,
                         SingleOwnedAddonRoot(package),
                         result->inspection.candidates,
                         result->error)) {
@@ -3095,7 +3209,8 @@ void StartPackageInstall(
         return;
     }
 
-    if (package.provider != L"github" ||
+    if (!SupportedBranchProvider(
+            package.provider) ||
         package.mode != L"branch" ||
         package.ref.empty()) {
         return;
@@ -3159,15 +3274,14 @@ void StartPackageInstall(
                 std::move(knownRemoteSha);
 
             if (result->remoteSha.empty() &&
-                !tp::ResolveGitHubBranchHead(
-                    package.repository,
-                    package.ref,
+                !ResolvePackageBranchHead(
+                    package,
                     result->remoteSha,
                     result->error)) {
                 result->ok = false;
-            } else if (!tp::ResetGitHubPackageStaging(
+            } else if (!ResetPackageStaging(
+                    package,
                     wowRoot,
-                    package.repository,
                     result->inspection.stagingDirectory,
                     result->error)) {
                 result->ok = false;
@@ -3180,8 +3294,8 @@ void StartPackageInstall(
                     result->inspection.stagingDirectory /
                     L"extracted";
 
-                if (!tp::DownloadGitHubArchive(
-                        package.repository,
+                if (!DownloadPackageBranchArchive(
+                        package,
                         result->remoteSha,
                         result->inspection.archivePath,
                         result->downloadedBytes,
@@ -3194,9 +3308,9 @@ void StartPackageInstall(
                         result->inspection.totalUncompressedBytes,
                         result->error)) {
                     result->ok = false;
-                } else if (!tp::DetectGitHubAddonCandidates(
+                } else if (!DetectPackageAddonCandidates(
+                        package,
                         result->inspection.extractedRoot,
-                        package.repository,
                         SingleOwnedAddonRoot(package),
                         result->inspection.candidates,
                         result->error)) {
@@ -5795,15 +5909,6 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                 return 0;
             }
 
-            if (package.provider != L"github") {
-                MessageBoxW(
-                    hwnd,
-                    L"This layout pass is currently limited to GitHub repositories.",
-                    L"TocPilot - Add Git",
-                    MB_OK | MB_ICONINFORMATION);
-                return 0;
-            }
-
             tp::AppState updatedState =
                 g_state;
             std::wstring error;
@@ -6964,9 +7069,9 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
 
         std::wstring stagingCleanupError;
         const bool stagingCleanupOk =
-            tp::CleanupGitHubPackageStaging(
+            CleanupPackageStaging(
+                installedPackage,
                 g_root,
-                installedPackage.repository,
                 stagingCleanupError);
 
         if (updateAllStep) {

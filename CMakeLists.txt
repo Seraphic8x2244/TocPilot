@@ -32,6 +32,7 @@ add_executable(TocPilot WIN32
     src/github_api.cpp
     src/github_release.cpp
     src/git_refs.cpp
+    src/gitlab_api.cpp
     src/install.cpp
     src/main.cpp
     src/provider.cpp
@@ -121,6 +122,26 @@ if(BUILD_TESTING)
     endif()
 
     add_test(NAME github-transport COMMAND TocPilotGitHubApiTests)
+
+    add_executable(TocPilotGitLabApiTests
+        tests/gitlab_api_tests.cpp
+        src/gitlab_api.cpp
+    )
+    target_compile_features(TocPilotGitLabApiTests PRIVATE cxx_std_20)
+    target_compile_definitions(TocPilotGitLabApiTests PRIVATE
+        UNICODE
+        _UNICODE
+        WIN32_LEAN_AND_MEAN
+        NOMINMAX
+    )
+    target_include_directories(TocPilotGitLabApiTests PRIVATE src)
+    target_link_libraries(TocPilotGitLabApiTests PRIVATE winhttp)
+
+    if(MSVC)
+        target_compile_options(TocPilotGitLabApiTests PRIVATE /W4 /permissive- /utf-8)
+    endif()
+
+    add_test(NAME gitlab-archive-path COMMAND TocPilotGitLabApiTests)
 
     add_executable(TocPilotGitRefsTests
         tests/git_refs_tests.cpp

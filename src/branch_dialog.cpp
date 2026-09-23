@@ -1,6 +1,6 @@
 #include "branch_dialog.h"
 
-#include "github_api.h"
+#include "git_refs.h"
 
 #include <algorithm>
 #include <memory>
@@ -23,15 +23,17 @@ constexpr int IDC_CANCEL_BRANCH = 3004;
 
 struct LoadResult {
     bool ok = false;
-    GitHubRepositoryInfo info;
+    GitRemoteRepositoryInfo info;
     std::wstring error;
 };
 
 struct DialogContext {
+    std::wstring host;
+    std::wstring providerName;
     std::wstring repository;
     std::wstring currentRef;
     BranchSelection* selection = nullptr;
-    GitHubRepositoryInfo info;
+    GitRemoteRepositoryInfo info;
     bool accepted = false;
 };
 
@@ -55,14 +57,18 @@ void SetControlFont(HWND control) {
 
 void StartLoad(
     HWND hwnd,
+    std::wstring host,
     std::wstring repository) {
     std::thread(
-        [hwnd, repository = std::move(repository)]() {
+        [hwnd,
+         host = std::move(host),
+         repository = std::move(repository)]() {
             auto result =
                 std::make_unique<LoadResult>();
 
             result->ok =
-                FetchGitHubRepositoryInfo(
+                FetchPublicGitRepositoryInfo(
+                    host,
                     repository,
                     result->info,
                     result->error);
@@ -186,11 +192,11 @@ LRESULT CALLBACK DialogProc(
             GetModuleHandleW(nullptr);
 
         std::wstring source =
-            L"GitHub repository: ";
-
-        if (context) {
-            source += context->repository;
-        }
+            context
+                ? context->providerName +
+                    L" repository: " +
+                    context->repository
+                : L"Repository";
 
         HWND label = CreateWindowExW(
             0,
@@ -289,6 +295,7 @@ LRESULT CALLBACK DialogProc(
         if (context) {
             StartLoad(
                 hwnd,
+                context->host,
                 context->repository);
         }
 
@@ -309,7 +316,8 @@ LRESULT CALLBACK DialogProc(
 
         if (!result->ok) {
             const std::wstring messageText =
-                L"GitHub branch lookup failed: " +
+                context->providerName +
+                L" branch lookup failed: " +
                 result->error;
 
             SetWindowTextW(
@@ -431,11 +439,19 @@ bool ShowBranchDialog(
     BranchSelection& selection) {
     selection = {};
 
-    if (package.provider != L"github") {
+    std::wstring host;
+    std::wstring providerName;
+
+    if (package.provider == L"github") {
+        host = L"github.com";
+        providerName = L"GitHub";
+    } else if (package.provider == L"gitlab") {
+        host = L"gitlab.com";
+        providerName = L"GitLab";
+    } else {
         MessageBoxW(
             owner,
-            L"Branch browsing is currently implemented for GitHub packages only. "
-            L"GitLab branch support is planned for a later milestone.",
+            L"Branch browsing is not available for this package provider.",
             L"TocPilot - Set Branch",
             MB_OK | MB_ICONINFORMATION);
 
@@ -481,6 +497,10 @@ bool ShowBranchDialog(
             (ownerHeight - height) / 2);
 
     DialogContext context;
+    context.host =
+        std::move(host);
+    context.providerName =
+        std::move(providerName);
     context.repository =
         package.repository;
     context.currentRef =
@@ -492,7 +512,9 @@ bool ShowBranchDialog(
         WS_EX_DLGMODALFRAME |
             WS_EX_CONTROLPARENT,
         kClassName,
-        L"Set GitHub Branch",
+        (L"Set " +
+         context.providerName +
+         L" Branch").c_str(),
         WS_CAPTION |
             WS_SYSMENU |
             WS_POPUP,
