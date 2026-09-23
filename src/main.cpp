@@ -505,6 +505,10 @@ bool PackageColumnLayoutLocked() {
 void UpdatePackageColumnLockUi() {
     const bool locked =
         PackageColumnLayoutLocked();
+    const bool editingEnabled =
+        g_stateReady &&
+        g_advancedVisible &&
+        !locked;
 
     if (g_lockColumnsButton) {
         SendMessageW(
@@ -525,9 +529,9 @@ void UpdatePackageColumnLockUi() {
         ListView_SetExtendedListViewStyleEx(
             g_packageList,
             LVS_EX_HEADERDRAGDROP,
-            locked
-                ? 0
-                : LVS_EX_HEADERDRAGDROP);
+            editingEnabled
+                ? LVS_EX_HEADERDRAGDROP
+                : 0);
     }
 }
 
@@ -5688,6 +5692,7 @@ void ToggleAdvanced(HWND hwnd) {
             SWP_NOZORDER |
             SWP_NOACTIVATE);
 
+    UpdatePackageColumnLockUi();
     LayoutControls(hwnd);
     UpdatePackageButtons();
 }
@@ -6174,7 +6179,8 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             header->hwndFrom ==
                 ListView_GetHeader(
                     g_packageList)) {
-            if (PackageColumnLayoutLocked() &&
+            if ((!g_advancedVisible ||
+                 PackageColumnLayoutLocked()) &&
                 (header->code ==
                      HDN_BEGINTRACKW ||
                  header->code ==
