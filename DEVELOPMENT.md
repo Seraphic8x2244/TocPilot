@@ -1,5 +1,11 @@
 # TocPilot Development Plan
 
+## 2026-09-23 implementation checkpoint: v0.3.5 version/status UX
+
+The next release is intentionally narrow. Advanced mode gains a local-only `Version` column, producing `Name | Branch | Version | Local SHA | Git SHA | Status`; Compact remains `Name | Status`. Version is not inferred from Git tags or remote archives: TocPilot reads only installed package-owned `.toc` files and displays a single unique nonblank `## Version:` value, `—` when absent, or `Multiple` when owned TOCs disagree. This keeps refresh cost and meaning deterministic.
+
+The steady status wording becomes `Up To Date`, `Update Available`, `Not Installed`, `Not Configured`, and `Needs Attention`. The slice also corrects the v0.3.4 view-priority regression that promoted healthy release/DLL packages simply because they were not branch-mode packages. Existing five-column Advanced layout state is migrated to six columns while preserving prior widths/order and remapping persisted sort columns. P5 import/export remains out of scope.
+
 ## 2026-09-23 release status: v0.3.2 published
 
 `v0.3.2` is published from merge commit `7030810f4c6994b69c9ec9fab9844749f2bdeefa`. Release workflow run `35909133183` (#45) rebuilt that exact commit, passed all **17/17** CTest tests, generated the SHA-256 sidecar, created/verified the direct `v0.3.2` tag, and published `TocPilot.exe` plus `TocPilot.exe.sha256`. GitHub's latest-stable endpoint reports `v0.3.2`, so normal TocPilot self-update discovery can consume it.
