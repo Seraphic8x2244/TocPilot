@@ -1,5 +1,19 @@
 # TocPilot status / handoff
 
+## 2026-09-23 runtime collision bug / release correction checkpoint
+
+- Active branch: `feature/repository-libraries`.
+- Source/application version is still `v0.3.0`; no new GitHub Release has been published for the repository-library work yet.
+- Current branch head entering this fix: `bcffe23cb3e7644e68d522abea5f9c3bae58ba4d`.
+- Last fully CI-green code baseline remains `2a43e2f9ec7eae25d56488ed3cba589bdf42971e`; later commits through `bcffe23c` are documentation-only.
+- Completed before this checkpoint: shallow Add Git repository classification, repository-library selection, persisted child/root source paths, sequential library-child installs, and GitHub standalone-DLL fallback after a no-addon result.
+- Newly reported runtime defect: adding a package whose addon install folder/name collides with an existing managed/installed addon can leave two TocPilot package records visible at once. The second package does not actually install; uninstalling the older package can leave stale UI/state until Refresh, after which the old record disappears but the new package is still not installed.
+- Required behavior: detect the ownership/install-folder collision before saving/installing the new package and gate it with an explicit **Overwrite existing** / cancel decision. Do not allow two managed records to ambiguously own the same addon root. The overwrite path must safely transfer/remove old ownership before the replacement install and preserve rollback/state correctness on failure.
+- Release correction: the previous validation produced only a pull-request CI artifact. TocPilot's normal deployment workflow requires a GitHub Release with direct `TocPilot.exe` so the app's self-updater can discover it.
+- Untested work entering this fix: collision replacement UI and transaction behavior; runtime repository-library installation remains only partially exercised.
+- Deferred/out of scope remains: GitLab release support, archive/bundle executable discovery, arbitrary-depth repository catalogue discovery, dependency resolution between library children, and broader collection UX.
+- Exact next step: inspect package identity/ownership collision handling and Add Git save/install ordering, implement a deterministic overwrite/cancel gate with tests, run the full Windows x64 Release CI suite, then bump/publish the next `0.3.x` GitHub Release only from the green tested commit.
+
 ## 2026-09-23 Add Git shallow detector implementation
 
 - Active branch: `feature/repository-libraries`.
