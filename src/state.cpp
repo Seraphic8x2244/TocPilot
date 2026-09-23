@@ -2068,12 +2068,7 @@ bool LoadOrCreateState(
         return false;
     }
 
-    if (packageSortColumn < -1 ||
-        packageSortColumn > 4) {
-        packageSortColumn = -1;
-    }
-
-    std::array<int, 5> packageColumnWidths =
+    std::array<int, 6> packageColumnWidths =
         kDefaultPackageColumnWidths;
     std::vector<int> parsedColumnWidths;
     if (!GetIntegerArrayMember(
@@ -2087,7 +2082,8 @@ bool LoadOrCreateState(
             L"settings.package_column_widths value.";
         return false;
     }
-    if (parsedColumnWidths.size() == packageColumnWidths.size()) {
+    if (parsedColumnWidths.size() ==
+        packageColumnWidths.size()) {
         for (std::size_t i = 0;
              i < packageColumnWidths.size();
              ++i) {
@@ -2097,9 +2093,21 @@ bool LoadOrCreateState(
                     40,
                     2000);
         }
+    } else if (
+        parsedColumnWidths.size() == 5) {
+        packageColumnWidths[0] =
+            std::clamp(parsedColumnWidths[0], 40, 2000);
+        packageColumnWidths[1] =
+            std::clamp(parsedColumnWidths[1], 40, 2000);
+        packageColumnWidths[3] =
+            std::clamp(parsedColumnWidths[2], 40, 2000);
+        packageColumnWidths[4] =
+            std::clamp(parsedColumnWidths[3], 40, 2000);
+        packageColumnWidths[5] =
+            std::clamp(parsedColumnWidths[4], 40, 2000);
     }
 
-    std::array<int, 5> packageColumnOrder =
+    std::array<int, 6> packageColumnOrder =
         kDefaultPackageColumnOrder;
     std::vector<int> parsedColumnOrder;
     if (!GetIntegerArrayMember(
@@ -2113,17 +2121,25 @@ bool LoadOrCreateState(
             L"settings.package_column_order value.";
         return false;
     }
-    if (parsedColumnOrder.size() == packageColumnOrder.size()) {
-        std::array<bool, 5> seen{};
+    if (parsedColumnOrder.size() ==
+        packageColumnOrder.size()) {
+        std::array<bool, 6> seen{};
         bool validOrder = true;
-        for (const int column : parsedColumnOrder) {
+        for (const int column :
+             parsedColumnOrder) {
             if (column < 0 ||
-                column >= static_cast<int>(seen.size()) ||
-                seen[static_cast<std::size_t>(column)]) {
+                column >=
+                    static_cast<int>(
+                        seen.size()) ||
+                seen[
+                    static_cast<std::size_t>(
+                        column)]) {
                 validOrder = false;
                 break;
             }
-            seen[static_cast<std::size_t>(column)] = true;
+            seen[
+                static_cast<std::size_t>(
+                    column)] = true;
         }
 
         if (validOrder) {
@@ -2132,6 +2148,62 @@ bool LoadOrCreateState(
                 parsedColumnOrder.end(),
                 packageColumnOrder.begin());
         }
+    } else if (
+        parsedColumnOrder.size() == 5) {
+        std::array<bool, 5> seen{};
+        bool validOrder = true;
+
+        for (const int column :
+             parsedColumnOrder) {
+            if (column < 0 ||
+                column >=
+                    static_cast<int>(
+                        seen.size()) ||
+                seen[
+                    static_cast<std::size_t>(
+                        column)]) {
+                validOrder = false;
+                break;
+            }
+
+            seen[
+                static_cast<std::size_t>(
+                    column)] = true;
+        }
+
+        if (validOrder) {
+            std::size_t output = 0;
+
+            for (const int oldColumn :
+                 parsedColumnOrder) {
+                const int mapped =
+                    oldColumn >= 2
+                        ? oldColumn + 1
+                        : oldColumn;
+
+                packageColumnOrder[output++] =
+                    mapped;
+
+                if (oldColumn == 1) {
+                    packageColumnOrder[output++] =
+                        2;
+                }
+            }
+        }
+    }
+
+    const bool legacyFiveColumnLayout =
+        parsedColumnWidths.size() != 6 &&
+        parsedColumnOrder.size() != 6;
+
+    if (legacyFiveColumnLayout &&
+        packageSortColumn >= 2) {
+        ++packageSortColumn;
+    }
+
+    if (packageSortColumn < -1 ||
+        packageSortColumn > 5) {
+        packageSortColumn = -1;
     }
 
     bool packageColumnsLocked = false;
