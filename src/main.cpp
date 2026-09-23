@@ -6991,9 +6991,6 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
 
         g_packageInstallInProgress = false;
 
-        const bool addGitQueueStep =
-            IsAddGitInstallQueueCurrent(
-                result->index);
         const bool updateAllStep =
             IsUpdateAllCurrentPackage(
                 result->packageId);
@@ -7027,10 +7024,6 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                 SetWindowTextW(
                     g_packageHint,
                     message.c_str());
-            }
-
-            if (addGitQueueStep) {
-                ClearAddGitInstallQueue();
             }
 
             if (updateAllStep) {
@@ -7161,15 +7154,6 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             return 0;
         }
 
-        if (addGitQueueStep) {
-            RefreshPackageStateUi();
-            if (ContinueAddGitInstallQueue(
-                    hwnd,
-                    index)) {
-                return 0;
-            }
-        }
-
         RefreshPackageStateUi();
         SelectPackageRow(index);
         UpdatePackageButtons();
@@ -7227,6 +7211,9 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
 
         g_packageInstallInProgress = false;
 
+        const bool addGitQueueStep =
+            IsAddGitInstallQueueCurrent(
+                result->index);
         const bool updateAllStep =
             IsUpdateAllCurrentPackage(
                 result->packageId);
@@ -7280,6 +7267,10 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                 SetWindowTextW(
                     g_packageHint,
                     message.c_str());
+            }
+
+            if (addGitQueueStep) {
+                ClearAddGitInstallQueue();
             }
 
             if (updateAllStep) {
@@ -7469,6 +7460,15 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                 tp::UpdateAllOutcome::Updated,
                 {});
             return 0;
+        }
+
+        if (addGitQueueStep) {
+            RefreshPackageStateUi();
+            if (ContinueAddGitInstallQueue(
+                    hwnd,
+                    index)) {
+                return 0;
+            }
         }
 
         RefreshPackageStateUi();
