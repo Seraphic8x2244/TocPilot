@@ -902,7 +902,10 @@ bool InspectAddGitRepositoryLayout(
     layout = {};
     error.clear();
 
-    if (!PackageBranchMode(package) ||
+    if (!SupportedBranchProvider(
+            package.provider) ||
+        package.mode != L"branch" ||
+        package.ref.empty() ||
         package.latestRevision.empty()) {
         error =
             L"Add Git repository inspection requires a selected branch revision.";
