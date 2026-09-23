@@ -1,5 +1,31 @@
 # TocPilot status / handoff
 
+## 2026-09-23 v0.3.4 published / update-visibility runtime handoff
+
+- Active product branch: `main`.
+- Published/source version: `v0.3.4`.
+- PR #4 merged at `d658b8eb409cb5e8d08f2bf647acbe33676a12a6` (`Merge v0.3.4 update status visibility`).
+- Release tag `v0.3.4` points exactly to merge commit `d658b8eb409cb5e8d08f2bf647acbe33676a12a6`.
+- GitHub Release workflow run `35926103920` (#47), Windows x64 release job `107401454846`, passed source-version validation, Release build, the complete **17/17** CTest suite, SHA-256 sidecar generation, tag creation/verification, and release asset publication.
+- Published latest-stable release: `v0.3.4`, draft=false, prerelease=false.
+- Published assets:
+  - `TocPilot.exe` — 2,417,664 bytes; SHA-256 `1cc3429c28eae36c0b99a77e48cfe083fb9b81af3e0f1f7c9c0cf0f0592afcf0`;
+  - `TocPilot.exe.sha256` — 78 bytes; release-asset SHA-256 `527a2721bc26d14365d55765347eae371a940c3b7bce0505448b0902cb4ebddf`.
+- Released UX changes:
+  - known updates render orange and remain in the top attention group;
+  - packages successfully updated during the current session render green and remain directly below remaining orange updates;
+  - green state is in-memory only and clears on Refresh All or app exit;
+  - Refresh All checks packages in current visible list order instead of TocPilot.json array order;
+  - Update New processes eligible packages in current visible list order while defensively retaining any unmatched candidates;
+  - Update New scrolls the list back to the top when the batch completes;
+  - selected rows keep normal Windows selection colours;
+  - no TocPilot.json schema or package-array ordering change.
+- Runtime-confirmed immediately before this release: normal startup self-update from installed `v0.3.2 -> v0.3.3`.
+- Runtime-untested for v0.3.4: automatic startup self-update `v0.3.3 -> v0.3.4`; orange/green row rendering; live orange-to-green transition during Update New; visible-order Refresh All/Update New; green clearing; Update New final scroll-to-top.
+- Previously deferred runtime checks remain: Advanced width/order persistence, Lock columns, compact/Advanced toggling, Branch selector positioning after reorder, v0.3.2 removal confirmation, single-nested Add Git, same-root overwrite/cancel, mixed root+child refusal, and terminal no-supported-content cases.
+- Deferred/out of scope remains: P5 import/export, package editing, ambiguous archive-mapping improvements, local-modification detection/backups, richer diagnostics, GitLab release support, release-archive executable discovery, arbitrary-depth repository catalogue discovery, dependency resolution between library children, and broader collection UX.
+- Exact next step: launch the installed `v0.3.3` normally and confirm startup self-update to published `v0.3.4`. Then exercise the orange/green ordering and visible-order Refresh All/Update New behavior. Do not start P5 import/export until the pending runtime checks are complete.
+
 ## 2026-09-23 v0.3.4 update-visibility release candidate
 
 - Active branch: `ux/update-status-visibility`; PR #4 targets `main`.
