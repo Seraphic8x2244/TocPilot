@@ -1,5 +1,30 @@
 # TocPilot status / handoff
 
+## 2026-09-23 v0.3.5 published / Version + status UX handoff
+
+- Active product branch: `main`.
+- Published/source version: `v0.3.5`.
+- PR #5 merged at `1d3050f4bc755e7b8be0762d3f6e6afe738f1525` (`Merge v0.3.5 version and status UX`).
+- Final PR CI head: `13b71f7a8cbfa628338e161c452cf7caaa5d6978`; Build run `35931674431` (#541), Windows x64 job `107419423256`, passed Release build, the complete **17/17** CTest suite, and executable artifact upload. The preceding run #540 exposed and led to the fix for the old five-element JSON array serializer.
+- Release tag `v0.3.5` points exactly to merge commit `1d3050f4bc755e7b8be0762d3f6e6afe738f1525`.
+- GitHub Release workflow run `35932008997` (#48), Windows x64 release job `107420500944`, passed source-version validation, Release build, **17/17** CTest tests, SHA-256 sidecar generation, tag creation/verification, and release asset publication.
+- Published latest-stable release: `v0.3.5`, draft=false, prerelease=false.
+- Published assets:
+  - `TocPilot.exe` — 2,425,856 bytes; SHA-256 `7b6756d80cd115dec2c6ec38c258adb10a6cb5b6e8d91ad3dca883ca1b29db9b`;
+  - `TocPilot.exe.sha256` — 78 bytes; release-asset SHA-256 `e2b459a74ff0f449efbd1eac201a0c372ba7f3b0305316019cba0bfd4b7fd6c5`.
+- v0.3.5 released:
+  - Advanced columns are now `Name | Branch | Version | Local SHA | Git SHA | Status`;
+  - Compact remains `Name | Status`; Version is Advanced-only;
+  - Version is local-only and fast: TocPilot reads package-owned installed `.toc` files, displays one unique nonblank `## Version:` value, `—` when absent, or `Multiple` when owned TOCs disagree; DLL packages display `—`;
+  - no Git-tag inference, archive download, or extra network request is used for Version;
+  - steady Status labels are `Up To Date`, `Update Available`, `Not Installed`, `Not Configured`, and `Needs Attention`;
+  - existing five-column v0.3.4 widths/order are migrated to six columns, inserting Version after Branch while preserving the old layout and remapping old sort columns `Installed/Latest/Status` to `Local SHA/Git SHA/Status`;
+  - healthy managed release/DLL packages no longer get promoted above ordinary current addons merely because they are not branch-mode packages.
+- Runtime-untested for v0.3.5: normal startup self-update `v0.3.4 -> v0.3.5`; local TOC Version values on real addons; `Multiple` behavior on real multi-root packages; five-to-six-column persistence migration; Compact hiding Version; Advanced reorder/Lock columns with six columns; Branch selector positioning; status wording; healthy DLL normal sorting.
+- Previously deferred runtime checks remain: earlier column persistence/Lock columns/compact toggling/Branch selector checks, removal confirmation, single-nested Add Git, same-root overwrite/cancel, mixed root+child refusal, and terminal no-supported-content cases.
+- Deferred/out of scope remains: P5 import/export, Git-tag version inference, remote TOC inspection, package editing, ambiguous archive mapping improvements, local-modification detection/backups, richer diagnostics, GitLab release support, release-archive executable discovery, arbitrary-depth repository catalogue discovery, dependency resolution between library children, and broader collection UX.
+- Exact next step: launch installed `v0.3.4` normally and confirm startup self-update to published `v0.3.5`; then runtime-check Version/Local SHA/Git SHA/Status presentation, DLL sorting, and six-column persistence/lock/compact behavior. Do not begin P5 import/export until that runtime pass is complete.
+
 ## 2026-09-23 v0.3.5 version/status UX implementation
 
 - Active branch: `ux/version-status-v035`, branched from docs-current `main` head `4611b68d1ea56107cef27a32a45fb5c21cbbc00c`.
