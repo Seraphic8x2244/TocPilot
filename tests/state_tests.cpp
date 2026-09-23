@@ -377,6 +377,98 @@ void TestGitLabBranchMutators() {
     }
 }
 
+void TestRepositoryChildPackages(
+    const std::filesystem::path& root) {
+    tp::AppState state;
+    bool created = false;
+    std::wstring error;
+
+    if (!tp::LoadOrCreateState(
+            root,
+            state,
+            created,
+            error)) {
+        Fail("repository-child fixture did not load");
+        return;
+    }
+
+    state.packages.clear();
+
+    auto atlas =
+        tp::MakeRepositoryAddonPackage(
+            L"github",
+            L"Cabro/Atlas",
+            L"Atlas",
+            L"Atlas");
+    auto loot =
+        tp::MakeRepositoryAddonPackage(
+            L"github",
+            L"Cabro/Atlas",
+            L"AtlasLoot",
+            L"AtlasLoot");
+
+    if (atlas.id == loot.id ||
+        atlas.sourcePath != L"Atlas" ||
+        loot.sourcePath != L"AtlasLoot") {
+        Fail("repository child package identities were not unique");
+        return;
+    }
+
+    const std::wstring revision =
+        L"0123456789abcdef0123456789abcdef01234567";
+
+    if (!tp::SetPackageBranch(
+            atlas,
+            L"master",
+            revision,
+            error) ||
+        !tp::SetPackageBranch(
+            loot,
+            L"master",
+            revision,
+            error) ||
+        !tp::AppendPackage(
+            state,
+            std::move(atlas),
+            error) ||
+        !tp::AppendPackage(
+            state,
+            std::move(loot),
+            error) ||
+        !tp::SaveState(
+            root,
+            state,
+            error)) {
+        Fail("repository child packages could not be saved");
+        return;
+    }
+
+    tp::AppState loaded;
+    created = true;
+    if (!tp::LoadOrCreateState(
+            root,
+            loaded,
+            created,
+            error) ||
+        loaded.packages.size() != 2 ||
+        loaded.packages[0].sourcePath != L"Atlas" ||
+        loaded.packages[1].sourcePath != L"AtlasLoot" ||
+        loaded.packages[0].repository != L"Cabro/Atlas" ||
+        loaded.packages[1].repository != L"Cabro/Atlas") {
+        Fail("repository child package paths did not round-trip");
+        return;
+    }
+
+    const std::string saved =
+        ReadAll(tp::StatePath(root));
+    if (saved.find("\"source_path\":\"Atlas\"") ==
+            std::string::npos ||
+        saved.find("\"source_path\":\"AtlasLoot\"") ==
+            std::string::npos) {
+        Fail("repository child source paths were not serialized");
+    }
+}
+
 void TestReleasePackageRoundTrip(
     const std::filesystem::path& root) {
     tp::AppState state;
@@ -598,6 +690,7 @@ int main() {
         TestRemovePackageRecord(root);
         TestClearInstalledState(root);
         TestGitLabBranchMutators();
+        TestRepositoryChildPackages(root);
         TestReleasePackageRoundTrip(root);
         TestReleaseTrackingMutators(root);
         TestUnknownFieldPreservation(root);
