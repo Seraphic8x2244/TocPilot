@@ -233,6 +233,8 @@ struct PackageInstallResult {
     std::wstring packageName;
     std::wstring branch;
     std::wstring remoteSha;
+    std::wstring replacedPackageId;
+    tp::PackageRecord replacementPackage;
     std::uint64_t downloadedBytes = 0;
     tp::ArchiveInspection inspection;
     tp::AddonInstallTransaction transaction;
@@ -3415,6 +3417,185 @@ void StartPackageInstall(
                             result->inspection.extractedRoot,
                             result->inspection.candidates,
                             package.installedFiles,
+                            otherInstalledFiles,
+                            plan,
+                            result->error)) {
+                        result->ok = false;
+                    } else if (!tp::PrepareAddonInstallTransaction(
+                            plan,
+                            result->transaction,
+                            result->error)) {
+                        result->ok = false;
+                    } else {
+                        result->ok = true;
+                    }
+                }
+            }
+
+            if (!PostMessageW(
+                    hwnd,
+                    WM_TP_PACKAGE_INSTALL_COMPLETE,
+                    0,
+                    reinterpret_cast<LPARAM>(
+                        result.get()))) {
+                return;
+            }
+
+            result.release();
+        })
+        .detach();
+}
+
+void StartPackageReplacementInstall(
+    HWND hwnd,
+    tp::PackageRecord replacementPackage,
+    std::size_t ownerIndex) {
+    if (ownerIndex >= g_state.packages.size()) {
+        return;
+    }
+
+    if (!SupportedBranchProvider(
+            replacementPackage.provider) ||
+        replacementPackage.mode != L"branch" ||
+        replacementPackage.ref.empty()) {
+        return;
+    }
+
+    const auto replacedPackage =
+        g_state.packages[ownerIndex];
+
+    if (replacedPackage.target != L"addons" ||
+        replacedPackage.installedFiles.empty()) {
+        return;
+    }
+
+    const std::wstring existingInstallFolder =
+        SingleOwnedAddonRoot(
+            replacedPackage);
+
+    if (existingInstallFolder.empty()) {
+        return;
+    }
+
+    std::vector<std::wstring> otherInstalledFiles;
+    for (std::size_t i = 0;
+         i < g_state.packages.size();
+         ++i) {
+        if (i == ownerIndex ||
+            g_state.packages[i].target != L"addons") {
+            continue;
+        }
+
+        const auto& files =
+            g_state.packages[i].installedFiles;
+        otherInstalledFiles.insert(
+            otherInstalledFiles.end(),
+            files.begin(),
+            files.end());
+    }
+
+    g_packageInstallInProgress = true;
+    UpdatePackageButtons();
+    SetPackageRowStatus(
+        ownerIndex,
+        L"Preparing replacement...");
+
+    if (g_packageHint) {
+        const std::wstring message =
+            replacementPackage.name +
+            L": staging and validating the replacement from " +
+            replacementPackage.ref +
+            L". The existing managed addon and package record stay in place until the replacement commit succeeds.";
+
+        SetWindowTextW(
+            g_packageHint,
+            message.c_str());
+    }
+
+    const auto wowRoot = g_root;
+    const auto replacedInstalledFiles =
+        replacedPackage.installedFiles;
+    const auto replacedPackageId =
+        replacedPackage.id;
+
+    std::thread(
+        [hwnd,
+         ownerIndex,
+         replacementPackage =
+             std::move(replacementPackage),
+         replacedInstalledFiles,
+         replacedPackageId,
+         existingInstallFolder,
+         otherInstalledFiles =
+             std::move(otherInstalledFiles),
+         wowRoot]() mutable {
+            auto result =
+                std::make_unique<PackageInstallResult>();
+
+            result->index = ownerIndex;
+            result->packageId =
+                replacementPackage.id;
+            result->packageName =
+                replacementPackage.name;
+            result->branch =
+                replacementPackage.ref;
+            result->remoteSha =
+                replacementPackage.latestRevision;
+            result->replacedPackageId =
+                replacedPackageId;
+            result->replacementPackage =
+                replacementPackage;
+
+            if (result->remoteSha.empty() &&
+                !ResolvePackageBranchHead(
+                    replacementPackage,
+                    result->remoteSha,
+                    result->error)) {
+                result->ok = false;
+            } else if (!ResetPackageStaging(
+                    replacementPackage,
+                    wowRoot,
+                    result->inspection.stagingDirectory,
+                    result->error)) {
+                result->ok = false;
+            } else {
+                result->inspection.archivePath =
+                    result->inspection.stagingDirectory /
+                    L"archive.zip";
+
+                result->inspection.extractedRoot =
+                    result->inspection.stagingDirectory /
+                    L"extracted";
+
+                if (!DownloadPackageBranchArchive(
+                        replacementPackage,
+                        result->remoteSha,
+                        result->inspection.archivePath,
+                        result->downloadedBytes,
+                        result->error)) {
+                    result->ok = false;
+                } else if (!tp::ExtractZipSecure(
+                        result->inspection.archivePath,
+                        result->inspection.extractedRoot,
+                        result->inspection.entryCount,
+                        result->inspection.totalUncompressedBytes,
+                        result->error)) {
+                    result->ok = false;
+                } else if (!DetectPackageAddonCandidates(
+                        replacementPackage,
+                        result->inspection.extractedRoot,
+                        existingInstallFolder,
+                        result->inspection.candidates,
+                        result->error)) {
+                    result->ok = false;
+                } else {
+                    tp::AddonInstallPlan plan;
+                    if (!tp::BuildAddonInstallPlan(
+                            wowRoot,
+                            replacementPackage.id,
+                            result->inspection.extractedRoot,
+                            result->inspection.candidates,
+                            replacedInstalledFiles,
                             otherInstalledFiles,
                             plan,
                             result->error)) {
