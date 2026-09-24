@@ -306,6 +306,8 @@ The active issue is **runtime validation debt**: v0.3.6 is published and CI/rele
 
 The earlier branch-change colour concern did not reproduce and is not considered a defect.
 
+Runtime observation to carry forward without acting on it yet: when a selected/targeted addon becomes `Update Available`, the Windows selection background highlight is desirable, but its text remains the normal selected-row colour instead of changing to the semantic state colour. Desired UX is to keep the selection background while allowing the text colour to reflect the row state (for example orange for `Update Available`, green for session-updated).
+
 ## Testing
 
 ### Last Runtime Baselines
