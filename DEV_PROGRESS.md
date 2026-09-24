@@ -9,8 +9,8 @@
 - Documentation migration baseline head: `8272778adf0c67191c0525459cc026b41f50db30` (`Document retained v0.3.5 row colours`).
 - Latest published release: `v0.3.5`.
 - Release/source commit and tag target: `1d3050f4bc755e7b8be0762d3f6e6afe738f1525` (`Merge v0.3.5 version and status UX`).
-- Current goal: finish runtime validation of published `v0.3.5` and its retained v0.3.4 UX behaviour before beginning the next P5 feature.
-- Current scope boundary: **do not start P5 import/export until the pending v0.3.5 runtime pass is complete**.
+- Current goal: close the remaining v0.3.5 runtime-discovered UX issues before beginning the next P5 feature.
+- Current scope boundary: **do not start P5 import/export until the Update New transient-status, Advanced Version population, and single-branch selector UX are resolved and runtime-checked**.
 - This documentation migration does not change runtime code, source version, `.github/release-version`, tag or release.
 
 ## Product Contract
@@ -239,8 +239,12 @@ Installed-addon Uninstall/Remove uses the native expandable TaskDialog:
 
 Previously runtime-confirmed foundations include:
 
-- During the current v0.3.5 runtime pass, orange/green row presentation and update/green/normal priority ordering were reported correct.
-- Changing a package branch correctly changes its steady status to `Update Available` when the selected branch head differs from the installed revision.
+- Normal installed startup self-update `v0.3.4 -> v0.3.5` passed.
+- Advanced six-column presentation is correct; column persistence/order is good in runtime use.
+- Compact mode remains `Name | Status` and does not overwrite the Advanced layout.
+- DLL rows/Version presentation are aligned correctly; DLL Version is `—`.
+- Orange/green row presentation and update/green/normal priority ordering were reported correct in steady state.
+- Changing a package branch correctly changes its steady status to `Update Available` when the selected branch head differs from the installed revision; the earlier colour concern has not reproduced.
 - TocPilot automatic self-update works end-to-end; notably installed `v0.1.37 -> v0.3.0` passed.
 - Installed `v0.3.2 -> v0.3.3` normal startup self-update passed before the v0.3.4 release.
 - Direct DLL management has been runtime-proven with ClassicAPI and Nampower.
@@ -253,26 +257,19 @@ Do not infer runtime confirmation for the newer v0.3.4/v0.3.5 UX deltas listed b
 
 ## Published / Awaiting Runtime Test
 
-### v0.3.5 delta
+### v0.3.5 delta still needing confirmation or follow-up
 
-- Automatic startup self-update `v0.3.4 -> v0.3.5`.
-- Real local TOC Version display.
-- `Multiple` on a real package with conflicting owned TOC versions.
-- Five-to-six-column persisted-state migration.
-- Six-column width/order persistence.
-- Lock Columns behavior with six columns.
-- Compact/Advanced toggling without Compact corrupting Advanced layout.
-- Inline Branch selector geometry after column reorder/addition.
-- New steady status wording.
-- Healthy managed DLL/release packages sorting normally rather than as attention rows.
+- Real local TOC Version values are correct after a refresh, but entering Advanced initially shows `—` until Refresh; this should populate immediately from the installed package files.
+- `Multiple` on a real package with conflicting owned TOC versions remains untested.
+- Lock Columns is no longer considered clearly useful; reassess/remove the dedicated toggle in the follow-up UX slice rather than preserving it by inertia.
+- Single-branch packages should not present an actionable branch arrow/menu once TocPilot knows there is only one branch.
+- Healthy managed DLL/release packages sorting normally rather than as attention rows should remain covered by the follow-up runtime pass.
 
-### Retained v0.3.4 UX still needing runtime confirmation
+### Retained v0.3.4 UX / follow-up
 
-- Live orange -> green transition during Update New.
-- Refresh All visible-order processing.
-- Update New visible-order processing.
-- Green clearing on Refresh All/app exit.
-- Update New final scroll-to-top.
+- During Update New, rows currently turn black and temporarily show `Up To Date` while the update is actually in progress, then turn green after completion. This transient state is misleading and should be corrected.
+- Refresh All / Update New ordering and final green steady-state behaviour otherwise appeared good in the current runtime pass.
+- Green clearing on Refresh All/app exit and Update New final scroll-to-top can be rechecked with the follow-up build.
 
 ### Earlier deferred runtime checks
 
@@ -296,11 +293,14 @@ For v0.3.5:
 
 ## Current Issues
 
-No confirmed source defect is currently documented for v0.3.5.
+Runtime-discovered v0.3.5 follow-up issues:
 
-Current runtime observation: changing a selected package's branch correctly moves its status to `Update Available`, but the row does not visibly show orange/green while it remains selected. Static review shows this is expected under the documented selected-row contract: custom draw intentionally uses normal Windows selection colours for selected rows, and the branch-change path reselects the package after saving. Verify the semantic colour after selecting a different row before classifying this as a defect.
+- Update New transient UI is misleading: rows can display black `Up To Date` while their install is still running, before becoming green on success.
+- Advanced Version values are correct after Refresh, but entering Advanced can initially show `—`; Version should be populated immediately without requiring network refresh.
+- A single-branch package should not expose an actionable branch arrow/menu once branch metadata confirms there is no alternative.
+- The earlier branch-change colour concern is currently non-reproducible and is not treated as a defect.
 
-The remaining active issue is **runtime validation debt** for the rest of the published v0.3.5 UX/update matrix. Do not interpret publication or green CI as that runtime pass.
+The dedicated Lock Columns toggle is also being reconsidered as unnecessary UI; any removal should be handled deliberately in the same focused UX slice rather than as an unrelated refactor.
 
 ## Testing
 
@@ -313,26 +313,18 @@ The remaining active issue is **runtime validation debt** for the rest of the pu
 
 ### Next Runtime Test
 
-Continue the active installed v0.3.5 runtime pass. First, after changing a package branch and seeing `Update Available`, select a different row and confirm the branch-switched row becomes orange once it is no longer selected. If it remains uncoloured after deselection, record that as a real row-colour defect.
+After the focused follow-up build is published, self-update to it normally and verify:
 
-Then verify the remaining matrix:
-
-1. automatic startup self-update `v0.3.4 -> v0.3.5` result, if not already explicitly recorded;
-2. Advanced shows `Name | Branch | Version | Local SHA | Git SHA | Status`;
-3. real addon Version values are correct and DLL Version is `—`;
-4. steady statuses use the current wording;
-5. healthy DLL/release rows sort normally;
-6. existing Advanced widths/order migrate to six columns and persist;
-7. Lock Columns still blocks resize/reorder/autosize;
-8. Compact remains `Name | Status` and does not overwrite Advanced layout;
-9. Branch selector remains correctly positioned after reorder;
-10. live orange -> green transition during Update New, visible-order Refresh All/Update New, green clearing and final scroll-to-top behave as documented.
-
-Record partial results accurately if the whole matrix is not completed.
+1. entering Advanced immediately shows installed TOC Version values without requiring Refresh;
+2. Update New keeps an honest in-progress status/semantic presentation until each package actually commits, then turns green on success;
+3. packages with only one discovered branch show no actionable branch arrow/menu;
+4. Advanced six-column persistence and Compact isolation remain intact;
+5. healthy DLL/release rows still sort normally;
+6. green clearing on Refresh All/app exit and Update New final scroll-to-top still behave as documented.
 
 ## Planned / Next Work
 
-After the pending runtime pass succeeds:
+After the focused v0.3.5 follow-up slice is runtime-confirmed:
 
 - begin P5 import/export as its own isolated slice;
 - define its state/ownership semantics before implementation;
@@ -373,6 +365,6 @@ Do not add support for user-uploaded ZIP/7z/RAR/installer/bundle release assets 
 
 ## Exact Next Step
 
-Continue the published v0.3.5 runtime pass. First verify that a branch-switched `Update Available` row turns orange after selecting a different row; selected rows intentionally use normal Windows selection colours. Then complete the remaining self-update, Version/Local SHA/Git SHA/Status, healthy DLL sorting, six-column persistence/Lock/Compact, Update New transition/order, clearing, and scroll-to-top checks.
+Implement a focused post-v0.3.5 UX slice that fixes the misleading Update New in-progress presentation, populates installed TOC Version immediately when Advanced is opened, suppresses branch affordances when only one branch exists, and reassesses/removes the Lock Columns toggle if no concrete correctness need remains. Preserve the confirmed six-column/Compact behaviour and package/update semantics. Build/test/release through the normal TocPilot workflow, then runtime-check that release before starting P5 import/export.
 
-**Do not begin P5 import/export until that runtime pass is complete.**
+**Do not begin P5 import/export until this follow-up slice is runtime-confirmed.**
