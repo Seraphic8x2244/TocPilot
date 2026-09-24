@@ -80,7 +80,6 @@ constexpr int IDC_TOCPILOT_UPDATE = 1021;
 constexpr int IDC_TOCPILOT_GITHUB = 1022;
 constexpr int IDC_TOCPILOT_RELEASES = 1023;
 constexpr int IDC_BRANCH_SELECTOR = 1024;
-constexpr int IDC_LOCK_COLUMNS = 1025;
 
 constexpr int kCompactWindowWidth = 590;
 constexpr int kDefaultWindowHeight = 480;
@@ -128,7 +127,6 @@ HWND g_removePackageButton = nullptr;
 HWND g_addPackageButton = nullptr;
 HWND g_adoptGitButton = nullptr;
 HWND g_advancedButton = nullptr;
-HWND g_lockColumnsButton = nullptr;
 HWND g_tocPilotButton = nullptr;
 HWND g_tocPilotWindow = nullptr;
 HWND g_tocPilotUpdateStatus = nullptr;
@@ -500,43 +498,21 @@ int WindowWidthForClient(
 
 void PositionBranchSelector();
 
-bool PackageColumnLayoutLocked() {
-    return
-        !g_stateReady ||
-        g_state.settings.packageColumnsLocked;
-}
+void UpdatePackageColumnEditingUi() {
+    if (!g_packageList) {
+        return;
+    }
 
-void UpdatePackageColumnLockUi() {
-    const bool locked =
-        PackageColumnLayoutLocked();
     const bool editingEnabled =
         g_stateReady &&
-        g_advancedVisible &&
-        !locked;
+        g_advancedVisible;
 
-    if (g_lockColumnsButton) {
-        SendMessageW(
-            g_lockColumnsButton,
-            BM_SETCHECK,
-            locked
-                ? BST_CHECKED
-                : BST_UNCHECKED,
-            0);
-        EnableWindow(
-            g_lockColumnsButton,
-            g_stateReady
-                ? TRUE
-                : FALSE);
-    }
-
-    if (g_packageList) {
-        ListView_SetExtendedListViewStyleEx(
-            g_packageList,
-            LVS_EX_HEADERDRAGDROP,
-            editingEnabled
-                ? LVS_EX_HEADERDRAGDROP
-                : 0);
-    }
+    ListView_SetExtendedListViewStyleEx(
+        g_packageList,
+        LVS_EX_HEADERDRAGDROP,
+        editingEnabled
+            ? LVS_EX_HEADERDRAGDROP
+            : 0);
 }
 
 void ApplyPackageColumnOrder() {
@@ -558,8 +534,7 @@ void ApplyPackageColumnOrder() {
 void SaveCurrentPackageColumnLayout() {
     if (!g_packageList ||
         !g_stateReady ||
-        !g_advancedVisible ||
-        PackageColumnLayoutLocked()) {
+        !g_advancedVisible) {
         return;
     }
 
@@ -846,21 +821,6 @@ void LayoutControls(HWND hwnd) {
         std::max(
             listTop + listHeight + 8,
             height - 54);
-
-    if (g_lockColumnsButton) {
-        ShowWindow(
-            g_lockColumnsButton,
-            g_advancedVisible
-                ? SW_SHOW
-                : SW_HIDE);
-        MoveWindow(
-            g_lockColumnsButton,
-            20,
-            iconY + 6,
-            140,
-            28,
-            TRUE);
-    }
 
     if (g_launchWowButton) {
         ShowWindow(g_launchWowButton, SW_SHOW);
@@ -1198,8 +1158,24 @@ bool DirectDllResolutionNeedsAttention(
                 std::wstring_view::npos;
 }
 
+bool PackageIsActiveUpdateAllItem(
+    std::wstring_view packageId) {
+    return
+        g_updateAllInProgress &&
+        tp::UpdateAllHasCurrent(
+            g_updateAllProgress) &&
+        tp::UpdateAllCurrentPackageId(
+            g_updateAllProgress) ==
+            packageId;
+}
+
 std::wstring PackageStatusText(
     const tp::PackageRecord& package) {
+    if (PackageIsActiveUpdateAllItem(
+            package.id)) {
+        return L"Updating...";
+    }
+
     if (package.mode == L"release") {
         std::wstring error;
         if (!tp::ValidateDirectDllPackage(
@@ -1407,7 +1383,9 @@ void ClearSessionUpdatedPackages() {
 
 COLORREF PackageRowTextColour(
     const tp::PackageRecord& package) {
-    if (PackageHasUpdateAvailable(package)) {
+    if (PackageIsActiveUpdateAllItem(
+            package.id) ||
+        PackageHasUpdateAvailable(package)) {
         return RGB(205, 105, 0);
     }
 
@@ -1588,9 +1566,9 @@ LRESULT HandlePackageListCustomDraw(
                     arrowWidth);
 
         const bool showArrow =
-            !g_branchSelectorLoaded ||
-            package.id !=
-                g_branchSelectorPackageId ||
+            g_branchSelectorLoaded &&
+            package.id ==
+                g_branchSelectorPackageId &&
             g_branchSelectorBranches.size() > 1;
 
         if (showArrow) {
@@ -2519,15 +2497,6 @@ void OpenBranchSelectorIfReady(
     g_branchSelectorOpenPackageId.clear();
 
     if (g_branchSelectorBranches.size() <= 1) {
-        if (g_packageHint) {
-            const std::wstring message =
-                package.name +
-                L" has no alternative branches.";
-            SetWindowTextW(
-                g_packageHint,
-                message.c_str());
-        }
-
         if (g_packageList) {
             InvalidateRect(
                 g_packageList,
@@ -2652,6 +2621,13 @@ void RequestBranchSelector(
     const std::wstring packageId =
         g_state.packages[
             packageIndex].id;
+
+    if (g_branchSelectorPackageId ==
+            packageId &&
+        g_branchSelectorLoaded &&
+        g_branchSelectorBranches.size() <= 1) {
+        return;
+    }
 
     g_branchSelectorOpenPackageId =
         packageId;
@@ -4198,10 +4174,8 @@ void StartAutoStatusRefresh(HWND hwnd) {
 bool IsUpdateAllCurrentPackage(
     std::wstring_view packageId) {
     return
-        g_updateAllInProgress &&
-        tp::UpdateAllHasCurrent(g_updateAllProgress) &&
-        tp::UpdateAllCurrentPackageId(g_updateAllProgress) ==
-            packageId;
+        PackageIsActiveUpdateAllItem(
+            packageId);
 }
 
 void FinishUpdateAll() {
@@ -5885,9 +5859,14 @@ void ToggleAdvanced(HWND hwnd) {
             SWP_NOZORDER |
             SWP_NOACTIVATE);
 
-    UpdatePackageColumnLockUi();
+    UpdatePackageColumnEditingUi();
     LayoutControls(hwnd);
-    UpdatePackageButtons();
+
+    if (g_advancedVisible) {
+        RefreshPackageStateUi();
+    } else {
+        UpdatePackageButtons();
+    }
 }
 
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) {
@@ -6111,23 +6090,6 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             GetModuleHandleW(nullptr),
             nullptr);
 
-        g_lockColumnsButton = CreateWindowExW(
-            0,
-            L"BUTTON",
-            L"Lock columns",
-            WS_CHILD | WS_TABSTOP |
-                BS_AUTOCHECKBOX,
-            0,
-            0,
-            140,
-            28,
-            hwnd,
-            reinterpret_cast<HMENU>(
-                static_cast<INT_PTR>(
-                    IDC_LOCK_COLUMNS)),
-            GetModuleHandleW(nullptr),
-            nullptr);
-
         EnableWindow(g_updateAllButton, FALSE);
         EnableWindow(g_refreshPackagesButton, FALSE);
         EnableWindow(g_inspectPackageButton, FALSE);
@@ -6211,7 +6173,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                 LVS_EX_DOUBLEBUFFER |
                 LVS_EX_LABELTIP);
 
-        UpdatePackageColumnLockUi();
+        UpdatePackageColumnEditingUi();
 
         SetWindowSubclass(
             g_packageList,
@@ -6372,8 +6334,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             header->hwndFrom ==
                 ListView_GetHeader(
                     g_packageList)) {
-            if ((!g_advancedVisible ||
-                 PackageColumnLayoutLocked()) &&
+            if (!g_advancedVisible &&
                 (header->code ==
                      HDN_BEGINTRACKW ||
                  header->code ==
@@ -6463,38 +6424,6 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
         if (LOWORD(wParam) == IDC_ADVANCED &&
             HIWORD(wParam) == BN_CLICKED) {
             ToggleAdvanced(hwnd);
-            return 0;
-        }
-
-        if (LOWORD(wParam) == IDC_LOCK_COLUMNS &&
-            HIWORD(wParam) == BN_CLICKED) {
-            if (g_stateReady &&
-                g_lockColumnsButton) {
-                const bool previous =
-                    g_state.settings.packageColumnsLocked;
-                const bool locked =
-                    SendMessageW(
-                        g_lockColumnsButton,
-                        BM_GETCHECK,
-                        0,
-                        0) ==
-                    BST_CHECKED;
-
-                g_state.settings.packageColumnsLocked =
-                    locked;
-
-                std::wstring saveError;
-                if (!tp::SaveState(
-                        g_root,
-                        g_state,
-                        saveError)) {
-                    g_state.settings.packageColumnsLocked =
-                        previous;
-                    g_stateError = saveError;
-                }
-
-                UpdatePackageColumnLockUi();
-            }
             return 0;
         }
 
@@ -7264,6 +7193,14 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
 
         UpdateBranchSelector(
             hwnd);
+
+        if (g_packageList) {
+            InvalidateRect(
+                g_packageList,
+                nullptr,
+                FALSE);
+        }
+
         OpenBranchSelectorIfReady(
             hwnd);
         return 0;
