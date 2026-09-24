@@ -9,8 +9,9 @@
 - Latest runtime source/release commit: `94d15feb684bc10f13c35c75649f001f07ae1f55` (merge of PR #6, `v0.3.6 runtime UX follow-up`).
 - Latest published release: `v0.3.6`.
 - Release/source commit and tag target: `94d15feb684bc10f13c35c75649f001f07ae1f55`.
-- Current goal: runtime-validate published `v0.3.6` through the normal installed self-update path and focused UX regression matrix.
-- Current scope boundary: **do not start P5 import/export until v0.3.6 is runtime-confirmed**.
+- Latest verified `main` head before this documentation checkpoint: `950b0db15ecdc412cb8db32ac6af605602ef586f` (`Record selected-row state colour observation`).
+- Current goal: v0.3.6 runtime validation is complete; P5 import/export is the next isolated product slice.
+- Current scope boundary: P5 import/export may now begin, but package editing and the other deferred P5 work remain out of scope unless explicitly reopened.
 - Documentation-only commits after the release do not change the published runtime baseline.
 
 ## Product Contract
@@ -208,7 +209,7 @@ Row semantics retained from v0.3.4:
 - update-available rows are orange;
 - successfully updated packages are green for the current session;
 - orange rows sort/group ahead of green, then normal rows under the selected sort;
-- selected rows use normal Windows selection colours;
+- selected rows keep the normal Windows selection background, but semantic row text colour should remain visible while selected;
 - green session state clears on Refresh All or exit;
 - Refresh All and Update New process packages in current visible list order;
 - Update New returns the package list to the top when complete.
@@ -239,6 +240,17 @@ Installed-addon Uninstall/Remove uses the native expandable TaskDialog:
 
 ## Completed / Runtime-Confirmed
 
+Published `v0.3.6` runtime-validation gate completed on 2026-09-24:
+
+- Normal installed startup delivery to published `v0.3.6` is accepted as passed as part of the user's active release testing; do not separately ask whether the updater worked when the user is already testing that published version through the normal installed workflow unless a failure/manual replacement is reported.
+- Entering Advanced without Refresh immediately populated Version for addons whose owned TOCs contain `## Version:`; observed blank/`—` cases were checked and their TOCs genuinely contained no Version field. DLL Version remains `—`.
+- Update-available/update-session colours and Update New behaviour were otherwise correct through the focused matrix.
+- Single-branch repositories expose no actionable branch selector after metadata loads; multi-branch repositories retain branch choices.
+- Lock Columns is gone; Advanced columns remain resizable/reorderable and persist; Compact does not overwrite the Advanced layout.
+- Healthy managed DLL/release rows sort normally.
+- Refresh All/app restart green clearing and Update New final scroll-to-top passed.
+- One UI issue remains: selecting an orange `Update Available` row causes its semantic orange text to revert to the normal selected-row text colour. Keep the Windows selection background, but preserve semantic orange/green text while selected in a future focused fix.
+
 Previously runtime-confirmed foundations include:
 
 - Normal installed startup self-update `v0.3.4 -> v0.3.5` passed.
@@ -255,23 +267,11 @@ Previously runtime-confirmed foundations include:
 - GitHub no-addon -> standalone-DLL fallback/discovery has been exercised.
 - Core package ownership, secure archive installation and normal branch tracking are established product behaviour.
 
-Do not infer runtime confirmation for the newer v0.3.4/v0.3.5 UX deltas listed below.
+## Remaining Optional Runtime Checks
 
-## Published / Awaiting Runtime Test
+No v0.3.6 release-gate validation remains.
 
-### v0.3.6 focused delta
-
-Published but not yet runtime-confirmed:
-
-- Normal installed startup self-update `v0.3.5 -> v0.3.6`.
-- Entering Advanced immediately reads installed package-owned TOC Version values without requiring Refresh; this remains local filesystem metadata and is intentionally not duplicated into JSON.
-- During Update New, the active item derives `Updating...` from authoritative batch state and remains orange across list rebuilds until completion; successful updates then become green for the session.
-- Once branch metadata confirms only one branch, the Branch cell exposes no actionable arrow/menu; multi-branch packages retain the selector.
-- The dedicated Lock Columns checkbox/locking behaviour is removed. Advanced columns remain directly resizable/reorderable and persist; Compact must continue not to overwrite the saved Advanced layout.
-- Healthy managed DLL/release rows should continue to sort normally and DLL Version should remain `—`.
-- Green clearing on Refresh All/app exit and Update New final scroll-to-top should be rechecked as regressions.
-
-Still optional validation debt where a real fixture is available:
+Optional validation debt where a real fixture is available:
 
 - `Multiple` on a package with conflicting owned TOC Version values.
 - Earlier removal/Add Git edge cases listed under Deferred Runtime Checks below.
@@ -300,18 +300,22 @@ The prior v0.3.5 release also passed its documented 17/17 Release workflow valid
 
 ## Current Issues
 
-No known source defect is currently documented for v0.3.6.
+v0.3.6 has no open release-gate defect; its runtime-validation gate is complete.
 
-The active issue is **runtime validation debt**: v0.3.6 is published and CI/release-validated but has not yet been exercised through the real installed `v0.3.5 -> v0.3.6` self-update path or its focused UX regression matrix.
+Confirmed non-blocking UI issue: when an orange `Update Available` row is selected, the Windows selection background is desirable but the text falls back to the normal selected-row colour instead of retaining the semantic row colour. Desired behaviour is to keep the selection background while preserving orange for `Update Available` and green for session-updated rows. This does not block P5 import/export and should be handled as its own focused UI fix rather than mixed into P5.
 
-The earlier branch-change colour concern did not reproduce and is not considered a defect.
-
-Runtime observation to carry forward without acting on it yet: when a selected/targeted addon becomes `Update Available`, the Windows selection background highlight is desirable, but its text remains the normal selected-row colour instead of changing to the semantic state colour. Desired UX is to keep the selection background while allowing the text colour to reflect the row state (for example orange for `Update Available`, green for session-updated).
+The earlier branch-change colour concern did not reproduce and is not considered a separate defect.
 
 ## Testing
 
 ### Last Runtime Baselines
 
+- Published `v0.3.6` focused runtime matrix: passed on 2026-09-24, with only the selected-row semantic text-colour issue recorded separately under Current Issues.
+- Advanced Version population without Refresh: passed; TOCs lacking a Version field correctly produce no Version value.
+- Single-vs-multi-branch selector affordance: passed.
+- Advanced resize/reorder persistence, Lock Columns removal and Compact isolation: passed.
+- Healthy DLL/release row sorting: passed.
+- Green clearing and Update New final scroll-to-top: passed.
 - Normal installed startup self-update `v0.3.4 -> v0.3.5`: passed.
 - v0.3.5 Advanced six-column presentation and column persistence/order: passed.
 - v0.3.5 Compact mode preserving Advanced layout: passed.
@@ -323,27 +327,17 @@ Runtime observation to carry forward without acting on it yet: when a selected/t
 
 ### Next Runtime Test
 
-Start from the currently installed `v0.3.5` and launch TocPilot normally.
+No further v0.3.6 release-gate runtime test is required before P5.
 
-Verify:
-
-1. normal startup self-update reaches published `v0.3.6` without manual EXE replacement;
-2. open Advanced **without pressing Refresh** and confirm installed addon Version values appear immediately; DLL Version remains `—`;
-3. create one or more known updates, press Update New, and confirm the active package stays orange with `Updating...` until its install actually completes, then turns green; queued updates must not falsely become black `Up To Date`;
-4. on a known single-branch repository, allow branch metadata to load and confirm there is no actionable arrow/menu; confirm a multi-branch repository still offers its branch choices;
-5. confirm the Lock Columns checkbox is gone, Advanced columns can be resized/reordered and persist after restart, and Compact still does not overwrite that Advanced layout;
-6. confirm healthy DLL/release rows still sort normally;
-7. if practical, confirm Refresh All/app restart clears green session state and Update New finishes scrolled to the top.
-
-Record partial results accurately if the entire matrix is not completed.
+Optional future checks remain the conflicting-TOC `Multiple` fixture and the deferred historical edge cases above. The selected-row semantic text-colour issue is already reproduced and does not need repeated confirmation before a focused fix.
 
 ## Planned / Next Work
 
-After v0.3.6 runtime confirmation:
+P5 import/export is now unblocked and is the next isolated slice:
 
-- begin P5 import/export as its own isolated slice;
-- define import/export state, identity, ownership and conflict semantics before implementation;
-- keep package editing and the other deferred P5 work out of that slice unless explicitly reopened.
+- first define import/export state, identity, ownership and conflict semantics before implementation;
+- keep package editing and the other deferred P5 work out of that slice unless explicitly reopened;
+- keep the selected-row text-colour fix separate from P5 rather than mixing unrelated UI work into the feature branch.
 
 ## Deferred / Out of Scope
 
@@ -381,6 +375,6 @@ Do not add support for user-uploaded ZIP/7z/RAR/installer/bundle release assets 
 
 ## Exact Next Step
 
-Runtime-test normal installed `v0.3.5 -> published v0.3.6` through TocPilot's startup self-update path, then verify immediate Advanced Version population, honest orange `Updating...` Update New state through commit, single-vs-multi-branch selector affordance, direct Advanced column resize/reorder persistence without the Lock Columns checkbox, Compact isolation, healthy DLL sorting, and the green-clearing/scroll-to-top regressions where practical.
+Begin P5 import/export as its own isolated slice. Before implementation, define the export/import data contract: package identity, provider/source fields, selected branch/release policy, ownership/install-state boundaries, duplicate/conflict handling, and what must deliberately not be imported. Then implement only that agreed P5 import/export slice on a focused branch.
 
-**Do not begin P5 import/export until v0.3.6 is runtime-confirmed.**
+Do not mix package editing, the selected-row semantic text-colour fix, or other deferred work into the P5 slice.
