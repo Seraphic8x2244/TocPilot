@@ -9,9 +9,9 @@
 - Latest runtime source/release commit: `94d15feb684bc10f13c35c75649f001f07ae1f55` (merge of PR #6, `v0.3.6 runtime UX follow-up`).
 - Latest published release: `v0.3.6`.
 - Release/source commit and tag target: `94d15feb684bc10f13c35c75649f001f07ae1f55`.
-- Latest verified `main` head before this documentation checkpoint: `950b0db15ecdc412cb8db32ac6af605602ef586f` (`Record selected-row state colour observation`).
-- Current goal: v0.3.6 runtime validation is complete; P5 import/export is the next isolated product slice.
-- Current scope boundary: P5 import/export may now begin, but package editing and the other deferred P5 work remain out of scope unless explicitly reopened.
+- Latest verified `main` head before this documentation checkpoint: `babd6a54ae725f2cb689033474c7fcacb4465d28` (`Close v0.3.6 runtime validation gate`).
+- Current goal: complete a focused post-v0.3.6 branch-selector/list-anchoring UX follow-up from fresh runtime findings before beginning P5 import/export.
+- Current scope boundary: keep this follow-up limited to branch metadata/affordance, branch-change row anchoring, and the already-confirmed selected-row semantic text-colour defect. Do not begin P5 import/export or package editing in the same slice.
 - Documentation-only commits after the release do not change the published runtime baseline.
 
 ## Product Contract
@@ -216,6 +216,16 @@ Row semantics retained from v0.3.4:
 
 Advanced column widths/order are persisted. The dedicated Lock Columns UI/behaviour is removed in v0.3.6; Advanced columns remain directly resizable/reorderable, while Compact must not overwrite the saved Advanced layout. The legacy JSON `package_columns_locked` field is retained for state compatibility but no longer controls the UI.
 
+Branch-selector target behaviour after the v0.3.6 runtime follow-up:
+
+- a branch package whose remote repository advertises more than one branch should always show the Branch-cell arrow once that repository's branch metadata is known;
+- a repository advertising exactly one branch should never show an actionable arrow or dropdown;
+- branch affordance must be based on per-repository/package metadata rather than only the currently selected row;
+- changing a branch may re-sort an addon to the update-available group, but the selection/branch interaction must remain anchored to that package identity after the list rebuild;
+- remote branch lists are transient remote metadata and should not be duplicated into durable package state merely for UI rendering;
+- Add Git already fetches the full Git smart-HTTP branch advertisement in the branch chooser; reuse that result to seed runtime metadata rather than immediately fetching it again;
+- normal branch-head refresh also fetches the full advertisement internally, so retain/reuse that information to discover newly added/removed remote branches during ordinary startup/Refresh All checks without an extra branch-list request.
+
 ### Removal UX
 
 Installed-addon Uninstall/Remove uses the native expandable TaskDialog:
@@ -302,9 +312,13 @@ The prior v0.3.5 release also passed its documented 17/17 Release workflow valid
 
 v0.3.6 has no open release-gate defect; its runtime-validation gate is complete.
 
-Confirmed non-blocking UI issue: when an orange `Update Available` row is selected, the Windows selection background is desirable but the text falls back to the normal selected-row colour instead of retaining the semantic row colour. Desired behaviour is to keep the selection background while preserving orange for `Update Available` and green for session-updated rows. This does not block P5 import/export and should be handled as its own focused UI fix rather than mixed into P5.
+Confirmed UI issues from post-v0.3.6 runtime use:
 
-The earlier branch-change colour concern did not reproduce and is not considered a separate defect.
+- when an orange `Update Available` row is selected, the Windows selection background is desirable but the text falls back to the normal selected-row colour instead of retaining the semantic row colour; keep the selection background while preserving orange/green semantic text;
+- changing an addon's branch can make it `Update Available` and re-sort it to the top, but the branch interaction/textbox anchoring does not follow the package to its new display row;
+- branch-arrow visibility is currently tied to one global selected-package branch-info slot, so it cannot satisfy the desired stable rule of always showing an arrow for known multi-branch repositories and never showing one for known single-branch repositories.
+
+These should be fixed together as a narrow branch/list UX follow-up before P5, without changing package/update semantics.
 
 ## Testing
 
@@ -327,17 +341,27 @@ The earlier branch-change colour concern did not reproduce and is not considered
 
 ### Next Runtime Test
 
-No further v0.3.6 release-gate runtime test is required before P5.
+After the focused branch/list UX follow-up is released, verify:
 
-Optional future checks remain the conflicting-TOC `Multiple` fixture and the deferred historical edge cases above. The selected-row semantic text-colour issue is already reproduced and does not need repeated confirmation before a focused fix.
+1. changing branch may move the addon into the update-available group, but the selected/interactive Branch cell follows that same package to its new row;
+2. every repository known to have more than one branch shows an arrow without first selecting that row, and clicking it opens the branch list;
+3. every repository known to have exactly one branch shows no arrow and clicking the Branch cell does not open a dropdown;
+4. a branch added remotely after the addon was first managed becomes visible after the next normal startup/Refresh All branch-head refresh, without requiring package removal/re-add;
+5. selected orange/green rows retain semantic text colour while keeping the Windows selection background.
+
+Optional future checks remain the conflicting-TOC `Multiple` fixture and the deferred historical edge cases above.
 
 ## Planned / Next Work
 
-P5 import/export is now unblocked and is the next isolated slice:
+Before P5, complete the focused branch/list UX follow-up:
 
-- first define import/export state, identity, ownership and conflict semantics before implementation;
-- keep package editing and the other deferred P5 work out of that slice unless explicitly reopened;
-- keep the selected-row text-colour fix separate from P5 rather than mixing unrelated UI work into the feature branch.
+- replace the single selected-package branch-info state with a small transient per-repository/package metadata cache suitable for row rendering;
+- seed it from the Add Git branch chooser's already-fetched repository info;
+- retain full branch info from ordinary branch-head refreshes so newly added/removed remote branches update naturally without duplicate network calls;
+- anchor branch-change selection/interaction by package ID across list re-sorts;
+- preserve semantic orange/green text on selected rows while keeping the Windows selection background.
+
+After that runtime-confirmed follow-up, begin P5 import/export as its own isolated slice. Define import/export state, identity, ownership and conflict semantics before implementation, and keep package editing/other deferred P5 work out of that slice unless explicitly reopened.
 
 ## Deferred / Out of Scope
 
@@ -375,6 +399,4 @@ Do not add support for user-uploaded ZIP/7z/RAR/installer/bundle release assets 
 
 ## Exact Next Step
 
-Begin P5 import/export as its own isolated slice. Before implementation, define the export/import data contract: package identity, provider/source fields, selected branch/release policy, ownership/install-state boundaries, duplicate/conflict handling, and what must deliberately not be imported. Then implement only that agreed P5 import/export slice on a focused branch.
-
-Do not mix package editing, the selected-row semantic text-colour fix, or other deferred work into the P5 slice.
+Create a focused post-v0.3.6 branch/list UX branch. Implement transient per-repository/package branch metadata so known multi-branch repos always render an arrow and known single-branch repos never do; seed it from Add Git's existing branch fetch and refresh it from the full smart-HTTP advertisement already obtained during normal branch-head checks. Fix branch-change re-sorting so selection/interaction follows the package by ID, and preserve semantic orange/green text on selected rows. Keep package/update behaviour otherwise unchanged, version/release through the normal TocPilot workflow, then runtime-test this matrix before starting P5 import/export.
