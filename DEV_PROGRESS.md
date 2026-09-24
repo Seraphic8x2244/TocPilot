@@ -4,14 +4,14 @@
 
 ## Current
 
-- Active branch: `main`.
+- Active branch: `fix/v0.3.6-runtime-ux`.
 - Source/application version: `v0.3.5`.
-- Documentation migration baseline head: `8272778adf0c67191c0525459cc026b41f50db30` (`Document retained v0.3.5 row colours`).
+- Current branch baseline: `0acd0197c8807c5a28eda882446f0793d6e2f79f` (`Record v0.3.5 runtime UX findings`).
 - Latest published release: `v0.3.5`.
 - Release/source commit and tag target: `1d3050f4bc755e7b8be0762d3f6e6afe738f1525` (`Merge v0.3.5 version and status UX`).
 - Current goal: close the remaining v0.3.5 runtime-discovered UX issues before beginning the next P5 feature.
 - Current scope boundary: **do not start P5 import/export until the Update New transient-status, Advanced Version population, and single-branch selector UX are resolved and runtime-checked**.
-- This documentation migration does not change runtime code, source version, `.github/release-version`, tag or release.
+- This branch is the focused post-v0.3.5 UX follow-up. Source/release version remains `v0.3.5` until the runtime changes are implemented and CI-ready for the next release.
 
 ## Product Contract
 
