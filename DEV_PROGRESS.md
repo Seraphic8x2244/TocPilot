@@ -9,7 +9,7 @@
 - Documentation migration baseline head: `8272778adf0c67191c0525459cc026b41f50db30` (`Document retained v0.3.5 row colours`).
 - Latest published release: `v0.3.5`.
 - Release/source commit and tag target: `1d3050f4bc755e7b8be0762d3f6e6afe738f1525` (`Merge v0.3.5 version and status UX`).
-- Current goal: runtime-validate published `v0.3.5` and its retained v0.3.4 UX behaviour before beginning the next P5 feature.
+- Current goal: finish runtime validation of published `v0.3.5` and its retained v0.3.4 UX behaviour before beginning the next P5 feature.
 - Current scope boundary: **do not start P5 import/export until the pending v0.3.5 runtime pass is complete**.
 - This documentation migration does not change runtime code, source version, `.github/release-version`, tag or release.
 
@@ -239,6 +239,8 @@ Installed-addon Uninstall/Remove uses the native expandable TaskDialog:
 
 Previously runtime-confirmed foundations include:
 
+- During the current v0.3.5 runtime pass, orange/green row presentation and update/green/normal priority ordering were reported correct.
+- Changing a package branch correctly changes its steady status to `Update Available` when the selected branch head differs from the installed revision.
 - TocPilot automatic self-update works end-to-end; notably installed `v0.1.37 -> v0.3.0` passed.
 - Installed `v0.3.2 -> v0.3.3` normal startup self-update passed before the v0.3.4 release.
 - Direct DLL management has been runtime-proven with ClassicAPI and Nampower.
@@ -266,10 +268,7 @@ Do not infer runtime confirmation for the newer v0.3.4/v0.3.5 UX deltas listed b
 
 ### Retained v0.3.4 UX still needing runtime confirmation
 
-- Orange update-available row presentation.
-- Green current-session updated row presentation.
 - Live orange -> green transition during Update New.
-- Update/green/normal priority grouping.
 - Refresh All visible-order processing.
 - Update New visible-order processing.
 - Green clearing on Refresh All/app exit.
@@ -297,11 +296,11 @@ For v0.3.5:
 
 ## Current Issues
 
-No known source defect is currently documented for v0.3.5.
+No confirmed source defect is currently documented for v0.3.5.
 
-The active issue is **runtime validation debt**: the published v0.3.5 UX/update path has not yet received the required real installed-client pass.
+Current runtime observation: changing a selected package's branch correctly moves its status to `Update Available`, but the row does not visibly show orange/green while it remains selected. Static review shows this is expected under the documented selected-row contract: custom draw intentionally uses normal Windows selection colours for selected rows, and the branch-change path reselects the package after saving. Verify the semantic colour after selecting a different row before classifying this as a defect.
 
-Do not interpret publication or green CI as that runtime pass.
+The remaining active issue is **runtime validation debt** for the rest of the published v0.3.5 UX/update matrix. Do not interpret publication or green CI as that runtime pass.
 
 ## Testing
 
@@ -314,11 +313,11 @@ Do not interpret publication or green CI as that runtime pass.
 
 ### Next Runtime Test
 
-Start with an installed `v0.3.4` TocPilot and launch it normally.
+Continue the active installed v0.3.5 runtime pass. First, after changing a package branch and seeing `Update Available`, select a different row and confirm the branch-switched row becomes orange once it is no longer selected. If it remains uncoloured after deselection, record that as a real row-colour defect.
 
-Verify:
+Then verify the remaining matrix:
 
-1. automatic startup self-update reaches published `v0.3.5` without manual EXE replacement;
+1. automatic startup self-update `v0.3.4 -> v0.3.5` result, if not already explicitly recorded;
 2. Advanced shows `Name | Branch | Version | Local SHA | Git SHA | Status`;
 3. real addon Version values are correct and DLL Version is `—`;
 4. steady statuses use the current wording;
@@ -327,7 +326,7 @@ Verify:
 7. Lock Columns still blocks resize/reorder/autosize;
 8. Compact remains `Name | Status` and does not overwrite Advanced layout;
 9. Branch selector remains correctly positioned after reorder;
-10. orange/green session row behaviour, visible-order Refresh All/Update New, green clearing and final scroll-to-top behave as documented.
+10. live orange -> green transition during Update New, visible-order Refresh All/Update New, green clearing and final scroll-to-top behave as documented.
 
 Record partial results accurately if the whole matrix is not completed.
 
@@ -374,6 +373,6 @@ Do not add support for user-uploaded ZIP/7z/RAR/installer/bundle release assets 
 
 ## Exact Next Step
 
-Runtime-test installed `v0.3.4 -> published v0.3.5` through TocPilot's normal startup self-update path, then exercise the Version/Local SHA/Git SHA/Status presentation, healthy DLL sorting, six-column persistence/Lock/Compact behavior, and retained orange/green update UX.
+Continue the published v0.3.5 runtime pass. First verify that a branch-switched `Update Available` row turns orange after selecting a different row; selected rows intentionally use normal Windows selection colours. Then complete the remaining self-update, Version/Local SHA/Git SHA/Status, healthy DLL sorting, six-column persistence/Lock/Compact, Update New transition/order, clearing, and scroll-to-top checks.
 
 **Do not begin P5 import/export until that runtime pass is complete.**
