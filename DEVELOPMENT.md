@@ -6,7 +6,7 @@
 
 Advanced mode now displays `Name | Branch | Version | Local SHA | Git SHA | Status`, while Compact remains `Name | Status`. Version is strictly local installed TOC metadata, with no extra network resolution: one unique nonblank owned `## Version:` value is displayed, no value becomes `—`, conflicting owned TOCs become `Multiple`, and DLL packages show `—`. Existing five-column layout state migrates to six columns while preserving prior widths/order and remapping persisted sort semantics.
 
-Steady Status text is now `Up To Date`, `Update Available`, `Not Installed`, `Not Configured`, or `Needs Attention`. The release also fixes the v0.3.4 sorting regression where healthy release/DLL packages were treated as attention rows simply because they were not branch-mode packages.
+Steady Status text is now `Up To Date`, `Update Available`, `Not Installed`, `Not Configured`, or `Needs Attention`. The release also fixes the v0.3.4 sorting regression where healthy release/DLL packages were treated as attention rows simply because they were not branch-mode packages. The v0.3.4 semantic row colours remain unchanged: update-available rows are orange, packages successfully updated during the current session are green, selected rows use normal Windows selection colours, and the green session state clears on Refresh All or app exit.
 
 Runtime validation now required: automatic `v0.3.4 -> v0.3.5` startup self-update, Version values on real addons, six-column persistence/Lock/compact/Branch-selector behavior, renamed statuses, and healthy DLL normal sorting. P5 import/export remains deferred until the pending runtime pass is complete.
 
