@@ -11,7 +11,7 @@
 - Assets:
   - `TocPilot.exe` — 2,425,856 bytes; SHA-256 `7b6756d80cd115dec2c6ec38c258adb10a6cb5b6e8d91ad3dca883ca1b29db9b`;
   - `TocPilot.exe.sha256` — 78 bytes; asset SHA-256 `e2b459a74ff0f449efbd1eac201a0c372ba7f3b0305316019cba0bfd4b7fd6c5`.
-- Completed/released: Advanced-only local TOC Version; `Local SHA`/`Git SHA` headers; Compact remains Name/Status; title-cased steady statuses with `Up To Date`; safe five-to-six-column width/order/sort migration; healthy managed DLL/release rows return to normal sorting.
+- Completed/released: Advanced-only local TOC Version; `Local SHA`/`Git SHA` headers; Compact remains Name/Status; title-cased steady statuses with `Up To Date`; safe five-to-six-column width/order/sort migration; healthy managed DLL/release rows return to normal sorting; v0.3.4 row colours are retained (orange = update available, green = successfully updated this session, selection uses normal Windows colours, green clears on Refresh All or exit).
 - Version semantics: local package-owned TOCs only; one unique value -> value; none -> `—`; disagreement -> `Multiple`; DLL -> `—`; no network/tag inference.
 - Runtime-untested: `v0.3.4 -> v0.3.5` self-update; real TOC Version display; migration/persistence/Lock columns with six columns; compact/Advanced switching; Branch selector geometry; renamed statuses; DLL normal-sort behavior.
 - Earlier deferred runtime items remain unchanged, and P5 import/export remains deferred.
