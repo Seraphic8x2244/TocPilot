@@ -4,14 +4,14 @@
 
 ## Current
 
-- Active branch: `main`.
-- Source/application version: `v0.3.5`.
-- Documentation migration baseline head: `8272778adf0c67191c0525459cc026b41f50db30` (`Document retained v0.3.5 row colours`).
+- Active branch: `fix/v0.3.6-runtime-ux`.
+- Source/application version: `v0.3.6`.
+- Current branch head before this documentation checkpoint: `b8399815a56e7dcf411f4b0425504860132f3262` (completed v0.3.6 version-source bump).
 - Latest published release: `v0.3.5`.
 - Release/source commit and tag target: `1d3050f4bc755e7b8be0762d3f6e6afe738f1525` (`Merge v0.3.5 version and status UX`).
 - Current goal: close the remaining v0.3.5 runtime-discovered UX issues before beginning the next P5 feature.
 - Current scope boundary: **do not start P5 import/export until the Update New transient-status, Advanced Version population, and single-branch selector UX are resolved and runtime-checked**.
-- This documentation migration does not change runtime code, source version, `.github/release-version`, tag or release.
+- This branch is the focused post-v0.3.5 UX follow-up and is now versioned `v0.3.6` for CI/merge/release validation. It is **not yet published or runtime-tested**.
 
 ## Product Contract
 
@@ -213,7 +213,7 @@ Row semantics retained from v0.3.4:
 - Refresh All and Update New process packages in current visible list order;
 - Update New returns the package list to the top when complete.
 
-Advanced column widths/order and Lock Columns are persisted. Compact mode must not overwrite the saved Advanced layout.
+Advanced column widths/order are persisted. The dedicated Lock Columns UI/behaviour is removed in v0.3.6; Advanced columns remain directly resizable/reorderable, while Compact must not overwrite the saved Advanced layout. The legacy JSON `package_columns_locked` field is retained for state compatibility but no longer controls the UI.
 
 ### Removal UX
 
@@ -278,6 +278,18 @@ Do not infer runtime confirmation for the newer v0.3.4/v0.3.5 UX deltas listed b
 - Same-root managed-addon overwrite/cancel against a real installation.
 - Mixed root + child refusal.
 - Terminal no-supported-content result.
+
+## Implemented / Awaiting CI and Runtime Test
+
+On `fix/v0.3.6-runtime-ux`:
+
+- `a8a1f88604bf6c355fbdce7692fba6b9ed336c00` implements the focused UX follow-up:
+  - active Update New item status is derived from authoritative batch state so list rebuilds retain `Updating...` and orange semantics until the item completes;
+  - entering Advanced immediately rebuilds local Version values from installed owned TOCs, with no network refresh and no duplicate Version field persisted to JSON;
+  - branch arrows are shown only after branch metadata confirms more than one branch, and single-branch rows do not open a branch menu;
+  - the Lock Columns checkbox/locking behaviour is removed while column resize/reorder persistence remains.
+- Version sources were advanced to `v0.3.6` through branch head `b8399815a56e7dcf411f4b0425504860132f3262`.
+- No v0.3.6 CI result, merge, release, self-update or runtime result should be inferred yet.
 
 ## Static / Automated Checks
 
@@ -365,6 +377,6 @@ Do not add support for user-uploaded ZIP/7z/RAR/installer/bundle release assets 
 
 ## Exact Next Step
 
-Implement a focused post-v0.3.5 UX slice that fixes the misleading Update New in-progress presentation, populates installed TOC Version immediately when Advanced is opened, suppresses branch affordances when only one branch exists, and reassesses/removes the Lock Columns toggle if no concrete correctness need remains. Preserve the confirmed six-column/Compact behaviour and package/update semantics. Build/test/release through the normal TocPilot workflow, then runtime-check that release before starting P5 import/export.
+Open/validate the v0.3.6 feature PR from `fix/v0.3.6-runtime-ux`, run the Windows x64 Release build and full CTest suite, review any CI failures, then merge only if green. After merge, publish `v0.3.6` through the normal Release workflow and runtime-test normal `v0.3.5 -> v0.3.6` self-update plus the focused Version/Update New/single-branch/column-persistence regression matrix.
 
-**Do not begin P5 import/export until this follow-up slice is runtime-confirmed.**
+**Do not begin P5 import/export until v0.3.6 is runtime-confirmed.**
