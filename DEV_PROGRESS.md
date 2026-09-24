@@ -4,14 +4,14 @@
 
 ## Current
 
-- Active branch: `fix/v0.3.6-runtime-ux`.
+- Active branch: `main`.
 - Source/application version: `v0.3.6`.
-- Current branch head before this documentation checkpoint: `b8399815a56e7dcf411f4b0425504860132f3262` (completed v0.3.6 version-source bump).
-- Latest published release: `v0.3.5`.
-- Release/source commit and tag target: `1d3050f4bc755e7b8be0762d3f6e6afe738f1525` (`Merge v0.3.5 version and status UX`).
-- Current goal: close the remaining v0.3.5 runtime-discovered UX issues before beginning the next P5 feature.
-- Current scope boundary: **do not start P5 import/export until the Update New transient-status, Advanced Version population, and single-branch selector UX are resolved and runtime-checked**.
-- This branch is the focused post-v0.3.5 UX follow-up and is now versioned `v0.3.6` for CI/merge/release validation. It is **not yet published or runtime-tested**.
+- Latest runtime source/release commit: `94d15feb684bc10f13c35c75649f001f07ae1f55` (merge of PR #6, `v0.3.6 runtime UX follow-up`).
+- Latest published release: `v0.3.6`.
+- Release/source commit and tag target: `94d15feb684bc10f13c35c75649f001f07ae1f55`.
+- Current goal: runtime-validate published `v0.3.6` through the normal installed self-update path and focused UX regression matrix.
+- Current scope boundary: **do not start P5 import/export until v0.3.6 is runtime-confirmed**.
+- Documentation-only commits after the release do not change the published runtime baseline.
 
 ## Product Contract
 
@@ -228,12 +228,14 @@ Installed-addon Uninstall/Remove uses the native expandable TaskDialog:
 
 ## Recent Relevant Commits / Release Provenance
 
-- `8272778adf0c67191c0525459cc026b41f50db30` — documentation baseline immediately before this workflow migration.
-- `1d3050f4bc755e7b8be0762d3f6e6afe738f1525` — v0.3.5 merge commit and release tag target.
-- `13b71f7a8cbfa628338e161c452cf7caaa5d6978` — final v0.3.5 feature head before merge; PR Build run `35931674431` (#541) passed Windows x64 Release build and 17/17 CTest tests.
-- v0.3.5 Release workflow run `35932008997` (#48), Windows x64 job `107420500944`, rebuilt the exact merged `main` commit, validated source version, passed 17/17 tests, generated SHA-256, created/verified tag `v0.3.5`, and published the release assets.
-- Published v0.3.5 `TocPilot.exe`: 2,425,856 bytes, SHA-256 `7b6756d80cd115dec2c6ec38c258adb10a6cb5b6e8d91ad3dca883ca1b29db9b`.
-- Published `TocPilot.exe.sha256` asset SHA-256: `e2b459a74ff0f449efbd1eac201a0c372ba7f3b0305316019cba0bfd4b7fd6c5`.
+- `94d15feb684bc10f13c35c75649f001f07ae1f55` — merged PR #6 and exact v0.3.6 release/tag target.
+- `c253ce6e5c0c2d71df39f5fba718cbc3fdaf2638` — final v0.3.6 PR head/documented feature checkpoint.
+- `a8a1f88604bf6c355fbdce7692fba6b9ed336c00` — focused runtime UX implementation.
+- PR #6 Build workflow run `36030303266` (#552), Windows x64 job `107737068577`, passed Release build and **17/17 CTest tests**.
+- v0.3.6 Release workflow run `36030677374` (#49), Windows x64 Release job `107738323507`, rebuilt exact merge commit `94d15feb684bc10f13c35c75649f001f07ae1f55`, validated source version, passed **17/17 CTest tests**, generated SHA-256, created tag `v0.3.6`, and published direct release assets.
+- Published v0.3.6 `TocPilot.exe`: 2,425,344 bytes, SHA-256 `97367453f8df171aae57e856355ac56a84c4217cd8ea4c55bc4c0006682c8be7`.
+- Published v0.3.6 `TocPilot.exe.sha256` asset SHA-256: `75a8c2ede9cd2280df1e8169db1a0519032150a851cdf747892ffe18d5d9a189`.
+- `1d3050f4bc755e7b8be0762d3f6e6afe738f1525` — prior v0.3.5 release/source commit.
 
 ## Completed / Runtime-Confirmed
 
@@ -257,21 +259,24 @@ Do not infer runtime confirmation for the newer v0.3.4/v0.3.5 UX deltas listed b
 
 ## Published / Awaiting Runtime Test
 
-### v0.3.5 delta still needing confirmation or follow-up
+### v0.3.6 focused delta
 
-- Real local TOC Version values are correct after a refresh, but entering Advanced initially shows `—` until Refresh; this should populate immediately from the installed package files.
-- `Multiple` on a real package with conflicting owned TOC versions remains untested.
-- Lock Columns is no longer considered clearly useful; reassess/remove the dedicated toggle in the follow-up UX slice rather than preserving it by inertia.
-- Single-branch packages should not present an actionable branch arrow/menu once TocPilot knows there is only one branch.
-- Healthy managed DLL/release packages sorting normally rather than as attention rows should remain covered by the follow-up runtime pass.
+Published but not yet runtime-confirmed:
 
-### Retained v0.3.4 UX / follow-up
+- Normal installed startup self-update `v0.3.5 -> v0.3.6`.
+- Entering Advanced immediately reads installed package-owned TOC Version values without requiring Refresh; this remains local filesystem metadata and is intentionally not duplicated into JSON.
+- During Update New, the active item derives `Updating...` from authoritative batch state and remains orange across list rebuilds until completion; successful updates then become green for the session.
+- Once branch metadata confirms only one branch, the Branch cell exposes no actionable arrow/menu; multi-branch packages retain the selector.
+- The dedicated Lock Columns checkbox/locking behaviour is removed. Advanced columns remain directly resizable/reorderable and persist; Compact must continue not to overwrite the saved Advanced layout.
+- Healthy managed DLL/release rows should continue to sort normally and DLL Version should remain `—`.
+- Green clearing on Refresh All/app exit and Update New final scroll-to-top should be rechecked as regressions.
 
-- During Update New, rows currently turn black and temporarily show `Up To Date` while the update is actually in progress, then turn green after completion. This transient state is misleading and should be corrected.
-- Refresh All / Update New ordering and final green steady-state behaviour otherwise appeared good in the current runtime pass.
-- Green clearing on Refresh All/app exit and Update New final scroll-to-top can be rechecked with the follow-up build.
+Still optional validation debt where a real fixture is available:
 
-### Earlier deferred runtime checks
+- `Multiple` on a package with conflicting owned TOC Version values.
+- Earlier removal/Add Git edge cases listed under Deferred Runtime Checks below.
+
+### Deferred Runtime Checks
 
 - v0.3.2 removal confirmation UI.
 - Single-nested Add Git case.
@@ -279,67 +284,63 @@ Do not infer runtime confirmation for the newer v0.3.4/v0.3.5 UX deltas listed b
 - Mixed root + child refusal.
 - Terminal no-supported-content result.
 
-## Implemented / Awaiting CI and Runtime Test
-
-On `fix/v0.3.6-runtime-ux`:
-
-- `a8a1f88604bf6c355fbdce7692fba6b9ed336c00` implements the focused UX follow-up:
-  - active Update New item status is derived from authoritative batch state so list rebuilds retain `Updating...` and orange semantics until the item completes;
-  - entering Advanced immediately rebuilds local Version values from installed owned TOCs, with no network refresh and no duplicate Version field persisted to JSON;
-  - branch arrows are shown only after branch metadata confirms more than one branch, and single-branch rows do not open a branch menu;
-  - the Lock Columns checkbox/locking behaviour is removed while column resize/reorder persistence remains.
-- Version sources were advanced to `v0.3.6` through branch head `b8399815a56e7dcf411f4b0425504860132f3262`.
-- No v0.3.6 CI result, merge, release, self-update or runtime result should be inferred yet.
-
 ## Static / Automated Checks
 
-For v0.3.5:
+For v0.3.6:
 
-- Final feature head `13b71f7a8cbfa628338e161c452cf7caaa5d6978` passed the Windows x64 Release build and complete 17/17 CTest suite in Build run `35931674431`.
-- Release commit `1d3050f4bc755e7b8be0762d3f6e6afe738f1525` was rebuilt by Release workflow run `35932008997`.
-- Release workflow source-version validation passed.
-- Complete 17/17 CTest suite passed.
+- PR head `c253ce6e5c0c2d71df39f5fba718cbc3fdaf2638` passed Windows x64 Release build and complete **17/17 CTest** suite in Build run `36030303266` (#552), job `107737068577`.
+- Merge/release commit `94d15feb684bc10f13c35c75649f001f07ae1f55` was rebuilt by Release workflow run `36030677374` (#49), job `107738323507`.
+- Release source-version validation passed for `v0.3.6`.
+- Complete **17/17 CTest** suite passed in the release rebuild.
 - SHA-256 sidecar generation passed.
-- Tag creation/verification and direct release-asset publication passed.
-- GitHub latest stable reports `v0.3.5`.
+- Tag `v0.3.6` creation and direct `TocPilot.exe` / `TocPilot.exe.sha256` publication passed.
+- GitHub release `v0.3.6` targets exact merge commit `94d15feb684bc10f13c35c75649f001f07ae1f55`.
+
+The prior v0.3.5 release also passed its documented 17/17 Release workflow validation; retain it only as the inherited runtime baseline.
 
 ## Current Issues
 
-Runtime-discovered v0.3.5 follow-up issues:
+No known source defect is currently documented for v0.3.6.
 
-- Update New transient UI is misleading: rows can display black `Up To Date` while their install is still running, before becoming green on success.
-- Advanced Version values are correct after Refresh, but entering Advanced can initially show `—`; Version should be populated immediately without requiring network refresh.
-- A single-branch package should not expose an actionable branch arrow/menu once branch metadata confirms there is no alternative.
-- The earlier branch-change colour concern is currently non-reproducible and is not treated as a defect.
+The active issue is **runtime validation debt**: v0.3.6 is published and CI/release-validated but has not yet been exercised through the real installed `v0.3.5 -> v0.3.6` self-update path or its focused UX regression matrix.
 
-The dedicated Lock Columns toggle is also being reconsidered as unnecessary UI; any removal should be handled deliberately in the same focused UX slice rather than as an unrelated refactor.
+The earlier branch-change colour concern did not reproduce and is not considered a defect.
 
 ## Testing
 
 ### Last Runtime Baselines
 
-- Automatic startup self-update `v0.1.37 -> v0.3.0`: passed.
-- Automatic startup self-update `v0.3.2 -> v0.3.3`: passed.
-- Direct DLL path with ClassicAPI/Nampower: passed.
-- Several Add Git root/library/DLL-discovery paths: passed as listed above.
+- Normal installed startup self-update `v0.3.4 -> v0.3.5`: passed.
+- v0.3.5 Advanced six-column presentation and column persistence/order: passed.
+- v0.3.5 Compact mode preserving Advanced layout: passed.
+- v0.3.5 DLL alignment/Version `—`: passed.
+- v0.3.5 steady orange/green row presentation and update/green/normal ordering: passed.
+- v0.3.5 branch switching correctly reaches `Update Available`; earlier colour concern did not reproduce.
+- Earlier self-update baselines `v0.1.37 -> v0.3.0` and `v0.3.2 -> v0.3.3`: passed.
+- Direct DLL path with ClassicAPI/Nampower and several Add Git root/library/DLL-discovery paths: passed.
 
 ### Next Runtime Test
 
-After the focused follow-up build is published, self-update to it normally and verify:
+Start from the currently installed `v0.3.5` and launch TocPilot normally.
 
-1. entering Advanced immediately shows installed TOC Version values without requiring Refresh;
-2. Update New keeps an honest in-progress status/semantic presentation until each package actually commits, then turns green on success;
-3. packages with only one discovered branch show no actionable branch arrow/menu;
-4. Advanced six-column persistence and Compact isolation remain intact;
-5. healthy DLL/release rows still sort normally;
-6. green clearing on Refresh All/app exit and Update New final scroll-to-top still behave as documented.
+Verify:
+
+1. normal startup self-update reaches published `v0.3.6` without manual EXE replacement;
+2. open Advanced **without pressing Refresh** and confirm installed addon Version values appear immediately; DLL Version remains `—`;
+3. create one or more known updates, press Update New, and confirm the active package stays orange with `Updating...` until its install actually completes, then turns green; queued updates must not falsely become black `Up To Date`;
+4. on a known single-branch repository, allow branch metadata to load and confirm there is no actionable arrow/menu; confirm a multi-branch repository still offers its branch choices;
+5. confirm the Lock Columns checkbox is gone, Advanced columns can be resized/reordered and persist after restart, and Compact still does not overwrite that Advanced layout;
+6. confirm healthy DLL/release rows still sort normally;
+7. if practical, confirm Refresh All/app restart clears green session state and Update New finishes scrolled to the top.
+
+Record partial results accurately if the entire matrix is not completed.
 
 ## Planned / Next Work
 
-After the focused v0.3.5 follow-up slice is runtime-confirmed:
+After v0.3.6 runtime confirmation:
 
 - begin P5 import/export as its own isolated slice;
-- define its state/ownership semantics before implementation;
+- define import/export state, identity, ownership and conflict semantics before implementation;
 - keep package editing and the other deferred P5 work out of that slice unless explicitly reopened.
 
 ## Deferred / Out of Scope
@@ -370,13 +371,14 @@ Do not add support for user-uploaded ZIP/7z/RAR/installer/bundle release assets 
 
 ## Release / Documentation Notes
 
-- Current published runtime baseline remains `v0.3.5` at `1d3050f4bc755e7b8be0762d3f6e6afe738f1525`.
-- Documentation-only commits after that release do not imply a new runtime build.
-- This workflow migration intentionally does **not** change `CMakeLists.txt`, `src/version.h` or `.github/release-version`.
-- No tag or GitHub Release should be created for this documentation migration.
+- Current published runtime baseline is `v0.3.6` at `94d15feb684bc10f13c35c75649f001f07ae1f55`.
+- Release workflow run `36030677374` (#49) is the authoritative v0.3.6 product build.
+- Documentation-only commits after that release do not imply a new runtime build and require no version bump/release.
+- Version remains local installed TOC metadata; do not persist a second Version value into JSON unless the product contract is deliberately changed.
+- The legacy `package_columns_locked` JSON field remains accepted for compatibility but no longer controls v0.3.6 UI behaviour.
 
 ## Exact Next Step
 
-Open/validate the v0.3.6 feature PR from `fix/v0.3.6-runtime-ux`, run the Windows x64 Release build and full CTest suite, review any CI failures, then merge only if green. After merge, publish `v0.3.6` through the normal Release workflow and runtime-test normal `v0.3.5 -> v0.3.6` self-update plus the focused Version/Update New/single-branch/column-persistence regression matrix.
+Runtime-test normal installed `v0.3.5 -> published v0.3.6` through TocPilot's startup self-update path, then verify immediate Advanced Version population, honest orange `Updating...` Update New state through commit, single-vs-multi-branch selector affordance, direct Advanced column resize/reorder persistence without the Lock Columns checkbox, Compact isolation, healthy DLL sorting, and the green-clearing/scroll-to-top regressions where practical.
 
 **Do not begin P5 import/export until v0.3.6 is runtime-confirmed.**
