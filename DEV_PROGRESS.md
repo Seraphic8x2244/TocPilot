@@ -4,14 +4,14 @@
 
 ## Current
 
-- Active branch: `fix/v0.3.7-branch-list-ux`.
+- Active branch: `main`.
 - Source/application version: `v0.3.7`.
-- Latest runtime source/release commit: `94d15feb684bc10f13c35c75649f001f07ae1f55` (merge of PR #6, published `v0.3.6`).
-- Latest published release: `v0.3.6`.
-- Release/source commit and tag target: `94d15feb684bc10f13c35c75649f001f07ae1f55`.
-- Feature branch implementation head before this documentation checkpoint: `064cbef1707e0c6e58ed2664cba87158a1a14085`.
-- Current goal: CI/release-validate the focused v0.3.7 branch-selector/list-anchoring UX follow-up, then runtime-check it before beginning P5 import/export.
-- Current scope boundary: keep this follow-up limited to branch metadata/affordance, branch-change row anchoring, and selected-row semantic text colour. Do not begin P5 import/export or package editing in the same slice.
+- Latest published release: `v0.3.7`.
+- Release/source commit and tag target: `ec410df48787fa88a97d49489c4f99ea6893811a` (merge of PR #7).
+- Latest runtime-confirmed release remains `v0.3.6` at `94d15feb684bc10f13c35c75649f001f07ae1f55` until v0.3.7 is exercised.
+- Latest verified `main` runtime/release head before this documentation checkpoint: `ec410df48787fa88a97d49489c4f99ea6893811a`.
+- Current goal: runtime-validate published v0.3.7 branch-selector/list-anchoring UX through the normal installed self-update path.
+- Current scope boundary: do not begin P5 import/export or package editing until the focused v0.3.7 runtime matrix is confirmed.
 - Documentation-only commits after the release do not change the published runtime baseline.
 
 ## Product Contract
@@ -239,6 +239,11 @@ Installed-addon Uninstall/Remove uses the native expandable TaskDialog:
 
 ## Recent Relevant Commits / Release Provenance
 
+- `ec410df48787fa88a97d49489c4f99ea6893811a` — merged PR #7 and exact v0.3.7 release/tag target.
+- PR #7 head `255a6439d788050ea034909e855851faeba78f4d` passed Build workflow run `36151542439` (#558), Windows x64 job `108125759401`, including **17/17 CTest tests**.
+- v0.3.7 Release workflow run `36161737119` (#50), Windows x64 Release job `108159686091`, rebuilt exact merge commit `ec410df48787fa88a97d49489c4f99ea6893811a`, validated source version, passed **17/17 CTest tests**, generated SHA-256, created tag `v0.3.7`, and published direct release assets.
+- Published v0.3.7 `TocPilot.exe`: 2,431,488 bytes, SHA-256 `81f6cd5b19a8952ea307bf9c004217d84baa5ebb95330488cae570292764d220`.
+- Published v0.3.7 `TocPilot.exe.sha256` asset SHA-256: `81a9244b9a9a2af031e92ce98dfb0795a755e1db7ebc9c76079c12c66f0d4dc4`.
 - `064cbef1707e0c6e58ed2664cba87158a1a14085` — retains full remote branch metadata even when the currently tracked branch disappears, so branch choices can recover from a deleted ref.
 - `c1884287b1320f7d644f27fc3a220bcd4e7ba3ef` — implements v0.3.7 branch metadata cache, Add Git cache seeding, selected-row semantic colour preservation, package-ID selection anchoring and the v0.3.7 version bump.
 - `430b3581b7b51ee9b1c45d64d06824984f1f4656` — main documentation checkpoint defining this focused follow-up.
@@ -299,6 +304,16 @@ Optional validation debt where a real fixture is available:
 
 ## Static / Automated Checks
 
+For v0.3.7:
+
+- PR head `255a6439d788050ea034909e855851faeba78f4d` passed Windows x64 Release build and complete **17/17 CTest** suite in Build run `36151542439` (#558), job `108125759401`.
+- Merge/release commit `ec410df48787fa88a97d49489c4f99ea6893811a` was rebuilt by Release workflow run `36161737119` (#50), job `108159686091`.
+- Release source-version validation passed for `v0.3.7`.
+- Complete **17/17 CTest** suite passed in the release rebuild.
+- SHA-256 sidecar generation passed.
+- Tag `v0.3.7` was created against exact merge commit `ec410df48787fa88a97d49489c4f99ea6893811a`.
+- Direct `TocPilot.exe` and `TocPilot.exe.sha256` assets were published successfully.
+
 For v0.3.6:
 
 - PR head `c253ce6e5c0c2d71df39f5fba718cbc3fdaf2638` passed Windows x64 Release build and complete **17/17 CTest** suite in Build run `36030303266` (#552), job `107737068577`.
@@ -315,15 +330,15 @@ The prior v0.3.5 release also passed its documented 17/17 Release workflow valid
 
 v0.3.6 has no open release-gate defect; its runtime-validation gate is complete.
 
-The post-v0.3.6 branch/list issues are implemented on `fix/v0.3.7-branch-list-ux` but are not yet CI-checked, merged, published or runtime-confirmed:
+The post-v0.3.6 branch/list fixes are now CI-checked, merged and published in v0.3.7, but are not yet runtime-confirmed:
 
-- row rendering now preserves semantic orange/green text while retaining the Windows selection background;
-- list rebuilds restore the selected package by package ID and ensure its new display row is visible after re-sorting;
+- row rendering should preserve semantic orange/green text while retaining the Windows selection background;
+- list rebuilds should restore the selected package by package ID and ensure its new display row is visible after re-sorting;
 - branch-arrow visibility now uses transient per-repository branch metadata rather than the one selected-package slot;
 - Add Git returns and seeds the full repository branch advertisement it already fetched;
 - normal branch-head refresh retains the full advertisement it already fetched, including when the tracked branch has disappeared, so new/deleted remote branches refresh without a second branch-list request.
 
-No runtime result should be inferred until v0.3.7 is published and tested.
+No runtime success should be inferred until the published v0.3.7 build is exercised.
 
 ## Testing
 
@@ -358,11 +373,7 @@ Optional future checks remain the conflicting-TOC `Multiple` fixture and the def
 
 ## Planned / Next Work
 
-The focused branch/list UX implementation is complete on the feature branch. Next:
-
-- open/validate the v0.3.7 PR and run the Windows x64 Release build plus complete CTest suite;
-- merge only if green, then publish v0.3.7 through the normal Release workflow;
-- runtime-check the documented branch-arrow, branch-change anchoring, remote-branch refresh and selected-row colour matrix.
+Published v0.3.7 is awaiting runtime confirmation. Verify the documented branch-arrow, branch-change anchoring, remote-branch refresh and selected-row colour matrix through normal installed use.
 
 After that runtime-confirmed follow-up, begin P5 import/export as its own isolated slice. Define import/export state, identity, ownership and conflict semantics before implementation, and keep package editing/other deferred P5 work out of that slice unless explicitly reopened.
 
@@ -394,12 +405,15 @@ Do not add support for user-uploaded ZIP/7z/RAR/installer/bundle release assets 
 
 ## Release / Documentation Notes
 
-- Current published runtime baseline is `v0.3.6` at `94d15feb684bc10f13c35c75649f001f07ae1f55`.
-- Release workflow run `36030677374` (#49) is the authoritative v0.3.6 product build.
+- Current published runtime baseline is `v0.3.7` at `ec410df48787fa88a97d49489c4f99ea6893811a`.
+- Release workflow run `36161737119` (#50) is the authoritative v0.3.7 product build.
+- Runtime-confirmed behaviour still inherits from v0.3.6 until the user completes the v0.3.7 focused matrix.
 - Documentation-only commits after that release do not imply a new runtime build and require no version bump/release.
 - Version remains local installed TOC metadata; do not persist a second Version value into JSON unless the product contract is deliberately changed.
 - The legacy `package_columns_locked` JSON field remains accepted for compatibility but no longer controls v0.3.6 UI behaviour.
 
 ## Exact Next Step
 
-Open/validate the v0.3.7 feature PR from `fix/v0.3.7-branch-list-ux`. Run the Windows x64 Release build and full CTest suite, review any failures, and merge only if green. Then publish v0.3.7 through the normal Release workflow and runtime-test the documented branch/list matrix before starting P5 import/export.
+Runtime-test published v0.3.7 through normal installed use. Verify branch-change row anchoring, persistent arrows for known multi-branch repositories, no arrow/dropdown for known single-branch repositories, discovery of a newly added remote branch after normal startup/Refresh All, and semantic orange/green text on selected rows. Record partial results accurately.
+
+**Do not begin P5 import/export until this focused v0.3.7 runtime matrix is confirmed.**
