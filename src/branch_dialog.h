@@ -1,5 +1,6 @@
 #pragma once
 
+#include "git_refs.h"
 #include "state.h"
 
 #include <windows.h>
@@ -11,6 +12,7 @@ namespace tp {
 struct BranchSelection {
     std::wstring name;
     std::wstring sha;
+    GitRemoteRepositoryInfo repositoryInfo;
 };
 
 bool ShowBranchDialog(

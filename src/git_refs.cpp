@@ -789,9 +789,15 @@ bool ResolvePublicGitBranchHead(
     std::wstring_view repository,
     std::wstring_view branch,
     std::wstring& remoteSha,
-    std::wstring& error) {
+    std::wstring& error,
+    GitRemoteRepositoryInfo*
+        repositoryInfo) {
     remoteSha.clear();
     error.clear();
+
+    if (repositoryInfo) {
+        *repositoryInfo = {};
+    }
 
     if (branch.empty()) {
         error = L"Tracked Git branch name is empty.";
@@ -805,6 +811,10 @@ bool ResolvePublicGitBranchHead(
             info,
             error)) {
         return false;
+    }
+
+    if (repositoryInfo) {
+        *repositoryInfo = info;
     }
 
     for (const auto& item : info.branches) {

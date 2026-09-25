@@ -4,14 +4,14 @@
 
 ## Current
 
-- Active branch: `main`.
-- Source/application version: `v0.3.6`.
-- Latest runtime source/release commit: `94d15feb684bc10f13c35c75649f001f07ae1f55` (merge of PR #6, `v0.3.6 runtime UX follow-up`).
+- Active branch: `fix/v0.3.7-branch-list-ux`.
+- Source/application version: `v0.3.7`.
+- Latest runtime source/release commit: `94d15feb684bc10f13c35c75649f001f07ae1f55` (merge of PR #6, published `v0.3.6`).
 - Latest published release: `v0.3.6`.
 - Release/source commit and tag target: `94d15feb684bc10f13c35c75649f001f07ae1f55`.
-- Latest verified `main` head before this documentation checkpoint: `babd6a54ae725f2cb689033474c7fcacb4465d28` (`Close v0.3.6 runtime validation gate`).
-- Current goal: complete a focused post-v0.3.6 branch-selector/list-anchoring UX follow-up from fresh runtime findings before beginning P5 import/export.
-- Current scope boundary: keep this follow-up limited to branch metadata/affordance, branch-change row anchoring, and the already-confirmed selected-row semantic text-colour defect. Do not begin P5 import/export or package editing in the same slice.
+- Feature branch implementation head before this documentation checkpoint: `064cbef1707e0c6e58ed2664cba87158a1a14085`.
+- Current goal: CI/release-validate the focused v0.3.7 branch-selector/list-anchoring UX follow-up, then runtime-check it before beginning P5 import/export.
+- Current scope boundary: keep this follow-up limited to branch metadata/affordance, branch-change row anchoring, and selected-row semantic text colour. Do not begin P5 import/export or package editing in the same slice.
 - Documentation-only commits after the release do not change the published runtime baseline.
 
 ## Product Contract
@@ -239,6 +239,9 @@ Installed-addon Uninstall/Remove uses the native expandable TaskDialog:
 
 ## Recent Relevant Commits / Release Provenance
 
+- `064cbef1707e0c6e58ed2664cba87158a1a14085` — retains full remote branch metadata even when the currently tracked branch disappears, so branch choices can recover from a deleted ref.
+- `c1884287b1320f7d644f27fc3a220bcd4e7ba3ef` — implements v0.3.7 branch metadata cache, Add Git cache seeding, selected-row semantic colour preservation, package-ID selection anchoring and the v0.3.7 version bump.
+- `430b3581b7b51ee9b1c45d64d06824984f1f4656` — main documentation checkpoint defining this focused follow-up.
 - `94d15feb684bc10f13c35c75649f001f07ae1f55` — merged PR #6 and exact v0.3.6 release/tag target.
 - `c253ce6e5c0c2d71df39f5fba718cbc3fdaf2638` — final v0.3.6 PR head/documented feature checkpoint.
 - `a8a1f88604bf6c355fbdce7692fba6b9ed336c00` — focused runtime UX implementation.
@@ -312,13 +315,15 @@ The prior v0.3.5 release also passed its documented 17/17 Release workflow valid
 
 v0.3.6 has no open release-gate defect; its runtime-validation gate is complete.
 
-Confirmed UI issues from post-v0.3.6 runtime use:
+The post-v0.3.6 branch/list issues are implemented on `fix/v0.3.7-branch-list-ux` but are not yet CI-checked, merged, published or runtime-confirmed:
 
-- when an orange `Update Available` row is selected, the Windows selection background is desirable but the text falls back to the normal selected-row colour instead of retaining the semantic row colour; keep the selection background while preserving orange/green semantic text;
-- changing an addon's branch can make it `Update Available` and re-sort it to the top, but the branch interaction/textbox anchoring does not follow the package to its new display row;
-- branch-arrow visibility is currently tied to one global selected-package branch-info slot, so it cannot satisfy the desired stable rule of always showing an arrow for known multi-branch repositories and never showing one for known single-branch repositories.
+- row rendering now preserves semantic orange/green text while retaining the Windows selection background;
+- list rebuilds restore the selected package by package ID and ensure its new display row is visible after re-sorting;
+- branch-arrow visibility now uses transient per-repository branch metadata rather than the one selected-package slot;
+- Add Git returns and seeds the full repository branch advertisement it already fetched;
+- normal branch-head refresh retains the full advertisement it already fetched, including when the tracked branch has disappeared, so new/deleted remote branches refresh without a second branch-list request.
 
-These should be fixed together as a narrow branch/list UX follow-up before P5, without changing package/update semantics.
+No runtime result should be inferred until v0.3.7 is published and tested.
 
 ## Testing
 
@@ -353,13 +358,11 @@ Optional future checks remain the conflicting-TOC `Multiple` fixture and the def
 
 ## Planned / Next Work
 
-Before P5, complete the focused branch/list UX follow-up:
+The focused branch/list UX implementation is complete on the feature branch. Next:
 
-- replace the single selected-package branch-info state with a small transient per-repository/package metadata cache suitable for row rendering;
-- seed it from the Add Git branch chooser's already-fetched repository info;
-- retain full branch info from ordinary branch-head refreshes so newly added/removed remote branches update naturally without duplicate network calls;
-- anchor branch-change selection/interaction by package ID across list re-sorts;
-- preserve semantic orange/green text on selected rows while keeping the Windows selection background.
+- open/validate the v0.3.7 PR and run the Windows x64 Release build plus complete CTest suite;
+- merge only if green, then publish v0.3.7 through the normal Release workflow;
+- runtime-check the documented branch-arrow, branch-change anchoring, remote-branch refresh and selected-row colour matrix.
 
 After that runtime-confirmed follow-up, begin P5 import/export as its own isolated slice. Define import/export state, identity, ownership and conflict semantics before implementation, and keep package editing/other deferred P5 work out of that slice unless explicitly reopened.
 
@@ -399,4 +402,4 @@ Do not add support for user-uploaded ZIP/7z/RAR/installer/bundle release assets 
 
 ## Exact Next Step
 
-Create a focused post-v0.3.6 branch/list UX branch. Implement transient per-repository/package branch metadata so known multi-branch repos always render an arrow and known single-branch repos never do; seed it from Add Git's existing branch fetch and refresh it from the full smart-HTTP advertisement already obtained during normal branch-head checks. Fix branch-change re-sorting so selection/interaction follows the package by ID, and preserve semantic orange/green text on selected rows. Keep package/update behaviour otherwise unchanged, version/release through the normal TocPilot workflow, then runtime-test this matrix before starting P5 import/export.
+Open/validate the v0.3.7 feature PR from `fix/v0.3.7-branch-list-ux`. Run the Windows x64 Release build and full CTest suite, review any failures, and merge only if green. Then publish v0.3.7 through the normal Release workflow and runtime-test the documented branch/list matrix before starting P5 import/export.
