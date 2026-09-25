@@ -113,6 +113,12 @@ constexpr std::array<const wchar_t*, 5> kTextScaleLabels{
     L"150%"
 };
 
+struct RepositoryBranchMetadata {
+    std::wstring provider;
+    std::wstring repository;
+    tp::GitRemoteRepositoryInfo info;
+};
+
 HWND g_wowStatus = nullptr;
 HWND g_githubStatus = nullptr;
 HWND g_releaseStatus = nullptr;
@@ -170,6 +176,8 @@ std::uint64_t g_branchSelectorGeneration = 0;
 std::wstring g_branchSelectorPackageId;
 std::wstring g_branchSelectorDefaultBranch;
 std::vector<tp::GitRemoteBranch> g_branchSelectorBranches;
+std::vector<RepositoryBranchMetadata>
+    g_repositoryBranchMetadata;
 tp::UpdateAllProgress g_updateAllProgress;
 std::vector<tp::PackageRefreshStamp> g_packageRefreshStamps;
 std::vector<std::wstring> g_autoStatusPackageIds;
@@ -209,6 +217,7 @@ struct PackageRefreshResult {
     std::wstring branch;
     std::wstring asset;
     std::wstring remoteSha;
+    tp::GitRemoteRepositoryInfo repositoryInfo;
     std::wstring error;
 };
 
@@ -895,7 +904,9 @@ std::wstring BranchProviderHost(
 bool ResolvePackageBranchHead(
     const tp::PackageRecord& package,
     std::wstring& remoteSha,
-    std::wstring& error) {
+    std::wstring& error,
+    tp::GitRemoteRepositoryInfo*
+        repositoryInfo = nullptr) {
     const std::wstring host =
         BranchProviderHost(
             package.provider);
@@ -911,7 +922,8 @@ bool ResolvePackageBranchHead(
         package.repository,
         package.ref,
         remoteSha,
-        error);
+        error,
+        repositoryInfo);
 }
 
 bool ResetPackageStaging(
@@ -1263,6 +1275,52 @@ int CompareInsensitive(
     return 0;
 }
 
+const tp::GitRemoteRepositoryInfo*
+CachedRepositoryBranchInfo(
+    const tp::PackageRecord& package) {
+    for (const auto& cached :
+         g_repositoryBranchMetadata) {
+        if (CompareInsensitive(
+                cached.provider,
+                package.provider) == 0 &&
+            CompareInsensitive(
+                cached.repository,
+                package.repository) == 0) {
+            return &cached.info;
+        }
+    }
+
+    return nullptr;
+}
+
+void CacheRepositoryBranchInfo(
+    const tp::PackageRecord& package,
+    const tp::GitRemoteRepositoryInfo& info) {
+    if (info.branches.empty()) {
+        return;
+    }
+
+    for (auto& cached :
+         g_repositoryBranchMetadata) {
+        if (CompareInsensitive(
+                cached.provider,
+                package.provider) == 0 &&
+            CompareInsensitive(
+                cached.repository,
+                package.repository) == 0) {
+            cached.info = info;
+            return;
+        }
+    }
+
+    RepositoryBranchMetadata cached;
+    cached.provider = package.provider;
+    cached.repository = package.repository;
+    cached.info = info;
+    g_repositoryBranchMetadata.push_back(
+        std::move(cached));
+}
+
 std::wstring SingleOwnedAddonRoot(
     const tp::PackageRecord& package) {
     constexpr std::wstring_view prefix =
@@ -1458,22 +1516,33 @@ LRESULT HandlePackageListCustomDraw(
     const bool focused =
         GetFocus() ==
         g_packageList;
+    const bool hasSemanticColour =
+        PackageIsActiveUpdateAllItem(
+            package.id) ||
+        PackageHasUpdateAvailable(
+            package) ||
+        PackageUpdatedThisSession(
+            package.id);
+    const COLORREF semanticTextColour =
+        PackageRowTextColour(
+            package);
     const COLORREF rowTextColour =
-        selected
-            ? GetSysColor(
-                focused
-                    ? COLOR_HIGHLIGHTTEXT
-                    : COLOR_WINDOWTEXT)
-            : PackageRowTextColour(
-                package);
+        hasSemanticColour
+            ? semanticTextColour
+            : (selected
+                ? GetSysColor(
+                    focused
+                        ? COLOR_HIGHLIGHTTEXT
+                        : COLOR_WINDOWTEXT)
+                : semanticTextColour);
 
     const bool drawName =
         draw->iSubItem == 0;
     const bool drawBranch =
         g_advancedVisible &&
         draw->iSubItem == 1 &&
-        package.provider ==
-            L"github";
+        PackageBranchMode(
+            package);
 
     if (!drawName &&
         !drawBranch) {
@@ -1565,11 +1634,12 @@ LRESULT HandlePackageListCustomDraw(
                 arrowRect.right -
                     arrowWidth);
 
+        const auto* branchInfo =
+            CachedRepositoryBranchInfo(
+                package);
         const bool showArrow =
-            g_branchSelectorLoaded &&
-            package.id ==
-                g_branchSelectorPackageId &&
-            g_branchSelectorBranches.size() > 1;
+            branchInfo &&
+            branchInfo->branches.size() > 1;
 
         if (showArrow) {
             DrawFrameControl(
@@ -2298,6 +2368,23 @@ void PopulateBranchSelectorLoaded(
     g_branchSelectorUpdating = false;
 }
 
+void SetBranchSelectorInfo(
+    const tp::PackageRecord& package,
+    const tp::GitRemoteRepositoryInfo& info) {
+    g_branchSelectorPackageId =
+        package.id;
+    g_branchSelectorDefaultBranch =
+        info.defaultBranch;
+    g_branchSelectorBranches =
+        info.branches;
+    g_branchSelectorLoaded = true;
+    g_branchSelectorLoadFailed = false;
+    g_branchSelectorLoadInProgress = false;
+
+    PopulateBranchSelectorLoaded(
+        package);
+}
+
 void PositionBranchSelector() {
     if (g_branchSelector) {
         ShowWindow(
@@ -2438,10 +2525,20 @@ void UpdateBranchSelector(
         PopulateBranchSelectorCurrent(
             package);
 
-        StartBranchSelectorLoad(
-            hwnd,
-            static_cast<std::size_t>(
-                selected));
+        const auto* cached =
+            CachedRepositoryBranchInfo(
+                package);
+
+        if (cached) {
+            SetBranchSelectorInfo(
+                package,
+                *cached);
+        } else {
+            StartBranchSelectorLoad(
+                hwnd,
+                static_cast<std::size_t>(
+                    selected));
+        }
     }
 
     PositionBranchSelector();
@@ -2608,25 +2705,35 @@ void RequestBranchSelector(
                 displayRow)];
 
     if (packageIndex >=
-            g_state.packages.size() ||
+            g_state.packages.size()) {
+        return;
+    }
+
+    const auto& package =
         g_state.packages[
-            packageIndex].provider !=
-            L"github" ||
-        g_state.packages[
-            packageIndex].mode ==
-            L"release") {
+            packageIndex];
+
+    if (!PackageBranchMode(
+            package)) {
+        return;
+    }
+
+    const auto* cached =
+        CachedRepositoryBranchInfo(
+            package);
+
+    if (cached &&
+        cached->branches.size() <= 1) {
         return;
     }
 
     const std::wstring packageId =
-        g_state.packages[
-            packageIndex].id;
+        package.id;
 
-    if (g_branchSelectorPackageId ==
-            packageId &&
-        g_branchSelectorLoaded &&
-        g_branchSelectorBranches.size() <= 1) {
-        return;
+    if (cached) {
+        SetBranchSelectorInfo(
+            package,
+            *cached);
     }
 
     g_branchSelectorOpenPackageId =
@@ -3031,8 +3138,19 @@ void SetPackageRowStatus(
 }
 
 void RefreshPackageStateUi() {
+    std::wstring selectedPackageId;
     const int selected =
         SelectedPackageRow();
+
+    if (selected >= 0 &&
+        selected <
+            static_cast<int>(
+                g_state.packages.size())) {
+        selectedPackageId =
+            g_state.packages[
+                static_cast<std::size_t>(
+                    selected)].id;
+    }
 
     std::wstring topPackageId;
     if (g_packageList) {
@@ -3109,13 +3227,29 @@ void RefreshPackageStateUi() {
         }
     }
 
-    if (selected >= 0 &&
-        selected <
-            static_cast<int>(
-                g_state.packages.size())) {
-        SelectPackageRow(
-            static_cast<std::size_t>(
-                selected));
+    if (!selectedPackageId.empty()) {
+        for (std::size_t i = 0;
+             i < g_state.packages.size();
+             ++i) {
+            if (g_state.packages[i].id !=
+                selectedPackageId) {
+                continue;
+            }
+
+            SelectPackageRow(i);
+
+            const int displayRow =
+                PackageDisplayRow(i);
+
+            if (displayRow >= 0 &&
+                g_packageList) {
+                ListView_EnsureVisible(
+                    g_packageList,
+                    displayRow,
+                    FALSE);
+            }
+            break;
+        }
     }
 
     UpdatePackageButtons();
@@ -3204,7 +3338,8 @@ void StartPackageRefresh(
                     ResolvePackageBranchHead(
                         package,
                         result->remoteSha,
-                        result->error);
+                        result->error,
+                        &result->repositoryInfo);
             } else if (directDll) {
                 std::wstring configError;
                 if (!tp::ValidateDirectDllPackage(
@@ -6593,6 +6728,10 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                 return 0;
             }
 
+            CacheRepositoryBranchInfo(
+                repositoryPackage,
+                selection.repositoryInfo);
+
             std::wstring error;
             if (!tp::SetPackageBranch(
                     repositoryPackage,
@@ -7169,21 +7308,16 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             return 0;
         }
 
-        g_branchSelectorDefaultBranch =
-            std::move(
-                result->info.defaultBranch);
-        g_branchSelectorBranches =
-            std::move(
-                result->info.branches);
-        g_branchSelectorLoaded = true;
-        g_branchSelectorLoadFailed =
-            false;
-
         if (packageIndex <
             g_state.packages.size()) {
-            PopulateBranchSelectorLoaded(
+            CacheRepositoryBranchInfo(
                 g_state.packages[
-                    packageIndex]);
+                    packageIndex],
+                result->info);
+            SetBranchSelectorInfo(
+                g_state.packages[
+                    packageIndex],
+                result->info);
             SetPackageRowStatus(
                 packageIndex,
                 PackageStatusText(
@@ -7332,6 +7466,19 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                 UpdatePackageButtons();
             }
             return 0;
+        }
+
+        if (!result->repositoryInfo.branches.empty()) {
+            CacheRepositoryBranchInfo(
+                g_state.packages[index],
+                result->repositoryInfo);
+
+            if (g_packageList) {
+                InvalidateRect(
+                    g_packageList,
+                    nullptr,
+                    FALSE);
+            }
         }
 
         SetPackageNeedsAttention(

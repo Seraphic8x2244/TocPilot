@@ -38,6 +38,8 @@ bool ResolvePublicGitBranchHead(
     std::wstring_view repository,
     std::wstring_view branch,
     std::wstring& remoteSha,
-    std::wstring& error);
+    std::wstring& error,
+    GitRemoteRepositoryInfo*
+        repositoryInfo = nullptr);
 
 } // namespace tp

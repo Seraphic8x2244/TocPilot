@@ -375,6 +375,8 @@ LRESULT CALLBACK DialogProc(
                 branch.name;
             context->selection->sha =
                 branch.sha;
+            context->selection->repositoryInfo =
+                context->info;
             context->accepted = true;
 
             DestroyWindow(hwnd);
