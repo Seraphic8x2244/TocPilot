@@ -8,10 +8,10 @@
 - Source/application version: `v0.3.7`.
 - Latest published release: `v0.3.7`.
 - Release/source commit and tag target: `ec410df48787fa88a97d49489c4f99ea6893811a` (merge of PR #7).
-- Latest runtime-confirmed release remains `v0.3.6` at `94d15feb684bc10f13c35c75649f001f07ae1f55` until v0.3.7 is exercised.
+- Latest runtime-confirmed release: `v0.3.7` at `ec410df48787fa88a97d49489c4f99ea6893811a`.
 - Latest verified `main` runtime/release head before this documentation checkpoint: `ec410df48787fa88a97d49489c4f99ea6893811a`.
-- Current goal: runtime-validate published v0.3.7 branch-selector/list-anchoring UX through the normal installed self-update path.
-- Current scope boundary: do not begin P5 import/export or package editing until the focused v0.3.7 runtime matrix is confirmed.
+- Current goal: begin P5 import/export as the next isolated product slice.
+- Current scope boundary: first define import/export state, identity, ownership and conflict semantics before implementation; keep package editing and other deferred P5 work out of this slice unless explicitly reopened.
 - Documentation-only commits after the release do not change the published runtime baseline.
 
 ## Product Contract
@@ -258,6 +258,15 @@ Installed-addon Uninstall/Remove uses the native expandable TaskDialog:
 
 ## Completed / Runtime-Confirmed
 
+Published `v0.3.7` branch/list runtime matrix completed on 2026-09-25:
+
+- branch arrows are correct for known multi-branch vs single-branch repositories;
+- changing branch and triggering update-priority re-sort keeps selection/interaction on the same addon;
+- selected orange/green rows retain their semantic text colour while keeping the Windows selection background;
+- adding a remote branch while TocPilot remains open is discovered by Refresh All alone and updates the branch affordance/list;
+- deleting that remote branch while TocPilot remains open is also discovered by Refresh All alone and removes the now-unneeded branch affordance;
+- no close/restart or remove/re-add was needed for remote branch metadata refresh.
+
 Published `v0.3.6` runtime-validation gate completed on 2026-09-24:
 
 - Normal installed startup delivery to published `v0.3.6` is accepted as passed as part of the user's active release testing; do not separately ask whether the updater worked when the user is already testing that published version through the normal installed workflow unless a failure/manual replacement is reported.
@@ -328,23 +337,16 @@ The prior v0.3.5 release also passed its documented 17/17 Release workflow valid
 
 ## Current Issues
 
-v0.3.6 has no open release-gate defect; its runtime-validation gate is complete.
+No known source or runtime defect is currently documented for published v0.3.7.
 
-The post-v0.3.6 branch/list fixes are now CI-checked, merged and published in v0.3.7, but are not yet runtime-confirmed:
-
-- row rendering should preserve semantic orange/green text while retaining the Windows selection background;
-- list rebuilds should restore the selected package by package ID and ensure its new display row is visible after re-sorting;
-- branch-arrow visibility now uses transient per-repository branch metadata rather than the one selected-package slot;
-- Add Git returns and seeds the full repository branch advertisement it already fetched;
-- normal branch-head refresh retains the full advertisement it already fetched, including when the tracked branch has disappeared, so new/deleted remote branches refresh without a second branch-list request.
-
-No runtime success should be inferred until the published v0.3.7 build is exercised.
+The focused post-v0.3.6 branch/list issues are runtime-confirmed fixed in v0.3.7.
 
 ## Testing
 
 ### Last Runtime Baselines
 
-- Published `v0.3.6` focused runtime matrix: passed on 2026-09-24, with only the selected-row semantic text-colour issue recorded separately under Current Issues.
+- Published `v0.3.7` branch/list matrix: passed on 2026-09-25, including branch re-sort anchoring, correct arrow affordance, selected semantic row colours, and live remote branch add/delete discovery through Refresh All without restarting TocPilot.
+- Published `v0.3.6` focused runtime matrix: passed on 2026-09-24.
 - Advanced Version population without Refresh: passed; TOCs lacking a Version field correctly produce no Version value.
 - Single-vs-multi-branch selector affordance: passed.
 - Advanced resize/reorder persistence, Lock Columns removal and Compact isolation: passed.
@@ -361,21 +363,19 @@ No runtime success should be inferred until the published v0.3.7 build is exerci
 
 ### Next Runtime Test
 
-After the focused branch/list UX follow-up is released, verify:
-
-1. changing branch may move the addon into the update-available group, but the selected/interactive Branch cell follows that same package to its new row;
-2. every repository known to have more than one branch shows an arrow without first selecting that row, and clicking it opens the branch list;
-3. every repository known to have exactly one branch shows no arrow and clicking the Branch cell does not open a dropdown;
-4. a branch added remotely after the addon was first managed becomes visible after the next normal startup/Refresh All branch-head refresh, without requiring package removal/re-add;
-5. selected orange/green rows retain semantic text colour while keeping the Windows selection background.
+No v0.3.7 release-gate runtime validation remains.
 
 Optional future checks remain the conflicting-TOC `Multiple` fixture and the deferred historical edge cases above.
 
 ## Planned / Next Work
 
-Published v0.3.7 is awaiting runtime confirmation. Verify the documented branch-arrow, branch-change anchoring, remote-branch refresh and selected-row colour matrix through normal installed use.
+P5 import/export is now unblocked and is the next isolated slice:
 
-After that runtime-confirmed follow-up, begin P5 import/export as its own isolated slice. Define import/export state, identity, ownership and conflict semantics before implementation, and keep package editing/other deferred P5 work out of that slice unless explicitly reopened.
+- define the export/import data contract before implementation;
+- define package identity and which provider/source/tracking fields are portable;
+- define whether installed revision, owned files and other machine-local install state are deliberately excluded;
+- define duplicate/conflict semantics against existing managed packages and live unmanaged addon roots;
+- keep package editing and the other deferred P5 work out of this slice unless explicitly reopened.
 
 ## Deferred / Out of Scope
 
@@ -407,13 +407,13 @@ Do not add support for user-uploaded ZIP/7z/RAR/installer/bundle release assets 
 
 - Current published runtime baseline is `v0.3.7` at `ec410df48787fa88a97d49489c4f99ea6893811a`.
 - Release workflow run `36161737119` (#50) is the authoritative v0.3.7 product build.
-- Runtime-confirmed behaviour still inherits from v0.3.6 until the user completes the v0.3.7 focused matrix.
+- Published v0.3.7 is runtime-confirmed for its focused branch/list delta.
 - Documentation-only commits after that release do not imply a new runtime build and require no version bump/release.
 - Version remains local installed TOC metadata; do not persist a second Version value into JSON unless the product contract is deliberately changed.
 - The legacy `package_columns_locked` JSON field remains accepted for compatibility but no longer controls v0.3.6 UI behaviour.
 
 ## Exact Next Step
 
-Runtime-test published v0.3.7 through normal installed use. Verify branch-change row anchoring, persistent arrows for known multi-branch repositories, no arrow/dropdown for known single-branch repositories, discovery of a newly added remote branch after normal startup/Refresh All, and semantic orange/green text on selected rows. Record partial results accurately.
+Begin P5 import/export as its own isolated slice. Before writing implementation code, define the import/export contract for package identity, provider/source and branch/release tracking fields, ownership/install-state exclusions, duplicate detection, conflicts with existing managed packages, conflicts with unmanaged live addon roots, and user confirmation/error semantics.
 
-**Do not begin P5 import/export until this focused v0.3.7 runtime matrix is confirmed.**
+Do not mix package editing or other deferred P5 work into the import/export slice.
