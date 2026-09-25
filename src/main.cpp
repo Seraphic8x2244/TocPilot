@@ -7413,6 +7413,19 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
         const std::wstring packageName =
             g_state.packages[index].name;
 
+        if (!result->repositoryInfo.branches.empty()) {
+            CacheRepositoryBranchInfo(
+                g_state.packages[index],
+                result->repositoryInfo);
+
+            if (g_packageList) {
+                InvalidateRect(
+                    g_packageList,
+                    nullptr,
+                    FALSE);
+            }
+        }
+
         if (!result->ok) {
             const bool rateLimited =
                 IsProviderRateLimitError(
@@ -7466,19 +7479,6 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                 UpdatePackageButtons();
             }
             return 0;
-        }
-
-        if (!result->repositoryInfo.branches.empty()) {
-            CacheRepositoryBranchInfo(
-                g_state.packages[index],
-                result->repositoryInfo);
-
-            if (g_packageList) {
-                InvalidateRect(
-                    g_packageList,
-                    nullptr,
-                    FALSE);
-            }
         }
 
         SetPackageNeedsAttention(

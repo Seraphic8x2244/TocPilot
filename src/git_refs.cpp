@@ -813,14 +813,13 @@ bool ResolvePublicGitBranchHead(
         return false;
     }
 
+    if (repositoryInfo) {
+        *repositoryInfo = info;
+    }
+
     for (const auto& item : info.branches) {
         if (item.name == branch) {
             remoteSha = item.sha;
-
-            if (repositoryInfo) {
-                *repositoryInfo = info;
-            }
-
             return true;
         }
     }
