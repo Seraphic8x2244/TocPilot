@@ -271,6 +271,7 @@ if(BUILD_TESTING)
         tests/direct_dll_tests.cpp
         src/direct_dll.cpp
         src/github_release.cpp
+        src/state.cpp
     )
     target_compile_features(TocPilotDirectDllTests PRIVATE cxx_std_20)
     target_compile_definitions(TocPilotDirectDllTests PRIVATE

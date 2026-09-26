@@ -1527,11 +1527,493 @@ bool EqualsInsensitive(
     return true;
 }
 
+std::wstring CanonicalSeparators(
+    std::wstring_view value) {
+    std::wstring result(value);
+    std::replace(
+        result.begin(),
+        result.end(),
+        L'\\',
+        L'/');
+    return result;
+}
+
+bool EndsWithInsensitive(
+    std::wstring_view value,
+    std::wstring_view suffix) {
+    if (value.size() < suffix.size()) {
+        return false;
+    }
+
+    return EqualsInsensitive(
+        value.substr(value.size() - suffix.size()),
+        suffix);
+}
+
+bool IsSafeRelativePath(
+    std::wstring_view value,
+    bool allowSingleDot = false) {
+    if (value.empty()) {
+        return false;
+    }
+
+    const std::wstring canonical =
+        CanonicalSeparators(value);
+
+    if (allowSingleDot &&
+        canonical == L".") {
+        return true;
+    }
+
+    if (canonical.front() == L'/' ||
+        canonical.back() == L'/' ||
+        canonical.find(L':') !=
+            std::wstring::npos) {
+        return false;
+    }
+
+    std::size_t start = 0;
+    while (start < canonical.size()) {
+        const std::size_t slash =
+            canonical.find(L'/', start);
+        const std::size_t end =
+            slash == std::wstring::npos
+                ? canonical.size()
+                : slash;
+        const std::wstring_view segment(
+            canonical.data() + start,
+            end - start);
+
+        if (segment.empty() ||
+            segment == L"." ||
+            segment == L"..") {
+            return false;
+        }
+
+        if (slash == std::wstring::npos) {
+            break;
+        }
+        start = slash + 1;
+    }
+
+    return true;
+}
+
+bool IsSafeRepositoryIdentity(
+    std::wstring_view provider,
+    std::wstring_view repository) {
+    if (repository.empty() ||
+        repository.find(L'\\') !=
+            std::wstring::npos ||
+        !IsSafeRelativePath(repository)) {
+        return false;
+    }
+
+    std::size_t components = 1;
+    for (const wchar_t ch : repository) {
+        if (ch == L'/') {
+            ++components;
+        }
+    }
+
+    if (provider == L"github") {
+        return components == 2;
+    }
+    if (provider == L"gitlab") {
+        return components >= 2;
+    }
+    return false;
+}
+
+bool AddonOwnedRoot(
+    std::wstring_view ownedPath,
+    std::wstring& root) {
+    root.clear();
+
+    const std::wstring canonical =
+        CanonicalSeparators(ownedPath);
+
+    if (!IsSafeRelativePath(canonical)) {
+        return false;
+    }
+
+    constexpr std::wstring_view prefix =
+        L"Interface/AddOns/";
+
+    if (canonical.size() <= prefix.size() ||
+        !EqualsInsensitive(
+            std::wstring_view(canonical).substr(
+                0,
+                prefix.size()),
+            prefix)) {
+        return false;
+    }
+
+    const std::wstring_view remainder =
+        std::wstring_view(canonical).substr(
+            prefix.size());
+    const std::size_t slash =
+        remainder.find(L'/');
+
+    if (slash == std::wstring::npos ||
+        slash == 0 ||
+        slash + 1 >= remainder.size()) {
+        return false;
+    }
+
+    root.assign(
+        remainder.substr(0, slash));
+    return true;
+}
+
+std::wstring ExpectedPackageId(
+    const PackageRecord& package) {
+    if (package.mode == L"release") {
+        return
+            package.provider + L":" +
+            package.repository + L":release:" +
+            package.asset;
+    }
+
+    const std::wstring source =
+        CanonicalSeparators(
+            package.sourcePath);
+
+    if (!source.empty() &&
+        source != L".") {
+        return
+            package.provider + L":" +
+            package.repository + L":addon:" +
+            source;
+    }
+
+    return
+        package.provider + L":" +
+        package.repository;
+}
+
+bool ValidatePackageRecordSemantics(
+    const PackageRecord& package,
+    std::wstring& error) {
+    const auto fail =
+        [&](std::wstring reason) {
+            error =
+                L"Package '" +
+                package.id +
+                L"' " +
+                std::move(reason);
+            return false;
+        };
+
+    if (package.id.empty() ||
+        package.name.empty() ||
+        package.provider.empty() ||
+        package.repository.empty() ||
+        package.mode.empty()) {
+        return fail(L"is incomplete.");
+    }
+
+    if (package.provider != L"github" &&
+        package.provider != L"gitlab") {
+        return fail(
+            L"uses an unsupported provider.");
+    }
+
+    if (!IsSafeRepositoryIdentity(
+            package.provider,
+            package.repository)) {
+        return fail(
+            L"has an invalid repository identity.");
+    }
+
+    if (!package.sourcePath.empty() &&
+        !IsSafeRelativePath(
+            package.sourcePath,
+            true)) {
+        return fail(
+            L"has an unsafe repository source path.");
+    }
+
+    const std::wstring expectedId =
+        ExpectedPackageId(package);
+    if (!EqualsInsensitive(
+            package.id,
+            expectedId)) {
+        return fail(
+            L"has an id that does not match its provider/repository/source identity.");
+    }
+
+    const bool hasInstalledRevision =
+        !package.installedRevision.empty();
+    const bool hasInstalledFiles =
+        !package.installedFiles.empty();
+
+    if (hasInstalledRevision !=
+        hasInstalledFiles) {
+        return fail(
+            L"has incoherent installed state: revision and owned files must either both be present or both be absent.");
+    }
+
+    if (package.mode == L"unconfigured") {
+        if (package.target != L"addons" ||
+            !package.ref.empty() ||
+            !package.releasePolicy.empty() ||
+            !package.asset.empty() ||
+            !package.targetPath.empty() ||
+            !package.installedRevision.empty() ||
+            !package.installedFiles.empty()) {
+            return fail(
+                L"has fields that are inconsistent with an unconfigured addon package.");
+        }
+        return true;
+    }
+
+    if (package.mode == L"branch") {
+        if (package.target != L"addons") {
+            return fail(
+                L"must target addons when tracking a branch.");
+        }
+        if (package.ref.empty()) {
+            return fail(
+                L"is a branch package without a branch ref.");
+        }
+        if (!package.releasePolicy.empty() ||
+            !package.asset.empty() ||
+            !package.targetPath.empty()) {
+            return fail(
+                L"mixes branch tracking with release/DLL fields.");
+        }
+
+        for (const auto& owned :
+             package.installedFiles) {
+            std::wstring root;
+            if (!AddonOwnedRoot(
+                    owned,
+                    root)) {
+                return fail(
+                    L"contains an unsafe or non-addon owned file path.");
+            }
+        }
+        return true;
+    }
+
+    if (package.mode == L"release") {
+        std::wstring directError;
+        if (!ValidateDirectDllPackageRecord(
+                package,
+                directError)) {
+            return fail(
+                L"is not a valid direct-DLL package: " +
+                directError);
+        }
+
+        if (!package.sourcePath.empty() ||
+            !package.ref.empty()) {
+            return fail(
+                L"mixes direct-release tracking with branch/source-path fields.");
+        }
+
+        if (hasInstalledFiles &&
+            (package.installedFiles.size() != 1 ||
+             package.installedFiles.front() !=
+                 package.targetPath)) {
+            return fail(
+                L"records direct-DLL ownership outside the exact configured target file.");
+        }
+        return true;
+    }
+
+    return fail(
+        L"uses an unsupported package mode.");
+}
+
 } // namespace
 
 std::filesystem::path StatePath(
     const std::filesystem::path& wowRoot) {
     return wowRoot / L"TocPilot.json";
+}
+
+bool ValidateDirectDllPackageRecord(
+    const PackageRecord& package,
+    std::wstring& error) {
+    error.clear();
+
+    if (package.provider != L"github" ||
+        package.mode != L"release" ||
+        package.target != L"wow_root") {
+        error =
+            L"Package is not a GitHub direct-DLL release package.";
+        return false;
+    }
+
+    if (package.releasePolicy !=
+        L"latest_stable") {
+        error =
+            L"Direct DLL packages currently require latest-stable release tracking.";
+        return false;
+    }
+
+    if (package.asset.empty() ||
+        !EndsWithInsensitive(
+            package.asset,
+            L".dll")) {
+        error =
+            L"Direct DLL packages require one exact .dll release asset name.";
+        return false;
+    }
+
+    if (package.asset.find_first_of(
+            L"/\\") !=
+        std::wstring::npos) {
+        error =
+            L"Direct DLL asset name must be a filename, not a path.";
+        return false;
+    }
+
+    if (package.targetPath.empty() ||
+        package.targetPath !=
+            package.asset ||
+        package.targetPath.find_first_of(
+            L"/\\") !=
+            std::wstring::npos) {
+        error =
+            L"Direct DLL destination must exactly match the selected DLL asset filename in the WoW root.";
+        return false;
+    }
+
+    const std::filesystem::path relative(
+        package.targetPath);
+
+    if (relative.is_absolute() ||
+        relative.has_parent_path() ||
+        relative.filename().wstring() !=
+            package.targetPath) {
+        error =
+            L"Direct DLL destination is not a safe WoW-root filename.";
+        return false;
+    }
+
+    return true;
+}
+
+bool ValidateDurablePackageState(
+    const std::vector<PackageRecord>& packages,
+    std::wstring& error) {
+    error.clear();
+
+    struct Ownership {
+        std::wstring value;
+        std::wstring packageId;
+    };
+
+    std::vector<Ownership> addonRoots;
+    std::vector<Ownership> directTargets;
+
+    for (std::size_t index = 0;
+         index < packages.size();
+         ++index) {
+        const auto& package =
+            packages[index];
+
+        for (std::size_t previous = 0;
+             previous < index;
+             ++previous) {
+            if (EqualsInsensitive(
+                    package.id,
+                    packages[previous].id)) {
+                error =
+                    L"Duplicate package id '" +
+                    package.id +
+                    L"' conflicts with '" +
+                    packages[previous].id +
+                    L"'.";
+                return false;
+            }
+        }
+
+        if (!ValidatePackageRecordSemantics(
+                package,
+                error)) {
+            return false;
+        }
+
+        if (package.target == L"addons") {
+            std::vector<std::wstring>
+                rootsForPackage;
+
+            for (const auto& owned :
+                 package.installedFiles) {
+                std::wstring root;
+                if (!AddonOwnedRoot(
+                        owned,
+                        root)) {
+                    error =
+                        L"Package '" +
+                        package.id +
+                        L"' contains an unsafe addon ownership path.";
+                    return false;
+                }
+
+                if (std::any_of(
+                        rootsForPackage.begin(),
+                        rootsForPackage.end(),
+                        [&](const std::wstring& existing) {
+                            return EqualsInsensitive(
+                                existing,
+                                root);
+                        })) {
+                    continue;
+                }
+
+                for (const auto& owner :
+                     addonRoots) {
+                    if (EqualsInsensitive(
+                            owner.value,
+                            root)) {
+                        error =
+                            L"Conflicting addon-root ownership for '" +
+                            root +
+                            L"' between packages '" +
+                            owner.packageId +
+                            L"' and '" +
+                            package.id +
+                            L"'.";
+                        return false;
+                    }
+                }
+
+                rootsForPackage.push_back(root);
+                addonRoots.push_back(
+                    {root, package.id});
+            }
+        }
+
+        if (package.mode == L"release" &&
+            package.target == L"wow_root") {
+            for (const auto& owner :
+                 directTargets) {
+                if (EqualsInsensitive(
+                        owner.value,
+                        package.targetPath)) {
+                    error =
+                        L"Conflicting direct-DLL destination ownership for '" +
+                        package.targetPath +
+                        L"' between packages '" +
+                        owner.packageId +
+                        L"' and '" +
+                        package.id +
+                        L"'.";
+                    return false;
+                }
+            }
+
+            directTargets.push_back(
+                {package.targetPath, package.id});
+        }
+    }
+
+    return true;
 }
 
 PackageRecord MakeRepositoryPackage(
@@ -1596,6 +2078,12 @@ bool AppendPackage(
         package.repository.empty()) {
         error =
             L"The package source is incomplete and was not saved.";
+        return false;
+    }
+
+    if (!ValidatePackageRecordSemantics(
+            package,
+            error)) {
         return false;
     }
 
@@ -1698,6 +2186,12 @@ bool ReplacePackageRecord(
         return false;
     }
 
+    if (!ValidatePackageRecordSemantics(
+            replacement,
+            error)) {
+        return false;
+    }
+
     std::size_t existingIndex =
         state.packages.size();
 
@@ -1781,6 +2275,11 @@ bool SetPackageBranch(
             L"Branch selection is not available for this package provider.";
         return false;
     }
+    if (package.target != L"addons") {
+        error =
+            L"Branch packages must target the addon directory.";
+        return false;
+    }
     if (branch.empty() || remoteSha.empty()) {
         error =
             L"The repository provider did not provide a valid branch and commit SHA.";
@@ -1803,20 +2302,22 @@ bool SetPackageLatestRevision(
         (package.provider == L"github" ||
          package.provider == L"gitlab") &&
         package.mode == L"branch" &&
+        package.target == L"addons" &&
         !package.ref.empty();
 
+    std::wstring directError;
     const bool directReleasePackage =
-        package.provider == L"github" &&
         package.mode == L"release" &&
-        package.releasePolicy == L"latest_stable" &&
-        !package.asset.empty() &&
-        package.target == L"wow_root" &&
-        !package.targetPath.empty();
+        ValidateDirectDllPackageRecord(
+            package,
+            directError);
 
     if (!branchPackage &&
         !directReleasePackage) {
         error =
-            L"Only configured GitHub/GitLab branch or latest-stable GitHub direct-release packages can be refreshed.";
+            !directError.empty()
+                ? directError
+                : L"Only configured GitHub/GitLab branch or latest-stable GitHub direct-release packages can be refreshed.";
         return false;
     }
 
@@ -1844,20 +2345,22 @@ bool SetPackageInstalledState(
         (package.provider == L"github" ||
          package.provider == L"gitlab") &&
         package.mode == L"branch" &&
+        package.target == L"addons" &&
         !package.ref.empty();
 
+    std::wstring directError;
     const bool directReleasePackage =
-        package.provider == L"github" &&
         package.mode == L"release" &&
-        package.releasePolicy == L"latest_stable" &&
-        !package.asset.empty() &&
-        package.target == L"wow_root" &&
-        !package.targetPath.empty();
+        ValidateDirectDllPackageRecord(
+            package,
+            directError);
 
     if (!branchPackage &&
         !directReleasePackage) {
         error =
-            L"Only configured GitHub/GitLab branch or latest-stable GitHub direct-release packages can be installed.";
+            !directError.empty()
+                ? directError
+                : L"Only configured GitHub/GitLab branch or latest-stable GitHub direct-release packages can be installed.";
         return false;
     }
 
@@ -2326,6 +2829,16 @@ bool LoadOrCreateState(
             packagesEnd,
             packages,
             error)) {
+        return false;
+    }
+
+    std::wstring semanticError;
+    if (!ValidateDurablePackageState(
+            packages,
+            semanticError)) {
+        error =
+            L"TocPilot.json failed semantic validation: " +
+            semanticError;
         return false;
     }
 

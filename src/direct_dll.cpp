@@ -103,32 +103,6 @@ std::wstring Lower(
     return value;
 }
 
-bool EndsWithInsensitive(
-    std::wstring_view value,
-    std::wstring_view suffix) {
-    if (value.size() <
-        suffix.size()) {
-        return false;
-    }
-
-    const std::size_t offset =
-        value.size() -
-        suffix.size();
-
-    for (std::size_t i = 0;
-         i < suffix.size();
-         ++i) {
-        if (std::towlower(
-                value[offset + i]) !=
-            std::towlower(
-                suffix[i])) {
-            return false;
-        }
-    }
-
-    return true;
-}
-
 bool IsHexDigest(
     std::wstring_view digest) {
     if (digest.size() != 64) {
@@ -872,63 +846,9 @@ bool IsDirectDllPackage(
 bool ValidateDirectDllPackage(
     const PackageRecord& package,
     std::wstring& error) {
-    error.clear();
-
-    if (!IsDirectDllPackage(
-            package)) {
-        error =
-            L"Package is not a GitHub direct-DLL release package.";
-        return false;
-    }
-
-    if (package.releasePolicy !=
-        L"latest_stable") {
-        error =
-            L"Direct DLL packages currently require latest-stable release tracking.";
-        return false;
-    }
-
-    if (package.asset.empty() ||
-        !EndsWithInsensitive(
-            package.asset,
-            L".dll")) {
-        error =
-            L"Direct DLL packages require one exact .dll release asset name.";
-        return false;
-    }
-
-    if (package.asset.find_first_of(
-            L"/\\") !=
-        std::wstring::npos) {
-        error =
-            L"Direct DLL asset name must be a filename, not a path.";
-        return false;
-    }
-
-    if (package.targetPath.empty() ||
-        package.targetPath !=
-            package.asset ||
-        package.targetPath.find_first_of(
-            L"/\\") !=
-            std::wstring::npos) {
-        error =
-            L"Direct DLL destination must exactly match the selected DLL asset filename in the WoW root.";
-        return false;
-    }
-
-    const std::filesystem::path relative(
-        package.targetPath);
-
-    if (relative.is_absolute() ||
-        relative.has_parent_path() ||
-        relative.filename().wstring() !=
-            package.targetPath) {
-        error =
-            L"Direct DLL destination is not a safe WoW-root filename.";
-        return false;
-    }
-
-    return true;
+    return ValidateDirectDllPackageRecord(
+        package,
+        error);
 }
 
 bool DirectDllTargetPath(

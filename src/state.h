@@ -90,6 +90,14 @@ PackageRecord MakeRepositoryAddonPackage(
     std::wstring sourcePath,
     std::wstring name);
 
+bool ValidateDirectDllPackageRecord(
+    const PackageRecord& package,
+    std::wstring& error);
+
+bool ValidateDurablePackageState(
+    const std::vector<PackageRecord>& packages,
+    std::wstring& error);
+
 bool AppendPackage(
     AppState& state,
     PackageRecord package,
