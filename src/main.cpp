@@ -2685,7 +2685,7 @@ void OpenBranchSelectorIfReady(
     if (!ListView_GetSubItemRect(
             g_packageList,
             displayRow,
-            1,
+            kPackageColumnBranch,
             LVIR_BOUNDS,
             &cell)) {
         return;
