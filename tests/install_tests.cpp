@@ -66,6 +66,63 @@ bool Exists(
         !ec;
 }
 
+
+tp::AddonTransactionStateMarker Marker(
+    std::wstring packageId,
+    std::wstring transactionId,
+    bool present = true) {
+    tp::AddonTransactionStateMarker marker;
+    marker.packageId = std::move(packageId);
+    marker.transactionId =
+        std::move(transactionId);
+    marker.present = present;
+    return marker;
+}
+
+bool BeginForTest(
+    const tp::AddonInstallPlan& plan,
+    tp::AddonInstallTransaction& transaction,
+    std::wstring& error,
+    const tp::AddonInstallOptions& options = {}) {
+    if (!tp::PrepareAddonInstallTransaction(
+            plan,
+            transaction,
+            error)) {
+        return false;
+    }
+
+    if (!tp::ArmAddonInstallTransaction(
+            transaction,
+            Marker(
+                plan.packageId,
+                L"test-pre-state"),
+            Marker(
+                plan.packageId,
+                transaction.transactionId),
+            error)) {
+        std::wstring cleanupError;
+        tp::RollbackAddonInstallTransaction(
+            transaction,
+            cleanupError);
+        return false;
+    }
+
+    if (!tp::CommitAddonInstallTransaction(
+            transaction,
+            error,
+            options)) {
+        if (transaction.prepared) {
+            std::wstring cleanupError;
+            tp::RollbackAddonInstallTransaction(
+                transaction,
+                cleanupError);
+        }
+        return false;
+    }
+
+    return true;
+}
+
 } // namespace
 
 int main() {
@@ -118,7 +175,7 @@ int main() {
             Fail("owned-root removal plan selected wrong roots");
         } else {
             tp::AddonInstallTransaction transaction;
-            if (!tp::BeginAddonInstallTransaction(
+            if (!BeginForTest(
                     plan,
                     transaction,
                     error)) {
@@ -148,7 +205,7 @@ int main() {
             }
 
             tp::AddonInstallTransaction committedRemoval;
-            if (!tp::BeginAddonInstallTransaction(
+            if (!BeginForTest(
                     plan,
                     committedRemoval,
                     error) ||
@@ -237,7 +294,7 @@ int main() {
             options.failAfterRootBackups = 1;
 
             tp::AddonInstallTransaction transaction;
-            if (tp::BeginAddonInstallTransaction(
+            if (BeginForTest(
                     plan,
                     transaction,
                     error,
@@ -333,7 +390,7 @@ int main() {
             }
 
             tp::AddonInstallTransaction firstTransaction;
-            if (!tp::BeginAddonInstallTransaction(
+            if (!BeginForTest(
                     firstPlan,
                     firstTransaction,
                     error)) {
@@ -403,7 +460,7 @@ int main() {
                         }
 
                         tp::AddonInstallTransaction updateTransaction;
-                        if (!tp::BeginAddonInstallTransaction(
+                        if (!BeginForTest(
                                 updatePlan,
                                 updateTransaction,
                                 error)) {
@@ -445,7 +502,7 @@ int main() {
                         }
 
                         tp::AddonInstallTransaction committedUpdate;
-                        if (!tp::BeginAddonInstallTransaction(
+                        if (!BeginForTest(
                                 updatePlan,
                                 committedUpdate,
                                 error) ||
@@ -564,7 +621,7 @@ int main() {
             options.failAfterNewRootCommits = 1;
 
             tp::AddonInstallTransaction transaction;
-            if (tp::BeginAddonInstallTransaction(
+            if (BeginForTest(
                     plan,
                     transaction,
                     error,
