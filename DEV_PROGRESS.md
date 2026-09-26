@@ -347,16 +347,18 @@ Highest-priority confirmed audit findings so far:
 - branch-dialog async results have no per-request generation token, leaving a rare stale-result/HWND-reuse race;
 - Add Git latest-stable DLL discovery performs provider network I/O synchronously on the dialog thread;
 - self-update executable/checksum downloads lack explicit response-size limits/asset-size matching;
+- self-update release asset/checksum transport does not reject an initial non-HTTPS URL even though the rulebook requires HTTPS provider/download traffic; normal GitHub metadata currently supplies HTTPS URLs and WinHTTP's default redirect policy blocks HTTPS -> HTTP downgrades;
+- Update All does not treat branch-addon archive HTTP rate limiting as a queue-stop condition, unlike status refresh and direct-DLL update paths;
 - ZIP extraction can allocate one very large uncompressed member fully in memory;
 - provider/repository staging-directory sanitization can collide for distinct identities.
 
-Lower-priority/test-debt findings and contract-driven direct-DLL risks are retained in `audit_dump.md`.
+Lower-priority/test-debt findings and contract-driven direct-DLL risks are retained in `audit_dump.md`. The network/updater pass also confirmed a low-priority updater handoff gap: parent-process synchronization failure is silently ignored before replacement retries begin.
 
 P6A bounded-pass status:
 
 - transaction/state recovery deep pass: **complete and documented**;
-- network/provider + updater deep pass: next;
-- async/UI ownership + Win32 resource pass: outstanding;
+- network/provider + updater deep pass: **complete and documented**;
+- async/UI ownership + Win32 resource pass: next;
 - tests/build-debt/final-priority pass: outstanding.
 
 Power-loss durability of the addon directory rename sequence remains a verification gap: `TocPilot.json` is explicitly flushed/write-through, while addon directory moves currently use `std::filesystem::rename` without a separately verified durability guarantee.
@@ -464,8 +466,8 @@ Do not add support for user-uploaded ZIP/7z/RAR/installer/bundle release assets 
 
 ## Exact Next Step
 
-Continue P6A with the **network/provider + updater deep pass**. Verify HTTPS/redirect invariants end-to-end, rate-limit/error classification consistency, malformed/partial response handling, and self-update handoff/cleanup edge cases. Record only verified evidence and test gaps; do not change runtime code yet.
+Continue P6A with the **async/UI ownership + Win32 resource pass**. Audit every detached worker/result-message pair, close/reopen/reentrancy paths, handle/GDI lifetime and silent Win32 API failures, and stale/legacy branch-selector control/code. Record only verified evidence and test gaps; do not change runtime code yet.
 
-Then complete, separately, the async/UI ownership + Win32 resource pass and the tests/build-debt/final-priority pass. Use `audit_dump.md` only as temporary scratch continuity and promote the concise authoritative findings/priorities back into this file after each pass.
+Then complete the tests/build-debt/final-priority pass. Use `audit_dump.md` only as temporary scratch continuity and promote the concise authoritative findings/priorities back into this file after each pass.
 
 After the findings list is stable, choose the first focused robustness fix/test slice. UI/UX review follows the robustness gate; visual/skin work follows the UI/UX pass.
