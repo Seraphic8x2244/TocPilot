@@ -4,14 +4,14 @@
 
 ## Current
 
-- Active branch: `main`.
-- Source/application version: `v0.3.8`.
+- Active branch: `feature/www-column-v0.3.9` (focused user-requested usability slice from `main` `43a433e23d0146d692ce8881e20c1f8e89fa2683`).
+- Source/application version: `v0.3.9` on the feature branch; latest published release remains `v0.3.8`.
 - Latest published release: `v0.3.8`.
 - Release/source commit and tag target: `17ce349273c6f2d76572c7107f3c6f7b139cf8d8` (merge of PR #9).
 - Latest runtime-confirmed release: `v0.3.8` at `17ce349273c6f2d76572c7107f3c6f7b139cf8d8` for the normal installed self-update path only; package-operation smoke checks remain pending before full A1 gate acceptance.
 - Latest verified `main` runtime/release head: `17ce349273c6f2d76572c7107f3c6f7b139cf8d8` (v0.3.8 A1 release; published/CI-checked; self-update runtime path passed, focused package smoke gate pending).
-- Current goal: complete the remaining v0.3.8 A1 package-operation smoke checks before starting A2.
-- Current scope boundary: do not begin A2 state semantic validation, UI cleanup, updater hardening, warning cleanup or deferred feature work until the A1 release/runtime gate is accepted.
+- Current goal: publish the narrow v0.3.9 Advanced-mode WWW repository-link column requested specifically to make the remaining A1 package-operation runtime gate faster, then resume that gate.
+- Current scope boundary: this is an explicit temporary exception to the prior no-UI-work boundary; keep v0.3.9 strictly to the WWW column/click behaviour and compatible column-layout migration. Do not begin A2, broader UI cleanup, updater hardening, warning cleanup or other deferred work until the A1 runtime gate is accepted.
 - Audit continuity: `audit_dump.md` is a temporary scratch checkpoint for the interrupted broad audit only; this file remains the sole authoritative live development source of truth.
 - Documentation-only commits after the release do not change the published runtime baseline.
 
@@ -186,7 +186,9 @@ Compact mode:
 
 Advanced mode:
 
-`Name | Branch | Version | Local SHA | Git SHA | Status`
+`Name | WWW | Branch | Version | Local SHA | Git SHA | Status`
+
+`WWW` is derived from the package's existing provider/repository identity (GitHub/GitLab), displays the repository URL and opens that repository in the default browser on a single click. It adds no duplicate durable source field.
 
 Version semantics are local-only:
 
@@ -413,7 +415,7 @@ The focused post-v0.3.6 branch/list issues remain runtime-confirmed fixed in v0.
 
 ### Next Runtime Test
 
-The published v0.3.8 self-update path has passed. Complete the remaining focused A1 runtime gate by smoking ordinary addon install/update/reinstall, Uninstall, Remove and managed replacement paths for regressions. The mapped process-crash windows are covered deterministically in CI; do not require ad-hoc destructive crash timing as the normal user gate.
+After v0.3.9 is published, start from installed v0.3.8 and use TocPilot's real self-updater to v0.3.9. Confirm Advanced shows `Name | WWW | Branch | Version | Local SHA | Git SHA | Status`, repository links open the correct GitHub/GitLab source, existing saved Advanced order/widths remain sensibly migrated, and Compact remains unchanged. Then use the WWW links while completing the remaining A1 install/update/reinstall, Uninstall, Remove and managed-replacement smoke checks. The mapped process-crash windows remain covered deterministically in CI; do not require ad-hoc destructive crash timing as the normal user gate.
 
 Optional future checks remain the conflicting-TOC `Multiple` fixture and the deferred historical edge cases above.
 
@@ -492,10 +494,14 @@ Do not add support for user-uploaded ZIP/7z/RAR/installer/bundle release assets 
 
 ## Exact Next Step
 
-Complete the focused **v0.3.8 A1 runtime gate**; do not begin A2 yet.
+Finish and publish the focused **v0.3.9 WWW-column usability slice**, then resume the A1 runtime gate; do not begin A2 yet.
 
-1. smoke ordinary addon install/update/reinstall, Uninstall, Remove and managed replacement paths on installed `v0.3.8`;
-2. report any regression against the v0.3.7 baseline, or accept the focused gate if those paths remain correct;
-3. record the final runtime result here before starting **A2 durable state semantic validation**.
+1. validate `feature/www-column-v0.3.9` through Windows x64 Release build + the complete CTest suite;
+2. merge only if `main` has not moved unexpectedly;
+3. publish `v0.3.9` through the real Release workflow from the exact merged `main` commit;
+4. runtime-test installed `v0.3.8 -> v0.3.9` through the normal self-updater;
+5. verify the clickable WWW repository column, migrated Advanced column layout and unchanged Compact view;
+6. use the new links to complete ordinary addon install/update/reinstall, Uninstall, Remove and managed replacement smoke checks;
+7. record the final A1 runtime result here before starting **A2 durable state semantic validation**.
 
 Keep the existing caveat explicit: A1 provides deterministic **process-restart** recovery, but full sudden-power-loss atomicity is not claimed until Windows directory-rename durability is separately verified.
