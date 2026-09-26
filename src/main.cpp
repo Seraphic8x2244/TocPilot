@@ -278,6 +278,38 @@ struct DirectDllInstallResult {
     std::wstring error;
 };
 
+
+tp::AddonTransactionStateMarker TransactionStateMarker(
+    const tp::PackageRecord& package) {
+    tp::AddonTransactionStateMarker marker;
+    marker.packageId = package.id;
+    marker.transactionId =
+        package.installTransaction;
+    marker.present = true;
+    return marker;
+}
+
+tp::AddonTransactionStateMarker MissingTransactionStateMarker(
+    std::wstring packageId) {
+    tp::AddonTransactionStateMarker marker;
+    marker.packageId = std::move(packageId);
+    marker.present = false;
+    return marker;
+}
+
+std::vector<tp::AddonTransactionStateMarker>
+CurrentTransactionStateMarkers(
+    const tp::AppState& state) {
+    std::vector<tp::AddonTransactionStateMarker>
+        markers;
+    markers.reserve(state.packages.size());
+    for (const auto& package : state.packages) {
+        markers.push_back(
+            TransactionStateMarker(package));
+    }
+    return markers;
+}
+
 void SetIndicator(HWND control, const std::wstring& text) {
     if (control) {
         SetWindowTextW(control, text.c_str());
@@ -8708,6 +8740,20 @@ int RunMainWindow(HINSTANCE instance) {
         g_state,
         g_stateCreated,
         g_stateError);
+
+    if (g_stateReady) {
+        std::wstring recoveryError;
+        if (!tp::RecoverAddonInstallTransactions(
+                g_root,
+                CurrentTransactionStateMarkers(
+                    g_state),
+                recoveryError)) {
+            g_stateReady = false;
+            g_stateError =
+                L"Addon transaction recovery failed: " +
+                recoveryError;
+        }
+    }
 
     if (!g_stateReady) {
         MessageBoxW(
