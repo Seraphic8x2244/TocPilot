@@ -156,6 +156,7 @@ HWND g_rootLabel = nullptr;
 
 HFONT g_uiFont = nullptr;
 HFONT g_boldUiFont = nullptr;
+HFONT g_linkUiFont = nullptr;
 HICON g_wowIcon = nullptr;
 HICON g_vanillaFixesIcon = nullptr;
 
@@ -427,6 +428,22 @@ void ApplyUiFont(HWND hwnd) {
         DEFAULT_PITCH | FF_DONTCARE,
         L"Segoe UI");
 
+    HFONT linkFont = CreateFontW(
+        height,
+        0,
+        0,
+        0,
+        FW_NORMAL,
+        FALSE,
+        TRUE,
+        FALSE,
+        DEFAULT_CHARSET,
+        OUT_DEFAULT_PRECIS,
+        CLIP_DEFAULT_PRECIS,
+        CLEARTYPE_QUALITY,
+        DEFAULT_PITCH | FF_DONTCARE,
+        L"Segoe UI");
+
     SendMessageW(hwnd, WM_SETFONT, reinterpret_cast<WPARAM>(font), TRUE);
     EnumChildWindows(
         hwnd,
@@ -439,8 +456,12 @@ void ApplyUiFont(HWND hwnd) {
     if (g_boldUiFont) {
         DeleteObject(g_boldUiFont);
     }
+    if (g_linkUiFont) {
+        DeleteObject(g_linkUiFont);
+    }
     g_uiFont = font;
     g_boldUiFont = boldFont;
+    g_linkUiFont = linkFont;
 
     if (g_tocPilotWindow &&
         IsWindow(g_tocPilotWindow)) {
@@ -885,7 +906,7 @@ void AddPackageListColumns() {
 
     constexpr std::array<ColumnSpec, tp::kPackageColumnCount> columns{{
         {L"Name", 180},
-        {L"WWW", 260},
+        {L"www", 260},
         {L"Branch", 250},
         {L"Version", 110},
         {L"Local SHA", 115},
@@ -1594,6 +1615,11 @@ LRESULT HandlePackageListCustomDraw(
 
     const bool drawName =
         draw->iSubItem == 0;
+    const bool drawWebsite =
+        g_advancedVisible &&
+        draw->iSubItem == kPackageColumnWww &&
+        !PackageRepositoryUrl(
+            package).empty();
     const bool drawBranch =
         g_advancedVisible &&
         draw->iSubItem == kPackageColumnBranch &&
@@ -1601,6 +1627,7 @@ LRESULT HandlePackageListCustomDraw(
             package);
 
     if (!drawName &&
+        !drawWebsite &&
         !drawBranch) {
         draw->clrText =
             rowTextColour;
@@ -1623,6 +1650,15 @@ LRESULT HandlePackageListCustomDraw(
             ListView_GetColumnWidth(
                 g_packageList,
                 0);
+    } else if (drawWebsite) {
+        if (!ListView_GetSubItemRect(
+                g_packageList,
+                displayRow,
+                kPackageColumnWww,
+                LVIR_BOUNDS,
+                &rect)) {
+            return CDRF_DODEFAULT;
+        }
     } else {
         if (!ListView_GetSubItemRect(
                 g_packageList,
@@ -1664,6 +1700,46 @@ LRESULT HandlePackageListCustomDraw(
         g_boldUiFont
             ? g_boldUiFont
             : normal;
+    HFONT link =
+        g_linkUiFont
+            ? g_linkUiFont
+            : normal;
+
+    if (drawWebsite) {
+        SetTextColor(
+            draw->nmcd.hdc,
+            RGB(0, 0, 255));
+
+        const HGDIOBJ oldFont =
+            SelectObject(
+                draw->nmcd.hdc,
+                link);
+
+        RECT textRect =
+            rect;
+        textRect.left += 6;
+        textRect.right -= 5;
+
+        const std::wstring website =
+            PackageRepositoryUrl(
+                package);
+
+        DrawTextW(
+            draw->nmcd.hdc,
+            website.c_str(),
+            -1,
+            &textRect,
+            DT_SINGLELINE |
+                DT_VCENTER |
+                DT_END_ELLIPSIS |
+                DT_NOPREFIX);
+
+        SelectObject(
+            draw->nmcd.hdc,
+            oldFont);
+
+        return CDRF_SKIPDEFAULT;
+    }
 
     if (drawBranch) {
         const HGDIOBJ oldFont =
@@ -8867,6 +8943,10 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
         if (g_boldUiFont) {
             DeleteObject(g_boldUiFont);
             g_boldUiFont = nullptr;
+        }
+        if (g_linkUiFont) {
+            DeleteObject(g_linkUiFont);
+            g_linkUiFont = nullptr;
         }
         PostQuitMessage(0);
         return 0;
