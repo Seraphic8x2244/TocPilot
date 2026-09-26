@@ -1266,6 +1266,16 @@ int main() {
                     addOns /
                     L"Shared/old.lua")) {
                 Fail("managed replacement preparation changed live files");
+            } else if (!tp::ArmAddonInstallTransaction(
+                           transaction,
+                           Marker(
+                               L"github:OldOwner/Shared",
+                               L"old-owner-state"),
+                           Marker(
+                               plan.packageId,
+                               transaction.transactionId),
+                           error)) {
+                Fail("managed replacement recovery journal arm failed");
             } else if (!tp::CommitAddonInstallTransaction(
                            transaction,
                            error)) {
