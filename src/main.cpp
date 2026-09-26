@@ -4629,7 +4629,7 @@ void UninstallPackage(
     }
 
     tp::AddonInstallTransaction transaction;
-    if (!tp::BeginAddonInstallTransaction(
+    if (!tp::PrepareAddonInstallTransaction(
             plan,
             transaction,
             error)) {
@@ -4641,7 +4641,7 @@ void UninstallPackage(
         if (g_packageHint) {
             const std::wstring message =
                 package.name +
-                L": uninstall failed - " +
+                L": uninstall preparation failed - " +
                 error;
             SetWindowTextW(
                 g_packageHint,
@@ -4659,10 +4659,79 @@ void UninstallPackage(
     }
 
     tp::AppState updatedState = g_state;
-    if (!tp::ClearPackageInstalledState(
+    bool transitionReady =
+        tp::ClearPackageInstalledState(
             updatedState.packages[index],
-            error) ||
-        !tp::SaveState(
+            error);
+
+    if (transitionReady) {
+        updatedState.packages[index]
+            .installTransaction =
+            transaction.transactionId;
+
+        transitionReady =
+            tp::ArmAddonInstallTransaction(
+                transaction,
+                TransactionStateMarker(package),
+                TransactionStateMarker(
+                    updatedState.packages[index]),
+                error);
+    }
+
+    if (transitionReady) {
+        transitionReady =
+            tp::CommitAddonInstallTransaction(
+                transaction,
+                error);
+    }
+
+    if (!transitionReady) {
+        const std::wstring transitionError =
+            error;
+        std::wstring rollbackError;
+        const bool rolledBack =
+            tp::RollbackAddonInstallTransaction(
+                transaction,
+                rollbackError);
+
+        g_packageInstallInProgress = false;
+        SetPackageRowStatus(
+            index,
+            rolledBack
+                ? L"Uninstall rolled back"
+                : L"Rollback failed");
+
+        std::wstring message =
+            package.name +
+            L": uninstall could not be committed - " +
+            transitionError;
+
+        if (!rolledBack) {
+            message +=
+                L"\r\n\r\nFilesystem rollback also failed: " +
+                rollbackError;
+        }
+
+        if (g_packageHint) {
+            SetWindowTextW(
+                g_packageHint,
+                message.c_str());
+        }
+
+        MessageBoxW(
+            hwnd,
+            message.c_str(),
+            rolledBack
+                ? L"TocPilot - Uninstall Failed"
+                : L"TocPilot - Rollback Failed",
+            MB_OK | MB_ICONERROR);
+
+        SelectPackageRow(index);
+        UpdatePackageButtons();
+        return;
+    }
+
+    if (!tp::SaveState(
             g_root,
             updatedState,
             error)) {
