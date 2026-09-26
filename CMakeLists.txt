@@ -201,6 +201,7 @@ if(BUILD_TESTING)
         NOMINMAX
     )
     target_include_directories(TocPilotInstallTests PRIVATE src)
+    target_link_libraries(TocPilotInstallTests PRIVATE ole32)
 
     if(MSVC)
         target_compile_options(TocPilotInstallTests PRIVATE /W4 /permissive- /utf-8)
