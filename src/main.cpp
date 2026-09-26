@@ -90,7 +90,16 @@ constexpr int kCompactPrimaryButtonCount = 4;
 constexpr int kAdvancedButtonCount = 8;
 constexpr int kCompactNameColumnMinWidth = 220;
 constexpr int kCompactStatusColumnMinWidth = 150;
+constexpr int kPackageColumnName = 0;
+constexpr int kPackageColumnWww = 1;
+constexpr int kPackageColumnBranch = 2;
+constexpr int kPackageColumnVersion = 3;
+constexpr int kPackageColumnInstalled = 4;
+constexpr int kPackageColumnLatest = 5;
+constexpr int kPackageColumnStatus = 6;
+
 constexpr int kAdvancedNameColumnMinWidth = 240;
+constexpr int kAdvancedWwwColumnMinWidth = 260;
 constexpr int kAdvancedBranchColumnMinWidth = 300;
 constexpr int kAdvancedVersionColumnMinWidth = 110;
 constexpr int kAdvancedInstalledColumnMinWidth = 115;
@@ -495,6 +504,7 @@ int RequiredClientWidth(
     const int columnsWidth =
         advanced
             ? kAdvancedNameColumnMinWidth +
+                kAdvancedWwwColumnMinWidth +
                 kAdvancedBranchColumnMinWidth +
                 kAdvancedVersionColumnMinWidth +
                 kAdvancedInstalledColumnMinWidth +
@@ -561,7 +571,7 @@ void ApplyPackageColumnOrder() {
         return;
     }
 
-    std::array<int, 6> order =
+    std::array<int, tp::kPackageColumnCount> order =
         g_stateReady
             ? g_state.settings.packageColumnOrder
             : tp::kDefaultPackageColumnOrder;
@@ -579,7 +589,7 @@ void SaveCurrentPackageColumnLayout() {
         return;
     }
 
-    std::array<int, 6> widths{};
+    std::array<int, tp::kPackageColumnCount> widths{};
     for (int column = 0;
          column < static_cast<int>(widths.size());
          ++column) {
@@ -592,7 +602,7 @@ void SaveCurrentPackageColumnLayout() {
                 2000);
     }
 
-    std::array<int, 6> order{};
+    std::array<int, tp::kPackageColumnCount> order{};
     if (!ListView_GetColumnOrderArray(
             g_packageList,
             static_cast<int>(order.size()),
@@ -658,27 +668,19 @@ void ResizeListColumns() {
 
         ListView_SetColumnWidth(
             g_packageList,
-            0,
+            kPackageColumnName,
             nameWidth);
+        for (int column = kPackageColumnWww;
+             column < kPackageColumnStatus;
+             ++column) {
+            ListView_SetColumnWidth(
+                g_packageList,
+                column,
+                0);
+        }
         ListView_SetColumnWidth(
             g_packageList,
-            1,
-            0);
-        ListView_SetColumnWidth(
-            g_packageList,
-            2,
-            0);
-        ListView_SetColumnWidth(
-            g_packageList,
-            3,
-            0);
-        ListView_SetColumnWidth(
-            g_packageList,
-            4,
-            0);
-        ListView_SetColumnWidth(
-            g_packageList,
-            5,
+            kPackageColumnStatus,
             statusWidth);
         return;
     }
@@ -881,8 +883,9 @@ void AddPackageListColumns() {
         int width;
     };
 
-    constexpr std::array<ColumnSpec, 6> columns{{
+    constexpr std::array<ColumnSpec, tp::kPackageColumnCount> columns{{
         {L"Name", 180},
+        {L"WWW", 260},
         {L"Branch", 250},
         {L"Version", 110},
         {L"Local SHA", 115},
@@ -930,6 +933,27 @@ std::wstring BranchProviderHost(
     if (provider == L"gitlab") {
         return L"gitlab.com";
     }
+    return {};
+}
+
+std::wstring PackageRepositoryUrl(
+    const tp::PackageRecord& package) {
+    if (package.repository.empty()) {
+        return {};
+    }
+
+    if (package.provider == L"github") {
+        return
+            L"https://github.com/" +
+            package.repository;
+    }
+
+    if (package.provider == L"gitlab") {
+        return
+            L"https://gitlab.com/" +
+            package.repository;
+    }
+
     return {};
 }
 
@@ -1572,7 +1596,7 @@ LRESULT HandlePackageListCustomDraw(
         draw->iSubItem == 0;
     const bool drawBranch =
         g_advancedVisible &&
-        draw->iSubItem == 1 &&
+        draw->iSubItem == kPackageColumnBranch &&
         PackageBranchMode(
             package);
 
@@ -1603,7 +1627,7 @@ LRESULT HandlePackageListCustomDraw(
         if (!ListView_GetSubItemRect(
                 g_packageList,
                 displayRow,
-                1,
+                kPackageColumnBranch,
                 LVIR_BOUNDS,
                 &rect)) {
             return CDRF_DODEFAULT;
@@ -1847,7 +1871,8 @@ void RefreshPackageLocalVersionCache() {
         L"—");
 
     if (!g_advancedVisible &&
-        g_packageSortColumn != 2) {
+        g_packageSortColumn !=
+            kPackageColumnVersion) {
         return;
     }
 
@@ -1873,22 +1898,24 @@ std::wstring PackageColumnText(
         g_state.packages[packageIndex];
 
     switch (column) {
-    case 0:
+    case kPackageColumnName:
         return PackageDisplayName(package);
-    case 1:
+    case kPackageColumnWww:
+        return PackageRepositoryUrl(package);
+    case kPackageColumnBranch:
         return PackageSourceText(package);
-    case 2:
+    case kPackageColumnVersion:
         return
             packageIndex <
                     g_packageLocalVersions.size()
                 ? g_packageLocalVersions[
                     packageIndex]
                 : L"—";
-    case 3:
+    case kPackageColumnInstalled:
         return package.installedRevision;
-    case 4:
+    case kPackageColumnLatest:
         return package.latestRevision;
-    case 5:
+    case kPackageColumnStatus:
         return PackageStatusText(package);
     default:
         return {};
@@ -2091,6 +2118,9 @@ void PopulatePackageList() {
             continue;
         }
 
+        const std::wstring website =
+            PackageRepositoryUrl(
+                package);
         const std::wstring source =
             PackageSourceText(
                 package);
@@ -2113,31 +2143,37 @@ void PopulatePackageList() {
         ListView_SetItemText(
             g_packageList,
             row,
-            1,
+            kPackageColumnWww,
+            const_cast<LPWSTR>(
+                website.c_str()));
+        ListView_SetItemText(
+            g_packageList,
+            row,
+            kPackageColumnBranch,
             const_cast<LPWSTR>(
                 source.c_str()));
         ListView_SetItemText(
             g_packageList,
             row,
-            2,
+            kPackageColumnVersion,
             const_cast<LPWSTR>(
                 version.c_str()));
         ListView_SetItemText(
             g_packageList,
             row,
-            3,
+            kPackageColumnInstalled,
             const_cast<LPWSTR>(
                 installed.c_str()));
         ListView_SetItemText(
             g_packageList,
             row,
-            4,
+            kPackageColumnLatest,
             const_cast<LPWSTR>(
                 latest.c_str()));
         ListView_SetItemText(
             g_packageList,
             row,
-            5,
+            kPackageColumnStatus,
             const_cast<LPWSTR>(
                 status.c_str()));
     }
@@ -2649,7 +2685,7 @@ void OpenBranchSelectorIfReady(
     if (!ListView_GetSubItemRect(
             g_packageList,
             displayRow,
-            1,
+            kPackageColumnBranch,
             LVIR_BOUNDS,
             &cell)) {
         return;
@@ -2929,7 +2965,9 @@ LRESULT CALLBACK PackageListSubclassProc(
 void SortPackageListByColumn(
     int column) {
     if (column < 0 ||
-        column >= 6) {
+        column >=
+            static_cast<int>(
+                tp::kPackageColumnCount)) {
         return;
     }
 
@@ -3164,7 +3202,7 @@ void SetPackageRowStatus(
     ListView_SetItemText(
         g_packageList,
         row,
-        5,
+        kPackageColumnStatus,
         const_cast<LPWSTR>(
             text.c_str()));
 }
@@ -6682,12 +6720,44 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                         lParam);
 
                 if (activate &&
-                    activate->iItem >= 0 &&
-                    activate->iSubItem == 1) {
-                    RequestBranchSelector(
-                        hwnd,
-                        activate->iItem);
-                    return 0;
+                    activate->iItem >= 0) {
+                    if (activate->iSubItem ==
+                        kPackageColumnWww) {
+                        const int displayRow =
+                            activate->iItem;
+
+                        if (displayRow <
+                                static_cast<int>(
+                                    g_packageViewOrder.size())) {
+                            const std::size_t packageIndex =
+                                g_packageViewOrder[
+                                    static_cast<std::size_t>(
+                                        displayRow)];
+
+                            if (packageIndex <
+                                g_state.packages.size()) {
+                                const std::wstring url =
+                                    PackageRepositoryUrl(
+                                        g_state.packages[
+                                            packageIndex]);
+
+                                if (!url.empty()) {
+                                    OpenWebLink(
+                                        hwnd,
+                                        url.c_str());
+                                }
+                            }
+                        }
+                        return 0;
+                    }
+
+                    if (activate->iSubItem ==
+                        kPackageColumnBranch) {
+                        RequestBranchSelector(
+                            hwnd,
+                            activate->iItem);
+                        return 0;
+                    }
                 }
             }
 
