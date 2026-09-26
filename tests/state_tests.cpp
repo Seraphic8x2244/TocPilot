@@ -59,6 +59,65 @@ bool WriteAll(
     return stream.good();
 }
 
+std::string StateJsonWithPackages(
+    std::string packages) {
+    return
+        "{\n"
+        "  \"schema\": 1,\n"
+        "  \"settings\": {"
+        "\"text_scale\":1.0,"
+        "\"check_app_updates\":true,"
+        "\"package_sort_column\":-1,"
+        "\"package_sort_ascending\":true,"
+        "\"package_column_widths\":[240,260,300,110,115,115,150],"
+        "\"package_column_order\":[0,1,2,3,4,5,6],"
+        "\"package_columns_locked\":false"
+        "},\n"
+        "  \"packages\": " +
+        std::move(packages) +
+        "\n}\n";
+}
+
+void ExpectSemanticLoadFailure(
+    const std::filesystem::path& root,
+    const std::string& label,
+    const std::string& packages,
+    std::wstring_view expectedError) {
+    const std::string json =
+        StateJsonWithPackages(
+            packages);
+
+    if (!WriteAll(
+            tp::StatePath(root),
+            json)) {
+        Fail(label + ": could not write fixture");
+        return;
+    }
+
+    tp::AppState state;
+    bool created = true;
+    std::wstring error;
+
+    if (tp::LoadOrCreateState(
+            root,
+            state,
+            created,
+            error)) {
+        Fail(label + ": invalid durable state was accepted");
+        return;
+    }
+
+    if (error.find(expectedError) ==
+        std::wstring::npos) {
+        Fail(label + ": wrong semantic error");
+    }
+
+    if (ReadAll(tp::StatePath(root)) !=
+        json) {
+        Fail(label + ": failed load modified TocPilot.json");
+    }
+}
+
 void TestCreateAddRoundTrip(
     const std::filesystem::path& root) {
     tp::AppState state;
@@ -342,6 +401,392 @@ void TestColumnLayoutValidation(
             tp::kDefaultPackageColumnOrder ||
         !state.settings.packageColumnsLocked) {
         Fail("column-layout validation did not normalize persisted values");
+    }
+}
+
+
+void TestDurableSemanticValidation(
+    const std::filesystem::path& root) {
+    const std::string rootPackage =
+        "{"
+        "\"id\":\"github:Owner/Root\","
+        "\"name\":\"Root\","
+        "\"provider\":\"github\","
+        "\"repository\":\"Owner/Root\","
+        "\"mode\":\"branch\","
+        "\"ref\":\"main\","
+        "\"release_policy\":null,"
+        "\"asset\":null,"
+        "\"source_path\":\".\","
+        "\"target\":\"addons\","
+        "\"target_path\":null,"
+        "\"installed_revision\":\"1111111111111111111111111111111111111111\","
+        "\"latest_revision\":\"1111111111111111111111111111111111111111\","
+        "\"installed_files\":[\"Interface/AddOns/Root/Root.toc\"],"
+        "\"install_transaction\":null"
+        "}";
+
+    const std::string childPackage =
+        "{"
+        "\"id\":\"gitlab:group/project:addon:Child\","
+        "\"name\":\"Child\","
+        "\"provider\":\"gitlab\","
+        "\"repository\":\"group/project\","
+        "\"mode\":\"branch\","
+        "\"ref\":\"main\","
+        "\"release_policy\":null,"
+        "\"asset\":null,"
+        "\"source_path\":\"Child\","
+        "\"target\":\"addons\","
+        "\"target_path\":null,"
+        "\"installed_revision\":\"2222222222222222222222222222222222222222\","
+        "\"latest_revision\":\"2222222222222222222222222222222222222222\","
+        "\"installed_files\":[\"Interface/AddOns/Child/Child.toc\"],"
+        "\"install_transaction\":null"
+        "}";
+
+    const std::string dllPackage =
+        "{"
+        "\"id\":\"github:Owner/ClassicAPI:release:ClassicAPI.dll\","
+        "\"name\":\"ClassicAPI.dll\","
+        "\"provider\":\"github\","
+        "\"repository\":\"Owner/ClassicAPI\","
+        "\"mode\":\"release\","
+        "\"ref\":null,"
+        "\"release_policy\":\"latest_stable\","
+        "\"asset\":\"ClassicAPI.dll\","
+        "\"source_path\":null,"
+        "\"target\":\"wow_root\","
+        "\"target_path\":\"ClassicAPI.dll\","
+        "\"installed_revision\":\"v1.2.3\","
+        "\"latest_revision\":\"v1.2.4\","
+        "\"installed_files\":[\"ClassicAPI.dll\"],"
+        "\"install_transaction\":null"
+        "}";
+
+    ExpectSemanticLoadFailure(
+        root,
+        "duplicate id",
+        "[" + rootPackage + "," +
+        "{"
+        "\"id\":\"GITHUB:OWNER/ROOT\","
+        "\"name\":\"Other\","
+        "\"provider\":\"github\","
+        "\"repository\":\"Owner/Other\","
+        "\"mode\":\"branch\","
+        "\"ref\":\"main\","
+        "\"release_policy\":null,"
+        "\"asset\":null,"
+        "\"source_path\":\".\","
+        "\"target\":\"addons\","
+        "\"target_path\":null,"
+        "\"installed_revision\":null,"
+        "\"latest_revision\":null,"
+        "\"installed_files\":[],"
+        "\"install_transaction\":null"
+        "}]",
+        L"Duplicate package id");
+
+    ExpectSemanticLoadFailure(
+        root,
+        "overlapping addon ownership",
+        "[" + rootPackage + "," +
+        "{"
+        "\"id\":\"github:Other/Fork\","
+        "\"name\":\"Fork\","
+        "\"provider\":\"github\","
+        "\"repository\":\"Other/Fork\","
+        "\"mode\":\"branch\","
+        "\"ref\":\"main\","
+        "\"release_policy\":null,"
+        "\"asset\":null,"
+        "\"source_path\":\".\","
+        "\"target\":\"addons\","
+        "\"target_path\":null,"
+        "\"installed_revision\":\"3333333333333333333333333333333333333333\","
+        "\"latest_revision\":\"3333333333333333333333333333333333333333\","
+        "\"installed_files\":[\"Interface/AddOns/Root/other.lua\"],"
+        "\"install_transaction\":null"
+        "}]",
+        L"Conflicting addon-root ownership");
+
+    ExpectSemanticLoadFailure(
+        root,
+        "identity mismatch",
+        "[{"
+        "\"id\":\"github:Owner/Wrong\","
+        "\"name\":\"Root\","
+        "\"provider\":\"github\","
+        "\"repository\":\"Owner/Root\","
+        "\"mode\":\"branch\","
+        "\"ref\":\"main\","
+        "\"release_policy\":null,"
+        "\"asset\":null,"
+        "\"source_path\":\".\","
+        "\"target\":\"addons\","
+        "\"target_path\":null,"
+        "\"installed_revision\":null,"
+        "\"latest_revision\":null,"
+        "\"installed_files\":[],"
+        "\"install_transaction\":null"
+        "}]",
+        L"id that does not match");
+
+    ExpectSemanticLoadFailure(
+        root,
+        "unsupported provider",
+        "[{"
+        "\"id\":\"bitbucket:Owner/Root\","
+        "\"name\":\"Root\","
+        "\"provider\":\"bitbucket\","
+        "\"repository\":\"Owner/Root\","
+        "\"mode\":\"branch\","
+        "\"ref\":\"main\","
+        "\"release_policy\":null,"
+        "\"asset\":null,"
+        "\"source_path\":\".\","
+        "\"target\":\"addons\","
+        "\"target_path\":null,"
+        "\"installed_revision\":null,"
+        "\"latest_revision\":null,"
+        "\"installed_files\":[],"
+        "\"install_transaction\":null"
+        "}]",
+        L"unsupported provider");
+
+    ExpectSemanticLoadFailure(
+        root,
+        "unsupported mode",
+        "[{"
+        "\"id\":\"github:Owner/Root\","
+        "\"name\":\"Root\","
+        "\"provider\":\"github\","
+        "\"repository\":\"Owner/Root\","
+        "\"mode\":\"archive\","
+        "\"ref\":null,"
+        "\"release_policy\":null,"
+        "\"asset\":null,"
+        "\"source_path\":\".\","
+        "\"target\":\"addons\","
+        "\"target_path\":null,"
+        "\"installed_revision\":null,"
+        "\"latest_revision\":null,"
+        "\"installed_files\":[],"
+        "\"install_transaction\":null"
+        "}]",
+        L"unsupported package mode");
+
+    ExpectSemanticLoadFailure(
+        root,
+        "branch target mismatch",
+        "[{"
+        "\"id\":\"github:Owner/Root\","
+        "\"name\":\"Root\","
+        "\"provider\":\"github\","
+        "\"repository\":\"Owner/Root\","
+        "\"mode\":\"branch\","
+        "\"ref\":\"main\","
+        "\"release_policy\":null,"
+        "\"asset\":null,"
+        "\"source_path\":\".\","
+        "\"target\":\"wow_root\","
+        "\"target_path\":null,"
+        "\"installed_revision\":null,"
+        "\"latest_revision\":null,"
+        "\"installed_files\":[],"
+        "\"install_transaction\":null"
+        "}]",
+        L"must target addons");
+
+    ExpectSemanticLoadFailure(
+        root,
+        "branch missing ref",
+        "[{"
+        "\"id\":\"github:Owner/Root\","
+        "\"name\":\"Root\","
+        "\"provider\":\"github\","
+        "\"repository\":\"Owner/Root\","
+        "\"mode\":\"branch\","
+        "\"ref\":null,"
+        "\"release_policy\":null,"
+        "\"asset\":null,"
+        "\"source_path\":\".\","
+        "\"target\":\"addons\","
+        "\"target_path\":null,"
+        "\"installed_revision\":null,"
+        "\"latest_revision\":null,"
+        "\"installed_files\":[],"
+        "\"install_transaction\":null"
+        "}]",
+        L"without a branch ref");
+
+    ExpectSemanticLoadFailure(
+        root,
+        "revision without files",
+        "[{"
+        "\"id\":\"github:Owner/Root\","
+        "\"name\":\"Root\","
+        "\"provider\":\"github\","
+        "\"repository\":\"Owner/Root\","
+        "\"mode\":\"branch\","
+        "\"ref\":\"main\","
+        "\"release_policy\":null,"
+        "\"asset\":null,"
+        "\"source_path\":\".\","
+        "\"target\":\"addons\","
+        "\"target_path\":null,"
+        "\"installed_revision\":\"1111111111111111111111111111111111111111\","
+        "\"latest_revision\":null,"
+        "\"installed_files\":[],"
+        "\"install_transaction\":null"
+        "}]",
+        L"incoherent installed state");
+
+    ExpectSemanticLoadFailure(
+        root,
+        "files without revision",
+        "[{"
+        "\"id\":\"github:Owner/Root\","
+        "\"name\":\"Root\","
+        "\"provider\":\"github\","
+        "\"repository\":\"Owner/Root\","
+        "\"mode\":\"branch\","
+        "\"ref\":\"main\","
+        "\"release_policy\":null,"
+        "\"asset\":null,"
+        "\"source_path\":\".\","
+        "\"target\":\"addons\","
+        "\"target_path\":null,"
+        "\"installed_revision\":null,"
+        "\"latest_revision\":null,"
+        "\"installed_files\":[\"Interface/AddOns/Root/Root.toc\"],"
+        "\"install_transaction\":null"
+        "}]",
+        L"incoherent installed state");
+
+    ExpectSemanticLoadFailure(
+        root,
+        "unsafe addon ownership",
+        "[{"
+        "\"id\":\"github:Owner/Root\","
+        "\"name\":\"Root\","
+        "\"provider\":\"github\","
+        "\"repository\":\"Owner/Root\","
+        "\"mode\":\"branch\","
+        "\"ref\":\"main\","
+        "\"release_policy\":null,"
+        "\"asset\":null,"
+        "\"source_path\":\".\","
+        "\"target\":\"addons\","
+        "\"target_path\":null,"
+        "\"installed_revision\":\"1111111111111111111111111111111111111111\","
+        "\"latest_revision\":null,"
+        "\"installed_files\":[\"Interface/AddOns/Root/../Other/evil.lua\"],"
+        "\"install_transaction\":null"
+        "}]",
+        L"unsafe or non-addon owned file path");
+
+    ExpectSemanticLoadFailure(
+        root,
+        "invalid direct DLL target",
+        "[{"
+        "\"id\":\"github:Owner/ClassicAPI:release:ClassicAPI.dll\","
+        "\"name\":\"ClassicAPI.dll\","
+        "\"provider\":\"github\","
+        "\"repository\":\"Owner/ClassicAPI\","
+        "\"mode\":\"release\","
+        "\"ref\":null,"
+        "\"release_policy\":\"latest_stable\","
+        "\"asset\":\"ClassicAPI.dll\","
+        "\"source_path\":null,"
+        "\"target\":\"wow_root\","
+        "\"target_path\":\"renamed.dll\","
+        "\"installed_revision\":null,"
+        "\"latest_revision\":\"v1.2.4\","
+        "\"installed_files\":[],"
+        "\"install_transaction\":null"
+        "}]",
+        L"Direct DLL destination");
+
+    ExpectSemanticLoadFailure(
+        root,
+        "invalid direct DLL ownership",
+        "[{"
+        "\"id\":\"github:Owner/ClassicAPI:release:ClassicAPI.dll\","
+        "\"name\":\"ClassicAPI.dll\","
+        "\"provider\":\"github\","
+        "\"repository\":\"Owner/ClassicAPI\","
+        "\"mode\":\"release\","
+        "\"ref\":null,"
+        "\"release_policy\":\"latest_stable\","
+        "\"asset\":\"ClassicAPI.dll\","
+        "\"source_path\":null,"
+        "\"target\":\"wow_root\","
+        "\"target_path\":\"ClassicAPI.dll\","
+        "\"installed_revision\":\"v1.2.3\","
+        "\"latest_revision\":\"v1.2.4\","
+        "\"installed_files\":[\"Other.dll\"],"
+        "\"install_transaction\":null"
+        "}]",
+        L"outside the exact configured target");
+
+    ExpectSemanticLoadFailure(
+        root,
+        "conflicting direct DLL target",
+        "[" + dllPackage + "," +
+        "{"
+        "\"id\":\"github:Other/ClassicAPI:release:ClassicAPI.dll\","
+        "\"name\":\"ClassicAPI.dll\","
+        "\"provider\":\"github\","
+        "\"repository\":\"Other/ClassicAPI\","
+        "\"mode\":\"release\","
+        "\"ref\":null,"
+        "\"release_policy\":\"latest_stable\","
+        "\"asset\":\"ClassicAPI.dll\","
+        "\"source_path\":null,"
+        "\"target\":\"wow_root\","
+        "\"target_path\":\"ClassicAPI.dll\","
+        "\"installed_revision\":null,"
+        "\"latest_revision\":\"v9.9.9\","
+        "\"installed_files\":[],"
+        "\"install_transaction\":null"
+        "}]",
+        L"Conflicting direct-DLL destination ownership");
+
+    const std::string validJson =
+        StateJsonWithPackages(
+            "[" +
+            rootPackage +
+            "," +
+            childPackage +
+            "," +
+            dllPackage +
+            "]");
+
+    if (!WriteAll(
+            tp::StatePath(root),
+            validJson)) {
+        Fail("valid semantic fixture could not be written");
+        return;
+    }
+
+    tp::AppState state;
+    bool created = true;
+    std::wstring error;
+    if (!tp::LoadOrCreateState(
+            root,
+            state,
+            created,
+            error) ||
+        created ||
+        state.packages.size() != 3 ||
+        state.packages[0].id !=
+            L"github:Owner/Root" ||
+        state.packages[1].id !=
+            L"gitlab:group/project:addon:Child" ||
+        state.packages[2].id !=
+            L"github:Owner/ClassicAPI:release:ClassicAPI.dll") {
+        Fail("valid branch/library/DLL durable state did not load");
     }
 }
 
@@ -892,6 +1337,10 @@ void TestReleasePackageRoundTrip(
             L"github",
             L"Owner/ClassicAPI");
 
+    package.id =
+        L"github:Owner/ClassicAPI:release:ClassicAPI.dll";
+    package.name =
+        L"ClassicAPI.dll";
     package.mode =
         L"release";
     package.releasePolicy =
@@ -1090,7 +1539,8 @@ int main() {
         TestCreateAddRoundTrip(root);
         TestLegacySixColumnLayoutMigration(root);
         TestLegacyFiveColumnLayoutMigration(root);
-    TestColumnLayoutValidation(root);
+        TestColumnLayoutValidation(root);
+        TestDurableSemanticValidation(root);
         TestRemovePackageRecord(root);
         TestPackageOwnerReplacement(root);
         TestClearInstalledState(root);
