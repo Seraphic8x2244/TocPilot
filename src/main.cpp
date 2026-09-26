@@ -4953,7 +4953,7 @@ void RemovePackage(
         L"Removing...");
 
     tp::AddonInstallTransaction transaction;
-    if (!tp::BeginAddonInstallTransaction(
+    if (!tp::PrepareAddonInstallTransaction(
             plan,
             transaction,
             error)) {
@@ -4974,11 +4974,67 @@ void RemovePackage(
     tp::AppState updatedState =
         g_state;
 
-    if (!tp::RemovePackageRecord(
+    bool transitionReady =
+        tp::RemovePackageRecord(
             updatedState,
             package.id,
-            error) ||
-        !tp::SaveState(
+            error);
+
+    if (transitionReady) {
+        transitionReady =
+            tp::ArmAddonInstallTransaction(
+                transaction,
+                TransactionStateMarker(package),
+                MissingTransactionStateMarker(
+                    package.id),
+                error);
+    }
+
+    if (transitionReady) {
+        transitionReady =
+            tp::CommitAddonInstallTransaction(
+                transaction,
+                error);
+    }
+
+    if (!transitionReady) {
+        const std::wstring transitionError =
+            error;
+        std::wstring rollbackError;
+        const bool rolledBack =
+            tp::RollbackAddonInstallTransaction(
+                transaction,
+                rollbackError);
+
+        g_packageInstallInProgress = false;
+        SetPackageRowStatus(
+            index,
+            rolledBack
+                ? L"Remove rolled back"
+                : L"Rollback failed");
+
+        std::wstring message =
+            L"TocPilot could not commit the removal: " +
+            transitionError;
+        if (!rolledBack) {
+            message +=
+                L"\r\n\r\nFilesystem rollback also failed: " +
+                rollbackError;
+        }
+
+        MessageBoxW(
+            hwnd,
+            message.c_str(),
+            rolledBack
+                ? L"TocPilot - Remove Failed"
+                : L"TocPilot - Rollback Failed",
+            MB_OK | MB_ICONERROR);
+
+        UpdatePackageButtons();
+        return;
+    }
+
+    if (!tp::SaveState(
             g_root,
             updatedState,
             error)) {
