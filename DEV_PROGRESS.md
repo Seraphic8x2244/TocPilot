@@ -12,7 +12,8 @@
 - Latest verified `main` source-changing head: `dcdd5058f50c83c427310feba083437db6368dcd` (merge of PR #11, A2 durable state semantic validation). Documentation-only commits may sit above it on `main`.
 - A1 runtime gate: **accepted for forward development** on 2026-09-26. Fresh install, reinstall, Update New and Remove Addon passed. Managed same-root replacement runtime validation is explicitly deferred rather than blocking later work. The deterministic crash-window tests remain the primary validation for restart-recovery semantics.
 - A2 durable state semantic validation: **implemented / CI-checked / merged / accepted for forward development**. The user explicitly chose not to require a standalone A2 release/runtime gate before continuing; do not claim a separately published/runtime-confirmed A2 build.
-- Current goal: implement **A3 ZIP single-member allocation hardening** and include the already-requested tiny repository-link presentation update in the same next release.
+- A3 + queued `www` presentation delta: **implemented on `hardening/a3-zip-streaming`; CI/merge/release pending**. ZIP members now stream through miniz's extraction callback directly into staged files instead of allocating one full-member buffer; the existing 256 MiB per-entry and 1 GiB total policy limits remain. Deterministic archive coverage forges an oversized central-directory member size in a tiny fixture and verifies policy rejection before extraction staging. Advanced repository URLs are custom-drawn always blue + underlined and the header is lowercase `www`; Compact is unchanged.
+- Current goal: complete CI/merge and publish the combined A2 + A3 + `www` runtime delta as `v0.3.10`.
 - Current scope boundary: A3 is only the ZIP single-member allocation bound plus its deterministic tests. The bundled UI delta is only `WWW` -> `www` and always-blue/underlined repository links (including selected/orange/green rows, no visited-link state). Do not mix self-update hardening, async DLL discovery, warning cleanup or other UI work into this slice.
 - Audit continuity: `audit_dump.md` is a temporary scratch checkpoint for the interrupted broad audit only; this file remains the sole authoritative live development source of truth.
 - Documentation-only commits after the release do not change the published runtime baseline.
@@ -393,7 +394,7 @@ Final severity/order:
 
 1. **HIGH — transaction restart recovery:** **IMPLEMENTED / CI-CHECKED / PUBLISHED / ACCEPTED**, with managed same-root replacement runtime validation deferred.
 2. **HIGH — durable state semantic validation:** **IMPLEMENTED / CI-CHECKED / MERGED / ACCEPTED FOR FORWARD DEVELOPMENT** at `dcdd5058f50c83c427310feba083437db6368dcd`; no standalone A2-only release gate required.
-3. **MEDIUM — ZIP member allocation bound:** **NEXT** — prevent one archive member from forcing a very large contiguous allocation before extraction.
+3. **MEDIUM — ZIP member allocation bound:** **IMPLEMENTED / CI PENDING** on `hardening/a3-zip-streaming` — per-member extraction now streams to the staged file rather than allocating the full uncompressed member in RAM; the existing 256 MiB per-entry policy remains enforced during archive inspection.
 4. **MEDIUM — self-update transport hardening:** carry/check exact asset size, cap checksum text and reject initial non-HTTPS asset/checksum URLs.
 5. **MEDIUM — async latest-stable DLL discovery:** remove provider I/O from the dialog thread.
 6. **MEDIUM/LOW — Add-Git branch-dialog request identity:** reject stale close/reopen completions.
@@ -524,15 +525,15 @@ Do not add support for user-uploaded ZIP/7z/RAR/installer/bundle release assets 
 
 ## Exact Next Step
 
-Implement **A3 ZIP single-member allocation hardening**, bundle the queued repository-link presentation tweak, then publish/test the combined next release (expected `v0.3.10`).
+Validate, merge and publish the focused A3 + `www` slice as `v0.3.10`.
 
-1. read `dev_rulebook.md` first and verify actual `main` before editing; `DEV_PROGRESS.md` is authoritative and `audit_dump.md` is evidence only;
-2. inspect `src/archive.cpp::ExtractZipSecure()`: current archive download cap is 256 MiB and total uncompressed cap is 1 GiB, but a single member can still allocate `std::vector<unsigned char>(plan.uncompressedBytes)` up to hundreds of MiB / near 1 GiB;
-3. prefer streaming extraction directly to the staged file if practical without broadening the slice; otherwise add a conservative per-entry uncompressed-size cap **before allocation** and return a clear controlled validation error instead of risking `std::bad_alloc`/process termination;
-4. add deterministic archive tests proving an oversized single member is rejected by policy before attempting the full allocation, while normal archive/path-safety/root-mapping tests remain intact;
-5. in the same release, make only the queued repository-link presentation changes: header `WWW` -> `www`; repository URL cells always blue + underlined, including selected/orange/green rows; no visited-link colour/state; Compact unchanged;
-6. run Windows x64 Release + complete CTest, merge only if `main` has not unexpectedly moved, then bump all three version sources to `0.3.10` with no unrelated work;
-7. publish `v0.3.10` through the real Release workflow from the exact merged `main` commit;
-8. runtime-test installed `v0.3.9 -> v0.3.10`, verify `www` presentation/click behaviour and normal package-operation smoke, then record the result before moving to self-update transport hardening.
+1. run the Windows x64 Release build and complete CTest suite for `hardening/a3-zip-streaming`;
+2. verify the branch contains only A3 ZIP streaming/test changes, lowercase `www`, always-blue/underlined repository-link drawing, and this development-state update;
+3. re-check actual `main`; merge only if it has not unexpectedly moved or after explicitly reconciling any new commits;
+4. from the merged `main`, create focused `release/v0.3.10` and bump only the three canonical version sources: `CMakeLists.txt`, `src/version.h`, and `.github/release-version`;
+5. require Windows x64 Release + complete CTest for the release-prep PR, merge it, then publish `v0.3.10` through the real Release workflow from the exact merged `main` commit;
+6. runtime-test installed `v0.3.9 -> v0.3.10`, verify `www` presentation/click behaviour and normal package-operation smoke, then record the result before moving to self-update transport hardening.
+
+Do not mix self-update hardening, async DLL discovery, Add-Git branch-dialog request identity, warning cleanup, rate-limit propagation, staging-name cleanup or other UI changes into this release.
 
 Keep the existing caveat explicit: A1 provides deterministic **process-restart** recovery, but full sudden-power-loss atomicity is not claimed until Windows directory-rename durability is separately verified.
