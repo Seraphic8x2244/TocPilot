@@ -227,28 +227,105 @@ These should not be re-audited from zero unless a later finding intersects them:
 - Self-update verifies SHA-256 before replacement and attempts executable rollback if the new installed executable cannot be launched.
 - v0.3.7 runtime-confirmed branch/list fixes remain outside the current audit concern unless a robustness finding directly intersects them.
 
+## Transaction/state recovery deep pass — completed
+
+### A1 deep-pass confirmation — HIGH — interrupted addon transactions are not restart-recoverable
+
+The earlier A1 finding is confirmed and its failure boundary is now mapped.
+
+**Exact process-crash windows**
+
+- **During prepare, before any live rename:** `prepared/` and `backup/` can remain under the per-package transaction directory. Live addons and `TocPilot.json` are still old, but the next operation is blocked because `PrepareAddonInstallTransaction()` rejects any existing transaction directory.
+- **After a live root is renamed into `backup/`, including the instant before that root is pushed into the in-memory `backedUpRoots` vector:** durable state is still old, but one or more old live addon roots may be absent. The only authoritative list of completed backup moves is in memory and is lost on restart.
+- **After all backups but before any prepared root is moved live:** durable state is still old while old live roots can all be absent.
+- **After one or more prepared roots are renamed live, including the instant before `installedRoots` is updated in memory:** live files can be partly new while durable state is still old. A moved prepared directory no longer exists under `prepared/`, so the transaction directory alone does not describe the intended complete new-root set.
+- **After filesystem commit but before `SaveState()`:** live files are new and backups are old, while durable package state is still old. Correct recovery is rollback to the old live installation.
+- **During the atomic state write:** `TocPilot.json` is designed to be either the old or new complete file because it is written through a flushed `.tmp` then replaced with write-through semantics. Recovery therefore has to inspect which state actually became durable.
+- **After `SaveState()` succeeds but before `FinalizeAddonInstallTransaction()`:** new package state is authoritative and the new live files must be kept; only backup/transaction cleanup is required. Blind rollback here would corrupt an already committed installation.
+- **During finalize cleanup:** state and live files are new-authoritative, but a partially removed transaction directory can remain and block the next operation.
+
+The destructor rollback in `PackageInstallResult` only helps while the original process is alive. The explicit uninstall/remove paths have the same live-files -> state-save -> finalize boundary and therefore the same restart-recovery problem.
+
+**Why the current directory layout is insufficient**
+
+`AddonInstallTransaction::active`, `backedUpRoots`, and `installedRoots` are memory-only. The transaction directory stores prepared and backup trees but no durable transaction phase, package identity, complete intended root inventory, or relationship to the old/new state file. Filesystem inspection alone cannot reliably distinguish “rollback the filesystem to the old state” from “state already committed; keep the new filesystem and only finalize cleanup.”
+
+**Minimum durable recovery information**
+
+A focused recovery design can remain small. Before the first live rename, write one atomic/flushed journal containing at least:
+
+1. a journal schema/version and transaction/package identity; for managed replacement, both the replaced and replacement identity where relevant;
+2. the affected addon-root inventory, including which roots existed before commit and which roots are intended to exist after commit;
+3. an unambiguous old-vs-new state discriminator. The simplest audited design is durable fingerprints of the exact pre-transaction state and intended post-transaction state, or an equivalent transaction token that is atomically persisted with the committed state;
+4. enough path/root data to restore old roots from `backup/` and remove newly created roots without reconstructing intent from missing `prepared/` entries.
+
+With that information, startup recovery can be deterministic:
+
+- current durable state matches **pre-state** -> restore backups/remove newly installed roots, then remove the transaction;
+- current durable state matches **post-state** -> keep the live install and remove transaction/backup residue;
+- state matches neither -> preserve the transaction evidence, refuse automatic mutation for the affected package, and surface a recovery error rather than guessing.
+
+Per-root “done” records are not obviously required for process-crash recovery if same-volume directory renames are atomic and recovery uses the durable intent inventory plus actual backup/live presence. They may still be useful for diagnostics. This should not be assumed for hard power-loss durability without verifying the filesystem guarantees.
+
+**Power-loss durability gap**
+
+`TocPilot.json` explicitly flushes and uses write-through replacement. Addon directory moves use `std::filesystem::rename` with retries and no explicit metadata flush/write-through step. The source audit therefore establishes deterministic *process-crash* recovery requirements, but exact ordering guarantees across sudden power loss are not currently proven by tests or a documented Windows/NTFS durability contract. Treat that as a verification gap when implementing recovery; do not claim full power-loss atomicity from the current rename calls alone.
+
+**Existing coverage / missing seams**
+
+- `tests/install_tests.cpp` exercises normal commit/finalize, explicit rollback, state-save-style rollback, and injected failure after root backup / after new-root commit.
+- Those injections remain in-process and occur only after the corresponding in-memory vectors are updated. They do not simulate process death between a successful rename and bookkeeping, restart with a leftover transaction directory, crash after atomic state commit, or partial finalize cleanup.
+- No startup transaction scanner/recovery entry point exists to test today.
+
+### A2 deep-pass confirmation — HIGH — state load validates JSON shape but not the full durable package invariants
+
+`LoadOrCreateState()` / `ParsePackages()` reject malformed JSON structure, unsupported schema, missing required strings, invalid tracking-field types, and invalid settings types. Settings also normalize bounded column widths/order, and unknown top-level/package fields are intentionally preserved.
+
+The loaded package array is then accepted directly into `state.packages`. It does **not** re-run the semantic invariants enforced by normal mutation paths.
+
+**Confirmed missing load-time checks**
+
+- case-insensitive duplicate package IDs;
+- conflicting addon-root ownership across durable package records;
+- package ID consistency with provider/repository/source-path identity;
+- supported provider/mode/target combinations;
+- required branch `ref` for a persisted branch package;
+- required latest-stable release policy/asset/wow-root target/target path for a persisted direct-release package;
+- installed-state coherence such as non-empty installed revision requiring owned files;
+- empty or structurally unsafe ownership paths;
+- direct-release ownership being exactly the configured target file.
+
+Some revision-string format validation is also absent at load time; normal provider paths validate/produce revisions before mutating state, whereas a hand-edited/corrupt state file can bypass that provenance.
+
+**Why this matters**
+
+Mutation APIs such as `AppendPackage()`, `ReplacePackageRecord()`, `SetPackageLatestRevision()`, and `SetPackageInstalledState()` prevent several of these invalid states from being created normally. Loading a corrupt or externally edited file can nevertheless instantiate them, after which ownership lookup returns the first matching package and later install/remove planning may encounter ambiguity only when an operation is attempted.
+
+**Test gap**
+
+`tests/state_tests.cpp` covers duplicate-ID rejection through `AppendPackage()`, replacement identity rules, normal ownership lookup, round-trip persistence, legacy column migration, and settings normalization. It does not load semantic-corruption fixtures for duplicate IDs, overlapping ownership, invalid provider/mode/target combinations, incoherent installed state, unsafe ownership paths, or mismatched direct-DLL ownership.
+
+**Focused fix/test shape**
+
+Add one centralized durable-state semantic validator used after parsing and before accepting `state.packages`. Keep forward-compatible unknown JSON fields intact; validate only invariants TocPilot must understand to operate safely. Add table-driven bad-state fixtures so the loader fails closed with a specific error before the UI treats the state as ready.
+
 ## Audit still outstanding
 
 The cancelled all-in-one pass had not yet completed these areas:
 
-1. **Transaction/state recovery deep pass**
-   - exact crash points through backup/live commit/state save/finalize;
-   - what minimum journal data is needed for deterministic restart recovery;
-   - state-load validation matrix beyond identity/ownership.
-
-2. **Network/provider + updater deep pass**
+1. **Network/provider + updater deep pass**
    - HTTPS/redirect invariants end-to-end;
    - rate-limit/error classification consistency;
    - malformed/partial response handling;
    - self-update handoff/cleanup edge cases.
 
-3. **Async/UI ownership + Win32 resource pass**
+2. **Async/UI ownership + Win32 resource pass**
    - every detached worker/result message pair;
    - close/reopen/reentrancy paths;
    - handle/GDI lifetime and silent API failures;
    - stale legacy branch-selector control/code.
 
-4. **Tests/build-debt pass**
+3. **Tests/build-debt pass**
    - map each confirmed finding to existing tests;
    - identify missing failure-injection seams;
    - investigate `LNK4098`;
