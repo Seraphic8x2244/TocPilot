@@ -8299,6 +8299,161 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             L"Committing...");
 
         std::wstring error;
+        tp::AppState updatedState = g_state;
+        bool statePrepared = false;
+
+        if (replacementStep) {
+            auto replacement =
+                result->replacementPackage;
+            replacement.installTransaction =
+                result->transaction.transactionId;
+
+            statePrepared =
+                tp::SetPackageInstalledState(
+                    replacement,
+                    result->remoteSha,
+                    result->transaction.plan.desiredInstalledFiles,
+                    error) &&
+                tp::ReplacePackageRecord(
+                    updatedState,
+                    result->replacedPackageId,
+                    std::move(replacement),
+                    error);
+        } else {
+            updatedState.packages[index]
+                .installTransaction =
+                result->transaction.transactionId;
+
+            statePrepared =
+                tp::SetPackageInstalledState(
+                    updatedState.packages[index],
+                    result->remoteSha,
+                    result->transaction.plan.desiredInstalledFiles,
+                    error);
+        }
+
+        if (!statePrepared) {
+            const std::wstring stateError = error;
+            std::wstring rollbackError;
+            const bool rolledBack =
+                tp::RollbackAddonInstallTransaction(
+                    result->transaction,
+                    rollbackError);
+
+            SetPackageRowStatus(
+                index,
+                rolledBack
+                    ? L"Install failed"
+                    : L"Rollback failed");
+
+            std::wstring message =
+                packageName +
+                L": package state transition could not be prepared - " +
+                stateError;
+            if (!rolledBack) {
+                message +=
+                    L". Transaction cleanup also failed: " +
+                    rollbackError;
+            }
+
+            if (g_packageHint) {
+                SetWindowTextW(
+                    g_packageHint,
+                    message.c_str());
+            }
+
+            if (addGitQueueStep) {
+                ClearAddGitInstallQueue();
+            }
+
+            if (updateAllStep) {
+                CompleteUpdateAllStep(
+                    hwnd,
+                    tp::UpdateAllOutcome::Failed,
+                    message,
+                    !rolledBack);
+            } else {
+                MessageBoxW(
+                    hwnd,
+                    message.c_str(),
+                    rolledBack
+                        ? L"TocPilot - Install Failed"
+                        : L"TocPilot - Rollback Failed",
+                    MB_OK | MB_ICONERROR);
+
+                if (replacementStep) {
+                    RefreshPackageStateUi();
+                }
+                SelectPackageRow(index);
+                UpdatePackageButtons();
+            }
+            return 0;
+        }
+
+        if (!tp::ArmAddonInstallTransaction(
+                result->transaction,
+                TransactionStateMarker(
+                    g_state.packages[index]),
+                TransactionStateMarker(
+                    updatedState.packages[index]),
+                error)) {
+            const std::wstring armError = error;
+            std::wstring rollbackError;
+            const bool rolledBack =
+                tp::RollbackAddonInstallTransaction(
+                    result->transaction,
+                    rollbackError);
+
+            SetPackageRowStatus(
+                index,
+                rolledBack
+                    ? L"Install failed"
+                    : L"Rollback failed");
+
+            std::wstring message =
+                packageName +
+                L": restart-recovery journal could not be armed - " +
+                armError;
+            if (!rolledBack) {
+                message +=
+                    L". Transaction cleanup also failed: " +
+                    rollbackError;
+            }
+
+            if (g_packageHint) {
+                SetWindowTextW(
+                    g_packageHint,
+                    message.c_str());
+            }
+
+            if (addGitQueueStep) {
+                ClearAddGitInstallQueue();
+            }
+
+            if (updateAllStep) {
+                CompleteUpdateAllStep(
+                    hwnd,
+                    tp::UpdateAllOutcome::Failed,
+                    message,
+                    !rolledBack);
+            } else {
+                MessageBoxW(
+                    hwnd,
+                    message.c_str(),
+                    rolledBack
+                        ? L"TocPilot - Install Failed"
+                        : L"TocPilot - Rollback Failed",
+                    MB_OK | MB_ICONERROR);
+
+                if (replacementStep) {
+                    RefreshPackageStateUi();
+                }
+                SelectPackageRow(index);
+                UpdatePackageButtons();
+            }
+            return 0;
+        }
+
         if (!tp::CommitAddonInstallTransaction(
                 result->transaction,
                 error)) {
@@ -8348,35 +8503,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             return 0;
         }
 
-        tp::AppState updatedState = g_state;
-        bool statePrepared = false;
-
-        if (replacementStep) {
-            auto replacement =
-                result->replacementPackage;
-
-            statePrepared =
-                tp::SetPackageInstalledState(
-                    replacement,
-                    result->remoteSha,
-                    result->transaction.plan.desiredInstalledFiles,
-                    error) &&
-                tp::ReplacePackageRecord(
-                    updatedState,
-                    result->replacedPackageId,
-                    std::move(replacement),
-                    error);
-        } else {
-            statePrepared =
-                tp::SetPackageInstalledState(
-                    updatedState.packages[index],
-                    result->remoteSha,
-                    result->transaction.plan.desiredInstalledFiles,
-                    error);
-        }
-
-        if (!statePrepared ||
-            !tp::SaveState(
+        if (!tp::SaveState(
                 g_root,
                 updatedState,
                 error)) {
