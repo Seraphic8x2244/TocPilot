@@ -309,23 +309,115 @@ Mutation APIs such as `AppendPackage()`, `ReplacePackageRecord()`, `SetPackageLa
 
 Add one centralized durable-state semantic validator used after parsing and before accepting `state.packages`. Keep forward-compatible unknown JSON fields intact; validate only invariants TocPilot must understand to operate safely. Add table-driven bad-state fixtures so the loader fails closed with a specific error before the UI treats the state as ready.
 
+## Network/provider + updater deep pass — completed
+
+### A5 deep-pass confirmation — MEDIUM — self-update payload/checksum reads are not size-bound or metadata-size-verified
+
+The earlier A5 finding is confirmed.
+
+- `GitHubReleaseAsset` already carries GitHub's `size`, but `ReleaseInfo` drops it when `CheckLatestRelease()` copies the exact `TocPilot.exe` asset.
+- `DownloadFile()` streams the updater executable until EOF with no byte ceiling and no equality check against release metadata.
+- checksum fallback uses `HttpGetString()`, which appends until EOF with no cap.
+- the direct-DLL path is the useful precedent: it rejects zero/over-256-MiB metadata, caps streamed bytes, and requires final downloaded size to equal GitHub release metadata; its checksum text is capped at 1 MiB.
+
+SHA-256 still prevents an oversized/mismatched executable from being installed if the expected digest remains trustworthy, but resource exhaustion happens before that final verification.
+
+**Test gap / focused shape**
+
+`tests/update_tests.cpp` exercises release-tag URL parsing plus an optional live discovery path; it has no injectable download reader and therefore no oversize/metadata-size mismatch coverage. Carry asset size into `ReleaseInfo`, add a bounded stream helper with deterministic tests, and cap fallback checksum text.
+
+### A8 deep-pass confirmation — LOW — checksum fallback parsers bind to the first arbitrary 64-hex run
+
+Both `src/update.cpp::ResolveExpectedDigest()` and `src/direct_dll.cpp::ParseChecksumBody()` scan the entire checksum response and accept the first 64 consecutive hexadecimal characters, without line/filename association.
+
+That can bind to the wrong digest in a multi-entry or oddly formatted sidecar. In normal GitHub release usage this is more likely to produce a false verification failure than an integrity bypass, but it is unnecessarily loose parsing for executable/DLL verification.
+
+**Test gap / focused shape**
+
+No tests exercise multi-entry checksum bodies, filename mismatch, comments containing a digest, or digest-only compatibility. Parse a conventional SHA-256 sidecar line and, where a filename is present, require the exact expected asset name; retain an explicitly tested digest-only one-line form if desired.
+
+### A10 — MEDIUM — self-update asset/checksum requests do not enforce the HTTPS boundary on the initial URL
+
+**Evidence**
+
+- Rulebook section 9 requires HTTPS for provider/download traffic.
+- GitHub release metadata is itself fetched from fixed `api.github.com` over HTTPS.
+- `ParseGitHubReleaseJson()` accepts any non-empty `browser_download_url` string and performs no scheme validation.
+- `CheckLatestRelease()` copies those URLs directly into `ReleaseInfo.assetUrl` / `checksumUrl`.
+- `src/update.cpp::CrackUrl()` records whether the URL is HTTPS but does not reject non-HTTPS; `OpenRequest()` simply omits `WINHTTP_FLAG_SECURE` when `parts.secure` is false.
+- By contrast, the direct-DLL `CrackUrl()` explicitly rejects any initial release-asset URL that is not HTTPS.
+- Microsoft documents WinHTTP's default redirect policy as following redirects except HTTPS -> HTTP downgrades, so the uncovered source-level gap is the **initial URL** accepted by the self-update path, not a normal secure-to-insecure redirect. Reference: https://learn.microsoft.com/en-us/windows/win32/winhttp/option-flags
+
+**Impact**
+
+Normal GitHub metadata currently supplies HTTPS browser-download URLs, so this is not a reproduced production failure. It is nevertheless a confirmed violation of TocPilot's explicit security boundary and makes updater transport less fail-closed than the direct-DLL path.
+
+The SHA-256 layer materially reduces risk when a trusted digest is present, but the fallback checksum URL uses the same permissive transport helper; transport policy should not depend on the remote metadata always remaining well-formed.
+
+**Test gap / focused shape**
+
+Centralize an HTTPS-only URL check for self-update asset/checksum requests and add unit coverage that rejects `http://` URLs before network I/O. Preserve WinHTTP's default HTTPS->HTTP downgrade refusal.
+
+### A11 — MEDIUM/LOW — Update All does not propagate addon archive rate limits as queue-stop conditions
+
+**Evidence**
+
+- branch/status refresh errors are passed through `IsProviderRateLimitError()`; startup/status/update-all refresh stops remaining checks when it sees `rate-limited` / `rate limited`.
+- direct-DLL install/update failure also passes `result->error` through `IsProviderRateLimitError()` before `CompleteUpdateAllStep()`.
+- branch addon installation preparation can fail in `DownloadPackageBranchArchive()`.
+- GitLab archive HTTP 429 is explicitly reported as `temporarily rate-limited`.
+- GitHub codeload combines 403/429 into `refused or temporarily limited`.
+- `WM_TP_PACKAGE_INSTALL_COMPLETE` handles install-preparation failure by calling `CompleteUpdateAllStep(... Failed, message)` **without** a rate-limit flag.
+
+**Impact**
+
+If Update All reaches a provider rate limit during archive download, TocPilot can continue attempting later addon downloads instead of stopping the provider-heavy queue as it already does during status refresh/direct-DLL resolution. This is inconsistent and can turn one rate-limit event into a run of avoidable failures.
+
+GitHub's current combined 403/429 wording is also too ambiguous for the existing string classifier to identify a definite 429.
+
+**Test gap / focused shape**
+
+Keep provider status mapping structured enough to distinguish HTTP 429 from ordinary refusal, and propagate a confirmed rate-limit outcome through branch install-preparation results into `CompleteUpdateAllStep()`. Add queue tests proving a 429 stops further provider work while an unrelated download failure does not.
+
+### A12 — LOW — updater parent-process synchronization failure is silently ignored
+
+**Evidence**
+
+`RunUpdaterMode()` opens the parent PID with `SYNCHRONIZE`; if `OpenProcess()` succeeds it waits indefinitely, but it does not inspect the `WaitForSingleObject()` result. If `OpenProcess()` fails, it immediately proceeds to stage/replace the target executable.
+
+The launching process treats successful creation of the staged updater process as updater success, posts `WM_CLOSE`, and has no return channel for a later updater-mode failure.
+
+**Impact**
+
+Under the normal same-user path the synchronization handle should usually succeed. If it does not, the updater can race the still-running parent and rely only on the 10-second file-operation retry loop. It can then report failure after the old UI has already committed to closing for an apparently successful update.
+
+This is a robustness/handoff gap, not a reproduced normal-runtime defect.
+
+**Test gap / focused shape**
+
+Make parent-wait acquisition/result explicit and fail with a clear updater message rather than silently switching synchronization strategy. A focused helper seam is needed to test OpenProcess/wait failure without depending on timing.
+
+### Network/provider areas verified robust in this pass
+
+- Git smart-HTTP ref discovery uses a caller-validated host, HTTPS port, `WINHTTP_FLAG_SECURE`, explicit timeouts, an 8 MiB body cap, status mapping, pkt-line bounds checks, service-header validation, object-ID validation and malformed/truncated response rejection.
+- GitHub release metadata uses fixed `api.github.com` HTTPS, explicit timeouts, an 8 MiB body cap, required JSON members/types, exact asset-name matching and duplicate exact-name rejection.
+- GitHub/GitLab branch archives use fixed HTTPS provider hosts, explicit timeouts, 256 MiB streaming caps, response-status checks and ZIP signature validation before extraction.
+- direct-DLL release-asset/checksum requests reject non-HTTPS initial URLs; direct DLL bytes are capped at 256 MiB and must match GitHub's exact asset size before SHA-256 acceptance; checksum text is capped at 1 MiB.
+- WinHTTP's documented default redirect policy disallows HTTPS -> HTTP downgrade redirects; no code in these paths overrides that policy.
+- self-update replacement uses `ReplaceFileW(... REPLACEFILE_WRITE_THROUGH)` with a backup and attempts rollback if the replacement executable cannot be launched.
+- post-update backup/staged-file deletion retries and then schedules stubborn files for deletion at reboot; failure to remove the now-empty staging directory is ignored and can leave benign temp-directory residue.
+
 ## Audit still outstanding
 
 The cancelled all-in-one pass had not yet completed these areas:
 
-1. **Network/provider + updater deep pass**
-   - HTTPS/redirect invariants end-to-end;
-   - rate-limit/error classification consistency;
-   - malformed/partial response handling;
-   - self-update handoff/cleanup edge cases.
-
-2. **Async/UI ownership + Win32 resource pass**
+1. **Async/UI ownership + Win32 resource pass**
    - every detached worker/result message pair;
    - close/reopen/reentrancy paths;
    - handle/GDI lifetime and silent API failures;
    - stale legacy branch-selector control/code.
 
-3. **Tests/build-debt pass**
+2. **Tests/build-debt pass**
    - map each confirmed finding to existing tests;
    - identify missing failure-injection seams;
    - investigate `LNK4098`;
