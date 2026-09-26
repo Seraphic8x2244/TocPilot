@@ -10,8 +10,8 @@
 - Release/source commit and tag target: `ec410df48787fa88a97d49489c4f99ea6893811a` (merge of PR #7).
 - Latest runtime-confirmed release: `v0.3.7` at `ec410df48787fa88a97d49489c4f99ea6893811a`.
 - Latest verified `main` runtime/release head before this documentation checkpoint: `ec410df48787fa88a97d49489c4f99ea6893811a`.
-- Current goal: begin P5 import/export as the next isolated product slice.
-- Current scope boundary: first define import/export state, identity, ownership and conflict semantics before implementation; keep package editing and other deferred P5 work out of this slice unless explicitly reopened.
+- Current goal: pause feature expansion and begin a dedicated hardening/polish milestone: first a full robustness audit, then a UI/UX pass, then a restrained visual/branding pass.
+- Current scope boundary: do not begin P5 import/export, package editing, provider expansion or other new feature work until the robustness audit has been completed and its findings have been triaged. Avoid drive-by refactors during the audit; document evidence first, then fix in focused slices.
 - Documentation-only commits after the release do not change the published runtime baseline.
 
 ## Product Contract
@@ -369,18 +369,46 @@ Optional future checks remain the conflicting-TOC `Multiple` fixture and the def
 
 ## Planned / Next Work
 
-P5 import/export is now unblocked and is the next isolated slice:
+### P6 — Hardening and polish
 
-- define the export/import data contract before implementation;
-- define package identity and which provider/source/tracking fields are portable;
-- define whether installed revision, owned files and other machine-local install state are deliberately excluded;
-- define duplicate/conflict semantics against existing managed packages and live unmanaged addon roots;
-- keep package editing and the other deferred P5 work out of this slice unless explicitly reopened.
+The original P5 backlog is no longer a strict sequence. Import/export and the remaining feature items are deferred while TocPilot's existing product surface is hardened and polished.
+
+#### P6A — Robustness audit
+
+Perform a deliberate source audit before changing behaviour. Cover at least:
+
+- state load/save, schema compatibility and corruption/failure handling;
+- package identity, ownership, replacement, uninstall/remove and rollback invariants;
+- archive extraction/path safety and filesystem transaction boundaries;
+- self-update integrity, updater handoff and release-state correctness;
+- provider/network parsing, HTTP failure paths, rate limits and malformed/partial responses;
+- background-thread/message lifetime, stale async results, cancellation/overlap and UI-thread state ownership;
+- branch metadata caching, refresh freshness, sorting/view-order/selection identity and package reordering;
+- direct DLL trust/integrity paths and file-lock/security-software failures;
+- Win32 resource/handle lifetime, error propagation and silent-failure paths;
+- test coverage gaps, duplicated/legacy code paths and assumptions that are no longer true.
+
+Audit output should distinguish confirmed defects, robustness risks, cleanup opportunities and test debt. Do not refactor merely for style while the audit is still establishing evidence.
+
+#### P6B — UI/UX pass
+
+Once robustness findings are under control, exercise every normal workflow as a product rather than as isolated features: startup/self-update, Compact/Advanced, Add Git, branch selection, Refresh All, Update New, install/reinstall, DLL management, Remove/Uninstall and error/recovery paths.
+
+Review consistency of labels, button state, selection/focus, keyboard/mouse behaviour, progress/status feedback, sorting/reordering, confirmations, empty/loading/error states, resize/DPI/text-scale behaviour and unnecessary friction. Prefer small coherent UX fixes over adding new capability.
+
+#### P6C — Visual polish / skin
+
+Only after interaction/layout behaviour is settled, define a restrained TocPilot visual treatment. Keep the native lightweight Windows application model and accessibility/clarity benefits; do not replace stable native controls with a framework-scale custom UI.
+
+Possible scope includes a cleaner branded header, consistent iconography, spacing/typography cleanup, subtle panel/background treatment and purpose-built TocPilot artwork. The visual pass should make the existing UI feel deliberate and cohesive rather than heavily themed.
+
+After P6 is accepted, reprioritize the deferred feature backlog rather than automatically returning to import/export.
 
 ## Deferred / Out of Scope
 
 Current deferred work includes:
 
+- P5 import/export;
 - P5 package-edit flow;
 - better ambiguous archive mapping;
 - optional local-modification detection/backups;
@@ -414,6 +442,6 @@ Do not add support for user-uploaded ZIP/7z/RAR/installer/bundle release assets 
 
 ## Exact Next Step
 
-Begin P5 import/export as its own isolated slice. Before writing implementation code, define the import/export contract for package identity, provider/source and branch/release tracking fields, ownership/install-state exclusions, duplicate detection, conflicts with existing managed packages, conflicts with unmanaged live addon roots, and user confirmation/error semantics.
+Begin P6A with a read-first robustness audit of the current `main` / published-v0.3.7 codebase. Review the application by subsystem and produce a concrete findings list with severity, exact source location/evidence, affected invariant or runtime behaviour, existing test coverage, and a proposed focused fix/test slice where action is justified.
 
-Do not mix package editing or other deferred P5 work into the import/export slice.
+Do not begin by rewriting or cleaning code. Establish the audit findings first, then prioritize and implement robustness fixes in coherent slices. UI/UX review follows the robustness gate; visual/skin work follows the UI/UX pass.
