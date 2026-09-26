@@ -66,6 +66,624 @@ bool Exists(
         !ec;
 }
 
+
+tp::AddonTransactionStateMarker Marker(
+    std::wstring packageId,
+    std::wstring transactionId,
+    bool present = true) {
+    tp::AddonTransactionStateMarker marker;
+    marker.packageId = std::move(packageId);
+    marker.transactionId =
+        std::move(transactionId);
+    marker.present = present;
+    return marker;
+}
+
+bool BeginForTest(
+    const tp::AddonInstallPlan& plan,
+    tp::AddonInstallTransaction& transaction,
+    std::wstring& error,
+    const tp::AddonInstallOptions& options = {}) {
+    if (!tp::PrepareAddonInstallTransaction(
+            plan,
+            transaction,
+            error)) {
+        return false;
+    }
+
+    if (!tp::ArmAddonInstallTransaction(
+            transaction,
+            Marker(
+                plan.packageId,
+                L"test-pre-state"),
+            Marker(
+                plan.packageId,
+                transaction.transactionId),
+            error)) {
+        std::wstring cleanupError;
+        tp::RollbackAddonInstallTransaction(
+            transaction,
+            cleanupError);
+        return false;
+    }
+
+    if (!tp::CommitAddonInstallTransaction(
+            transaction,
+            error,
+            options)) {
+        if (transaction.prepared) {
+            std::wstring cleanupError;
+            tp::RollbackAddonInstallTransaction(
+                transaction,
+                cleanupError);
+        }
+        return false;
+    }
+
+    return true;
+}
+
+
+bool BuildRecoveryUpdateFixture(
+    const std::filesystem::path& wowRoot,
+    tp::AddonInstallPlan& plan,
+    std::wstring& error) {
+    const auto addOns =
+        wowRoot /
+        L"Interface" /
+        L"AddOns";
+    const auto extracted =
+        wowRoot /
+        L"recovery-extracted";
+
+    if (!WriteText(
+            addOns /
+                L"Recovery/Recovery.toc",
+            "old toc") ||
+        !WriteText(
+            addOns /
+                L"Recovery/old.lua",
+            "old file") ||
+        !WriteText(
+            extracted /
+                L"repo/Recovery/Recovery.toc",
+            "new toc") ||
+        !WriteText(
+            extracted /
+                L"repo/Recovery/new.lua",
+            "new file")) {
+        error =
+            L"Could not create restart-recovery fixture.";
+        return false;
+    }
+
+    return tp::BuildAddonInstallPlan(
+        wowRoot,
+        L"github:Owner/Recovery",
+        extracted,
+        {Candidate(
+            L"repo/Recovery",
+            L"Recovery")},
+        {
+            L"Interface/AddOns/Recovery/Recovery.toc",
+            L"Interface/AddOns/Recovery/old.lua"
+        },
+        {},
+        plan,
+        error);
+}
+
+bool RecoveryOldLive(
+    const std::filesystem::path& wowRoot) {
+    const auto root =
+        wowRoot /
+        L"Interface" /
+        L"AddOns" /
+        L"Recovery";
+    return
+        ReadText(root / L"Recovery.toc") ==
+            "old toc" &&
+        Exists(root / L"old.lua") &&
+        !Exists(root / L"new.lua");
+}
+
+bool RecoveryNewLive(
+    const std::filesystem::path& wowRoot) {
+    const auto root =
+        wowRoot /
+        L"Interface" /
+        L"AddOns" /
+        L"Recovery";
+    return
+        ReadText(root / L"Recovery.toc") ==
+            "new toc" &&
+        !Exists(root / L"old.lua") &&
+        Exists(root / L"new.lua");
+}
+
+bool PrepareArmedRecoveryUpdate(
+    const std::filesystem::path& wowRoot,
+    tp::AddonInstallPlan& plan,
+    tp::AddonInstallTransaction& transaction,
+    tp::AddonTransactionStateMarker& pre,
+    tp::AddonTransactionStateMarker& post,
+    std::wstring& error) {
+    if (!BuildRecoveryUpdateFixture(
+            wowRoot,
+            plan,
+            error) ||
+        !tp::PrepareAddonInstallTransaction(
+            plan,
+            transaction,
+            error)) {
+        return false;
+    }
+
+    pre =
+        Marker(
+            plan.packageId,
+            L"durable-pre");
+    post =
+        Marker(
+            plan.packageId,
+            transaction.transactionId);
+
+    if (!tp::ArmAddonInstallTransaction(
+            transaction,
+            pre,
+            post,
+            error)) {
+        std::wstring cleanupError;
+        tp::RollbackAddonInstallTransaction(
+            transaction,
+            cleanupError);
+        return false;
+    }
+
+    return true;
+}
+
+void TestRestartRecovery(
+    const std::filesystem::path& temp) {
+    const auto recoveryRoot =
+        temp /
+        L"RestartRecovery";
+
+    std::error_code ec;
+    std::filesystem::remove_all(
+        recoveryRoot,
+        ec);
+
+    {
+        const auto pre =
+            Marker(
+                L"github:Owner/Recovery",
+                L"durable-pre");
+        const auto post =
+            Marker(
+                L"github:Owner/Recovery",
+                L"durable-post");
+
+        if (tp::DecideAddonTransactionRecovery(
+                pre,
+                post,
+                {pre}) !=
+                tp::AddonTransactionRecoveryDecision::Rollback ||
+            tp::DecideAddonTransactionRecovery(
+                pre,
+                post,
+                {post}) !=
+                tp::AddonTransactionRecoveryDecision::Finalize ||
+            tp::DecideAddonTransactionRecovery(
+                pre,
+                post,
+                {Marker(
+                    pre.packageId,
+                    L"neither")}) !=
+                tp::AddonTransactionRecoveryDecision::Conflict) {
+            Fail("restart recovery state decision was not deterministic");
+        }
+
+        const auto replacedPre =
+            Marker(
+                L"github:Old/Recovery",
+                L"old-marker");
+        const auto replacementPost =
+            Marker(
+                L"github:New/Recovery",
+                L"replacement-marker");
+
+        if (tp::DecideAddonTransactionRecovery(
+                replacedPre,
+                replacementPost,
+                {replacedPre}) !=
+                tp::AddonTransactionRecoveryDecision::Rollback ||
+            tp::DecideAddonTransactionRecovery(
+                replacedPre,
+                replacementPost,
+                {replacementPost}) !=
+                tp::AddonTransactionRecoveryDecision::Finalize ||
+            tp::DecideAddonTransactionRecovery(
+                replacedPre,
+                replacementPost,
+                {replacedPre, replacementPost}) !=
+                tp::AddonTransactionRecoveryDecision::Conflict) {
+            Fail("replacement recovery state decision was not deterministic");
+        }
+    }
+
+    // Crash during prepare after the durable prepared journal exists.
+    {
+        const auto wowRoot =
+            recoveryRoot / L"Prepared";
+        tp::AddonInstallPlan plan;
+        std::wstring error;
+        if (!BuildRecoveryUpdateFixture(
+                wowRoot,
+                plan,
+                error)) {
+            Fail("prepared-crash fixture plan failed");
+        } else {
+            tp::AddonInstallTransaction transaction;
+            if (!tp::PrepareAddonInstallTransaction(
+                    plan,
+                    transaction,
+                    error)) {
+                Fail("prepared-crash transaction preparation failed");
+            } else if (!tp::RecoverAddonInstallTransactions(
+                           wowRoot,
+                           {Marker(
+                               plan.packageId,
+                               L"durable-pre")},
+                           error) ||
+                       Exists(plan.transactionRoot) ||
+                       !RecoveryOldLive(wowRoot)) {
+                Fail("prepared-crash restart recovery failed");
+            }
+        }
+    }
+
+    // Crash after a successful live->backup rename but before bookkeeping.
+    {
+        const auto wowRoot =
+            recoveryRoot / L"BackupRename";
+        tp::AddonInstallPlan plan;
+        tp::AddonInstallTransaction transaction;
+        tp::AddonTransactionStateMarker pre;
+        tp::AddonTransactionStateMarker post;
+        std::wstring error;
+
+        if (!PrepareArmedRecoveryUpdate(
+                wowRoot,
+                plan,
+                transaction,
+                pre,
+                post,
+                error)) {
+            Fail("backup-rename crash fixture failed");
+        } else {
+            tp::AddonInstallOptions options;
+            options.simulateCrashAfterRootBackupRename =
+                true;
+
+            if (tp::CommitAddonInstallTransaction(
+                    transaction,
+                    error,
+                    options) ||
+                !transaction.backedUpRoots.empty() ||
+                !Exists(
+                    plan.transactionRoot /
+                    L"backup/Recovery") ||
+                Exists(
+                    plan.addOnsRoot /
+                    L"Recovery")) {
+                Fail("backup-rename crash window was not constructed");
+            } else if (!tp::RecoverAddonInstallTransactions(
+                           wowRoot,
+                           {pre},
+                           error) ||
+                       Exists(plan.transactionRoot) ||
+                       !RecoveryOldLive(wowRoot)) {
+                Fail("backup-rename restart rollback failed");
+            }
+        }
+    }
+
+    // Crash after all old roots are backed up, before any new root is live.
+    {
+        const auto wowRoot =
+            recoveryRoot / L"AllBackups";
+        tp::AddonInstallPlan plan;
+        tp::AddonInstallTransaction transaction;
+        tp::AddonTransactionStateMarker pre;
+        tp::AddonTransactionStateMarker post;
+        std::wstring error;
+
+        if (!PrepareArmedRecoveryUpdate(
+                wowRoot,
+                plan,
+                transaction,
+                pre,
+                post,
+                error)) {
+            Fail("all-backups crash fixture failed");
+        } else {
+            tp::AddonInstallOptions options;
+            options.simulateCrashAfterAllRootBackups =
+                true;
+
+            if (tp::CommitAddonInstallTransaction(
+                    transaction,
+                    error,
+                    options) ||
+                transaction.backedUpRoots.size() != 1 ||
+                Exists(
+                    plan.addOnsRoot /
+                    L"Recovery")) {
+                Fail("all-backups crash window was not constructed");
+            } else if (!tp::RecoverAddonInstallTransactions(
+                           wowRoot,
+                           {pre},
+                           error) ||
+                       !RecoveryOldLive(wowRoot) ||
+                       Exists(plan.transactionRoot)) {
+                Fail("all-backups restart rollback failed");
+            }
+        }
+    }
+
+    // Crash after prepared->live rename but before installedRoots bookkeeping.
+    {
+        const auto wowRoot =
+            recoveryRoot / L"NewRename";
+        tp::AddonInstallPlan plan;
+        tp::AddonInstallTransaction transaction;
+        tp::AddonTransactionStateMarker pre;
+        tp::AddonTransactionStateMarker post;
+        std::wstring error;
+
+        if (!PrepareArmedRecoveryUpdate(
+                wowRoot,
+                plan,
+                transaction,
+                pre,
+                post,
+                error)) {
+            Fail("new-rename crash fixture failed");
+        } else {
+            tp::AddonInstallOptions options;
+            options.simulateCrashAfterNewRootCommitRename =
+                true;
+
+            if (tp::CommitAddonInstallTransaction(
+                    transaction,
+                    error,
+                    options) ||
+                !transaction.installedRoots.empty() ||
+                !RecoveryNewLive(wowRoot) ||
+                !Exists(
+                    plan.transactionRoot /
+                    L"backup/Recovery")) {
+                Fail("new-rename crash window was not constructed");
+            } else if (!tp::RecoverAddonInstallTransactions(
+                           wowRoot,
+                           {pre},
+                           error) ||
+                       !RecoveryOldLive(wowRoot) ||
+                       Exists(plan.transactionRoot)) {
+                Fail("new-rename restart rollback failed");
+            }
+        }
+    }
+
+    // Filesystem commit completed but durable state is still pre-state.
+    {
+        const auto wowRoot =
+            recoveryRoot / L"BeforeStateSave";
+        tp::AddonInstallPlan plan;
+        tp::AddonInstallTransaction transaction;
+        tp::AddonTransactionStateMarker pre;
+        tp::AddonTransactionStateMarker post;
+        std::wstring error;
+
+        if (!PrepareArmedRecoveryUpdate(
+                wowRoot,
+                plan,
+                transaction,
+                pre,
+                post,
+                error) ||
+            !tp::CommitAddonInstallTransaction(
+                transaction,
+                error)) {
+            Fail("pre-state committed fixture failed");
+        } else if (!RecoveryNewLive(wowRoot) ||
+                   !tp::RecoverAddonInstallTransactions(
+                       wowRoot,
+                       {pre},
+                       error) ||
+                   !RecoveryOldLive(wowRoot) ||
+                   Exists(plan.transactionRoot)) {
+            Fail("pre-state restart rollback after filesystem commit failed");
+        }
+    }
+
+    // State save committed before finalize: new live state must be preserved.
+    {
+        const auto wowRoot =
+            recoveryRoot / L"AfterStateSave";
+        tp::AddonInstallPlan plan;
+        tp::AddonInstallTransaction transaction;
+        tp::AddonTransactionStateMarker pre;
+        tp::AddonTransactionStateMarker post;
+        std::wstring error;
+
+        if (!PrepareArmedRecoveryUpdate(
+                wowRoot,
+                plan,
+                transaction,
+                pre,
+                post,
+                error) ||
+            !tp::CommitAddonInstallTransaction(
+                transaction,
+                error)) {
+            Fail("post-state committed fixture failed");
+        } else if (!tp::RecoverAddonInstallTransactions(
+                       wowRoot,
+                       {post},
+                       error) ||
+                   !RecoveryNewLive(wowRoot) ||
+                   Exists(plan.transactionRoot)) {
+            Fail("post-state restart finalize failed");
+        }
+    }
+
+    // Finalize cleanup may be partially complete when the process stops.
+    {
+        const auto wowRoot =
+            recoveryRoot / L"PartialFinalize";
+        tp::AddonInstallPlan plan;
+        tp::AddonInstallTransaction transaction;
+        tp::AddonTransactionStateMarker pre;
+        tp::AddonTransactionStateMarker post;
+        std::wstring error;
+
+        if (!PrepareArmedRecoveryUpdate(
+                wowRoot,
+                plan,
+                transaction,
+                pre,
+                post,
+                error) ||
+            !tp::CommitAddonInstallTransaction(
+                transaction,
+                error)) {
+            Fail("partial-finalize fixture failed");
+        } else {
+            std::filesystem::remove_all(
+                plan.transactionRoot /
+                    L"backup",
+                ec);
+
+            if (!tp::RecoverAddonInstallTransactions(
+                    wowRoot,
+                    {post},
+                    error) ||
+                !RecoveryNewLive(wowRoot) ||
+                Exists(plan.transactionRoot)) {
+                Fail("partial-finalize restart cleanup failed");
+            }
+        }
+    }
+
+    // A remove transaction uses an absent package as its durable post-state.
+    {
+        const auto wowRoot =
+            recoveryRoot / L"RemovedPostState";
+        const auto addOns =
+            wowRoot /
+            L"Interface" /
+            L"AddOns";
+        WriteText(
+            addOns /
+                L"Owned/Owned.toc",
+            "owned");
+
+        tp::AddonInstallPlan plan;
+        std::wstring error;
+        if (!tp::BuildAddonRemovalPlan(
+                wowRoot,
+                L"github:Owner/Removed",
+                {L"Interface/AddOns/Owned/Owned.toc"},
+                {},
+                plan,
+                error)) {
+            Fail("removed-post-state plan failed");
+        } else {
+            tp::AddonInstallTransaction transaction;
+            if (!tp::PrepareAddonInstallTransaction(
+                    plan,
+                    transaction,
+                    error)) {
+                Fail("removed-post-state prepare failed");
+            } else {
+                const auto pre =
+                    Marker(
+                        plan.packageId,
+                        L"durable-pre");
+                const auto post =
+                    Marker(
+                        plan.packageId,
+                        L"",
+                        false);
+
+                if (!tp::ArmAddonInstallTransaction(
+                        transaction,
+                        pre,
+                        post,
+                        error) ||
+                    !tp::CommitAddonInstallTransaction(
+                        transaction,
+                        error)) {
+                    Fail("removed-post-state commit failed");
+                } else if (
+                    Exists(addOns / L"Owned") ||
+                    !tp::RecoverAddonInstallTransactions(
+                        wowRoot,
+                        {},
+                        error) ||
+                    Exists(addOns / L"Owned") ||
+                    Exists(plan.transactionRoot)) {
+                    Fail("removed-post-state restart finalize failed");
+                }
+            }
+        }
+    }
+
+    // Unknown durable state must preserve evidence instead of guessing.
+    {
+        const auto wowRoot =
+            recoveryRoot / L"Conflict";
+        tp::AddonInstallPlan plan;
+        tp::AddonInstallTransaction transaction;
+        tp::AddonTransactionStateMarker pre;
+        tp::AddonTransactionStateMarker post;
+        std::wstring error;
+
+        if (!PrepareArmedRecoveryUpdate(
+                wowRoot,
+                plan,
+                transaction,
+                pre,
+                post,
+                error) ||
+            !tp::CommitAddonInstallTransaction(
+                transaction,
+                error)) {
+            Fail("conflict recovery fixture failed");
+        } else if (tp::RecoverAddonInstallTransactions(
+                       wowRoot,
+                       {Marker(
+                           plan.packageId,
+                           L"neither")},
+                       error) ||
+                   !Exists(plan.transactionRoot)) {
+            Fail("conflict recovery did not preserve evidence");
+        } else {
+            error.clear();
+            if (!tp::RecoverAddonInstallTransactions(
+                    wowRoot,
+                    {pre},
+                    error) ||
+                !RecoveryOldLive(wowRoot) ||
+                Exists(plan.transactionRoot)) {
+                Fail("conflict fixture cleanup rollback failed");
+            }
+        }
+    }
+}
+
 } // namespace
 
 int main() {
@@ -118,7 +736,7 @@ int main() {
             Fail("owned-root removal plan selected wrong roots");
         } else {
             tp::AddonInstallTransaction transaction;
-            if (!tp::BeginAddonInstallTransaction(
+            if (!BeginForTest(
                     plan,
                     transaction,
                     error)) {
@@ -148,7 +766,7 @@ int main() {
             }
 
             tp::AddonInstallTransaction committedRemoval;
-            if (!tp::BeginAddonInstallTransaction(
+            if (!BeginForTest(
                     plan,
                     committedRemoval,
                     error) ||
@@ -237,7 +855,7 @@ int main() {
             options.failAfterRootBackups = 1;
 
             tp::AddonInstallTransaction transaction;
-            if (tp::BeginAddonInstallTransaction(
+            if (BeginForTest(
                     plan,
                     transaction,
                     error,
@@ -333,7 +951,7 @@ int main() {
             }
 
             tp::AddonInstallTransaction firstTransaction;
-            if (!tp::BeginAddonInstallTransaction(
+            if (!BeginForTest(
                     firstPlan,
                     firstTransaction,
                     error)) {
@@ -403,7 +1021,7 @@ int main() {
                         }
 
                         tp::AddonInstallTransaction updateTransaction;
-                        if (!tp::BeginAddonInstallTransaction(
+                        if (!BeginForTest(
                                 updatePlan,
                                 updateTransaction,
                                 error)) {
@@ -445,7 +1063,7 @@ int main() {
                         }
 
                         tp::AddonInstallTransaction committedUpdate;
-                        if (!tp::BeginAddonInstallTransaction(
+                        if (!BeginForTest(
                                 updatePlan,
                                 committedUpdate,
                                 error) ||
@@ -564,7 +1182,7 @@ int main() {
             options.failAfterNewRootCommits = 1;
 
             tp::AddonInstallTransaction transaction;
-            if (tp::BeginAddonInstallTransaction(
+            if (BeginForTest(
                     plan,
                     transaction,
                     error,
@@ -648,6 +1266,16 @@ int main() {
                     addOns /
                     L"Shared/old.lua")) {
                 Fail("managed replacement preparation changed live files");
+            } else if (!tp::ArmAddonInstallTransaction(
+                           transaction,
+                           Marker(
+                               L"github:OldOwner/Shared",
+                               L"old-owner-state"),
+                           Marker(
+                               plan.packageId,
+                               transaction.transactionId),
+                           error)) {
+                Fail("managed replacement recovery journal arm failed");
             } else if (!tp::CommitAddonInstallTransaction(
                            transaction,
                            error)) {
@@ -710,6 +1338,8 @@ int main() {
             Fail("other package ownership collision was accepted");
         }
     }
+
+    TestRestartRecovery(temp);
 
     std::filesystem::remove_all(temp, ec);
 
