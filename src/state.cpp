@@ -934,7 +934,9 @@ std::string SerializePackage(const PackageRecord& package) {
         << "\"latest_revision\":"
         << JsonStringOrNull(package.latestRevision) << ","
         << "\"installed_files\":"
-        << JsonStringArray(package.installedFiles)
+        << JsonStringArray(package.installedFiles) << ","
+        << "\"install_transaction\":"
+        << JsonStringOrNull(package.installTransaction)
         << "}";
     return stream.str();
 }
@@ -945,7 +947,7 @@ std::string MergePackageJson(const PackageRecord& package) {
     }
 
     std::string json = package.sourceJson;
-    const std::array<std::pair<std::string_view, std::string>, 14> values{{
+    const std::array<std::pair<std::string_view, std::string>, 15> values{{
         {"id", EscapeJson(package.id)},
         {"name", EscapeJson(package.name)},
         {"provider", EscapeJson(package.provider)},
@@ -959,7 +961,8 @@ std::string MergePackageJson(const PackageRecord& package) {
         {"target_path", JsonStringOrNull(package.targetPath)},
         {"installed_revision", JsonStringOrNull(package.installedRevision)},
         {"latest_revision", JsonStringOrNull(package.latestRevision)},
-        {"installed_files", JsonStringArray(package.installedFiles)}
+        {"installed_files", JsonStringArray(package.installedFiles)},
+        {"install_transaction", JsonStringOrNull(package.installTransaction)}
     }};
 
     for (const auto& [key, value] : values) {
@@ -1262,7 +1265,13 @@ bool ParsePackages(
                 objectStart,
                 objectEnd,
                 "installed_files",
-                package.installedFiles)) {
+                package.installedFiles) ||
+            !GetNullableStringMember(
+                json,
+                objectStart,
+                objectEnd,
+                "install_transaction",
+                package.installTransaction)) {
             error =
                 L"TocPilot.json contains an invalid package tracking field.";
             return false;
