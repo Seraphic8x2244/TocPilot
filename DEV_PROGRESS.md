@@ -5,12 +5,12 @@
 ## Current
 
 - Active branch: `main`.
-- Source/application version: `v0.3.7`.
-- Latest published release: `v0.3.7`.
-- Release/source commit and tag target: `ec410df48787fa88a97d49489c4f99ea6893811a` (merge of PR #7).
+- Source/application version: `v0.3.8`.
+- Latest published release: `v0.3.8`.
+- Release/source commit and tag target: `17ce349273c6f2d76572c7107f3c6f7b139cf8d8` (merge of PR #9).
 - Latest runtime-confirmed release: `v0.3.7` at `ec410df48787fa88a97d49489c4f99ea6893811a`.
-- Latest verified `main` source head: `0396aaa17279da65f8ee0aea27ddff4458f481ac` (merge of PR #8, A1 restart recovery; CI-checked, not yet published/runtime-confirmed).
-- Current goal: A1 durable addon-transaction restart recovery is implemented and merged; prepare its focused release/runtime gate before starting the next audited robustness slice.
+- Latest verified `main` runtime/release head: `17ce349273c6f2d76572c7107f3c6f7b139cf8d8` (v0.3.8 A1 release; published/CI-checked, runtime gate pending).
+- Current goal: v0.3.8 publishes A1 durable addon-transaction restart recovery; complete its focused runtime gate before starting A2.
 - Current scope boundary: do not begin A2 state semantic validation, UI cleanup, updater hardening, warning cleanup or deferred feature work until the A1 release/runtime gate is accepted.
 - Audit continuity: `audit_dump.md` is a temporary scratch checkpoint for the interrupted broad audit only; this file remains the sole authoritative live development source of truth.
 - Documentation-only commits after the release do not change the published runtime baseline.
@@ -240,6 +240,11 @@ Installed-addon Uninstall/Remove uses the native expandable TaskDialog:
 
 ## Recent Relevant Commits / Release Provenance
 
+- `17ce349273c6f2d76572c7107f3c6f7b139cf8d8` — merged PR #9 and exact v0.3.8 release/tag target.
+- PR #9 head `8d56730e1079723c1541745b81e80b30e6d81a08` passed Build workflow run `36243060906` (#577), Windows x64 job `108407087603`, including **17/17 CTest tests**.
+- v0.3.8 Release workflow run `36243263009` (#51), Windows x64 Release job `108407654961`, rebuilt exact merge commit `17ce349273c6f2d76572c7107f3c6f7b139cf8d8`, validated source version, passed **17/17 CTest tests**, generated SHA-256, created tag `v0.3.8`, and published direct release assets.
+- Published v0.3.8 `TocPilot.exe`: 2,473,472 bytes, SHA-256 `82cd45ba4e060f1bd0915dd8af23dafce9bb516384677f4f1896fa37fecefaba`.
+- Published v0.3.8 `TocPilot.exe.sha256` asset SHA-256: `6ae0cc32b33fde03aa5024ae58cbe2729cb216e70beb2597089367f52cd5e136`.
 - `ec410df48787fa88a97d49489c4f99ea6893811a` — merged PR #7 and exact v0.3.7 release/tag target.
 - PR #7 head `255a6439d788050ea034909e855851faeba78f4d` passed Build workflow run `36151542439` (#558), Windows x64 job `108125759401`, including **17/17 CTest tests**.
 - v0.3.7 Release workflow run `36161737119` (#50), Windows x64 Release job `108159686091`, rebuilt exact merge commit `ec410df48787fa88a97d49489c4f99ea6893811a`, validated source version, passed **17/17 CTest tests**, generated SHA-256, created tag `v0.3.7`, and published direct release assets.
@@ -319,7 +324,9 @@ For A1 durable addon-transaction restart recovery (post-v0.3.7 source):
 - PR #8 head `d09d27e4af05d3bafd1e024d5f40a8655357bb18` passed Windows x64 Release build and the complete **17/17 CTest** suite in Build workflow run `36241747072` (#574), job `108403455015`.
 - The `addon-install-transaction` test now deterministically covers prepared-only interruption, live->backup rename before in-memory bookkeeping, all backups complete before new roots, prepared->live rename before bookkeeping, filesystem commit with durable pre-state, durable post-state before finalize, partial finalize cleanup, remove-to-absent post-state and fail-closed ambiguous durable state.
 - PR #8 merged to `main` as `0396aaa17279da65f8ee0aea27ddff4458f481ac`.
-- This source is **CI-checked but not yet published or runtime-confirmed**; the published/runtime baseline remains v0.3.7.
+- PR #9 release-prep head `8d56730e1079723c1541745b81e80b30e6d81a08` passed the complete **17/17 CTest** suite in Build workflow run `36243060906` (#577), job `108407087603`.
+- v0.3.8 was published from exact merge commit `17ce349273c6f2d76572c7107f3c6f7b139cf8d8` by Release workflow run `36243263009` (#51), job `108407654961`; the release rebuild also passed **17/17 CTest tests**, created tag `v0.3.8` against that commit and published the direct EXE/checksum assets.
+- v0.3.8 is **published but not yet runtime-confirmed**; the accepted runtime baseline remains v0.3.7 until the focused gate passes.
 
 For v0.3.7:
 
@@ -345,9 +352,9 @@ The prior v0.3.5 release also passed its documented 17/17 Release workflow valid
 
 ## Current Issues
 
-Published/runtime-confirmed v0.3.7 remains the accepted product baseline; the P6A source audit has now identified robustness issues that were not exposed by that focused runtime gate.
+Published v0.3.8 now contains A1; runtime-confirmed v0.3.7 remains the accepted product baseline until the focused v0.3.8 gate passes.
 
-P6A is complete. A1 transaction restart recovery is implemented and CI-checked at `0396aaa17279da65f8ee0aea27ddff4458f481ac`, but remains pending its release/runtime gate. It now writes a versioned, flushed pre-mutation journal; arms it with package/transaction identity, affected-root intent and durable pre/post state markers before live renames; recovers unfinished transactions before normal package mutation; and preserves evidence rather than guessing when durable state is ambiguous.
+P6A is complete. A1 transaction restart recovery is implemented, CI-checked and published in v0.3.8 at `17ce349273c6f2d76572c7107f3c6f7b139cf8d8`, but remains pending its runtime gate. It now writes a versioned, flushed pre-mutation journal; arms it with package/transaction identity, affected-root intent and durable pre/post state markers before live renames; recovers unfinished transactions before normal package mutation; and preserves evidence rather than guessing when durable state is ambiguous.
 
 Remaining audited implementation priority after A1 acceptance starts with:
 
@@ -364,7 +371,7 @@ Lower-priority/test/build findings and contract-driven direct-DLL risks are reta
 
 Final severity/order:
 
-1. **HIGH — transaction restart recovery:** **IMPLEMENTED / CI-CHECKED; release/runtime gate pending** at `0396aaa17279da65f8ee0aea27ddff4458f481ac`.
+1. **HIGH — transaction restart recovery:** **IMPLEMENTED / CI-CHECKED / PUBLISHED v0.3.8; runtime gate pending** at `17ce349273c6f2d76572c7107f3c6f7b139cf8d8`.
 2. **HIGH — durable state semantic validation:** reject conflicting/impossible package records before runtime use.
 3. **MEDIUM — ZIP member allocation bound:** reject a single oversized uncompressed member before allocating it.
 4. **MEDIUM — self-update transport hardening:** carry/check exact asset size, cap checksum text and reject initial non-HTTPS asset/checksum URLs.
@@ -405,7 +412,7 @@ The focused post-v0.3.6 branch/list issues remain runtime-confirmed fixed in v0.
 
 ### Next Runtime Test
 
-No v0.3.7 release-gate runtime validation remains. The next runtime gate is the A1 restart-recovery release. Normal runtime validation should begin from installed v0.3.7 through TocPilot's real self-updater, then smoke ordinary addon install/update/reinstall, Uninstall, Remove and managed replacement paths for regressions. The mapped process-crash windows are covered deterministically in CI; do not require ad-hoc destructive crash timing as the normal user gate.
+No v0.3.7 release-gate runtime validation remains. The next runtime gate is published v0.3.8 A1 restart recovery. Runtime validation should begin from installed v0.3.7 through TocPilot's real self-updater to v0.3.8, then smoke ordinary addon install/update/reinstall, Uninstall, Remove and managed replacement paths for regressions. The mapped process-crash windows are covered deterministically in CI; do not require ad-hoc destructive crash timing as the normal user gate.
 
 Optional future checks remain the conflicting-TOC `Multiple` fixture and the deferred historical edge cases above.
 
@@ -475,22 +482,21 @@ Do not add support for user-uploaded ZIP/7z/RAR/installer/bundle release assets 
 
 ## Release / Documentation Notes
 
-- Current published runtime baseline is `v0.3.7` at `ec410df48787fa88a97d49489c4f99ea6893811a`.
-- Release workflow run `36161737119` (#50) is the authoritative v0.3.7 product build.
-- Published v0.3.7 is runtime-confirmed for its focused branch/list delta.
+- Current published release is `v0.3.8` at `17ce349273c6f2d76572c7107f3c6f7b139cf8d8`; the accepted runtime-confirmed baseline remains `v0.3.7` until the v0.3.8 gate passes.
+- Release workflow run `36243263009` (#51) is the authoritative v0.3.8 product build.
+- Published v0.3.8 is CI/release-verified but not yet runtime-confirmed.
 - Documentation-only commits after that release do not imply a new runtime build and require no version bump/release.
 - Version remains local installed TOC metadata; do not persist a second Version value into JSON unless the product contract is deliberately changed.
 - The legacy `package_columns_locked` JSON field remains accepted for compatibility but no longer controls v0.3.6 UI behaviour.
 
 ## Exact Next Step
 
-Prepare the focused **v0.3.8 A1 release/runtime gate**; do not begin A2 yet.
+Complete the focused **v0.3.8 A1 runtime gate**; do not begin A2 yet.
 
-1. create a narrow release-prep branch from current `main` `0396aaa17279da65f8ee0aea27ddff4458f481ac`;
-2. bump all three release-version sources to `0.3.8` and make no unrelated runtime changes;
-3. validate the release-prep PR through Windows x64 Release build + complete CTest, then merge only if `main` has not moved unexpectedly;
-4. publish `v0.3.8` through the real Release workflow from the exact merged `main` commit;
-5. runtime-test via the normal installed `v0.3.7 -> v0.3.8` self-update path plus focused install/update/reinstall/Uninstall/Remove/managed-replacement smoke checks;
-6. record the release/runtime result here before starting **A2 durable state semantic validation**.
+1. start from the normally installed `v0.3.7` and launch TocPilot so the real self-updater delivers published `v0.3.8`;
+2. confirm the normal updater/restart path completes without manual EXE replacement;
+3. smoke ordinary addon install/update/reinstall, Uninstall, Remove and managed replacement paths for regressions;
+4. report any regression against the v0.3.7 baseline, or accept the focused gate if those paths remain correct;
+5. record the runtime result here before starting **A2 durable state semantic validation**.
 
 Keep the existing caveat explicit: A1 provides deterministic **process-restart** recovery, but full sudden-power-loss atomicity is not claimed until Windows directory-rename durability is separately verified.
