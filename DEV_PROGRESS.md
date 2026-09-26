@@ -10,8 +10,9 @@
 - Release/source commit and tag target: `ec410df48787fa88a97d49489c4f99ea6893811a` (merge of PR #7).
 - Latest runtime-confirmed release: `v0.3.7` at `ec410df48787fa88a97d49489c4f99ea6893811a`.
 - Latest verified `main` runtime/release head before this documentation checkpoint: `ec410df48787fa88a97d49489c4f99ea6893811a`.
-- Current goal: pause feature expansion and begin a dedicated hardening/polish milestone: first a full robustness audit, then a UI/UX pass, then a restrained visual/branding pass.
+- Current goal: continue P6A as a bounded read-first robustness audit, preserving each verified subsystem checkpoint before moving to the next; then triage and fix in focused slices before UI/UX or visual work.
 - Current scope boundary: do not begin P5 import/export, package editing, provider expansion or other new feature work until the robustness audit has been completed and its findings have been triaged. Avoid drive-by refactors during the audit; document evidence first, then fix in focused slices.
+- Audit continuity: `audit_dump.md` is a temporary scratch checkpoint for the interrupted broad audit only; this file remains the sole authoritative live development source of truth.
 - Documentation-only commits after the release do not change the published runtime baseline.
 
 ## Product Contract
@@ -337,9 +338,21 @@ The prior v0.3.5 release also passed its documented 17/17 Release workflow valid
 
 ## Current Issues
 
-No known source or runtime defect is currently documented for published v0.3.7.
+Published/runtime-confirmed v0.3.7 remains the accepted product baseline; the P6A source audit has now identified robustness issues that were not exposed by that focused runtime gate.
 
-The focused post-v0.3.6 branch/list issues are runtime-confirmed fixed in v0.3.7.
+Highest-priority confirmed audit findings so far:
+
+- interrupted addon transactions have no restart recovery path: an unexpected process/power loss between live filesystem commit and durable state/finalize can leave live files/state mismatched and a blocking unfinished transaction directory;
+- state load does not globally reject duplicate package IDs or conflicting durable ownership records even though normal mutation APIs enforce those invariants;
+- branch-dialog async results have no per-request generation token, leaving a rare stale-result/HWND-reuse race;
+- Add Git latest-stable DLL discovery performs provider network I/O synchronously on the dialog thread;
+- self-update executable/checksum downloads lack explicit response-size limits/asset-size matching;
+- ZIP extraction can allocate one very large uncompressed member fully in memory;
+- provider/repository staging-directory sanitization can collide for distinct identities.
+
+Lower-priority/test-debt findings and contract-driven direct-DLL risks are retained in `audit_dump.md`.
+
+The focused post-v0.3.6 branch/list issues remain runtime-confirmed fixed in v0.3.7.
 
 ## Testing
 
@@ -442,6 +455,8 @@ Do not add support for user-uploaded ZIP/7z/RAR/installer/bundle release assets 
 
 ## Exact Next Step
 
-Begin P6A with a read-first robustness audit of the current `main` / published-v0.3.7 codebase. Review the application by subsystem and produce a concrete findings list with severity, exact source location/evidence, affected invariant or runtime behaviour, existing test coverage, and a proposed focused fix/test slice where action is justified.
+Continue P6A in bounded passes rather than one all-in-one audit. Start with the transaction/state recovery deep pass: map exact crash points through backup -> live commit -> state save -> finalize, determine the minimum durable recovery/journal information required, and complete the state-load invariant-validation matrix. Record only verified evidence and test gaps; do not change runtime code yet.
 
-Do not begin by rewriting or cleaning code. Establish the audit findings first, then prioritize and implement robustness fixes in coherent slices. UI/UX review follows the robustness gate; visual/skin work follows the UI/UX pass.
+Then complete, separately, the network/provider + updater pass, async/UI ownership + Win32 resource pass, and tests/build-debt pass. Use `audit_dump.md` only as temporary scratch continuity and promote the concise authoritative findings/priorities back into this file after each pass.
+
+After the findings list is stable, choose the first focused robustness fix/test slice. UI/UX review follows the robustness gate; visual/skin work follows the UI/UX pass.
