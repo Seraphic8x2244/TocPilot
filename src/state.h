@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <cstddef>
 #include <filesystem>
 #include <string>
 #include <string_view>
@@ -8,8 +9,12 @@
 
 namespace tp {
 
-inline constexpr std::array<int, 6> kDefaultPackageColumnWidths{
+inline constexpr std::size_t kPackageColumnCount = 7;
+
+inline constexpr std::array<int, kPackageColumnCount>
+kDefaultPackageColumnWidths{
     240,
+    260,
     300,
     110,
     115,
@@ -17,13 +22,15 @@ inline constexpr std::array<int, 6> kDefaultPackageColumnWidths{
     150
 };
 
-inline constexpr std::array<int, 6> kDefaultPackageColumnOrder{
+inline constexpr std::array<int, kPackageColumnCount>
+kDefaultPackageColumnOrder{
     0,
     1,
     2,
     3,
     4,
-    5
+    5,
+    6
 };
 
 struct AppSettings {
@@ -31,9 +38,9 @@ struct AppSettings {
     bool checkAppUpdates = true;
     int packageSortColumn = -1;
     bool packageSortAscending = true;
-    std::array<int, 6> packageColumnWidths =
+    std::array<int, kPackageColumnCount> packageColumnWidths =
         kDefaultPackageColumnWidths;
-    std::array<int, 6> packageColumnOrder =
+    std::array<int, kPackageColumnCount> packageColumnOrder =
         kDefaultPackageColumnOrder;
     bool packageColumnsLocked = false;
 };

@@ -2078,7 +2078,7 @@ bool LoadOrCreateState(
         return false;
     }
 
-    std::array<int, 6> packageColumnWidths =
+    std::array<int, kPackageColumnCount> packageColumnWidths =
         kDefaultPackageColumnWidths;
     std::vector<int> parsedColumnWidths;
     if (!GetIntegerArrayMember(
@@ -2104,10 +2104,10 @@ bool LoadOrCreateState(
                     2000);
         }
     } else if (
-        parsedColumnWidths.size() == 5) {
+        parsedColumnWidths.size() == 6) {
         packageColumnWidths[0] =
             std::clamp(parsedColumnWidths[0], 40, 2000);
-        packageColumnWidths[1] =
+        packageColumnWidths[2] =
             std::clamp(parsedColumnWidths[1], 40, 2000);
         packageColumnWidths[3] =
             std::clamp(parsedColumnWidths[2], 40, 2000);
@@ -2115,9 +2115,23 @@ bool LoadOrCreateState(
             std::clamp(parsedColumnWidths[3], 40, 2000);
         packageColumnWidths[5] =
             std::clamp(parsedColumnWidths[4], 40, 2000);
+        packageColumnWidths[6] =
+            std::clamp(parsedColumnWidths[5], 40, 2000);
+    } else if (
+        parsedColumnWidths.size() == 5) {
+        packageColumnWidths[0] =
+            std::clamp(parsedColumnWidths[0], 40, 2000);
+        packageColumnWidths[2] =
+            std::clamp(parsedColumnWidths[1], 40, 2000);
+        packageColumnWidths[4] =
+            std::clamp(parsedColumnWidths[2], 40, 2000);
+        packageColumnWidths[5] =
+            std::clamp(parsedColumnWidths[3], 40, 2000);
+        packageColumnWidths[6] =
+            std::clamp(parsedColumnWidths[4], 40, 2000);
     }
 
-    std::array<int, 6> packageColumnOrder =
+    std::array<int, kPackageColumnCount> packageColumnOrder =
         kDefaultPackageColumnOrder;
     std::vector<int> parsedColumnOrder;
     if (!GetIntegerArrayMember(
@@ -2133,7 +2147,7 @@ bool LoadOrCreateState(
     }
     if (parsedColumnOrder.size() ==
         packageColumnOrder.size()) {
-        std::array<bool, 6> seen{};
+        std::array<bool, kPackageColumnCount> seen{};
         bool validOrder = true;
         for (const int column :
              parsedColumnOrder) {
@@ -2157,6 +2171,44 @@ bool LoadOrCreateState(
                 parsedColumnOrder.begin(),
                 parsedColumnOrder.end(),
                 packageColumnOrder.begin());
+        }
+    } else if (
+        parsedColumnOrder.size() == 6) {
+        std::array<bool, 6> seen{};
+        bool validOrder = true;
+
+        for (const int column :
+             parsedColumnOrder) {
+            if (column < 0 ||
+                column >=
+                    static_cast<int>(
+                        seen.size()) ||
+                seen[
+                    static_cast<std::size_t>(
+                        column)]) {
+                validOrder = false;
+                break;
+            }
+
+            seen[
+                static_cast<std::size_t>(
+                    column)] = true;
+        }
+
+        if (validOrder) {
+            std::size_t output = 0;
+
+            for (const int oldColumn :
+                 parsedColumnOrder) {
+                if (oldColumn == 1) {
+                    packageColumnOrder[output++] = 1;
+                }
+
+                packageColumnOrder[output++] =
+                    oldColumn == 0
+                        ? 0
+                        : oldColumn + 1;
+            }
         }
     } else if (
         parsedColumnOrder.size() == 5) {
@@ -2186,33 +2238,49 @@ bool LoadOrCreateState(
 
             for (const int oldColumn :
                  parsedColumnOrder) {
+                if (oldColumn == 1) {
+                    packageColumnOrder[output++] = 1;
+                    packageColumnOrder[output++] = 2;
+                    packageColumnOrder[output++] = 3;
+                    continue;
+                }
+
                 const int mapped =
-                    oldColumn >= 2
-                        ? oldColumn + 1
-                        : oldColumn;
+                    oldColumn == 0
+                        ? 0
+                        : oldColumn + 2;
 
                 packageColumnOrder[output++] =
                     mapped;
-
-                if (oldColumn == 1) {
-                    packageColumnOrder[output++] =
-                        2;
-                }
             }
         }
     }
 
+    const bool legacySixColumnLayout =
+        parsedColumnWidths.size() == 6 ||
+        parsedColumnOrder.size() == 6;
     const bool legacyFiveColumnLayout =
-        parsedColumnWidths.size() != 6 &&
-        parsedColumnOrder.size() != 6;
+        !legacySixColumnLayout &&
+        (parsedColumnWidths.size() == 5 ||
+         parsedColumnOrder.size() == 5);
 
-    if (legacyFiveColumnLayout &&
-        packageSortColumn >= 2) {
+    if (legacySixColumnLayout &&
+        packageSortColumn >= 1) {
         ++packageSortColumn;
+    } else if (
+        legacyFiveColumnLayout) {
+        if (packageSortColumn == 1) {
+            packageSortColumn = 2;
+        } else if (
+            packageSortColumn >= 2) {
+            packageSortColumn += 2;
+        }
     }
 
     if (packageSortColumn < -1 ||
-        packageSortColumn > 5) {
+        packageSortColumn >
+            static_cast<int>(
+                kPackageColumnCount) - 1) {
         packageSortColumn = -1;
     }
 
