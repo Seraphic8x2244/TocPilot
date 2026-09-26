@@ -138,6 +138,9 @@ void TestCreateAddRoundTrip(
         return;
     }
 
+    state.packages[0].installTransaction =
+        L"transaction-roundtrip-marker";
+
     state.settings.textScale = 1.25;
     state.settings.packageSortColumn = 5;
     state.settings.packageSortAscending = false;
@@ -185,6 +188,8 @@ void TestCreateAddRoundTrip(
         loaded.packages[0].installedRevision != installedSha ||
         loaded.packages[0].latestRevision != installedSha ||
         loaded.packages[0].installedFiles != installedFiles ||
+        loaded.packages[0].installTransaction !=
+            L"transaction-roundtrip-marker" ||
         loaded.settings.textScale != 1.25 ||
         loaded.settings.packageSortColumn != 5 ||
         loaded.settings.packageSortAscending ||
