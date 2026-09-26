@@ -344,22 +344,22 @@ Highest-priority confirmed audit findings so far:
 
 - interrupted addon transactions have no restart recovery path: the transaction phase/root bookkeeping is memory-only, so a restart can see old durable state with partially/new live files or new durable state with stale backups and cannot safely infer rollback vs finalize. The transaction deep pass established the minimum recovery design: a durable pre-mutation journal with package/transaction identity, affected-root intent and an unambiguous pre-state vs post-state discriminator;
 - state load validates JSON shape but does not globally revalidate durable package semantics. It can accept duplicate package IDs, conflicting addon-root ownership, identity/provider/mode/target inconsistencies, incoherent installed state, unsafe ownership paths and direct-DLL ownership that normal mutation APIs would reject;
-- branch-dialog async results have no per-request generation token, leaving a rare stale-result/HWND-reuse race;
-- Add Git latest-stable DLL discovery performs provider network I/O synchronously on the dialog thread;
+- the dedicated Add-Git branch dialog has no per-request generation/repository token. Closing and reopening it while its detached lookup is still running leaves a rare stale-result/HWND-reuse race; the main inline branch selector already has a generation + package-ID guard;
+- Add Git latest-stable DLL discovery performs provider network I/O synchronously on the dialog thread, including the DLL-fallback dialog creation path, so provider timeout/failure can freeze that UI;
 - self-update executable/checksum downloads lack explicit response-size limits/asset-size matching;
 - self-update release asset/checksum transport does not reject an initial non-HTTPS URL even though the rulebook requires HTTPS provider/download traffic; normal GitHub metadata currently supplies HTTPS URLs and WinHTTP's default redirect policy blocks HTTPS -> HTTP downgrades;
 - Update All does not treat branch-addon archive HTTP rate limiting as a queue-stop condition, unlike status refresh and direct-DLL update paths;
 - ZIP extraction can allocate one very large uncompressed member fully in memory;
 - provider/repository staging-directory sanitization can collide for distinct identities.
 
-Lower-priority/test-debt findings and contract-driven direct-DLL risks are retained in `audit_dump.md`. The network/updater pass also confirmed a low-priority updater handoff gap: parent-process synchronization failure is silently ignored before replacement retries begin.
+Lower-priority/test-debt findings and contract-driven direct-DLL risks are retained in `audit_dump.md`. The async/UI pass found no high/medium GDI/icon ownership leak. It did confirm low-priority cleanup/debt: the old hidden branch COMBOBOX is now dead infrastructure after the list-cell popup redesign; main close can abandon non-install async work/staging; several rare Win32 control/subclass/timer/GetMessage failures are not surfaced.
 
 P6A bounded-pass status:
 
 - transaction/state recovery deep pass: **complete and documented**;
 - network/provider + updater deep pass: **complete and documented**;
-- async/UI ownership + Win32 resource pass: next;
-- tests/build-debt/final-priority pass: outstanding.
+- async/UI ownership + Win32 resource pass: **complete and documented**;
+- tests/build-debt/final-priority pass: next.
 
 Power-loss durability of the addon directory rename sequence remains a verification gap: `TocPilot.json` is explicitly flushed/write-through, while addon directory moves currently use `std::filesystem::rename` without a separately verified durability guarantee.
 
@@ -466,8 +466,8 @@ Do not add support for user-uploaded ZIP/7z/RAR/installer/bundle release assets 
 
 ## Exact Next Step
 
-Continue P6A with the **async/UI ownership + Win32 resource pass**. Audit every detached worker/result-message pair, close/reopen/reentrancy paths, handle/GDI lifetime and silent Win32 API failures, and stale/legacy branch-selector control/code. Record only verified evidence and test gaps; do not change runtime code yet.
+Continue P6A with the **tests/build-debt/final-priority pass**. Map every confirmed finding to current test coverage and missing failure-injection seams, inspect CMake/CI/runtime-library configuration behind the observed `LNK4098` warning, then produce the final severity/implementation ordering. Record only verified evidence; do not change runtime code yet.
 
-Then complete the tests/build-debt/final-priority pass. Use `audit_dump.md` only as temporary scratch continuity and promote the concise authoritative findings/priorities back into this file after each pass.
+After that pass, choose the first focused robustness fix/test slice. Use `audit_dump.md` only as temporary scratch continuity and promote the concise authoritative findings/priorities back into this file after each pass.
 
 After the findings list is stable, choose the first focused robustness fix/test slice. UI/UX review follows the robustness gate; visual/skin work follows the UI/UX pass.
