@@ -8,10 +8,11 @@
 - Source/application version: `v0.3.9`.
 - Latest published release: `v0.3.9`.
 - Release/source commit and tag target: `57feb4307058b484ff980bd30b60d7eafb4466af` (merge of PR #10).
-- Latest runtime-confirmed release: `v0.3.8` at `17ce349273c6f2d76572c7107f3c6f7b139cf8d8` for the normal installed self-update path only; package-operation smoke checks remain pending before full A1 gate acceptance.
-- Latest verified `main` runtime/release head: `57feb4307058b484ff980bd30b60d7eafb4466af` (v0.3.9 WWW-column release; published/CI-checked, runtime test pending).
-- Current goal: runtime-test v0.3.8 -> v0.3.9, verify the WWW column/layout migration, then use it to complete the remaining A1 package-operation smoke gate.
-- Current scope boundary: this is an explicit temporary exception to the prior no-UI-work boundary; keep v0.3.9 strictly to the WWW column/click behaviour and compatible column-layout migration. Do not begin A2, broader UI cleanup, updater hardening, warning cleanup or other deferred work until the A1 runtime gate is accepted.
+- Latest runtime-confirmed release: `v0.3.8` at `17ce349273c6f2d76572c7107f3c6f7b139cf8d8` for the normal installed self-update path. v0.3.9 remains published/CI-checked with its updater/UI delta not separately confirmed.
+- Latest verified `main` runtime/release head: `57feb4307058b484ff980bd30b60d7eafb4466af` (v0.3.9 WWW-column release; published/CI-checked).
+- A1 runtime gate: **accepted for forward development** on 2026-09-26. Fresh install, reinstall, Update New and Remove Addon passed. Managed same-root replacement runtime validation is explicitly deferred rather than blocking A2. The deterministic crash-window tests remain the primary validation for restart-recovery semantics.
+- Current goal: implement **A2 durable state semantic validation only**.
+- Current scope boundary: do not mix A2 with ZIP bounds, updater hardening, async DLL discovery, warning cleanup or unrelated UI changes. The next UI follow-up is separately queued: rename `WWW` to lowercase `www`, and render repository links blue + underlined at all times, including selected/semantic rows.
 - Audit continuity: `audit_dump.md` is a temporary scratch checkpoint for the interrupted broad audit only; this file remains the sole authoritative live development source of truth.
 - Documentation-only commits after the release do not change the published runtime baseline.
 
@@ -318,9 +319,9 @@ Optional validation debt where a real fixture is available:
 
 ### Deferred Runtime Checks
 
+- Managed same-root replacement against a real installation (A1 runtime debt; explicitly deferred on 2026-09-26 and does not block A2).
 - v0.3.2 removal confirmation UI.
 - Single-nested Add Git case.
-- Same-root managed-addon overwrite/cancel against a real installation.
 - Mixed root + child refusal.
 - Terminal no-supported-content result.
 
@@ -333,8 +334,10 @@ For A1 durable addon-transaction restart recovery (post-v0.3.7 source):
 - PR #8 merged to `main` as `0396aaa17279da65f8ee0aea27ddff4458f481ac`.
 - PR #9 release-prep head `8d56730e1079723c1541745b81e80b30e6d81a08` passed the complete **17/17 CTest** suite in Build workflow run `36243060906` (#577), job `108407087603`.
 - v0.3.8 was published from exact merge commit `17ce349273c6f2d76572c7107f3c6f7b139cf8d8` by Release workflow run `36243263009` (#51), job `108407654961`; the release rebuild also passed **17/17 CTest tests**, created tag `v0.3.8` against that commit and published the direct EXE/checksum assets.
-- v0.3.8's normal installed self-update path from v0.3.7 is runtime-confirmed; its package-operation smoke gate remains pending.
-- v0.3.9 is **published/CI-checked but not yet runtime-confirmed**; it is the next runtime target.
+- v0.3.8's normal installed self-update path from v0.3.7 is runtime-confirmed.
+- A1 package-operation runtime smoke: fresh install passed, reinstall passed, Update New passed and Remove Addon passed on 2026-09-26. Managed same-root replacement remains deferred.
+- A1 is accepted for forward development with that explicit deferred runtime debt.
+- v0.3.9 is **published/CI-checked but its updater/UI delta is not separately runtime-confirmed**.
 
 For v0.3.7:
 
@@ -360,9 +363,9 @@ The prior v0.3.5 release also passed its documented 17/17 Release workflow valid
 
 ## Current Issues
 
-Published v0.3.9 contains the WWW-column usability slice on top of A1. The v0.3.8 self-update path is runtime-confirmed; the remaining A1 package-operation gate and the v0.3.9 UI/runtime delta are still pending.
+Published v0.3.9 contains the WWW-column usability slice on top of A1. A1 is accepted for forward development after fresh install, reinstall, Update New and Remove Addon passed; managed same-root replacement remains explicit deferred runtime debt. The v0.3.9 updater/UI delta is still not separately runtime-confirmed.
 
-P6A is complete. A1 transaction restart recovery is implemented, CI-checked and published in v0.3.8 at `17ce349273c6f2d76572c7107f3c6f7b139cf8d8`, but remains pending its runtime gate. It now writes a versioned, flushed pre-mutation journal; arms it with package/transaction identity, affected-root intent and durable pre/post state markers before live renames; recovers unfinished transactions before normal package mutation; and preserves evidence rather than guessing when durable state is ambiguous.
+P6A is complete. A1 transaction restart recovery is implemented, CI-checked and published in v0.3.8 at `17ce349273c6f2d76572c7107f3c6f7b139cf8d8`, and accepted for forward development with the same-root replacement runtime check deferred. It now writes a versioned, flushed pre-mutation journal; arms it with package/transaction identity, affected-root intent and durable pre/post state markers before live renames; recovers unfinished transactions before normal package mutation; and preserves evidence rather than guessing when durable state is ambiguous.
 
 Remaining audited implementation priority after A1 acceptance starts with:
 
@@ -379,8 +382,8 @@ Lower-priority/test/build findings and contract-driven direct-DLL risks are reta
 
 Final severity/order:
 
-1. **HIGH — transaction restart recovery:** **IMPLEMENTED / CI-CHECKED / PUBLISHED v0.3.8; runtime gate pending** at `17ce349273c6f2d76572c7107f3c6f7b139cf8d8`.
-2. **HIGH — durable state semantic validation:** reject conflicting/impossible package records before runtime use.
+1. **HIGH — transaction restart recovery:** **IMPLEMENTED / CI-CHECKED / PUBLISHED / ACCEPTED**, with managed same-root replacement runtime validation deferred.
+2. **HIGH — durable state semantic validation:** **NEXT** — reject conflicting/impossible package records before runtime use.
 3. **MEDIUM — ZIP member allocation bound:** reject a single oversized uncompressed member before allocating it.
 4. **MEDIUM — self-update transport hardening:** carry/check exact asset size, cap checksum text and reject initial non-HTTPS asset/checksum URLs.
 5. **MEDIUM — async latest-stable DLL discovery:** remove provider I/O from the dialog thread.
@@ -421,7 +424,9 @@ The focused post-v0.3.6 branch/list issues remain runtime-confirmed fixed in v0.
 
 ### Next Runtime Test
 
-Start from installed v0.3.8 and use TocPilot's real self-updater to published v0.3.9. Confirm Advanced shows `Name | WWW | Branch | Version | Local SHA | Git SHA | Status`, repository links open the correct GitHub/GitLab source, existing saved Advanced order/widths remain sensibly migrated, and Compact remains unchanged. Then use the WWW links while completing the remaining A1 install/update/reinstall, Uninstall, Remove and managed-replacement smoke checks. The mapped process-crash windows remain covered deterministically in CI; do not require ad-hoc destructive crash timing as the normal user gate.
+No additional runtime test is required before starting A2. A1's managed same-root replacement check remains deferred. v0.3.9's WWW/updater UI delta can be checked opportunistically; do not block A2 on it.
+
+The current product workflow has **Remove Addon**, not the old Uninstall flow. Do not reintroduce Uninstall as a required runtime gate.
 
 Optional future checks remain the conflicting-TOC `Multiple` fixture and the deferred historical edge cases above.
 
@@ -500,13 +505,16 @@ Do not add support for user-uploaded ZIP/7z/RAR/installer/bundle release assets 
 
 ## Exact Next Step
 
-Runtime-test published **v0.3.9**, then finish the A1 runtime gate; do not begin A2 yet.
+Implement **A2 durable state semantic validation only**.
 
-1. launch normally installed `v0.3.8` and confirm the real self-updater delivers `v0.3.9` without manual EXE replacement;
-2. verify Advanced shows `Name | WWW | Branch | Version | Local SHA | Git SHA | Status`;
-3. click representative GitHub/GitLab WWW cells and confirm the correct repository opens; verify the migrated Advanced widths/order are sensible and Compact remains `Name | Status`;
-4. use the WWW links to smoke ordinary addon install/update/reinstall, Uninstall, Remove and managed replacement paths;
-5. report any regression against the v0.3.8/v0.3.7 baseline, or accept the focused gate if those paths remain correct;
-6. record the final A1 runtime result here before starting **A2 durable state semantic validation**.
+1. define a pure, centralized validator for the fully loaded durable package set before runtime use;
+2. reject duplicate package IDs and ambiguous/conflicting addon-root ownership;
+3. reject identity/provider/mode/target inconsistencies and incoherent installed-state combinations;
+4. reject unsafe durable ownership paths that escape approved WoW/addon destinations;
+5. revalidate direct-DLL durable ownership against the same narrow product contract used by normal mutation paths;
+6. fail closed with a clear state-load error while preserving the original `TocPilot.json` for manual repair;
+7. add deterministic state tests for every rejected semantic class plus valid branch/library/DLL fixtures;
+8. keep JSON unknown-field preservation and existing legacy-layout migration behaviour intact;
+9. do not begin A3/ZIP bounds, updater hardening or the queued `www` visual follow-up in this slice.
 
 Keep the existing caveat explicit: A1 provides deterministic **process-restart** recovery, but full sudden-power-loss atomicity is not claimed until Windows directory-rename durability is separately verified.
