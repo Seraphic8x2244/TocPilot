@@ -4,13 +4,13 @@
 
 ## Current
 
-- Active branch: `feature/www-column-v0.3.9` (focused user-requested usability slice from `main` `43a433e23d0146d692ce8881e20c1f8e89fa2683`).
-- Source/application version: `v0.3.9` on the feature branch; latest published release remains `v0.3.8`.
-- Latest published release: `v0.3.8`.
-- Release/source commit and tag target: `17ce349273c6f2d76572c7107f3c6f7b139cf8d8` (merge of PR #9).
+- Active branch: `main`.
+- Source/application version: `v0.3.9`.
+- Latest published release: `v0.3.9`.
+- Release/source commit and tag target: `57feb4307058b484ff980bd30b60d7eafb4466af` (merge of PR #10).
 - Latest runtime-confirmed release: `v0.3.8` at `17ce349273c6f2d76572c7107f3c6f7b139cf8d8` for the normal installed self-update path only; package-operation smoke checks remain pending before full A1 gate acceptance.
-- Latest verified `main` runtime/release head: `17ce349273c6f2d76572c7107f3c6f7b139cf8d8` (v0.3.8 A1 release; published/CI-checked; self-update runtime path passed, focused package smoke gate pending).
-- Current goal: publish the narrow v0.3.9 Advanced-mode WWW repository-link column requested specifically to make the remaining A1 package-operation runtime gate faster, then resume that gate.
+- Latest verified `main` runtime/release head: `57feb4307058b484ff980bd30b60d7eafb4466af` (v0.3.9 WWW-column release; published/CI-checked, runtime test pending).
+- Current goal: runtime-test v0.3.8 -> v0.3.9, verify the WWW column/layout migration, then use it to complete the remaining A1 package-operation smoke gate.
 - Current scope boundary: this is an explicit temporary exception to the prior no-UI-work boundary; keep v0.3.9 strictly to the WWW column/click behaviour and compatible column-layout migration. Do not begin A2, broader UI cleanup, updater hardening, warning cleanup or other deferred work until the A1 runtime gate is accepted.
 - Audit continuity: `audit_dump.md` is a temporary scratch checkpoint for the interrupted broad audit only; this file remains the sole authoritative live development source of truth.
 - Documentation-only commits after the release do not change the published runtime baseline.
@@ -242,6 +242,11 @@ Installed-addon Uninstall/Remove uses the native expandable TaskDialog:
 
 ## Recent Relevant Commits / Release Provenance
 
+- `57feb4307058b484ff980bd30b60d7eafb4466af` — merged PR #10 and exact v0.3.9 release/tag target.
+- PR #10 head `06553ee63c8d6a645a42861ffe80bb2351b88c40` passed Build workflow run `36251399338` (#581), Windows x64 job `108429989143`, including **17/17 CTest tests** and the six-column -> seven-column persisted-layout migration case.
+- v0.3.9 Release workflow run `36251599364` (#52), Windows x64 Release job `108430537496`, rebuilt exact merge commit `57feb4307058b484ff980bd30b60d7eafb4466af`, validated source version, passed **17/17 CTest tests**, generated SHA-256, created tag `v0.3.9`, and published direct release assets.
+- Published v0.3.9 `TocPilot.exe`: 2,475,008 bytes, SHA-256 `0f31c5543155a515fd4af4a22a6dd4bea91e4d64e2babe65b9406adaeedfb58e`.
+- Published v0.3.9 `TocPilot.exe.sha256` asset SHA-256: `a9f4c90767f275d5c2f709e2cedf5c664727d322475f6eaa25cb6ed37299e60d`.
 - `17ce349273c6f2d76572c7107f3c6f7b139cf8d8` — merged PR #9 and exact v0.3.8 release/tag target.
 - PR #9 head `8d56730e1079723c1541745b81e80b30e6d81a08` passed Build workflow run `36243060906` (#577), Windows x64 job `108407087603`, including **17/17 CTest tests**.
 - v0.3.8 Release workflow run `36243263009` (#51), Windows x64 Release job `108407654961`, rebuilt exact merge commit `17ce349273c6f2d76572c7107f3c6f7b139cf8d8`, validated source version, passed **17/17 CTest tests**, generated SHA-256, created tag `v0.3.8`, and published direct release assets.
@@ -328,7 +333,8 @@ For A1 durable addon-transaction restart recovery (post-v0.3.7 source):
 - PR #8 merged to `main` as `0396aaa17279da65f8ee0aea27ddff4458f481ac`.
 - PR #9 release-prep head `8d56730e1079723c1541745b81e80b30e6d81a08` passed the complete **17/17 CTest** suite in Build workflow run `36243060906` (#577), job `108407087603`.
 - v0.3.8 was published from exact merge commit `17ce349273c6f2d76572c7107f3c6f7b139cf8d8` by Release workflow run `36243263009` (#51), job `108407654961`; the release rebuild also passed **17/17 CTest tests**, created tag `v0.3.8` against that commit and published the direct EXE/checksum assets.
-- v0.3.8 is **published but not yet runtime-confirmed**; the accepted runtime baseline remains v0.3.7 until the focused gate passes.
+- v0.3.8's normal installed self-update path from v0.3.7 is runtime-confirmed; its package-operation smoke gate remains pending.
+- v0.3.9 is **published/CI-checked but not yet runtime-confirmed**; it is the next runtime target.
 
 For v0.3.7:
 
@@ -354,7 +360,7 @@ The prior v0.3.5 release also passed its documented 17/17 Release workflow valid
 
 ## Current Issues
 
-Published v0.3.8 now contains A1; runtime-confirmed v0.3.7 remains the accepted product baseline until the focused v0.3.8 gate passes.
+Published v0.3.9 contains the WWW-column usability slice on top of A1. The v0.3.8 self-update path is runtime-confirmed; the remaining A1 package-operation gate and the v0.3.9 UI/runtime delta are still pending.
 
 P6A is complete. A1 transaction restart recovery is implemented, CI-checked and published in v0.3.8 at `17ce349273c6f2d76572c7107f3c6f7b139cf8d8`, but remains pending its runtime gate. It now writes a versioned, flushed pre-mutation journal; arms it with package/transaction identity, affected-root intent and durable pre/post state markers before live renames; recovers unfinished transactions before normal package mutation; and preserves evidence rather than guessing when durable state is ambiguous.
 
@@ -415,7 +421,7 @@ The focused post-v0.3.6 branch/list issues remain runtime-confirmed fixed in v0.
 
 ### Next Runtime Test
 
-After v0.3.9 is published, start from installed v0.3.8 and use TocPilot's real self-updater to v0.3.9. Confirm Advanced shows `Name | WWW | Branch | Version | Local SHA | Git SHA | Status`, repository links open the correct GitHub/GitLab source, existing saved Advanced order/widths remain sensibly migrated, and Compact remains unchanged. Then use the WWW links while completing the remaining A1 install/update/reinstall, Uninstall, Remove and managed-replacement smoke checks. The mapped process-crash windows remain covered deterministically in CI; do not require ad-hoc destructive crash timing as the normal user gate.
+Start from installed v0.3.8 and use TocPilot's real self-updater to published v0.3.9. Confirm Advanced shows `Name | WWW | Branch | Version | Local SHA | Git SHA | Status`, repository links open the correct GitHub/GitLab source, existing saved Advanced order/widths remain sensibly migrated, and Compact remains unchanged. Then use the WWW links while completing the remaining A1 install/update/reinstall, Uninstall, Remove and managed-replacement smoke checks. The mapped process-crash windows remain covered deterministically in CI; do not require ad-hoc destructive crash timing as the normal user gate.
 
 Optional future checks remain the conflicting-TOC `Multiple` fixture and the deferred historical edge cases above.
 
@@ -485,23 +491,22 @@ Do not add support for user-uploaded ZIP/7z/RAR/installer/bundle release assets 
 
 ## Release / Documentation Notes
 
-- Current published release is `v0.3.8` at `17ce349273c6f2d76572c7107f3c6f7b139cf8d8`.
-- Release workflow run `36243263009` (#51) is the authoritative v0.3.8 product build.
-- Published v0.3.8 is CI/release-verified and its normal installed self-update path from v0.3.7 is runtime-confirmed; full A1 acceptance still awaits the focused package-operation smoke checks.
+- Current published release is `v0.3.9` at `57feb4307058b484ff980bd30b60d7eafb4466af`.
+- Release workflow run `36251599364` (#52) is the authoritative v0.3.9 product build.
+- Published v0.3.9 is CI/release-verified but not yet runtime-confirmed. v0.3.8's normal installed self-update path from v0.3.7 is runtime-confirmed; full A1 acceptance still awaits the focused package-operation smoke checks.
 - Documentation-only commits after that release do not imply a new runtime build and require no version bump/release.
 - Version remains local installed TOC metadata; do not persist a second Version value into JSON unless the product contract is deliberately changed.
 - The legacy `package_columns_locked` JSON field remains accepted for compatibility but no longer controls v0.3.6 UI behaviour.
 
 ## Exact Next Step
 
-Finish and publish the focused **v0.3.9 WWW-column usability slice**, then resume the A1 runtime gate; do not begin A2 yet.
+Runtime-test published **v0.3.9**, then finish the A1 runtime gate; do not begin A2 yet.
 
-1. validate `feature/www-column-v0.3.9` through Windows x64 Release build + the complete CTest suite;
-2. merge only if `main` has not moved unexpectedly;
-3. publish `v0.3.9` through the real Release workflow from the exact merged `main` commit;
-4. runtime-test installed `v0.3.8 -> v0.3.9` through the normal self-updater;
-5. verify the clickable WWW repository column, migrated Advanced column layout and unchanged Compact view;
-6. use the new links to complete ordinary addon install/update/reinstall, Uninstall, Remove and managed replacement smoke checks;
-7. record the final A1 runtime result here before starting **A2 durable state semantic validation**.
+1. launch normally installed `v0.3.8` and confirm the real self-updater delivers `v0.3.9` without manual EXE replacement;
+2. verify Advanced shows `Name | WWW | Branch | Version | Local SHA | Git SHA | Status`;
+3. click representative GitHub/GitLab WWW cells and confirm the correct repository opens; verify the migrated Advanced widths/order are sensible and Compact remains `Name | Status`;
+4. use the WWW links to smoke ordinary addon install/update/reinstall, Uninstall, Remove and managed replacement paths;
+5. report any regression against the v0.3.8/v0.3.7 baseline, or accept the focused gate if those paths remain correct;
+6. record the final A1 runtime result here before starting **A2 durable state semantic validation**.
 
 Keep the existing caveat explicit: A1 provides deterministic **process-restart** recovery, but full sudden-power-loss atomicity is not claimed until Windows directory-rename durability is separately verified.
