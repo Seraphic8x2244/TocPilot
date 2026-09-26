@@ -10,7 +10,7 @@
 - Release/source commit and tag target: `ec410df48787fa88a97d49489c4f99ea6893811a` (merge of PR #7).
 - Latest runtime-confirmed release: `v0.3.7` at `ec410df48787fa88a97d49489c4f99ea6893811a`.
 - Latest verified `main` runtime/release head before this documentation checkpoint: `ec410df48787fa88a97d49489c4f99ea6893811a`.
-- Current goal: continue P6A as a bounded read-first robustness audit, preserving each verified subsystem checkpoint before moving to the next; then triage and fix in focused slices before UI/UX or visual work.
+- Current goal: P6A bounded audit is complete; begin the first focused robustness slice with durable addon-transaction restart recovery, then work the audited findings in priority order before UI/UX or visual work.
 - Current scope boundary: do not begin P5 import/export, package editing, provider expansion or other new feature work until the robustness audit has been completed and its findings have been triaged. Avoid drive-by refactors during the audit; document evidence first, then fix in focused slices.
 - Audit continuity: `audit_dump.md` is a temporary scratch checkpoint for the interrupted broad audit only; this file remains the sole authoritative live development source of truth.
 - Documentation-only commits after the release do not change the published runtime baseline.
@@ -340,7 +340,7 @@ The prior v0.3.5 release also passed its documented 17/17 Release workflow valid
 
 Published/runtime-confirmed v0.3.7 remains the accepted product baseline; the P6A source audit has now identified robustness issues that were not exposed by that focused runtime gate.
 
-Highest-priority confirmed audit findings so far:
+P6A is complete. Final implementation priority starts with:
 
 - interrupted addon transactions have no restart recovery path: the transaction phase/root bookkeeping is memory-only, so a restart can see old durable state with partially/new live files or new durable state with stale backups and cannot safely infer rollback vs finalize. The transaction deep pass established the minimum recovery design: a durable pre-mutation journal with package/transaction identity, affected-root intent and an unambiguous pre-state vs post-state discriminator;
 - state load validates JSON shape but does not globally revalidate durable package semantics. It can accept duplicate package IDs, conflicting addon-root ownership, identity/provider/mode/target inconsistencies, incoherent installed state, unsafe ownership paths and direct-DLL ownership that normal mutation APIs would reject;
@@ -352,14 +352,24 @@ Highest-priority confirmed audit findings so far:
 - ZIP extraction can allocate one very large uncompressed member fully in memory;
 - provider/repository staging-directory sanitization can collide for distinct identities.
 
-Lower-priority/test-debt findings and contract-driven direct-DLL risks are retained in `audit_dump.md`. The async/UI pass found no high/medium GDI/icon ownership leak. It did confirm low-priority cleanup/debt: the old hidden branch COMBOBOX is now dead infrastructure after the list-cell popup redesign; main close can abandon non-install async work/staging; several rare Win32 control/subclass/timer/GetMessage failures are not surfaced.
+Lower-priority/test/build findings and contract-driven direct-DLL risks are retained in `audit_dump.md`. The async/UI pass found no high/medium GDI/icon ownership leak. It did confirm low-priority cleanup/debt: the old hidden branch COMBOBOX is now dead infrastructure after the list-cell popup redesign; main close can abandon non-install async work/staging; several rare Win32 control/subclass/timer/GetMessage failures are not surfaced.
 
-P6A bounded-pass status:
+Final severity/order:
 
-- transaction/state recovery deep pass: **complete and documented**;
-- network/provider + updater deep pass: **complete and documented**;
-- async/UI ownership + Win32 resource pass: **complete and documented**;
-- tests/build-debt/final-priority pass: next.
+1. **HIGH — transaction restart recovery:** durable pre-mutation journal + deterministic startup rollback/finalize decision.
+2. **HIGH — durable state semantic validation:** reject conflicting/impossible package records before runtime use.
+3. **MEDIUM — ZIP member allocation bound:** reject a single oversized uncompressed member before allocating it.
+4. **MEDIUM — self-update transport hardening:** carry/check exact asset size, cap checksum text and reject initial non-HTTPS asset/checksum URLs.
+5. **MEDIUM — async latest-stable DLL discovery:** remove provider I/O from the dialog thread.
+6. **MEDIUM/LOW — Add-Git branch-dialog request identity:** reject stale close/reopen completions.
+7. **MEDIUM/LOW — Update All archive rate-limit propagation:** confirmed provider 429 should stop later provider-heavy queue work.
+8. Remaining lower-priority work: separate live network smoke tests from deterministic default CTest; updater parent-wait handling; strict checksum-sidecar parsing; collision-proof staging identity; dead branch-combo removal; optional non-mutating shutdown cleanup; archive-test CRT/warning cleanup.
+
+P6A bounded-pass status: **all four passes complete and documented**.
+
+Build/test audit:
+- `TocPilotArchiveTests` is currently built with CMake's default dynamic MSVC runtime while linked `TocPilotMiniz` is explicitly static-runtime, explaining the observed `LNK4098`; align the test target/runtime rather than masking the warning;
+- `git-smart-http-live-github` and `self-update-live-latest` are ordinary CTest entries, so current Build and Release workflows make normal test success depend on live GitHub/network availability. Keep them as explicit live smoke coverage, but separate them from the deterministic default suite.
 
 Power-loss durability of the addon directory rename sequence remains a verification gap: `TocPilot.json` is explicitly flushed/write-through, while addon directory moves currently use `std::filesystem::rename` without a separately verified durability guarantee.
 
@@ -387,7 +397,7 @@ The focused post-v0.3.6 branch/list issues remain runtime-confirmed fixed in v0.
 
 ### Next Runtime Test
 
-No v0.3.7 release-gate runtime validation remains.
+No v0.3.7 release-gate runtime validation remains. The next runtime gate is for the first robustness implementation slice after its deterministic recovery tests pass.
 
 Optional future checks remain the conflicting-TOC `Multiple` fixture and the deferred historical edge cases above.
 
@@ -397,9 +407,9 @@ Optional future checks remain the conflicting-TOC `Multiple` fixture and the def
 
 The original P5 backlog is no longer a strict sequence. Import/export and the remaining feature items are deferred while TocPilot's existing product surface is hardened and polished.
 
-#### P6A — Robustness audit
+#### P6A — Robustness audit — COMPLETE
 
-Perform a deliberate source audit before changing behaviour. Cover at least:
+Completed as four bounded read-first passes. The audit covered:
 
 - state load/save, schema compatibility and corruption/failure handling;
 - package identity, ownership, replacement, uninstall/remove and rollback invariants;
@@ -412,7 +422,7 @@ Perform a deliberate source audit before changing behaviour. Cover at least:
 - Win32 resource/handle lifetime, error propagation and silent-failure paths;
 - test coverage gaps, duplicated/legacy code paths and assumptions that are no longer true.
 
-Audit output should distinguish confirmed defects, robustness risks, cleanup opportunities and test debt. Do not refactor merely for style while the audit is still establishing evidence.
+Audit output distinguishes confirmed defects, robustness risks, cleanup opportunities and test debt. Detailed evidence remains in `audit_dump.md`; the priority and next step above/in this file are authoritative.
 
 #### P6B — UI/UX pass
 
@@ -466,8 +476,16 @@ Do not add support for user-uploaded ZIP/7z/RAR/installer/bundle release assets 
 
 ## Exact Next Step
 
-Continue P6A with the **tests/build-debt/final-priority pass**. Map every confirmed finding to current test coverage and missing failure-injection seams, inspect CMake/CI/runtime-library configuration behind the observed `LNK4098` warning, then produce the final severity/implementation ordering. Record only verified evidence; do not change runtime code yet.
+Begin the first P6A robustness implementation slice: **A1 durable addon-transaction restart recovery only**.
 
-After that pass, choose the first focused robustness fix/test slice. Use `audit_dump.md` only as temporary scratch continuity and promote the concise authoritative findings/priorities back into this file after each pass.
+Keep the slice bounded:
 
-After the findings list is stable, choose the first focused robustness fix/test slice. UI/UX review follows the robustness gate; visual/skin work follows the UI/UX pass.
+1. define a versioned transaction journal/manifest plus a pure recovery-decision model;
+2. persist/flush the journal before the first live addon rename, including transaction/package identity, complete affected-root intent and an unambiguous pre-state/post-state discriminator;
+3. scan/recover unfinished addon transactions during startup before normal package mutation is available;
+4. durable state matches pre-state -> restore old roots/remove new roots, then clean the transaction;
+5. durable state matches post-state -> preserve the new live install and finish transaction cleanup;
+6. durable state matches neither -> fail closed and preserve the transaction evidence rather than guessing;
+7. add deterministic tests for every mapped process-crash window, including rename-before-in-memory-bookkeeping and state-save-before-finalize.
+
+Do not combine A2 state semantic validation, UI cleanup, updater transport work or warning cleanup into this slice. Do not claim full sudden-power-loss atomicity until directory-rename durability semantics are separately verified. After the slice is code-complete and tests/build pass, update this document before choosing the runtime gate/release step.
