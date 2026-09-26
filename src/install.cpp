@@ -1844,7 +1844,8 @@ bool PrepareAddonInstallTransaction(
     const bool hasRemovalRoots =
         !plan.obsoleteInstallFolders.empty();
 
-    if ((!hasInstallRoots && !hasRemovalRoots) ||
+    if (plan.packageId.empty() ||
+        (!hasInstallRoots && !hasRemovalRoots) ||
         (hasInstallRoots &&
          plan.desiredInstalledFiles.empty()) ||
         plan.transactionRoot.empty()) {
@@ -1898,6 +1899,44 @@ bool PrepareAddonInstallTransaction(
         return false;
     }
 
+    transaction.plan = plan;
+    transaction.transactionId =
+        GenerateTransactionId();
+    if (transaction.transactionId.empty()) {
+        std::wstring cleanupError;
+        RemoveAllWithRetries(
+            plan.transactionRoot,
+            cleanupError);
+        error =
+            L"Could not create addon transaction identity.";
+        return false;
+    }
+
+    transaction.postRoots.reserve(
+        plan.roots.size());
+    for (const auto& root : plan.roots) {
+        transaction.postRoots.push_back(
+            root.installFolder);
+    }
+    std::sort(
+        transaction.postRoots.begin(),
+        transaction.postRoots.end(),
+        InsensitiveLess{});
+
+    // The prepared journal is durable before staging begins. It proves that
+    // no live addon rename was permitted yet, so restart recovery can safely
+    // discard an interrupted prepare phase.
+    if (!WriteTransactionJournal(
+            transaction,
+            "prepared",
+            error)) {
+        std::wstring cleanupError;
+        RemoveAllWithRetries(
+            plan.transactionRoot,
+            cleanupError);
+        return false;
+    }
+
     for (const auto& root : plan.roots) {
         if (!CopyTree(
                 root.sourceDirectory,
@@ -1911,8 +1950,272 @@ bool PrepareAddonInstallTransaction(
         }
     }
 
-    transaction.plan = plan;
     transaction.prepared = true;
+    return true;
+}
+
+bool ArmAddonInstallTransaction(
+    AddonInstallTransaction& transaction,
+    AddonTransactionStateMarker preState,
+    AddonTransactionStateMarker postState,
+    std::wstring& error) {
+    error.clear();
+
+    if (!transaction.prepared ||
+        transaction.active ||
+        transaction.journalArmed ||
+        transaction.transactionId.empty() ||
+        preState.packageId.empty() ||
+        postState.packageId.empty()) {
+        error =
+            L"Install transaction cannot be armed for commit.";
+        return false;
+    }
+
+    if (postState.present &&
+        postState.transactionId !=
+            transaction.transactionId) {
+        error =
+            L"Install transaction post-state marker does not match the transaction identity.";
+        return false;
+    }
+
+    const bool sameIdentity =
+        EqualsInsensitive(
+            preState.packageId,
+            postState.packageId);
+    if (sameIdentity &&
+        preState.present ==
+            postState.present &&
+        preState.transactionId ==
+            postState.transactionId) {
+        error =
+            L"Install transaction pre-state and post-state are not distinguishable.";
+        return false;
+    }
+
+    transaction.preState =
+        std::move(preState);
+    transaction.postState =
+        std::move(postState);
+    transaction.preExistingRoots.clear();
+
+    for (const auto& root :
+         RootsToBackup(transaction.plan)) {
+        bool exists = false;
+        if (!RootExists(
+                transaction.plan.addOnsRoot /
+                    root,
+                exists,
+                error)) {
+            return false;
+        }
+        if (exists) {
+            transaction.preExistingRoots.push_back(
+                root);
+        }
+    }
+
+    if (!WriteTransactionJournal(
+            transaction,
+            "armed",
+            error)) {
+        return false;
+    }
+
+    transaction.journalArmed = true;
+    return true;
+}
+
+AddonTransactionRecoveryDecision DecideAddonTransactionRecovery(
+    const AddonTransactionStateMarker& preState,
+    const AddonTransactionStateMarker& postState,
+    const std::vector<AddonTransactionStateMarker>& currentState) {
+    const bool preMatches =
+        MarkerExpectationMatches(
+            preState,
+            currentState) &&
+        OtherIdentityAbsent(
+            preState,
+            postState,
+            currentState);
+    const bool postMatches =
+        MarkerExpectationMatches(
+            postState,
+            currentState) &&
+        OtherIdentityAbsent(
+            postState,
+            preState,
+            currentState);
+
+    if (preMatches && !postMatches) {
+        return
+            AddonTransactionRecoveryDecision::Rollback;
+    }
+    if (postMatches && !preMatches) {
+        return
+            AddonTransactionRecoveryDecision::Finalize;
+    }
+    return
+        AddonTransactionRecoveryDecision::Conflict;
+}
+
+bool RecoverAddonInstallTransactions(
+    const std::filesystem::path& wowRoot,
+    const std::vector<AddonTransactionStateMarker>& currentState,
+    std::wstring& error) {
+    error.clear();
+
+    const auto transactionsRoot =
+        wowRoot /
+        L"Interface" /
+        L"TocPilot" /
+        L"transactions";
+
+    std::error_code ec;
+    const auto rootStatus =
+        std::filesystem::symlink_status(
+            transactionsRoot,
+            ec);
+    if (ec) {
+        if (ec == std::errc::no_such_file_or_directory) {
+            return true;
+        }
+
+        error =
+            L"Could not inspect addon transaction recovery directory.";
+        return false;
+    }
+
+    if (!std::filesystem::exists(rootStatus)) {
+        return true;
+    }
+    if (std::filesystem::is_symlink(rootStatus) ||
+        !std::filesystem::is_directory(rootStatus)) {
+        error =
+            L"Addon transaction recovery path is not a normal directory.";
+        return false;
+    }
+
+    std::vector<std::filesystem::path>
+        transactionDirectories;
+    for (std::filesystem::directory_iterator it(
+             transactionsRoot,
+             std::filesystem::directory_options::none,
+             ec),
+         end;
+         !ec && it != end;
+         it.increment(ec)) {
+        const auto status =
+            it->symlink_status(ec);
+        if (ec) {
+            break;
+        }
+
+        if (std::filesystem::is_symlink(status) ||
+            !std::filesystem::is_directory(status)) {
+            error =
+                L"Unexpected object in addon transaction recovery directory: " +
+                it->path().wstring();
+            return false;
+        }
+
+        transactionDirectories.push_back(
+            it->path());
+    }
+
+    if (ec) {
+        error =
+            L"Could not enumerate addon transaction recovery directory.";
+        return false;
+    }
+
+    std::sort(
+        transactionDirectories.begin(),
+        transactionDirectories.end());
+
+    const auto addOnsRoot =
+        wowRoot /
+        L"Interface" /
+        L"AddOns";
+
+    for (const auto& transactionRoot :
+         transactionDirectories) {
+        AddonTransactionJournal journal;
+        std::wstring journalError;
+        if (!ReadTransactionJournal(
+                transactionRoot,
+                journal,
+                journalError)) {
+            error =
+                journalError +
+                L" Evidence was preserved at " +
+                transactionRoot.wstring() +
+                L".";
+            return false;
+        }
+
+        if (journal.phase == "prepared") {
+            if (!RemoveAllWithRetries(
+                    transactionRoot,
+                    error)) {
+                return false;
+            }
+            continue;
+        }
+
+        const auto decision =
+            DecideAddonTransactionRecovery(
+                journal.preState,
+                journal.postState,
+                currentState);
+
+        if (decision ==
+            AddonTransactionRecoveryDecision::Conflict) {
+            error =
+                L"Durable package state matches neither side of unfinished addon transaction " +
+                journal.transactionId +
+                L". Evidence was preserved at " +
+                transactionRoot.wstring() +
+                L".";
+            return false;
+        }
+
+        if (decision ==
+            AddonTransactionRecoveryDecision::Rollback) {
+            if (!RestoreFromIntent(
+                    addOnsRoot,
+                    transactionRoot,
+                    journal.preExistingRoots,
+                    journal.postRoots,
+                    error)) {
+                error +=
+                    L" Recovery evidence was preserved at " +
+                    transactionRoot.wstring() +
+                    L".";
+                return false;
+            }
+        } else {
+            if (!VerifyPostStateFilesystem(
+                    addOnsRoot,
+                    journal.preExistingRoots,
+                    journal.postRoots,
+                    error)) {
+                error +=
+                    L" Recovery evidence was preserved at " +
+                    transactionRoot.wstring() +
+                    L".";
+                return false;
+            }
+        }
+
+        if (!RemoveAllWithRetries(
+                transactionRoot,
+                error)) {
+            return false;
+        }
+    }
+
     return true;
 }
 
@@ -1923,6 +2226,7 @@ bool CommitAddonInstallTransaction(
     error.clear();
 
     if (!transaction.prepared ||
+        !transaction.journalArmed ||
         transaction.active ||
         (transaction.plan.roots.empty() &&
          transaction.plan.obsoleteInstallFolders.empty())) {
@@ -1949,32 +2253,24 @@ bool CommitAddonInstallTransaction(
 
     transaction.active = true;
 
-    std::vector<std::wstring> rootsToBackup;
-    for (const auto& root : plan.roots) {
-        rootsToBackup.push_back(
-            root.installFolder);
-    }
-    rootsToBackup.insert(
-        rootsToBackup.end(),
-        plan.obsoleteInstallFolders.begin(),
-        plan.obsoleteInstallFolders.end());
-    std::sort(
-        rootsToBackup.begin(),
-        rootsToBackup.end(),
-        InsensitiveLess{});
-    rootsToBackup.erase(
-        std::unique(
-            rootsToBackup.begin(),
-            rootsToBackup.end(),
-            [](const std::wstring& left,
-               const std::wstring& right) {
-                return EqualsInsensitive(
-                    left,
-                    right);
-            }),
-        rootsToBackup.end());
+    const auto rollbackCommitFailure =
+        [&](std::wstring commitError) {
+            std::wstring rollbackError;
+            if (!RollbackAddonInstallTransaction(
+                    transaction,
+                    rollbackError)) {
+                error =
+                    std::move(commitError) +
+                    L" Rollback also failed: " +
+                    rollbackError;
+            } else {
+                error = std::move(commitError);
+            }
+            return false;
+        };
 
-    for (const auto& folder : rootsToBackup) {
+    for (const auto& folder :
+         transaction.preExistingRoots) {
         const auto live =
             plan.addOnsRoot /
             folder;
@@ -1984,23 +2280,14 @@ bool CommitAddonInstallTransaction(
                 live,
                 exists,
                 error)) {
-            const std::wstring commitError = error;
-            std::wstring rollbackError;
-            if (!RollbackAddonInstallTransaction(
-                    transaction,
-                    rollbackError)) {
-                error =
-                    commitError +
-                    L" Rollback also failed: " +
-                    rollbackError;
-            } else {
-                error = commitError;
-            }
-            return false;
+            return rollbackCommitFailure(
+                error);
         }
-
         if (!exists) {
-            continue;
+            return rollbackCommitFailure(
+                L"Live addon root disappeared before transaction commit: " +
+                folder +
+                L".");
         }
 
         const auto backup =
@@ -2009,38 +2296,21 @@ bool CommitAddonInstallTransaction(
             backup.parent_path(),
             ec);
         if (ec) {
-            const std::wstring commitError =
-                L"Could not create install rollback directory.";
-            std::wstring rollbackError;
-            if (!RollbackAddonInstallTransaction(
-                    transaction,
-                    rollbackError)) {
-                error =
-                    commitError +
-                    L" Rollback also failed: " +
-                    rollbackError;
-            } else {
-                error = commitError;
-            }
-            return false;
+            return rollbackCommitFailure(
+                L"Could not create install rollback directory.");
         }
 
         if (!RenameWithRetries(
                 live,
                 backup,
                 error)) {
-            const std::wstring commitError = error;
-            std::wstring rollbackError;
-            if (!RollbackAddonInstallTransaction(
-                    transaction,
-                    rollbackError)) {
-                error =
-                    commitError +
-                    L" Rollback also failed: " +
-                    rollbackError;
-            } else {
-                error = commitError;
-            }
+            return rollbackCommitFailure(
+                error);
+        }
+
+        if (options.simulateCrashAfterRootBackupRename) {
+            error =
+                L"Simulated process crash after live root backup rename.";
             return false;
         }
 
@@ -2049,21 +2319,15 @@ bool CommitAddonInstallTransaction(
 
         if (transaction.backedUpRoots.size() >=
                 options.failAfterRootBackups) {
-            const std::wstring commitError =
-                L"Injected install failure after live root backup.";
-            std::wstring rollbackError;
-            if (!RollbackAddonInstallTransaction(
-                    transaction,
-                    rollbackError)) {
-                error =
-                    commitError +
-                    L" Rollback also failed: " +
-                    rollbackError;
-            } else {
-                error = commitError;
-            }
-            return false;
+            return rollbackCommitFailure(
+                L"Injected install failure after live root backup.");
         }
+    }
+
+    if (options.simulateCrashAfterAllRootBackups) {
+        error =
+            L"Simulated process crash after all live root backups.";
+        return false;
     }
 
     for (const auto& root : plan.roots) {
@@ -2071,18 +2335,13 @@ bool CommitAddonInstallTransaction(
                 root.preparedDirectory,
                 root.liveDirectory,
                 error)) {
-            const std::wstring commitError = error;
-            std::wstring rollbackError;
-            if (!RollbackAddonInstallTransaction(
-                    transaction,
-                    rollbackError)) {
-                error =
-                    commitError +
-                    L" Rollback also failed: " +
-                    rollbackError;
-            } else {
-                error = commitError;
-            }
+            return rollbackCommitFailure(
+                error);
+        }
+
+        if (options.simulateCrashAfterNewRootCommitRename) {
+            error =
+                L"Simulated process crash after new live root rename.";
             return false;
         }
 
@@ -2091,47 +2350,9 @@ bool CommitAddonInstallTransaction(
 
         if (transaction.installedRoots.size() >=
                 options.failAfterNewRootCommits) {
-            const std::wstring commitError =
-                L"Injected install failure after live root commit.";
-            std::wstring rollbackError;
-            if (!RollbackAddonInstallTransaction(
-                    transaction,
-                    rollbackError)) {
-                error =
-                    commitError +
-                    L" Rollback also failed: " +
-                    rollbackError;
-            } else {
-                error = commitError;
-            }
-            return false;
+            return rollbackCommitFailure(
+                L"Injected install failure after live root commit.");
         }
-    }
-
-    return true;
-}
-
-bool BeginAddonInstallTransaction(
-    const AddonInstallPlan& plan,
-    AddonInstallTransaction& transaction,
-    std::wstring& error,
-    const AddonInstallOptions& options) {
-    if (!PrepareAddonInstallTransaction(
-            plan,
-            transaction,
-            error)) {
-        return false;
-    }
-
-    if (!CommitAddonInstallTransaction(
-            transaction,
-            error,
-            options)) {
-        std::wstring cleanupError;
-        RollbackAddonInstallTransaction(
-            transaction,
-            cleanupError);
-        return false;
     }
 
     return true;
@@ -2147,26 +2368,36 @@ bool RollbackAddonInstallTransaction(
     }
 
     if (transaction.active) {
-        if (!RestoreBackups(
-                transaction,
+        if (!transaction.journalArmed) {
+            error =
+                L"Active addon transaction has no durable recovery journal.";
+            return false;
+        }
+
+        if (!RestoreFromIntent(
+                transaction.plan.addOnsRoot,
+                transaction.plan.transactionRoot,
+                transaction.preExistingRoots,
+                transaction.postRoots,
                 error)) {
             return false;
         }
 
         transaction.active = false;
-        transaction.backedUpRoots.clear();
-        transaction.installedRoots.clear();
     }
 
-    std::wstring cleanupError;
     if (!RemoveAllWithRetries(
             transaction.plan.transactionRoot,
-            cleanupError)) {
-        error = std::move(cleanupError);
+            error)) {
         return false;
     }
 
     transaction.prepared = false;
+    transaction.journalArmed = false;
+    transaction.backedUpRoots.clear();
+    transaction.installedRoots.clear();
+    transaction.preExistingRoots.clear();
+    transaction.postRoots.clear();
     return true;
 }
 
@@ -2193,6 +2424,9 @@ bool FinalizeAddonInstallTransaction(
     }
 
     transaction.prepared = false;
+    transaction.journalArmed = false;
+    transaction.preExistingRoots.clear();
+    transaction.postRoots.clear();
     return true;
 }
 
