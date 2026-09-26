@@ -9,11 +9,11 @@
 - Latest published release: `v0.3.9`.
 - Release/source commit and tag target: `57feb4307058b484ff980bd30b60d7eafb4466af` (merge of PR #10).
 - Latest runtime-confirmed release: `v0.3.8` at `17ce349273c6f2d76572c7107f3c6f7b139cf8d8` for the normal installed self-update path. v0.3.9 remains published/CI-checked with its updater/UI delta not separately confirmed.
-- Latest verified `main` source head: `dcdd5058f50c83c427310feba083437db6368dcd` (merge of PR #11, A2 durable state semantic validation; CI-checked, not yet published/runtime-confirmed).
+- Latest verified `main` source-changing head: `dcdd5058f50c83c427310feba083437db6368dcd` (merge of PR #11, A2 durable state semantic validation). Documentation-only commits may sit above it on `main`.
 - A1 runtime gate: **accepted for forward development** on 2026-09-26. Fresh install, reinstall, Update New and Remove Addon passed. Managed same-root replacement runtime validation is explicitly deferred rather than blocking later work. The deterministic crash-window tests remain the primary validation for restart-recovery semantics.
-- A2 durable state semantic validation: **implemented / CI-checked / merged**, not yet published or runtime-tested.
-- Current goal: prepare the next release gate after applying the already-requested tiny WWW visual follow-up: rename `WWW` to lowercase `www`, and render repository links blue + underlined at all times, including selected/semantic rows.
-- Current scope boundary: keep the WWW visual follow-up narrowly separated from A2 implementation, then release/test both together before beginning A3 ZIP member allocation bounds. Do not mix updater hardening, async DLL discovery, warning cleanup or other UI work into that release.
+- A2 durable state semantic validation: **implemented / CI-checked / merged / accepted for forward development**. The user explicitly chose not to require a standalone A2 release/runtime gate before continuing; do not claim a separately published/runtime-confirmed A2 build.
+- Current goal: implement **A3 ZIP single-member allocation hardening** and include the already-requested tiny repository-link presentation update in the same next release.
+- Current scope boundary: A3 is only the ZIP single-member allocation bound plus its deterministic tests. The bundled UI delta is only `WWW` -> `www` and always-blue/underlined repository links (including selected/orange/green rows, no visited-link state). Do not mix self-update hardening, async DLL discovery, warning cleanup or other UI work into this slice.
 - Audit continuity: `audit_dump.md` is a temporary scratch checkpoint for the interrupted broad audit only; this file remains the sole authoritative live development source of truth.
 - Documentation-only commits after the release do not change the published runtime baseline.
 
@@ -374,9 +374,9 @@ Published v0.3.9 contains the WWW-column usability slice on top of A1. A1 is acc
 
 P6A is complete. A1 transaction restart recovery is implemented, CI-checked and published in v0.3.8 at `17ce349273c6f2d76572c7107f3c6f7b139cf8d8`, and accepted for forward development with the same-root replacement runtime check deferred. It now writes a versioned, flushed pre-mutation journal; arms it with package/transaction identity, affected-root intent and durable pre/post state markers before live renames; recovers unfinished transactions before normal package mutation; and preserves evidence rather than guessing when durable state is ambiguous.
 
-A2 durable state semantic validation is implemented, CI-checked and merged at `dcdd5058f50c83c427310feba083437db6368dcd`, but is not yet published/runtime-confirmed. State load now fails closed before runtime use when durable packages violate understood identity, mode/target, ownership, installed-state or direct-DLL invariants; the original JSON is preserved for manual repair.
+A2 durable state semantic validation is implemented, CI-checked and merged at `dcdd5058f50c83c427310feba083437db6368dcd`. State load now fails closed before runtime use when durable packages violate understood identity, mode/target, ownership, installed-state or direct-DLL invariants; the original JSON is preserved for manual repair. The user accepted A2 for forward development without a separate A2-only release/runtime gate.
 
-Remaining audited implementation priority after the A2 release/runtime gate starts with:
+Remaining audited implementation priority now starts with:
 
 
 - the dedicated Add-Git branch dialog has no per-request generation/repository token. Closing and reopening it while its detached lookup is still running leaves a rare stale-result/HWND-reuse race; the main inline branch selector already has a generation + package-ID guard;
@@ -392,8 +392,8 @@ Lower-priority/test/build findings and contract-driven direct-DLL risks are reta
 Final severity/order:
 
 1. **HIGH — transaction restart recovery:** **IMPLEMENTED / CI-CHECKED / PUBLISHED / ACCEPTED**, with managed same-root replacement runtime validation deferred.
-2. **HIGH — durable state semantic validation:** **IMPLEMENTED / CI-CHECKED / MERGED; release/runtime gate pending** at `dcdd5058f50c83c427310feba083437db6368dcd`.
-3. **MEDIUM — ZIP member allocation bound:** **NEXT AFTER A2 GATE** — reject a single oversized uncompressed member before allocating it.
+2. **HIGH — durable state semantic validation:** **IMPLEMENTED / CI-CHECKED / MERGED / ACCEPTED FOR FORWARD DEVELOPMENT** at `dcdd5058f50c83c427310feba083437db6368dcd`; no standalone A2-only release gate required.
+3. **MEDIUM — ZIP member allocation bound:** **NEXT** — prevent one archive member from forcing a very large contiguous allocation before extraction.
 4. **MEDIUM — self-update transport hardening:** carry/check exact asset size, cap checksum text and reject initial non-HTTPS asset/checksum URLs.
 5. **MEDIUM — async latest-stable DLL discovery:** remove provider I/O from the dialog thread.
 6. **MEDIUM/LOW — Add-Git branch-dialog request identity:** reject stale close/reopen completions.
@@ -433,14 +433,15 @@ The focused post-v0.3.6 branch/list issues remain runtime-confirmed fixed in v0.
 
 ### Next Runtime Test
 
-The next runtime gate is the release containing merged A2 plus the queued narrow `www` visual follow-up. Start from installed v0.3.9 through TocPilot's real self-updater.
+No separate runtime gate is required before starting A3. The next user runtime gate should be the release that bundles merged A2, A3 ZIP single-member allocation hardening and the narrow `www` presentation update.
 
-Runtime focus:
-- normal startup/state load succeeds with the user's existing valid TocPilot.json;
-- Advanced repository column is headed `www` and repository links are always blue + underlined while still opening the correct source;
+Runtime focus for that release:
+- normal self-update from installed v0.3.9 succeeds;
+- normal startup/state load succeeds with the user's existing TocPilot.json;
+- Advanced repository column is headed `www`, and repository links are always blue + underlined while still opening the correct source;
 - Compact remains `Name | Status`;
 - ordinary package listing/refresh/install/reinstall/Update New/Remove Addon remain regression-free;
-- no destructive malformed-state runtime test is required from the user because the rejection matrix is deterministic in CI.
+- no destructive malformed-state or huge-ZIP runtime fixture is required from the user because those rejection paths should be deterministic in CI.
 
 A1's managed same-root replacement check remains deferred. The current product workflow has **Remove Addon**, not the old Uninstall flow.
 
@@ -515,21 +516,23 @@ Do not add support for user-uploaded ZIP/7z/RAR/installer/bundle release assets 
 - Current published release is `v0.3.9` at `57feb4307058b484ff980bd30b60d7eafb4466af`.
 - Release workflow run `36251599364` (#52) is the authoritative v0.3.9 product build.
 - Published v0.3.9 is CI/release-verified but its own updater/UI delta is not separately runtime-confirmed. A1 is nevertheless accepted for forward development based on the completed v0.3.8 package-operation smoke checks, with managed same-root replacement explicitly deferred.
-- A2 is merged on top of v0.3.9 source at `dcdd5058f50c83c427310feba083437db6368dcd`; it has not yet been version-bumped, published or runtime-confirmed.
+- A2 is merged on top of v0.3.9 source at `dcdd5058f50c83c427310feba083437db6368dcd`; it is accepted for forward development without a standalone A2-only release. Do not describe A2 as separately published/runtime-confirmed.
+- The next release should bundle A2 + A3 + the narrow `www` presentation follow-up, then use the normal self-update/runtime smoke as the combined gate.
 - Documentation-only commits after that release do not imply a new runtime build and require no version bump/release.
 - Version remains local installed TOC metadata; do not persist a second Version value into JSON unless the product contract is deliberately changed.
 - The legacy `package_columns_locked` JSON field remains accepted for compatibility but no longer controls v0.3.6 UI behaviour.
 
 ## Exact Next Step
 
-Prepare the focused **v0.3.10 A2 release/runtime gate**, including only the already-requested WWW visual follow-up before release; do not begin A3 yet.
+Implement **A3 ZIP single-member allocation hardening**, bundle the queued repository-link presentation tweak, then publish/test the combined next release (expected `v0.3.10`).
 
-1. create a narrow follow-up branch from current `main` `dcdd5058f50c83c427310feba083437db6368dcd`;
-2. change only the repository-link presentation: header `WWW` -> `www`; render repository URL cells blue and underlined at all times, including selected/orange/green rows, with no visited-link state;
-3. validate that tiny UI follow-up through Windows x64 Release + complete CTest and merge only if `main` has not unexpectedly moved;
-4. bump all three release-version sources to `0.3.10` with no unrelated runtime changes;
-5. validate release prep, merge, and publish `v0.3.10` through the real Release workflow from the exact merged `main` commit;
-6. runtime-test installed `v0.3.9 -> v0.3.10` through the normal self-updater, confirm existing state loads cleanly, verify `www` hyperlink presentation/behaviour and smoke normal package operations;
-7. record the A2 release/runtime result before beginning **A3 ZIP member allocation bounds**.
+1. read `dev_rulebook.md` first and verify actual `main` before editing; `DEV_PROGRESS.md` is authoritative and `audit_dump.md` is evidence only;
+2. inspect `src/archive.cpp::ExtractZipSecure()`: current archive download cap is 256 MiB and total uncompressed cap is 1 GiB, but a single member can still allocate `std::vector<unsigned char>(plan.uncompressedBytes)` up to hundreds of MiB / near 1 GiB;
+3. prefer streaming extraction directly to the staged file if practical without broadening the slice; otherwise add a conservative per-entry uncompressed-size cap **before allocation** and return a clear controlled validation error instead of risking `std::bad_alloc`/process termination;
+4. add deterministic archive tests proving an oversized single member is rejected by policy before attempting the full allocation, while normal archive/path-safety/root-mapping tests remain intact;
+5. in the same release, make only the queued repository-link presentation changes: header `WWW` -> `www`; repository URL cells always blue + underlined, including selected/orange/green rows; no visited-link colour/state; Compact unchanged;
+6. run Windows x64 Release + complete CTest, merge only if `main` has not unexpectedly moved, then bump all three version sources to `0.3.10` with no unrelated work;
+7. publish `v0.3.10` through the real Release workflow from the exact merged `main` commit;
+8. runtime-test installed `v0.3.9 -> v0.3.10`, verify `www` presentation/click behaviour and normal package-operation smoke, then record the result before moving to self-update transport hardening.
 
 Keep the existing caveat explicit: A1 provides deterministic **process-restart** recovery, but full sudden-power-loss atomicity is not claimed until Windows directory-rename durability is separately verified.
