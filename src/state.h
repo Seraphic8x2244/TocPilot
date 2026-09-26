@@ -53,6 +53,9 @@ struct PackageRecord {
     std::wstring installedRevision;
     std::wstring latestRevision;
     std::vector<std::wstring> installedFiles;
+    // Last durable addon-filesystem transaction committed for this package.
+    // Used only to distinguish restart recovery pre/post state.
+    std::wstring installTransaction;
 
     // Preserve the complete package object so fields from newer versions are
     // not discarded when this version updates unrelated state.
