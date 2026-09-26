@@ -150,7 +150,7 @@ std::wstring GenerateTransactionId() {
         if (StringFromGUID2(
                 guid,
                 buffer,
-                static_cast<int>(std::size(buffer))) > 0) {
+                static_cast<int>(sizeof(buffer) / sizeof(buffer[0]))) > 0) {
             return buffer;
         }
     }
@@ -1252,100 +1252,244 @@ std::filesystem::path BackupPath(
         folder;
 }
 
-bool RestoreBackups(
-    AddonInstallTransaction& transaction,
+bool NormalDirectoryExists(
+    const std::filesystem::path& path,
+    bool& exists,
     std::wstring& error) {
-    bool ok = true;
-    std::wstring firstError;
+    std::error_code ec;
+    const auto status =
+        std::filesystem::symlink_status(path, ec);
 
-    for (auto it = transaction.installedRoots.rbegin();
-         it != transaction.installedRoots.rend();
-         ++it) {
-        std::wstring removeError;
-        if (!RemoveAllWithRetries(
-                transaction.plan.addOnsRoot / *it,
-                removeError) &&
-            firstError.empty()) {
-            firstError = std::move(removeError);
-            ok = false;
+    if (ec) {
+        if (ec == std::errc::no_such_file_or_directory) {
+            exists = false;
+            return true;
         }
+
+        error =
+            L"Could not inspect addon transaction path: " +
+            path.wstring();
+        return false;
     }
 
-    for (auto it = transaction.backedUpRoots.rbegin();
-         it != transaction.backedUpRoots.rend();
-         ++it) {
-        const auto live =
-            transaction.plan.addOnsRoot / *it;
-        const auto backup =
-            BackupPath(transaction.plan, *it);
+    if (!std::filesystem::exists(status)) {
+        exists = false;
+        return true;
+    }
 
-        std::error_code existsError;
-        const bool backupExists =
-            std::filesystem::exists(
+    if (std::filesystem::is_symlink(status) ||
+        !std::filesystem::is_directory(status)) {
+        error =
+            L"Addon transaction path is not a normal directory: " +
+            path.wstring();
+        return false;
+    }
+
+    exists = true;
+    return true;
+}
+
+bool RestoreFromIntent(
+    const std::filesystem::path& addOnsRoot,
+    const std::filesystem::path& transactionRoot,
+    const std::vector<std::wstring>& preExistingRoots,
+    const std::vector<std::wstring>& postRoots,
+    std::wstring& error) {
+    error.clear();
+
+    std::vector<std::wstring> affected =
+        preExistingRoots;
+    affected.insert(
+        affected.end(),
+        postRoots.begin(),
+        postRoots.end());
+    std::sort(
+        affected.begin(),
+        affected.end(),
+        InsensitiveLess{});
+    affected.erase(
+        std::unique(
+            affected.begin(),
+            affected.end(),
+            [](const std::wstring& left,
+               const std::wstring& right) {
+                return EqualsInsensitive(
+                    left,
+                    right);
+            }),
+        affected.end());
+
+    for (const auto& root : affected) {
+        const bool existedBefore =
+            ContainsInsensitive(
+                preExistingRoots,
+                root);
+        const bool existsAfter =
+            ContainsInsensitive(
+                postRoots,
+                root);
+        const auto live =
+            addOnsRoot / root;
+        const auto backup =
+            transactionRoot /
+            L"backup" /
+            root;
+
+        bool backupExists = false;
+        if (!NormalDirectoryExists(
                 backup,
-                existsError);
-        if (existsError) {
-            if (firstError.empty()) {
-                firstError =
-                    L"Could not inspect rollback backup for " +
-                    *it +
+                backupExists,
+                error)) {
+            return false;
+        }
+
+        if (backupExists) {
+            if (!existedBefore) {
+                error =
+                    L"Addon transaction contains an unexpected rollback backup for " +
+                    root +
                     L".";
+                return false;
             }
-            ok = false;
+
+            if (!RemoveAllWithRetries(
+                    live,
+                    error) ||
+                !RenameWithRetries(
+                    backup,
+                    live,
+                    error)) {
+                return false;
+            }
             continue;
         }
 
-        if (!backupExists) {
+        if (existedBefore) {
             bool liveExists = false;
-            std::wstring liveError;
-            if (RootExists(
+            if (!RootExists(
                     live,
                     liveExists,
-                    liveError) &&
-                liveExists) {
-                // A prior rollback attempt already restored this root.
-                continue;
+                    error)) {
+                return false;
             }
-
-            if (firstError.empty()) {
-                firstError =
-                    liveError.empty()
-                        ? L"Rollback backup is missing for " +
-                            *it +
-                            L"."
-                        : std::move(liveError);
+            if (!liveExists) {
+                error =
+                    L"Rollback evidence is incomplete for addon root " +
+                    root +
+                    L".";
+                return false;
             }
-            ok = false;
             continue;
         }
 
-        std::wstring removeError;
-        if (!RemoveAllWithRetries(
+        if (existsAfter &&
+            !RemoveAllWithRetries(
                 live,
-                removeError)) {
-            if (firstError.empty()) {
-                firstError = std::move(removeError);
-            }
-            ok = false;
+                error)) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+bool VerifyPostStateFilesystem(
+    const std::filesystem::path& addOnsRoot,
+    const std::vector<std::wstring>& preExistingRoots,
+    const std::vector<std::wstring>& postRoots,
+    std::wstring& error) {
+    error.clear();
+
+    for (const auto& root : postRoots) {
+        bool exists = false;
+        if (!RootExists(
+                addOnsRoot / root,
+                exists,
+                error)) {
+            return false;
+        }
+        if (!exists) {
+            error =
+                L"Committed addon transaction is missing live root " +
+                root +
+                L".";
+            return false;
+        }
+    }
+
+    for (const auto& root : preExistingRoots) {
+        if (ContainsInsensitive(
+                postRoots,
+                root)) {
             continue;
         }
 
-        std::wstring moveError;
-        if (!RenameWithRetries(
-                backup,
-                live,
-                moveError)) {
-            if (firstError.empty()) {
-                firstError = std::move(moveError);
-            }
-            ok = false;
+        bool exists = false;
+        if (!RootExists(
+                addOnsRoot / root,
+                exists,
+                error)) {
+            return false;
+        }
+        if (exists) {
+            error =
+                L"Committed addon transaction still contains obsolete live root " +
+                root +
+                L".";
+            return false;
         }
     }
 
-    if (!ok) {
-        error = std::move(firstError);
+    return true;
+}
+
+bool MarkerExpectationMatches(
+    const AddonTransactionStateMarker& expected,
+    const std::vector<AddonTransactionStateMarker>& currentState) {
+    std::size_t matches = 0;
+    bool exact = false;
+
+    for (const auto& current : currentState) {
+        if (!current.present ||
+            !EqualsInsensitive(
+                current.packageId,
+                expected.packageId)) {
+            continue;
+        }
+
+        ++matches;
+        exact =
+            current.transactionId ==
+            expected.transactionId;
     }
-    return ok;
+
+    if (!expected.present) {
+        return matches == 0;
+    }
+
+    return matches == 1 && exact;
+}
+
+bool OtherIdentityAbsent(
+    const AddonTransactionStateMarker& expected,
+    const AddonTransactionStateMarker& other,
+    const std::vector<AddonTransactionStateMarker>& currentState) {
+    if (EqualsInsensitive(
+            expected.packageId,
+            other.packageId)) {
+        return true;
+    }
+
+    return std::none_of(
+        currentState.begin(),
+        currentState.end(),
+        [&](const AddonTransactionStateMarker& current) {
+            return
+                current.present &&
+                EqualsInsensitive(
+                    current.packageId,
+                    other.packageId);
+        });
 }
 
 } // namespace
@@ -1399,6 +1543,7 @@ bool BuildAddonInstallPlan(
         }
     }
 
+    plan.packageId = std::wstring(packageId);
     plan.wowRoot = wowRoot;
     plan.addOnsRoot =
         wowRoot /
@@ -1668,6 +1813,7 @@ bool BuildAddonRemovalPlan(
         }
     }
 
+    plan.packageId = std::wstring(packageId);
     plan.wowRoot = wowRoot;
     plan.addOnsRoot =
         wowRoot /
