@@ -1,6 +1,7 @@
 #include "archive.h"
 #include "miniz.h"
 
+#include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -78,6 +79,91 @@ bool WriteFixtureZip(
 
     mz_free(data);
     return written;
+}
+
+bool PatchFirstCentralDirectoryUncompressedSize(
+    const std::filesystem::path& path,
+    std::uint32_t uncompressedBytes) {
+    std::ifstream input(
+        path,
+        std::ios::binary |
+            std::ios::ate);
+
+    if (!input) {
+        return false;
+    }
+
+    const std::streampos end =
+        input.tellg();
+
+    if (end <= 0) {
+        return false;
+    }
+
+    std::vector<unsigned char> bytes(
+        static_cast<std::size_t>(end));
+
+    input.seekg(0, std::ios::beg);
+    if (!input.read(
+            reinterpret_cast<char*>(
+                bytes.data()),
+            static_cast<std::streamsize>(
+                bytes.size()))) {
+        return false;
+    }
+
+    constexpr unsigned char signature[] = {
+        0x50, 0x4b, 0x01, 0x02
+    };
+
+    std::size_t central = bytes.size();
+    for (std::size_t i = 0;
+         i + 28 <= bytes.size();
+         ++i) {
+        if (bytes[i] == signature[0] &&
+            bytes[i + 1] == signature[1] &&
+            bytes[i + 2] == signature[2] &&
+            bytes[i + 3] == signature[3]) {
+            central = i;
+            break;
+        }
+    }
+
+    if (central == bytes.size()) {
+        return false;
+    }
+
+    constexpr std::size_t kUncompressedSizeOffset = 24;
+    for (std::size_t byte = 0;
+         byte < sizeof(uncompressedBytes);
+         ++byte) {
+        bytes[
+            central +
+            kUncompressedSizeOffset +
+            byte] =
+            static_cast<unsigned char>(
+                (uncompressedBytes >>
+                 (byte * 8)) &
+                0xffu);
+    }
+
+    std::ofstream output(
+        path,
+        std::ios::binary |
+            std::ios::trunc);
+
+    if (!output) {
+        return false;
+    }
+
+    output.write(
+        reinterpret_cast<const char*>(
+            bytes.data()),
+        static_cast<std::streamsize>(
+            bytes.size()));
+    output.flush();
+
+    return static_cast<bool>(output);
 }
 
 } // namespace
@@ -614,6 +700,47 @@ int main() {
                 !candidates[0].repositoryRelativePath.empty() ||
                 candidates[0].installFolder != L"Root") {
                 Fail("explicit repository-root candidate selection failed");
+            }
+        }
+
+        const auto oversizedZipPath =
+            temp / L"oversized-entry.zip";
+        const auto oversizedExtracted =
+            temp / L"oversized-entry-extracted";
+
+        if (!WriteFixtureZip(
+                oversizedZipPath,
+                {
+                    {"wrapper/oversized.bin", "small"}
+                })) {
+            Fail("could not create oversized ZIP entry fixture");
+        } else if (
+            !PatchFirstCentralDirectoryUncompressedSize(
+                oversizedZipPath,
+                256u * 1024u * 1024u + 1u)) {
+            Fail("could not patch oversized ZIP entry fixture");
+        } else {
+            std::size_t entries = 0;
+            std::uint64_t bytes = 0;
+            std::wstring error;
+
+            if (tp::ExtractZipSecure(
+                    oversizedZipPath,
+                    oversizedExtracted,
+                    entries,
+                    bytes,
+                    error)) {
+                Fail("oversized ZIP entry was accepted");
+            } else if (
+                error.find(
+                    L"256 MiB per-file inspection limit") ==
+                std::wstring::npos) {
+                Fail("oversized ZIP entry did not report the per-file policy limit");
+            }
+
+            if (std::filesystem::exists(
+                    oversizedExtracted)) {
+                Fail("oversized ZIP entry reached extraction staging");
             }
         }
 
