@@ -19,6 +19,7 @@ struct AddonInstallRoot {
 };
 
 struct AddonInstallPlan {
+    std::wstring packageId;
     std::filesystem::path wowRoot;
     std::filesystem::path addOnsRoot;
     std::filesystem::path transactionRoot;
@@ -33,13 +34,34 @@ struct AddonInstallOptions {
         std::numeric_limits<std::size_t>::max();
     std::size_t failAfterNewRootCommits =
         std::numeric_limits<std::size_t>::max();
+    bool simulateCrashAfterRootBackupRename = false;
+    bool simulateCrashAfterAllRootBackups = false;
+    bool simulateCrashAfterNewRootCommitRename = false;
+};
+
+struct AddonTransactionStateMarker {
+    std::wstring packageId;
+    std::wstring transactionId;
+    bool present = false;
+};
+
+enum class AddonTransactionRecoveryDecision {
+    Rollback,
+    Finalize,
+    Conflict
 };
 
 struct AddonInstallTransaction {
     AddonInstallPlan plan;
+    std::wstring transactionId;
+    AddonTransactionStateMarker preState;
+    AddonTransactionStateMarker postState;
+    std::vector<std::wstring> preExistingRoots;
+    std::vector<std::wstring> postRoots;
     std::vector<std::wstring> backedUpRoots;
     std::vector<std::wstring> installedRoots;
     bool prepared = false;
+    bool journalArmed = false;
     bool active = false;
 };
 
@@ -66,13 +88,23 @@ bool PrepareAddonInstallTransaction(
     AddonInstallTransaction& transaction,
     std::wstring& error);
 
-bool CommitAddonInstallTransaction(
+bool ArmAddonInstallTransaction(
     AddonInstallTransaction& transaction,
-    std::wstring& error,
-    const AddonInstallOptions& options = {});
+    AddonTransactionStateMarker preState,
+    AddonTransactionStateMarker postState,
+    std::wstring& error);
 
-bool BeginAddonInstallTransaction(
-    const AddonInstallPlan& plan,
+AddonTransactionRecoveryDecision DecideAddonTransactionRecovery(
+    const AddonTransactionStateMarker& preState,
+    const AddonTransactionStateMarker& postState,
+    const std::vector<AddonTransactionStateMarker>& currentState);
+
+bool RecoverAddonInstallTransactions(
+    const std::filesystem::path& wowRoot,
+    const std::vector<AddonTransactionStateMarker>& currentState,
+    std::wstring& error);
+
+bool CommitAddonInstallTransaction(
     AddonInstallTransaction& transaction,
     std::wstring& error,
     const AddonInstallOptions& options = {});
