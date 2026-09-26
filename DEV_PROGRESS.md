@@ -9,9 +9,9 @@
 - Latest published release: `v0.3.7`.
 - Release/source commit and tag target: `ec410df48787fa88a97d49489c4f99ea6893811a` (merge of PR #7).
 - Latest runtime-confirmed release: `v0.3.7` at `ec410df48787fa88a97d49489c4f99ea6893811a`.
-- Latest verified `main` runtime/release head before this documentation checkpoint: `ec410df48787fa88a97d49489c4f99ea6893811a`.
-- Current goal: P6A bounded audit is complete; begin the first focused robustness slice with durable addon-transaction restart recovery, then work the audited findings in priority order before UI/UX or visual work.
-- Current scope boundary: do not begin P5 import/export, package editing, provider expansion or other new feature work until the robustness audit has been completed and its findings have been triaged. Avoid drive-by refactors during the audit; document evidence first, then fix in focused slices.
+- Latest verified `main` source head: `0396aaa17279da65f8ee0aea27ddff4458f481ac` (merge of PR #8, A1 restart recovery; CI-checked, not yet published/runtime-confirmed).
+- Current goal: A1 durable addon-transaction restart recovery is implemented and merged; prepare its focused release/runtime gate before starting the next audited robustness slice.
+- Current scope boundary: do not begin A2 state semantic validation, UI cleanup, updater hardening, warning cleanup or deferred feature work until the A1 release/runtime gate is accepted.
 - Audit continuity: `audit_dump.md` is a temporary scratch checkpoint for the interrupted broad audit only; this file remains the sole authoritative live development source of truth.
 - Documentation-only commits after the release do not change the published runtime baseline.
 
@@ -314,6 +314,13 @@ Optional validation debt where a real fixture is available:
 
 ## Static / Automated Checks
 
+For A1 durable addon-transaction restart recovery (post-v0.3.7 source):
+
+- PR #8 head `d09d27e4af05d3bafd1e024d5f40a8655357bb18` passed Windows x64 Release build and the complete **17/17 CTest** suite in Build workflow run `36241747072` (#574), job `108403455015`.
+- The `addon-install-transaction` test now deterministically covers prepared-only interruption, live->backup rename before in-memory bookkeeping, all backups complete before new roots, prepared->live rename before bookkeeping, filesystem commit with durable pre-state, durable post-state before finalize, partial finalize cleanup, remove-to-absent post-state and fail-closed ambiguous durable state.
+- PR #8 merged to `main` as `0396aaa17279da65f8ee0aea27ddff4458f481ac`.
+- This source is **CI-checked but not yet published or runtime-confirmed**; the published/runtime baseline remains v0.3.7.
+
 For v0.3.7:
 
 - PR head `255a6439d788050ea034909e855851faeba78f4d` passed Windows x64 Release build and complete **17/17 CTest** suite in Build run `36151542439` (#558), job `108125759401`.
@@ -340,9 +347,10 @@ The prior v0.3.5 release also passed its documented 17/17 Release workflow valid
 
 Published/runtime-confirmed v0.3.7 remains the accepted product baseline; the P6A source audit has now identified robustness issues that were not exposed by that focused runtime gate.
 
-P6A is complete. Final implementation priority starts with:
+P6A is complete. A1 transaction restart recovery is implemented and CI-checked at `0396aaa17279da65f8ee0aea27ddff4458f481ac`, but remains pending its release/runtime gate. It now writes a versioned, flushed pre-mutation journal; arms it with package/transaction identity, affected-root intent and durable pre/post state markers before live renames; recovers unfinished transactions before normal package mutation; and preserves evidence rather than guessing when durable state is ambiguous.
 
-- interrupted addon transactions have no restart recovery path: the transaction phase/root bookkeeping is memory-only, so a restart can see old durable state with partially/new live files or new durable state with stale backups and cannot safely infer rollback vs finalize. The transaction deep pass established the minimum recovery design: a durable pre-mutation journal with package/transaction identity, affected-root intent and an unambiguous pre-state vs post-state discriminator;
+Remaining audited implementation priority after A1 acceptance starts with:
+
 - state load validates JSON shape but does not globally revalidate durable package semantics. It can accept duplicate package IDs, conflicting addon-root ownership, identity/provider/mode/target inconsistencies, incoherent installed state, unsafe ownership paths and direct-DLL ownership that normal mutation APIs would reject;
 - the dedicated Add-Git branch dialog has no per-request generation/repository token. Closing and reopening it while its detached lookup is still running leaves a rare stale-result/HWND-reuse race; the main inline branch selector already has a generation + package-ID guard;
 - Add Git latest-stable DLL discovery performs provider network I/O synchronously on the dialog thread, including the DLL-fallback dialog creation path, so provider timeout/failure can freeze that UI;
@@ -356,7 +364,7 @@ Lower-priority/test/build findings and contract-driven direct-DLL risks are reta
 
 Final severity/order:
 
-1. **HIGH — transaction restart recovery:** durable pre-mutation journal + deterministic startup rollback/finalize decision.
+1. **HIGH — transaction restart recovery:** **IMPLEMENTED / CI-CHECKED; release/runtime gate pending** at `0396aaa17279da65f8ee0aea27ddff4458f481ac`.
 2. **HIGH — durable state semantic validation:** reject conflicting/impossible package records before runtime use.
 3. **MEDIUM — ZIP member allocation bound:** reject a single oversized uncompressed member before allocating it.
 4. **MEDIUM — self-update transport hardening:** carry/check exact asset size, cap checksum text and reject initial non-HTTPS asset/checksum URLs.
@@ -397,7 +405,7 @@ The focused post-v0.3.6 branch/list issues remain runtime-confirmed fixed in v0.
 
 ### Next Runtime Test
 
-No v0.3.7 release-gate runtime validation remains. The next runtime gate is for the first robustness implementation slice after its deterministic recovery tests pass.
+No v0.3.7 release-gate runtime validation remains. The next runtime gate is the A1 restart-recovery release. Normal runtime validation should begin from installed v0.3.7 through TocPilot's real self-updater, then smoke ordinary addon install/update/reinstall, Uninstall, Remove and managed replacement paths for regressions. The mapped process-crash windows are covered deterministically in CI; do not require ad-hoc destructive crash timing as the normal user gate.
 
 Optional future checks remain the conflicting-TOC `Multiple` fixture and the deferred historical edge cases above.
 
@@ -476,16 +484,13 @@ Do not add support for user-uploaded ZIP/7z/RAR/installer/bundle release assets 
 
 ## Exact Next Step
 
-Begin the first P6A robustness implementation slice: **A1 durable addon-transaction restart recovery only**.
+Prepare the focused **v0.3.8 A1 release/runtime gate**; do not begin A2 yet.
 
-Keep the slice bounded:
+1. create a narrow release-prep branch from current `main` `0396aaa17279da65f8ee0aea27ddff4458f481ac`;
+2. bump all three release-version sources to `0.3.8` and make no unrelated runtime changes;
+3. validate the release-prep PR through Windows x64 Release build + complete CTest, then merge only if `main` has not moved unexpectedly;
+4. publish `v0.3.8` through the real Release workflow from the exact merged `main` commit;
+5. runtime-test via the normal installed `v0.3.7 -> v0.3.8` self-update path plus focused install/update/reinstall/Uninstall/Remove/managed-replacement smoke checks;
+6. record the release/runtime result here before starting **A2 durable state semantic validation**.
 
-1. define a versioned transaction journal/manifest plus a pure recovery-decision model;
-2. persist/flush the journal before the first live addon rename, including transaction/package identity, complete affected-root intent and an unambiguous pre-state/post-state discriminator;
-3. scan/recover unfinished addon transactions during startup before normal package mutation is available;
-4. durable state matches pre-state -> restore old roots/remove new roots, then clean the transaction;
-5. durable state matches post-state -> preserve the new live install and finish transaction cleanup;
-6. durable state matches neither -> fail closed and preserve the transaction evidence rather than guessing;
-7. add deterministic tests for every mapped process-crash window, including rename-before-in-memory-bookkeeping and state-save-before-finalize.
-
-Do not combine A2 state semantic validation, UI cleanup, updater transport work or warning cleanup into this slice. Do not claim full sudden-power-loss atomicity until directory-rename durability semantics are separately verified. After the slice is code-complete and tests/build pass, update this document before choosing the runtime gate/release step.
+Keep the existing caveat explicit: A1 provides deterministic **process-restart** recovery, but full sudden-power-loss atomicity is not claimed until Windows directory-rename durability is separately verified.
