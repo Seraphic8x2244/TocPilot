@@ -507,22 +507,117 @@ These are robustness debt, not evidence of a current normal-path resource leak.
 - self-update check/update: single-operation flags prevent duplicate starts; result pointer ownership follows the same `unique_ptr` transfer pattern — good;
 - dedicated Add-Git branch dialog: missing request identity — A3 above.
 
-## Audit still outstanding
+## Tests/build-debt + final-priority pass — completed
 
-The cancelled all-in-one pass had not yet completed these areas:
+### Coverage map against confirmed findings
 
-1. **Tests/build-debt pass**
-   - map each confirmed finding to existing tests;
-   - identify missing failure-injection seams;
-   - investigate `LNK4098`;
-   - final severity/priority ordering.
+| Finding | Existing coverage | Missing seam / deterministic test needed |
+| --- | --- | --- |
+| **A1 HIGH — restart transaction recovery** | `install_tests` covers normal commit/finalize, explicit rollback, state-save-style rollback and injected in-process failures after backup/new-root commit | no startup scanner/recovery API; no process-death fixture; no rename-success-before-bookkeeping case; no pre-state/post-state journal decision test; no partial-finalize restart case |
+| **A2 HIGH — semantic validation on state load** | `state_tests` covers round-trip, schema/settings migration/normalization and mutation-time duplicate/ownership/identity rules | table-driven persisted-state fixtures for duplicate IDs, overlapping ownership, invalid mode/provider/target/ref combinations, installed-state incoherence, unsafe ownership and direct-DLL mismatch |
+| **A3 MEDIUM/LOW — branch-dialog stale result** | main-window branch selector has generation/package runtime guard | no branch-dialog acceptance helper; no token/repository mismatch unit test |
+| **A4 MEDIUM — synchronous DLL release lookup** | GitHub release parsing has unit coverage | no dialog async state machine/request-identity seam; no close/repository-change stale completion tests |
+| **A5 MEDIUM — self-update size bounds** | `update_tests` covers latest-tag parsing and optional live discovery; GitHub release tests preserve asset metadata including size | no bounded updater stream helper; no oversize, metadata-size mismatch or checksum-text-cap tests |
+| **A6 MEDIUM — large single ZIP member allocation** | `archive_tests` covers path safety, extraction and addon-root layout detection | no per-entry policy seam/fixture that rejects a large member before allocating its full uncompressed size |
+| **A7 LOW — staging-name collision** | normal staging/layout behaviour exercised incidentally | no direct test proving distinct canonical repositories cannot map to the same staging directory |
+| **A8 LOW — loose checksum parsing** | direct-DLL policy and self-update discovery tests do not exercise checksum body selection | expose/factor a checksum parser; test exact filename, digest-only compatibility, multi-entry sidecars, wrong filename and comment/noise |
+| **A10 MEDIUM — self-update accepts initial HTTP URL** | live self-update test expects current GitHub HTTPS URLs; direct-DLL implementation separately rejects non-HTTPS | self-update URL-policy helper with `http://` rejection before I/O |
+| **A11 MEDIUM/LOW — archive 429 not stopping Update All** | `update_all_tests` covers candidate queue/order/accounting only | structured provider result or classifier seam plus orchestration test proving confirmed 429 stops remaining provider work and ordinary failure does not |
+| **A12 LOW — updater parent-wait failure ignored** | no updater-process synchronization tests | injectable/process helper for OpenProcess/Wait result; deterministic failure handling test |
+| **A13 LOW — hidden legacy branch combo** | no UI structural tests | no new behavioural test is required if removed mechanically; existing branch metadata/popup behaviour must remain covered by static review/runtime smoke |
+| **A14 LOW — close during non-install work** | package install close gate is runtime code only | optional shutdown-policy helper tests if this is tightened; do not make it a prerequisite for higher-priority work |
 
-## Recommended audit execution method from here
+Existing parser/policy tests are comparatively strong around smart-HTTP pkt-lines, GitHub release JSON, exact release-asset selection, direct-DLL package policy, archive path traversal/root mapping, update queue accounting and mutation-time state invariants. The audit should preserve those focused seams rather than replacing them with end-to-end-only coverage.
 
-Do not attempt the remaining P6A audit in one giant connector/tool call. Continue in four bounded passes matching the outstanding groups above. After each pass:
+### A9 deep-pass resolution — LOW/CLEANUP — `LNK4098` is a confirmed CRT mismatch in the archive test target
 
-- append only newly verified evidence here;
-- promote concise active findings/priorities into `DEV_PROGRESS.md`;
-- avoid runtime code changes until the findings list is stable enough to choose the first focused fix slice.
+The warning has a direct CMake cause.
 
-The first implementation slice should not be chosen solely from this scratchpad until the transaction/state deep pass has confirmed the exact recovery design and priority.
+- `cmake_minimum_required(VERSION 3.24)` puts CMP0091 in the modern runtime-library mode.
+- `TocPilotMiniz` explicitly sets `MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>"`, i.e. `/MT` or `/MTd`.
+- the shipping `TocPilot` target explicitly uses the same static runtime and is consistent with Miniz.
+- `TocPilotArchiveTests` links `TocPilotMiniz` but does **not** set `MSVC_RUNTIME_LIBRARY`.
+- CMake's documented default when the property is unset is `MultiThreaded$<$<CONFIG:Debug>:Debug>DLL`, i.e. `/MD` or `/MDd`.
+- Microsoft documents `LNK4098` as the expected warning when incompatible/default CRT libraries are mixed.
+
+References:
+- https://cmake.org/cmake/help/latest/prop_tgt/MSVC_RUNTIME_LIBRARY.html
+- https://learn.microsoft.com/en-us/cpp/error-messages/tool-errors/linker-tools-warning-lnk4098
+
+So `TocPilotArchiveTests` is `/MD` while its linked Miniz library is `/MT`. This should be fixed by compiling that test target with the same runtime as the static library (or by applying one intentional project test-runtime policy), **not** by hiding the warning with `/NODEFAULTLIB`.
+
+The recorded `C4100` and `C4457` warnings remain source-cleanup only.
+
+### A15 — LOW/MEDIUM BUILD RELIABILITY — live network smoke tests are part of the ordinary blocking CTest suite
+
+CMake registers both:
+
+- `git-smart-http-live-github` -> `TocPilotGitRefsTests --live-github`
+- `self-update-live-latest` -> `TocPilotUpdateTests --live-latest`
+
+as ordinary tests.
+
+Both `.github/workflows/build.yml` and `.github/workflows/release.yml` run plain:
+
+`ctest --test-dir build -C Release --output-on-failure`
+
+with no exclusion/label filter. Therefore every PR/push build and every release test gate depends on live GitHub/network availability and current repository/release state.
+
+These tests are valuable provider smoke tests, but they are not deterministic unit tests. Provider outage, network interruption or rate limiting can fail an otherwise-correct source build/release.
+
+**Focused build/test fix**
+
+Label live tests (for example `live` / `network`) and keep the normal blocking suite offline/deterministic. Run live smoke explicitly in a separate CI step/workflow or at a controlled cadence; the release workflow may still choose to require the live smoke explicitly if that remains the desired release contract.
+
+### Final P6A priority ordering
+
+**P0 — durability/invariant correctness**
+
+1. **A1 — interrupted addon transaction restart recovery (HIGH).**
+   This is the only finding that can leave live managed addon files and durable package state materially divergent after an unexpected process/power interruption. It needs a durable journal/recovery decision before more surface robustness work.
+2. **A2 — semantic validation of loaded durable state (HIGH).**
+   Fail closed before operating on duplicated/conflicting ownership or structurally impossible package records.
+
+**P1 — bounded-input/security/availability robustness**
+
+3. **A6 — per-entry ZIP extraction memory bound (MEDIUM).**
+   Prevent remote archive shape from provoking an uncontrolled very large contiguous allocation/process termination.
+4. **A5 + A10 — self-update bounded download + HTTPS-only initial asset/checksum URLs (MEDIUM).**
+   These touch the same updater transport boundary and can be implemented/tested as one focused transport-hardening slice without changing update UX.
+5. **A4 — asynchronous latest-stable DLL discovery (MEDIUM).**
+   Remove provider-timeout UI hangs, using request identity from the outset.
+6. **A3 — generation-safe Add-Git branch dialog completion (MEDIUM/LOW).**
+   Small targeted race fix; likely pairs naturally with A4's dialog request-identity helper only if doing so does not enlarge the slice.
+7. **A11 — structured archive rate-limit propagation into Update All (MEDIUM/LOW).**
+
+**P2 — cleanup / test infrastructure**
+
+8. **A15 — separate live network smoke from deterministic default CTest (LOW/MEDIUM build reliability).**
+9. **A12 — explicit updater parent wait failure handling (LOW).**
+10. **A8 — strict checksum-sidecar parsing (LOW).**
+11. **A7 — collision-proof staging directory identity (LOW).**
+12. **A13 — remove the dead hidden branch combo/subclass/reposition plumbing (LOW).**
+13. **A14 — optional shutdown cleanup policy for non-mutating workers (LOW).**
+14. **A9 — align `TocPilotArchiveTests` CRT with Miniz and clean compiler warnings (LOW/CLEANUP).**
+
+The direct-DLL no-backup/write-final policy risks documented earlier remain product-contract choices rather than audit defects and are not inserted into this implementation ranking.
+
+### First robustness fix slice selected after the completed audit
+
+Start with **A1 only: durable addon transaction restart recovery**.
+
+Keep the implementation slice bounded to:
+
+1. define a versioned transaction journal/manifest and pure recovery-decision model;
+2. write/flush the journal before the first live addon rename, carrying transaction/package identity, complete affected-root intent and pre/post durable-state discriminators;
+3. add startup recovery scanning before normal package operations become available;
+4. if durable state matches pre-state, restore old roots/remove new roots and clean the transaction;
+5. if durable state matches post-state, preserve new live roots and finish transaction cleanup;
+6. if neither matches, fail closed for that transaction and preserve evidence rather than guessing;
+7. add deterministic tests for each crash window identified in the transaction deep pass, including rename-before-in-memory-bookkeeping and state-save-before-finalize boundaries.
+
+Do **not** combine A2, UI cleanup, updater hardening or unrelated warning cleanup into this first runtime slice. Power-loss filesystem metadata guarantees remain a separately stated verification limit; the first implementation target is deterministic restart recovery from observable durable state, not an unsupported claim of full hardware-loss atomicity.
+
+## P6A bounded audit complete
+
+All four bounded audit passes are complete. This file remains detailed scratch/history only; `DEV_PROGRESS.md` is authoritative for the live finding list, priority and exact next step.
