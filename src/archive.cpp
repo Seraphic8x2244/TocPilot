@@ -231,6 +231,47 @@ struct ZipReaderGuard {
     }
 };
 
+size_t WriteExtractedFile(
+    void* opaque,
+    mz_uint64 fileOffset,
+    const void* buffer,
+    size_t bytes) {
+    auto* output =
+        static_cast<std::ofstream*>(opaque);
+
+    if (!output ||
+        !*output ||
+        fileOffset >
+            static_cast<mz_uint64>(
+                std::numeric_limits<
+                    std::streamoff>::max()) ||
+        bytes >
+            static_cast<std::size_t>(
+                std::numeric_limits<
+                    std::streamsize>::max())) {
+        return 0;
+    }
+
+    output->seekp(
+        static_cast<std::streamoff>(
+            fileOffset),
+        std::ios::beg);
+
+    if (!*output) {
+        return 0;
+    }
+
+    output->write(
+        reinterpret_cast<const char*>(
+            buffer),
+        static_cast<std::streamsize>(
+            bytes));
+
+    return *output
+        ? bytes
+        : 0;
+}
+
 struct EntryPlan {
     mz_uint index = 0;
     std::filesystem::path relativePath;
@@ -756,33 +797,6 @@ bool ExtractZipSecure(
             return false;
         }
 
-        if (plan.uncompressedBytes >
-            static_cast<std::uint64_t>(
-                std::numeric_limits<std::size_t>::max())) {
-            error =
-                L"ZIP entry is too large for this process.";
-            cleanupPartial();
-            return false;
-        }
-
-        std::vector<unsigned char> fileBytes(
-            static_cast<std::size_t>(
-                plan.uncompressedBytes));
-
-        if (!fileBytes.empty() &&
-            !mz_zip_reader_extract_to_mem(
-                &archive,
-                plan.index,
-                fileBytes.data(),
-                fileBytes.size(),
-                0)) {
-            error =
-                L"Could not extract ZIP entry: " +
-                MinizError(archive);
-            cleanupPartial();
-            return false;
-        }
-
         std::ofstream outputFile(
             output,
             std::ios::binary |
@@ -795,12 +809,18 @@ bool ExtractZipSecure(
             return false;
         }
 
-        if (!fileBytes.empty()) {
-            outputFile.write(
-                reinterpret_cast<const char*>(
-                    fileBytes.data()),
-                static_cast<std::streamsize>(
-                    fileBytes.size()));
+        if (!mz_zip_reader_extract_to_callback(
+                &archive,
+                plan.index,
+                WriteExtractedFile,
+                &outputFile,
+                0)) {
+            error =
+                L"Could not extract ZIP entry: " +
+                MinizError(archive);
+            outputFile.close();
+            cleanupPartial();
+            return false;
         }
 
         outputFile.flush();
