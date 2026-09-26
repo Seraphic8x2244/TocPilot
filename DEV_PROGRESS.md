@@ -8,9 +8,9 @@
 - Source/application version: `v0.3.8`.
 - Latest published release: `v0.3.8`.
 - Release/source commit and tag target: `17ce349273c6f2d76572c7107f3c6f7b139cf8d8` (merge of PR #9).
-- Latest runtime-confirmed release: `v0.3.7` at `ec410df48787fa88a97d49489c4f99ea6893811a`.
-- Latest verified `main` runtime/release head: `17ce349273c6f2d76572c7107f3c6f7b139cf8d8` (v0.3.8 A1 release; published/CI-checked, runtime gate pending).
-- Current goal: v0.3.8 publishes A1 durable addon-transaction restart recovery; complete its focused runtime gate before starting A2.
+- Latest runtime-confirmed release: `v0.3.8` at `17ce349273c6f2d76572c7107f3c6f7b139cf8d8` for the normal installed self-update path only; package-operation smoke checks remain pending before full A1 gate acceptance.
+- Latest verified `main` runtime/release head: `17ce349273c6f2d76572c7107f3c6f7b139cf8d8` (v0.3.8 A1 release; published/CI-checked; self-update runtime path passed, focused package smoke gate pending).
+- Current goal: complete the remaining v0.3.8 A1 package-operation smoke checks before starting A2.
 - Current scope boundary: do not begin A2 state semantic validation, UI cleanup, updater hardening, warning cleanup or deferred feature work until the A1 release/runtime gate is accepted.
 - Audit continuity: `audit_dump.md` is a temporary scratch checkpoint for the interrupted broad audit only; this file remains the sole authoritative live development source of truth.
 - Documentation-only commits after the release do not change the published runtime baseline.
@@ -394,6 +394,7 @@ The focused post-v0.3.6 branch/list issues remain runtime-confirmed fixed in v0.
 
 ### Last Runtime Baselines
 
+- Published `v0.3.8` normal installed self-update `v0.3.7 -> v0.3.8`: passed on 2026-09-26 through TocPilot's real self-updater; no manual EXE replacement was required.
 - Published `v0.3.7` branch/list matrix: passed on 2026-09-25, including branch re-sort anchoring, correct arrow affordance, selected semantic row colours, and live remote branch add/delete discovery through Refresh All without restarting TocPilot.
 - Published `v0.3.6` focused runtime matrix: passed on 2026-09-24.
 - Advanced Version population without Refresh: passed; TOCs lacking a Version field correctly produce no Version value.
@@ -412,7 +413,7 @@ The focused post-v0.3.6 branch/list issues remain runtime-confirmed fixed in v0.
 
 ### Next Runtime Test
 
-No v0.3.7 release-gate runtime validation remains. The next runtime gate is published v0.3.8 A1 restart recovery. Runtime validation should begin from installed v0.3.7 through TocPilot's real self-updater to v0.3.8, then smoke ordinary addon install/update/reinstall, Uninstall, Remove and managed replacement paths for regressions. The mapped process-crash windows are covered deterministically in CI; do not require ad-hoc destructive crash timing as the normal user gate.
+The published v0.3.8 self-update path has passed. Complete the remaining focused A1 runtime gate by smoking ordinary addon install/update/reinstall, Uninstall, Remove and managed replacement paths for regressions. The mapped process-crash windows are covered deterministically in CI; do not require ad-hoc destructive crash timing as the normal user gate.
 
 Optional future checks remain the conflicting-TOC `Multiple` fixture and the deferred historical edge cases above.
 
@@ -482,9 +483,9 @@ Do not add support for user-uploaded ZIP/7z/RAR/installer/bundle release assets 
 
 ## Release / Documentation Notes
 
-- Current published release is `v0.3.8` at `17ce349273c6f2d76572c7107f3c6f7b139cf8d8`; the accepted runtime-confirmed baseline remains `v0.3.7` until the v0.3.8 gate passes.
+- Current published release is `v0.3.8` at `17ce349273c6f2d76572c7107f3c6f7b139cf8d8`.
 - Release workflow run `36243263009` (#51) is the authoritative v0.3.8 product build.
-- Published v0.3.8 is CI/release-verified but not yet runtime-confirmed.
+- Published v0.3.8 is CI/release-verified and its normal installed self-update path from v0.3.7 is runtime-confirmed; full A1 acceptance still awaits the focused package-operation smoke checks.
 - Documentation-only commits after that release do not imply a new runtime build and require no version bump/release.
 - Version remains local installed TOC metadata; do not persist a second Version value into JSON unless the product contract is deliberately changed.
 - The legacy `package_columns_locked` JSON field remains accepted for compatibility but no longer controls v0.3.6 UI behaviour.
@@ -493,10 +494,8 @@ Do not add support for user-uploaded ZIP/7z/RAR/installer/bundle release assets 
 
 Complete the focused **v0.3.8 A1 runtime gate**; do not begin A2 yet.
 
-1. start from the normally installed `v0.3.7` and launch TocPilot so the real self-updater delivers published `v0.3.8`;
-2. confirm the normal updater/restart path completes without manual EXE replacement;
-3. smoke ordinary addon install/update/reinstall, Uninstall, Remove and managed replacement paths for regressions;
-4. report any regression against the v0.3.7 baseline, or accept the focused gate if those paths remain correct;
-5. record the runtime result here before starting **A2 durable state semantic validation**.
+1. smoke ordinary addon install/update/reinstall, Uninstall, Remove and managed replacement paths on installed `v0.3.8`;
+2. report any regression against the v0.3.7 baseline, or accept the focused gate if those paths remain correct;
+3. record the final runtime result here before starting **A2 durable state semantic validation**.
 
 Keep the existing caveat explicit: A1 provides deterministic **process-restart** recovery, but full sudden-power-loss atomicity is not claimed until Windows directory-rename durability is separately verified.
