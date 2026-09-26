@@ -407,17 +407,111 @@ Make parent-wait acquisition/result explicit and fail with a clear updater messa
 - self-update replacement uses `ReplaceFileW(... REPLACEFILE_WRITE_THROUGH)` with a backup and attempts rollback if the replacement executable cannot be launched.
 - post-update backup/staged-file deletion retries and then schedules stubborn files for deletion at reboot; failure to remove the now-empty staging directory is ignored and can leave benign temp-directory residue.
 
+## Async/UI ownership + Win32 resource deep pass — completed
+
+### A3 deep-pass confirmation — MEDIUM/LOW — the Add-Git branch dialog has a stale-result/HWND-reuse race
+
+The dedicated `src/branch_dialog.cpp` loader is the one detached UI worker that does not carry request identity.
+
+**Evidence**
+
+- `ShowBranchDialog()` owns `DialogContext` on its stack, creates the popup, then runs a nested message loop until the dialog is destroyed.
+- `StartLoad()` launches a detached worker carrying only the dialog `HWND`, host and repository.
+- `LoadResult` carries only success/info/error — no generation, repository identity or request token.
+- Cancel/close destroys the dialog immediately and `ShowBranchDialog()` can return while the worker is still running.
+- A successful `PostMessageW()` transfers the raw result pointer to whatever window currently owns that handle. Microsoft explicitly documents that window handles are recycled and can identify a different window after destruction: https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-iswindow
+- Reopening the branch dialog quickly therefore permits the old lookup to target a newly-created branch dialog if Windows reuses the same `HWND`. The receiving dialog has no token/repository check and will accept/populate the stale repository info.
+
+This is distinct from the main-window inline branch lookup: `BranchLoadResult` there carries a monotonically increasing generation and package ID, and `WM_TP_BRANCHES_READY` discards any result whose generation/package no longer matches.
+
+**Impact**
+
+The race is rare and requires close/reopen plus handle reuse, but stale branches can be shown for the wrong Add-Git repository. If the user then selects one, the wrong branch name/SHA/repository-info can flow into the new package setup; subsequent repository inspection should normally fail because that SHA is not in the new repository, but the dialog should never admit the stale result.
+
+**Test/fix shape**
+
+Give each branch-dialog request a request/generation identity tied to the dialog context/repository and reject any completion that does not match the live request. Prefer making worker lifetime explicit rather than relying on `HWND` validity. Add a deterministic testable result-acceptance helper; UI handle reuse itself does not need to be timing-tested.
+
+### A4 deep-pass confirmation — MEDIUM — latest-stable DLL discovery blocks the dialog/UI thread
+
+`src/add_package_dialog.cpp::LoadLatestStableDllAssets()` calls `FetchLatestStableGitHubRelease()` synchronously.
+
+It is invoked from both:
+
+- `ValidateAndAccept()` when the DLL fallback has not yet loaded matching release metadata; and
+- the DLL-only fallback dialog's `WM_CREATE` path, meaning the window procedure itself can remain inside provider I/O before creation finishes.
+
+The function updates the status text and calls `UpdateWindow()`, but the UI thread then remains inside WinHTTP work until it completes or fails. Provider timeouts therefore translate directly into an apparently frozen Add Git/DLL dialog.
+
+**Test/fix shape**
+
+Move release discovery to the same worker/result-message pattern as other provider operations. Disable relevant controls while loading, carry a request identity/repository, allow close/cancel without a stale result being accepted, and add acceptance-state unit tests around repository changes/close-reopen.
+
+### A13 — LOW — the old inline branch COMBOBOX is dead UI infrastructure after the popup-selector redesign
+
+The main window still creates `g_branchSelector` as a hidden `COMBOBOX`, and `PopulateBranchSelectorCurrent()` / `PopulateBranchSelectorLoaded()` continue resetting and filling it.
+
+However:
+
+- `PositionBranchSelector()` now unconditionally hides the combo;
+- `IDC_BRANCH_SELECTOR` has no command-selection handling;
+- actual branch selection is rendered in the list cell and opened with `CreatePopupMenu()` / `TrackPopupMenu()` using `g_branchSelectorBranches`.
+
+The combo no longer contributes to visible behaviour or selection state. It is leftover infrastructure from the pre-popup selector and increases the number of null/enable/populate paths that future UI work must reason about.
+
+**Fix shape**
+
+After the audit gate, remove the hidden combo, its control ID, update/populate calls that exist solely to drive it, and the associated scroll/reposition messages/subclass plumbing if no longer used for anything else. Preserve the generation/package branch cache and list-cell popup behaviour.
+
+### A14 — LOW — main-window close is not gated for non-install detached work
+
+`WM_CLOSE` blocks only `g_updateAllInProgress` and `g_packageInstallInProgress`. It does not block package refresh/inspection, app-update check, or app-update download/verification.
+
+This does not expose the live-addon transaction corruption boundary: addon install preparation sets `g_packageInstallInProgress` before its worker begins, so close is blocked through prepare/commit/state/finalize. Main async result ownership is also safe when `PostMessageW()` fails because the worker retains its `unique_ptr`.
+
+Remaining effects are cleanup/UX oriented:
+
+- closing during inspection can terminate the process with package staging still present; later staging reset paths are designed to clear it;
+- closing during self-update before updater launch can leave temporary update staging; later cleanup already tolerates/schedules stubborn files;
+- closing during a read-only refresh/check simply abandons the result.
+
+Do not inflate this into a state-integrity defect. If shutdown behaviour is tightened later, distinguish mutating critical sections from cancelable/read-only work rather than blocking all closes indiscriminately.
+
+### Win32/GDI ownership review — no high/medium leak found
+
+Verified ownership pairs include:
+
+- main `GetDC()` / `ReleaseDC()`;
+- dynamically-created UI fonts are replaced/deleted and deleted on `WM_DESTROY`; failed bold-font creation safely falls back to the normal font in custom drawing;
+- executable icons returned by `PrivateExtractIconsW()` are retained and destroyed with `DestroyIcon()`;
+- branch popup menus are destroyed after `TrackPopupMenu()`;
+- splash `GetDC` / `ReleaseDC`, compatible DC / `DeleteDC`, DIB selection restoration / `DeleteObject`, GDI+ bitmap smart pointers and GDI+ startup/shutdown are paired across the inspected success/failure paths;
+- `CreateStreamOnHGlobal(..., TRUE,...)` transfers the backing `HGLOBAL` to the stream, which is released after GDI+ copies the image.
+
+**Low-priority silent Win32 failure debt**
+
+- many child `CreateWindowExW()` calls are not checked. Failure of a critical main control such as the package list would currently produce a partially-functional window rather than fail `WM_CREATE` cleanly;
+- `SetWindowSubclass()` return is ignored. Its current scroll/reposition purpose is largely obsolete because the legacy branch combo is always hidden;
+- splash `SetTimer()` return is ignored; failure primarily loses animated progress dots because phase changes themselves call `RenderSplash()`;
+- nested dialog `GetMessageW()` loops treat `-1` the same as quit/exit from the loop and do not surface the Win32 error.
+
+These are robustness debt, not evidence of a current normal-path resource leak.
+
+### Main detached-worker ownership/identity matrix
+
+- inline branch lookup: generation + package ID guard — good;
+- package refresh: index/package/tracking fields are checked before state/UI acceptance — good;
+- package inspection: index/package/ref checked before acceptance — good;
+- branch addon install/replacement: package/replacement identity and tracking checked before live commit; result destructor rolls a prepared transaction back if ownership never reaches the UI — good for in-process lifetime;
+- direct-DLL install: package ID/mode/asset/target checked before state advance — good;
+- self-update check/update: single-operation flags prevent duplicate starts; result pointer ownership follows the same `unique_ptr` transfer pattern — good;
+- dedicated Add-Git branch dialog: missing request identity — A3 above.
+
 ## Audit still outstanding
 
 The cancelled all-in-one pass had not yet completed these areas:
 
-1. **Async/UI ownership + Win32 resource pass**
-   - every detached worker/result message pair;
-   - close/reopen/reentrancy paths;
-   - handle/GDI lifetime and silent API failures;
-   - stale legacy branch-selector control/code.
-
-2. **Tests/build-debt pass**
+1. **Tests/build-debt pass**
    - map each confirmed finding to existing tests;
    - identify missing failure-injection seams;
    - investigate `LNK4098`;
