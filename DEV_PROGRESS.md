@@ -9,10 +9,11 @@
 - Latest published release: `v0.3.9`.
 - Release/source commit and tag target: `57feb4307058b484ff980bd30b60d7eafb4466af` (merge of PR #10).
 - Latest runtime-confirmed release: `v0.3.8` at `17ce349273c6f2d76572c7107f3c6f7b139cf8d8` for the normal installed self-update path. v0.3.9 remains published/CI-checked with its updater/UI delta not separately confirmed.
-- Latest verified `main` runtime/release head: `57feb4307058b484ff980bd30b60d7eafb4466af` (v0.3.9 WWW-column release; published/CI-checked).
-- A1 runtime gate: **accepted for forward development** on 2026-09-26. Fresh install, reinstall, Update New and Remove Addon passed. Managed same-root replacement runtime validation is explicitly deferred rather than blocking A2. The deterministic crash-window tests remain the primary validation for restart-recovery semantics.
-- Current goal: implement **A2 durable state semantic validation only**.
-- Current scope boundary: do not mix A2 with ZIP bounds, updater hardening, async DLL discovery, warning cleanup or unrelated UI changes. The next UI follow-up is separately queued: rename `WWW` to lowercase `www`, and render repository links blue + underlined at all times, including selected/semantic rows.
+- Latest verified `main` source head: `dcdd5058f50c83c427310feba083437db6368dcd` (merge of PR #11, A2 durable state semantic validation; CI-checked, not yet published/runtime-confirmed).
+- A1 runtime gate: **accepted for forward development** on 2026-09-26. Fresh install, reinstall, Update New and Remove Addon passed. Managed same-root replacement runtime validation is explicitly deferred rather than blocking later work. The deterministic crash-window tests remain the primary validation for restart-recovery semantics.
+- A2 durable state semantic validation: **implemented / CI-checked / merged**, not yet published or runtime-tested.
+- Current goal: prepare the next release gate after applying the already-requested tiny WWW visual follow-up: rename `WWW` to lowercase `www`, and render repository links blue + underlined at all times, including selected/semantic rows.
+- Current scope boundary: keep the WWW visual follow-up narrowly separated from A2 implementation, then release/test both together before beginning A3 ZIP member allocation bounds. Do not mix updater hardening, async DLL discovery, warning cleanup or other UI work into that release.
 - Audit continuity: `audit_dump.md` is a temporary scratch checkpoint for the interrupted broad audit only; this file remains the sole authoritative live development source of truth.
 - Documentation-only commits after the release do not change the published runtime baseline.
 
@@ -232,17 +233,23 @@ Branch-selector target behaviour after the v0.3.6 runtime follow-up:
 
 ### Removal UX
 
-Installed-addon Uninstall/Remove uses the native expandable TaskDialog:
+The current product workflow is **Remove Addon**; the old Uninstall flow is not part of the active UI/runtime gate.
+
+Remove Addon uses the native expandable TaskDialog:
 
 - compact counts by default;
 - No/cancel is the default;
 - expandable details show exact TocPilot-owned addon roots and recorded files;
-- Uninstall removes owned files but retains package/tracking;
-- Remove deletes package state after owned files are removed;
+- installed managed addon removal deletes TocPilot-owned files and then removes package state;
 - record-only removal clearly states that no addon files are being removed.
+
+Legacy Uninstall implementation code may remain as cleanup debt, but do not treat it as a current user workflow or required runtime test.
 
 ## Recent Relevant Commits / Release Provenance
 
+- `dcdd5058f50c83c427310feba083437db6368dcd` — merged PR #11, A2 durable state semantic validation; source version remains v0.3.9 and this commit is not yet published.
+- PR #11 head `262ad8806639d9b2c4461bb8fec687bb82a35cc1` passed Build workflow run `36255044602` (#585), Windows x64 job `108440109791`, including **17/17 CTest tests**.
+- A2 load-time tests now cover duplicate IDs, overlapping addon-root ownership, identity/provider/mode/target inconsistencies, missing branch ref, incoherent installed revision/files state, unsafe addon ownership paths, invalid direct-DLL target/ownership and conflicting direct-DLL destinations; invalid loads preserve the original state file. Valid GitHub root, GitLab child/library and GitHub direct-DLL fixtures also load.
 - `57feb4307058b484ff980bd30b60d7eafb4466af` — merged PR #10 and exact v0.3.9 release/tag target.
 - PR #10 head `06553ee63c8d6a645a42861ffe80bb2351b88c40` passed Build workflow run `36251399338` (#581), Windows x64 job `108429989143`, including **17/17 CTest tests** and the six-column -> seven-column persisted-layout migration case.
 - v0.3.9 Release workflow run `36251599364` (#52), Windows x64 Release job `108430537496`, rebuilt exact merge commit `57feb4307058b484ff980bd30b60d7eafb4466af`, validated source version, passed **17/17 CTest tests**, generated SHA-256, created tag `v0.3.9`, and published direct release assets.
@@ -367,9 +374,11 @@ Published v0.3.9 contains the WWW-column usability slice on top of A1. A1 is acc
 
 P6A is complete. A1 transaction restart recovery is implemented, CI-checked and published in v0.3.8 at `17ce349273c6f2d76572c7107f3c6f7b139cf8d8`, and accepted for forward development with the same-root replacement runtime check deferred. It now writes a versioned, flushed pre-mutation journal; arms it with package/transaction identity, affected-root intent and durable pre/post state markers before live renames; recovers unfinished transactions before normal package mutation; and preserves evidence rather than guessing when durable state is ambiguous.
 
-Remaining audited implementation priority after A1 acceptance starts with:
+A2 durable state semantic validation is implemented, CI-checked and merged at `dcdd5058f50c83c427310feba083437db6368dcd`, but is not yet published/runtime-confirmed. State load now fails closed before runtime use when durable packages violate understood identity, mode/target, ownership, installed-state or direct-DLL invariants; the original JSON is preserved for manual repair.
 
-- state load validates JSON shape but does not globally revalidate durable package semantics. It can accept duplicate package IDs, conflicting addon-root ownership, identity/provider/mode/target inconsistencies, incoherent installed state, unsafe ownership paths and direct-DLL ownership that normal mutation APIs would reject;
+Remaining audited implementation priority after the A2 release/runtime gate starts with:
+
+
 - the dedicated Add-Git branch dialog has no per-request generation/repository token. Closing and reopening it while its detached lookup is still running leaves a rare stale-result/HWND-reuse race; the main inline branch selector already has a generation + package-ID guard;
 - Add Git latest-stable DLL discovery performs provider network I/O synchronously on the dialog thread, including the DLL-fallback dialog creation path, so provider timeout/failure can freeze that UI;
 - self-update executable/checksum downloads lack explicit response-size limits/asset-size matching;
@@ -383,8 +392,8 @@ Lower-priority/test/build findings and contract-driven direct-DLL risks are reta
 Final severity/order:
 
 1. **HIGH — transaction restart recovery:** **IMPLEMENTED / CI-CHECKED / PUBLISHED / ACCEPTED**, with managed same-root replacement runtime validation deferred.
-2. **HIGH — durable state semantic validation:** **NEXT** — reject conflicting/impossible package records before runtime use.
-3. **MEDIUM — ZIP member allocation bound:** reject a single oversized uncompressed member before allocating it.
+2. **HIGH — durable state semantic validation:** **IMPLEMENTED / CI-CHECKED / MERGED; release/runtime gate pending** at `dcdd5058f50c83c427310feba083437db6368dcd`.
+3. **MEDIUM — ZIP member allocation bound:** **NEXT AFTER A2 GATE** — reject a single oversized uncompressed member before allocating it.
 4. **MEDIUM — self-update transport hardening:** carry/check exact asset size, cap checksum text and reject initial non-HTTPS asset/checksum URLs.
 5. **MEDIUM — async latest-stable DLL discovery:** remove provider I/O from the dialog thread.
 6. **MEDIUM/LOW — Add-Git branch-dialog request identity:** reject stale close/reopen completions.
@@ -424,9 +433,16 @@ The focused post-v0.3.6 branch/list issues remain runtime-confirmed fixed in v0.
 
 ### Next Runtime Test
 
-No additional runtime test is required before starting A2. A1's managed same-root replacement check remains deferred. v0.3.9's WWW/updater UI delta can be checked opportunistically; do not block A2 on it.
+The next runtime gate is the release containing merged A2 plus the queued narrow `www` visual follow-up. Start from installed v0.3.9 through TocPilot's real self-updater.
 
-The current product workflow has **Remove Addon**, not the old Uninstall flow. Do not reintroduce Uninstall as a required runtime gate.
+Runtime focus:
+- normal startup/state load succeeds with the user's existing valid TocPilot.json;
+- Advanced repository column is headed `www` and repository links are always blue + underlined while still opening the correct source;
+- Compact remains `Name | Status`;
+- ordinary package listing/refresh/install/reinstall/Update New/Remove Addon remain regression-free;
+- no destructive malformed-state runtime test is required from the user because the rejection matrix is deterministic in CI.
+
+A1's managed same-root replacement check remains deferred. The current product workflow has **Remove Addon**, not the old Uninstall flow.
 
 Optional future checks remain the conflicting-TOC `Multiple` fixture and the deferred historical edge cases above.
 
@@ -455,7 +471,7 @@ Audit output distinguishes confirmed defects, robustness risks, cleanup opportun
 
 #### P6B — UI/UX pass
 
-Once robustness findings are under control, exercise every normal workflow as a product rather than as isolated features: startup/self-update, Compact/Advanced, Add Git, branch selection, Refresh All, Update New, install/reinstall, DLL management, Remove/Uninstall and error/recovery paths.
+Once robustness findings are under control, exercise every normal workflow as a product rather than as isolated features: startup/self-update, Compact/Advanced, Add Git, branch selection, Refresh All, Update New, install/reinstall, DLL management, Remove Addon and error/recovery paths.
 
 Review consistency of labels, button state, selection/focus, keyboard/mouse behaviour, progress/status feedback, sorting/reordering, confirmations, empty/loading/error states, resize/DPI/text-scale behaviour and unnecessary friction. Prefer small coherent UX fixes over adding new capability.
 
@@ -498,23 +514,22 @@ Do not add support for user-uploaded ZIP/7z/RAR/installer/bundle release assets 
 
 - Current published release is `v0.3.9` at `57feb4307058b484ff980bd30b60d7eafb4466af`.
 - Release workflow run `36251599364` (#52) is the authoritative v0.3.9 product build.
-- Published v0.3.9 is CI/release-verified but not yet runtime-confirmed. v0.3.8's normal installed self-update path from v0.3.7 is runtime-confirmed; full A1 acceptance still awaits the focused package-operation smoke checks.
+- Published v0.3.9 is CI/release-verified but its own updater/UI delta is not separately runtime-confirmed. A1 is nevertheless accepted for forward development based on the completed v0.3.8 package-operation smoke checks, with managed same-root replacement explicitly deferred.
+- A2 is merged on top of v0.3.9 source at `dcdd5058f50c83c427310feba083437db6368dcd`; it has not yet been version-bumped, published or runtime-confirmed.
 - Documentation-only commits after that release do not imply a new runtime build and require no version bump/release.
 - Version remains local installed TOC metadata; do not persist a second Version value into JSON unless the product contract is deliberately changed.
 - The legacy `package_columns_locked` JSON field remains accepted for compatibility but no longer controls v0.3.6 UI behaviour.
 
 ## Exact Next Step
 
-Implement **A2 durable state semantic validation only**.
+Prepare the focused **v0.3.10 A2 release/runtime gate**, including only the already-requested WWW visual follow-up before release; do not begin A3 yet.
 
-1. define a pure, centralized validator for the fully loaded durable package set before runtime use;
-2. reject duplicate package IDs and ambiguous/conflicting addon-root ownership;
-3. reject identity/provider/mode/target inconsistencies and incoherent installed-state combinations;
-4. reject unsafe durable ownership paths that escape approved WoW/addon destinations;
-5. revalidate direct-DLL durable ownership against the same narrow product contract used by normal mutation paths;
-6. fail closed with a clear state-load error while preserving the original `TocPilot.json` for manual repair;
-7. add deterministic state tests for every rejected semantic class plus valid branch/library/DLL fixtures;
-8. keep JSON unknown-field preservation and existing legacy-layout migration behaviour intact;
-9. do not begin A3/ZIP bounds, updater hardening or the queued `www` visual follow-up in this slice.
+1. create a narrow follow-up branch from current `main` `dcdd5058f50c83c427310feba083437db6368dcd`;
+2. change only the repository-link presentation: header `WWW` -> `www`; render repository URL cells blue and underlined at all times, including selected/orange/green rows, with no visited-link state;
+3. validate that tiny UI follow-up through Windows x64 Release + complete CTest and merge only if `main` has not unexpectedly moved;
+4. bump all three release-version sources to `0.3.10` with no unrelated runtime changes;
+5. validate release prep, merge, and publish `v0.3.10` through the real Release workflow from the exact merged `main` commit;
+6. runtime-test installed `v0.3.9 -> v0.3.10` through the normal self-updater, confirm existing state loads cleanly, verify `www` hyperlink presentation/behaviour and smoke normal package operations;
+7. record the A2 release/runtime result before beginning **A3 ZIP member allocation bounds**.
 
 Keep the existing caveat explicit: A1 provides deterministic **process-restart** recovery, but full sudden-power-loss atomicity is not claimed until Windows directory-rename durability is separately verified.
