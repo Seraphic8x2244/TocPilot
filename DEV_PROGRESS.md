@@ -342,8 +342,8 @@ Published/runtime-confirmed v0.3.7 remains the accepted product baseline; the P6
 
 Highest-priority confirmed audit findings so far:
 
-- interrupted addon transactions have no restart recovery path: an unexpected process/power loss between live filesystem commit and durable state/finalize can leave live files/state mismatched and a blocking unfinished transaction directory;
-- state load does not globally reject duplicate package IDs or conflicting durable ownership records even though normal mutation APIs enforce those invariants;
+- interrupted addon transactions have no restart recovery path: the transaction phase/root bookkeeping is memory-only, so a restart can see old durable state with partially/new live files or new durable state with stale backups and cannot safely infer rollback vs finalize. The transaction deep pass established the minimum recovery design: a durable pre-mutation journal with package/transaction identity, affected-root intent and an unambiguous pre-state vs post-state discriminator;
+- state load validates JSON shape but does not globally revalidate durable package semantics. It can accept duplicate package IDs, conflicting addon-root ownership, identity/provider/mode/target inconsistencies, incoherent installed state, unsafe ownership paths and direct-DLL ownership that normal mutation APIs would reject;
 - branch-dialog async results have no per-request generation token, leaving a rare stale-result/HWND-reuse race;
 - Add Git latest-stable DLL discovery performs provider network I/O synchronously on the dialog thread;
 - self-update executable/checksum downloads lack explicit response-size limits/asset-size matching;
@@ -351,6 +351,15 @@ Highest-priority confirmed audit findings so far:
 - provider/repository staging-directory sanitization can collide for distinct identities.
 
 Lower-priority/test-debt findings and contract-driven direct-DLL risks are retained in `audit_dump.md`.
+
+P6A bounded-pass status:
+
+- transaction/state recovery deep pass: **complete and documented**;
+- network/provider + updater deep pass: next;
+- async/UI ownership + Win32 resource pass: outstanding;
+- tests/build-debt/final-priority pass: outstanding.
+
+Power-loss durability of the addon directory rename sequence remains a verification gap: `TocPilot.json` is explicitly flushed/write-through, while addon directory moves currently use `std::filesystem::rename` without a separately verified durability guarantee.
 
 The focused post-v0.3.6 branch/list issues remain runtime-confirmed fixed in v0.3.7.
 
@@ -455,8 +464,8 @@ Do not add support for user-uploaded ZIP/7z/RAR/installer/bundle release assets 
 
 ## Exact Next Step
 
-Continue P6A in bounded passes rather than one all-in-one audit. Start with the transaction/state recovery deep pass: map exact crash points through backup -> live commit -> state save -> finalize, determine the minimum durable recovery/journal information required, and complete the state-load invariant-validation matrix. Record only verified evidence and test gaps; do not change runtime code yet.
+Continue P6A with the **network/provider + updater deep pass**. Verify HTTPS/redirect invariants end-to-end, rate-limit/error classification consistency, malformed/partial response handling, and self-update handoff/cleanup edge cases. Record only verified evidence and test gaps; do not change runtime code yet.
 
-Then complete, separately, the network/provider + updater pass, async/UI ownership + Win32 resource pass, and tests/build-debt pass. Use `audit_dump.md` only as temporary scratch continuity and promote the concise authoritative findings/priorities back into this file after each pass.
+Then complete, separately, the async/UI ownership + Win32 resource pass and the tests/build-debt/final-priority pass. Use `audit_dump.md` only as temporary scratch continuity and promote the concise authoritative findings/priorities back into this file after each pass.
 
 After the findings list is stable, choose the first focused robustness fix/test slice. UI/UX review follows the robustness gate; visual/skin work follows the UI/UX pass.
