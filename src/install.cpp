@@ -1,6 +1,10 @@
 #include "install.h"
 
+#include <windows.h>
+#include <objbase.h>
+
 #include <algorithm>
+#include <map>
 #include <chrono>
 #include <cwctype>
 #include <iomanip>
@@ -123,6 +127,731 @@ bool SafeInstallFolderName(
     }
 
     return true;
+}
+
+
+struct AddonTransactionJournal {
+    std::string phase;
+    std::wstring transactionId;
+    std::wstring packageId;
+    AddonTransactionStateMarker preState;
+    AddonTransactionStateMarker postState;
+    std::vector<std::wstring> preExistingRoots;
+    std::vector<std::wstring> postRoots;
+};
+
+constexpr std::size_t kMaxJournalBytes = 1024 * 1024;
+constexpr char kJournalMagic[] = "TOCPILOT_ADDON_TRANSACTION_V1";
+
+std::wstring GenerateTransactionId() {
+    GUID guid{};
+    if (SUCCEEDED(CoCreateGuid(&guid))) {
+        wchar_t buffer[40]{};
+        if (StringFromGUID2(
+                guid,
+                buffer,
+                static_cast<int>(std::size(buffer))) > 0) {
+            return buffer;
+        }
+    }
+
+    const auto ticks =
+        std::chrono::high_resolution_clock::now()
+            .time_since_epoch()
+            .count();
+    return
+        L"fallback-" +
+        std::to_wstring(
+            static_cast<unsigned long long>(ticks)) +
+        L"-" +
+        std::to_wstring(GetCurrentProcessId());
+}
+
+bool WideToUtf8(
+    std::wstring_view value,
+    std::string& utf8) {
+    utf8.clear();
+    if (value.empty()) {
+        return true;
+    }
+
+    const int bytes = WideCharToMultiByte(
+        CP_UTF8,
+        WC_ERR_INVALID_CHARS,
+        value.data(),
+        static_cast<int>(value.size()),
+        nullptr,
+        0,
+        nullptr,
+        nullptr);
+    if (bytes <= 0) {
+        return false;
+    }
+
+    utf8.resize(static_cast<std::size_t>(bytes));
+    return WideCharToMultiByte(
+        CP_UTF8,
+        WC_ERR_INVALID_CHARS,
+        value.data(),
+        static_cast<int>(value.size()),
+        utf8.data(),
+        bytes,
+        nullptr,
+        nullptr) == bytes;
+}
+
+bool Utf8ToWide(
+    std::string_view value,
+    std::wstring& wide) {
+    wide.clear();
+    if (value.empty()) {
+        return true;
+    }
+
+    const int chars = MultiByteToWideChar(
+        CP_UTF8,
+        MB_ERR_INVALID_CHARS,
+        value.data(),
+        static_cast<int>(value.size()),
+        nullptr,
+        0);
+    if (chars <= 0) {
+        return false;
+    }
+
+    wide.resize(static_cast<std::size_t>(chars));
+    return MultiByteToWideChar(
+        CP_UTF8,
+        MB_ERR_INVALID_CHARS,
+        value.data(),
+        static_cast<int>(value.size()),
+        wide.data(),
+        chars) == chars;
+}
+
+char HexDigit(unsigned value) {
+    return static_cast<char>(
+        value < 10 ? '0' + value : 'a' + (value - 10));
+}
+
+int HexValue(char ch) {
+    if (ch >= '0' && ch <= '9') {
+        return ch - '0';
+    }
+    if (ch >= 'a' && ch <= 'f') {
+        return 10 + ch - 'a';
+    }
+    if (ch >= 'A' && ch <= 'F') {
+        return 10 + ch - 'A';
+    }
+    return -1;
+}
+
+bool EncodeJournalText(
+    std::wstring_view value,
+    std::string& encoded) {
+    std::string utf8;
+    if (!WideToUtf8(value, utf8)) {
+        return false;
+    }
+
+    encoded.clear();
+    encoded.reserve(utf8.size() * 2);
+    for (const unsigned char ch : utf8) {
+        encoded.push_back(HexDigit(ch >> 4));
+        encoded.push_back(HexDigit(ch & 0x0f));
+    }
+    return true;
+}
+
+bool DecodeJournalText(
+    std::string_view encoded,
+    std::wstring& value) {
+    if ((encoded.size() % 2) != 0) {
+        return false;
+    }
+
+    std::string utf8;
+    utf8.reserve(encoded.size() / 2);
+    for (std::size_t i = 0; i < encoded.size(); i += 2) {
+        const int high = HexValue(encoded[i]);
+        const int low = HexValue(encoded[i + 1]);
+        if (high < 0 || low < 0) {
+            return false;
+        }
+        utf8.push_back(
+            static_cast<char>((high << 4) | low));
+    }
+
+    return Utf8ToWide(utf8, value);
+}
+
+std::filesystem::path JournalPath(
+    const std::filesystem::path& transactionRoot) {
+    return transactionRoot / L"journal.v1";
+}
+
+bool WriteAllJournalBytes(
+    HANDLE file,
+    std::string_view content,
+    std::wstring& error) {
+    std::size_t offset = 0;
+    while (offset < content.size()) {
+        const DWORD chunk = static_cast<DWORD>(
+            std::min<std::size_t>(
+                content.size() - offset,
+                1024 * 1024));
+        DWORD written = 0;
+        if (!WriteFile(
+                file,
+                content.data() + offset,
+                chunk,
+                &written,
+                nullptr) ||
+            written != chunk) {
+            error =
+                L"Could not write addon transaction journal.";
+            return false;
+        }
+        offset += written;
+    }
+
+    if (!FlushFileBuffers(file)) {
+        error =
+            L"Could not flush addon transaction journal.";
+        return false;
+    }
+    return true;
+}
+
+bool AtomicWriteJournal(
+    const std::filesystem::path& path,
+    std::string_view content,
+    std::wstring& error) {
+    if (content.size() > kMaxJournalBytes) {
+        error =
+            L"Addon transaction journal is unexpectedly large.";
+        return false;
+    }
+
+    auto temp = path;
+    temp += L".tmp";
+
+    HANDLE file = CreateFileW(
+        temp.c_str(),
+        GENERIC_WRITE,
+        0,
+        nullptr,
+        CREATE_ALWAYS,
+        FILE_ATTRIBUTE_NORMAL | FILE_FLAG_WRITE_THROUGH,
+        nullptr);
+    if (file == INVALID_HANDLE_VALUE) {
+        error =
+            L"Could not create addon transaction journal.";
+        return false;
+    }
+
+    const bool wrote =
+        WriteAllJournalBytes(
+            file,
+            content,
+            error);
+    CloseHandle(file);
+
+    if (!wrote) {
+        DeleteFileW(temp.c_str());
+        return false;
+    }
+
+    std::error_code ec;
+    const bool destinationExists =
+        std::filesystem::exists(path, ec);
+    if (ec) {
+        DeleteFileW(temp.c_str());
+        error =
+            L"Could not inspect addon transaction journal.";
+        return false;
+    }
+
+    BOOL replaced = FALSE;
+    if (destinationExists) {
+        replaced = ReplaceFileW(
+            path.c_str(),
+            temp.c_str(),
+            nullptr,
+            REPLACEFILE_WRITE_THROUGH,
+            nullptr,
+            nullptr);
+    } else {
+        replaced = MoveFileExW(
+            temp.c_str(),
+            path.c_str(),
+            MOVEFILE_REPLACE_EXISTING |
+                MOVEFILE_WRITE_THROUGH);
+    }
+
+    if (!replaced) {
+        DeleteFileW(temp.c_str());
+        error =
+            L"Could not atomically publish addon transaction journal.";
+        return false;
+    }
+
+    return true;
+}
+
+bool ReadJournalBytes(
+    const std::filesystem::path& path,
+    std::string& content,
+    std::wstring& error) {
+    HANDLE file = CreateFileW(
+        path.c_str(),
+        GENERIC_READ,
+        FILE_SHARE_READ,
+        nullptr,
+        OPEN_EXISTING,
+        FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN,
+        nullptr);
+    if (file == INVALID_HANDLE_VALUE) {
+        error =
+            L"Unfinished addon transaction has no readable journal: " +
+            path.parent_path().wstring();
+        return false;
+    }
+
+    LARGE_INTEGER size{};
+    if (!GetFileSizeEx(file, &size) ||
+        size.QuadPart < 0 ||
+        static_cast<unsigned long long>(size.QuadPart) >
+            kMaxJournalBytes) {
+        CloseHandle(file);
+        error =
+            L"Addon transaction journal has an invalid size: " +
+            path.wstring();
+        return false;
+    }
+
+    content.resize(
+        static_cast<std::size_t>(size.QuadPart));
+    std::size_t offset = 0;
+    while (offset < content.size()) {
+        const DWORD chunk = static_cast<DWORD>(
+            std::min<std::size_t>(
+                content.size() - offset,
+                1024 * 1024));
+        DWORD read = 0;
+        if (!ReadFile(
+                file,
+                content.data() + offset,
+                chunk,
+                &read,
+                nullptr) ||
+            read == 0) {
+            CloseHandle(file);
+            error =
+                L"Could not read addon transaction journal: " +
+                path.wstring();
+            return false;
+        }
+        offset += read;
+    }
+
+    CloseHandle(file);
+    return true;
+}
+
+void AppendJournalText(
+    std::string& output,
+    std::string_view key,
+    std::wstring_view value,
+    bool& ok) {
+    if (!ok) {
+        return;
+    }
+
+    std::string encoded;
+    if (!EncodeJournalText(value, encoded)) {
+        ok = false;
+        return;
+    }
+
+    output.append(key);
+    output.push_back('=');
+    output.append(encoded);
+    output.push_back('\n');
+}
+
+std::string SerializeJournal(
+    const AddonInstallTransaction& transaction,
+    std::string_view phase,
+    bool& ok) {
+    ok = true;
+    std::string output;
+    output.reserve(1024);
+    output += kJournalMagic;
+    output.push_back('\n');
+    output += "phase=";
+    output.append(phase);
+    output.push_back('\n');
+
+    AppendJournalText(
+        output,
+        "transaction_id",
+        transaction.transactionId,
+        ok);
+    AppendJournalText(
+        output,
+        "package_id",
+        transaction.plan.packageId,
+        ok);
+
+    if (phase == "armed") {
+        output += transaction.preState.present
+            ? "pre_present=1\n"
+            : "pre_present=0\n";
+        AppendJournalText(
+            output,
+            "pre_package_id",
+            transaction.preState.packageId,
+            ok);
+        AppendJournalText(
+            output,
+            "pre_transaction_id",
+            transaction.preState.transactionId,
+            ok);
+
+        output += transaction.postState.present
+            ? "post_present=1\n"
+            : "post_present=0\n";
+        AppendJournalText(
+            output,
+            "post_package_id",
+            transaction.postState.packageId,
+            ok);
+        AppendJournalText(
+            output,
+            "post_transaction_id",
+            transaction.postState.transactionId,
+            ok);
+
+        for (const auto& root :
+             transaction.preExistingRoots) {
+            AppendJournalText(
+                output,
+                "pre_root",
+                root,
+                ok);
+        }
+    }
+
+    for (const auto& root : transaction.postRoots) {
+        AppendJournalText(
+            output,
+            "post_root",
+            root,
+            ok);
+    }
+
+    return output;
+}
+
+bool WriteTransactionJournal(
+    const AddonInstallTransaction& transaction,
+    std::string_view phase,
+    std::wstring& error) {
+    bool encoded = false;
+    const std::string content =
+        SerializeJournal(
+            transaction,
+            phase,
+            encoded);
+    if (!encoded) {
+        error =
+            L"Addon transaction journal contains text that cannot be encoded.";
+        return false;
+    }
+
+    return AtomicWriteJournal(
+        JournalPath(
+            transaction.plan.transactionRoot),
+        content,
+        error);
+}
+
+bool GetSingleJournalField(
+    const std::map<std::string, std::vector<std::string>>& fields,
+    const char* key,
+    std::string& value) {
+    const auto it = fields.find(key);
+    if (it == fields.end() ||
+        it->second.size() != 1) {
+        return false;
+    }
+
+    value = it->second.front();
+    return true;
+}
+
+bool ParsePresentField(
+    const std::map<std::string, std::vector<std::string>>& fields,
+    const char* key,
+    bool& present) {
+    std::string value;
+    if (!GetSingleJournalField(
+            fields,
+            key,
+            value)) {
+        return false;
+    }
+    if (value == "1") {
+        present = true;
+        return true;
+    }
+    if (value == "0") {
+        present = false;
+        return true;
+    }
+    return false;
+}
+
+bool ParseEncodedField(
+    const std::map<std::string, std::vector<std::string>>& fields,
+    const char* key,
+    std::wstring& value) {
+    std::string encoded;
+    return
+        GetSingleJournalField(fields, key, encoded) &&
+        DecodeJournalText(encoded, value);
+}
+
+bool ParseJournal(
+    std::string_view content,
+    AddonTransactionJournal& journal,
+    std::wstring& error) {
+    journal = {};
+
+    std::map<std::string, std::vector<std::string>> fields;
+    std::size_t pos = 0;
+    const std::size_t firstEnd =
+        content.find('\n', pos);
+    if (firstEnd == std::string_view::npos ||
+        content.substr(0, firstEnd) !=
+            kJournalMagic) {
+        error =
+            L"Addon transaction journal has an unsupported format.";
+        return false;
+    }
+    pos = firstEnd + 1;
+
+    while (pos < content.size()) {
+        const std::size_t end =
+            content.find('\n', pos);
+        const std::size_t lineEnd =
+            end == std::string_view::npos
+                ? content.size()
+                : end;
+        const std::string_view line =
+            content.substr(pos, lineEnd - pos);
+
+        if (!line.empty()) {
+            const std::size_t equals =
+                line.find('=');
+            if (equals == std::string_view::npos ||
+                equals == 0) {
+                error =
+                    L"Addon transaction journal contains a malformed field.";
+                return false;
+            }
+            fields[
+                std::string(line.substr(0, equals))]
+                .push_back(
+                    std::string(line.substr(equals + 1)));
+        }
+
+        if (end == std::string_view::npos) {
+            break;
+        }
+        pos = end + 1;
+    }
+
+    std::string phase;
+    if (!GetSingleJournalField(
+            fields,
+            "phase",
+            phase) ||
+        (phase != "prepared" &&
+         phase != "armed")) {
+        error =
+            L"Addon transaction journal has an invalid phase.";
+        return false;
+    }
+    journal.phase = std::move(phase);
+
+    if (!ParseEncodedField(
+            fields,
+            "transaction_id",
+            journal.transactionId) ||
+        !ParseEncodedField(
+            fields,
+            "package_id",
+            journal.packageId) ||
+        journal.transactionId.empty() ||
+        journal.packageId.empty()) {
+        error =
+            L"Addon transaction journal is missing transaction identity.";
+        return false;
+    }
+
+    const auto postRoots =
+        fields.find("post_root");
+    if (postRoots != fields.end()) {
+        for (const auto& encoded :
+             postRoots->second) {
+            std::wstring root;
+            std::wstring rootError;
+            if (!DecodeJournalText(
+                    encoded,
+                    root) ||
+                !SafeInstallFolderName(
+                    root,
+                    rootError)) {
+                error =
+                    L"Addon transaction journal contains an unsafe post-state root.";
+                return false;
+            }
+            journal.postRoots.push_back(
+                std::move(root));
+        }
+    }
+
+    if (journal.phase == "prepared") {
+        return true;
+    }
+
+    if (!ParsePresentField(
+            fields,
+            "pre_present",
+            journal.preState.present) ||
+        !ParseEncodedField(
+            fields,
+            "pre_package_id",
+            journal.preState.packageId) ||
+        !ParseEncodedField(
+            fields,
+            "pre_transaction_id",
+            journal.preState.transactionId) ||
+        !ParsePresentField(
+            fields,
+            "post_present",
+            journal.postState.present) ||
+        !ParseEncodedField(
+            fields,
+            "post_package_id",
+            journal.postState.packageId) ||
+        !ParseEncodedField(
+            fields,
+            "post_transaction_id",
+            journal.postState.transactionId) ||
+        journal.preState.packageId.empty() ||
+        journal.postState.packageId.empty()) {
+        error =
+            L"Addon transaction journal is missing durable-state discriminators.";
+        return false;
+    }
+
+    if (journal.postState.present &&
+        journal.postState.transactionId !=
+            journal.transactionId) {
+        error =
+            L"Addon transaction journal post-state marker does not match its transaction identity.";
+        return false;
+    }
+
+    const auto preRoots =
+        fields.find("pre_root");
+    if (preRoots != fields.end()) {
+        for (const auto& encoded :
+             preRoots->second) {
+            std::wstring root;
+            std::wstring rootError;
+            if (!DecodeJournalText(
+                    encoded,
+                    root) ||
+                !SafeInstallFolderName(
+                    root,
+                    rootError)) {
+                error =
+                    L"Addon transaction journal contains an unsafe pre-state root.";
+                return false;
+            }
+            journal.preExistingRoots.push_back(
+                std::move(root));
+        }
+    }
+
+    return true;
+}
+
+bool ReadTransactionJournal(
+    const std::filesystem::path& transactionRoot,
+    AddonTransactionJournal& journal,
+    std::wstring& error) {
+    std::string content;
+    return
+        ReadJournalBytes(
+            JournalPath(transactionRoot),
+            content,
+            error) &&
+        ParseJournal(
+            content,
+            journal,
+            error);
+}
+
+bool ContainsInsensitive(
+    const std::vector<std::wstring>& values,
+    std::wstring_view value) {
+    return std::any_of(
+        values.begin(),
+        values.end(),
+        [&](const std::wstring& candidate) {
+            return EqualsInsensitive(
+                candidate,
+                value);
+        });
+}
+
+std::vector<std::wstring> RootsToBackup(
+    const AddonInstallPlan& plan) {
+    std::vector<std::wstring> roots;
+    roots.reserve(
+        plan.roots.size() +
+        plan.obsoleteInstallFolders.size());
+
+    for (const auto& root : plan.roots) {
+        roots.push_back(root.installFolder);
+    }
+    roots.insert(
+        roots.end(),
+        plan.obsoleteInstallFolders.begin(),
+        plan.obsoleteInstallFolders.end());
+
+    std::sort(
+        roots.begin(),
+        roots.end(),
+        InsensitiveLess{});
+    roots.erase(
+        std::unique(
+            roots.begin(),
+            roots.end(),
+            [](const std::wstring& left,
+               const std::wstring& right) {
+                return EqualsInsensitive(
+                    left,
+                    right);
+            }),
+        roots.end());
+    return roots;
 }
 
 bool SafeSourceRelativePath(
