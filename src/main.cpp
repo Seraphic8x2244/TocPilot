@@ -91,6 +91,7 @@ constexpr int kCompactPrimaryButtonCount = 4;
 constexpr int kAdvancedButtonCount = 8;
 constexpr int kCompactNameColumnMinWidth = 220;
 constexpr int kCompactStatusColumnMinWidth = 150;
+constexpr int kPackageColumnMinWidth = 40;
 constexpr int kPackageColumnName = 0;
 constexpr int kPackageColumnWww = 1;
 constexpr int kPackageColumnBranch = 2;
@@ -573,6 +574,49 @@ int WindowWidthForClient(
 void PositionBranchSelector();
 void ResizeListColumns();
 
+int PackageListClientWidth() {
+    if (!g_packageList) {
+        return 0;
+    }
+
+    RECT client{};
+    if (!GetClientRect(
+            g_packageList,
+            &client)) {
+        return 0;
+    }
+
+    return std::max(
+        0,
+        static_cast<int>(
+            client.right -
+            client.left));
+}
+
+std::array<int, tp::kPackageColumnCount>
+CurrentPackageColumnOrder() {
+    std::array<int, tp::kPackageColumnCount> order =
+        g_stateReady
+            ? g_state.settings.packageColumnOrder
+            : tp::kDefaultPackageColumnOrder;
+
+    if (g_packageList) {
+        std::array<int, tp::kPackageColumnCount>
+            current{};
+        if (ListView_GetColumnOrderArray(
+                g_packageList,
+                static_cast<int>(
+                    current.size()),
+                current.data())) {
+            order = current;
+        }
+    }
+
+    return
+        tp::NormalizePackageColumnOrder(
+            order);
+}
+
 void UpdatePackageColumnEditingUi() {
     if (!g_packageList) {
         return;
@@ -614,6 +658,9 @@ void SaveCurrentPackageColumnLayout() {
         return;
     }
 
+    const auto order =
+        CurrentPackageColumnOrder();
+
     std::array<int, tp::kPackageColumnCount> widths =
         g_state.settings.packageColumnWidths;
 
@@ -626,17 +673,38 @@ void SaveCurrentPackageColumnLayout() {
                     ListView_GetColumnWidth(
                         g_packageList,
                         column),
-                    40,
+                    kPackageColumnMinWidth,
                     2000);
         }
     } else {
+        const int leftColumn =
+            order[0];
+        const int rightColumn =
+            order[1];
+        const auto split =
+            tp::CompactDividerWidths(
+                ListView_GetColumnWidth(
+                    g_packageList,
+                    leftColumn),
+                PackageListClientWidth(),
+                kPackageColumnMinWidth);
+
+        ListView_SetColumnWidth(
+            g_packageList,
+            leftColumn,
+            split[0]);
+        ListView_SetColumnWidth(
+            g_packageList,
+            rightColumn,
+            split[1]);
+
         widths[static_cast<std::size_t>(
             kPackageColumnName)] =
             std::clamp(
                 ListView_GetColumnWidth(
                     g_packageList,
                     kPackageColumnName),
-                40,
+                kPackageColumnMinWidth,
                 2000);
         widths[static_cast<std::size_t>(
             kPackageColumnStatus)] =
@@ -644,21 +712,9 @@ void SaveCurrentPackageColumnLayout() {
                 ListView_GetColumnWidth(
                     g_packageList,
                     kPackageColumnStatus),
-                40,
+                kPackageColumnMinWidth,
                 2000);
     }
-
-    std::array<int, tp::kPackageColumnCount> order{};
-    if (!ListView_GetColumnOrderArray(
-            g_packageList,
-            static_cast<int>(order.size()),
-            order.data())) {
-        return;
-    }
-
-    order =
-        tp::NormalizePackageColumnOrder(
-            order);
 
     const bool changed =
         widths !=
@@ -699,11 +755,6 @@ void ResizeListColumns() {
             : tp::kDefaultPackageColumnWidths;
 
     if (!g_advancedVisible) {
-        ListView_SetColumnWidth(
-            g_packageList,
-            kPackageColumnName,
-            widths[static_cast<std::size_t>(
-                kPackageColumnName)]);
         for (int column = kPackageColumnWww;
              column < kPackageColumnStatus;
              ++column) {
@@ -712,11 +763,24 @@ void ResizeListColumns() {
                 column,
                 0);
         }
+
+        const auto fitted =
+            tp::FitCompactColumnWidths(
+                widths[static_cast<std::size_t>(
+                    kPackageColumnName)],
+                widths[static_cast<std::size_t>(
+                    kPackageColumnStatus)],
+                PackageListClientWidth(),
+                kPackageColumnMinWidth);
+
+        ListView_SetColumnWidth(
+            g_packageList,
+            kPackageColumnName,
+            fitted[0]);
         ListView_SetColumnWidth(
             g_packageList,
             kPackageColumnStatus,
-            widths[static_cast<std::size_t>(
-                kPackageColumnStatus)]);
+            fitted[1]);
         return;
     }
 
@@ -2300,6 +2364,7 @@ void PopulatePackageList() {
     }
 
     UpdatePackageSortIndicator();
+    ResizeListColumns();
 }
 
 void SelectPackageRow(std::size_t index);
@@ -6787,7 +6852,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             header->hwndFrom ==
                 ListView_GetHeader(
                     g_packageList)) {
-            const auto* headerNotification =
+            auto* headerNotification =
                 reinterpret_cast<NMHEADERW*>(
                     lParam);
             const int headerColumn =
@@ -6799,16 +6864,54 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                     kPackageColumnName ||
                 headerColumn ==
                     kPackageColumnStatus;
+            const auto order =
+                CurrentPackageColumnOrder();
+            const int compactLeftColumn =
+                order[0];
+            const int compactRightColumn =
+                order[1];
 
             if (!g_advancedVisible &&
-                !primaryColumn &&
-                (header->code ==
-                     HDN_BEGINTRACKW ||
-                 header->code ==
-                     HDN_BEGINDRAG ||
-                 header->code ==
-                     HDN_DIVIDERDBLCLICKW)) {
+                ((!primaryColumn &&
+                  (header->code ==
+                       HDN_BEGINTRACKW ||
+                   header->code ==
+                       HDN_BEGINDRAG ||
+                   header->code ==
+                       HDN_DIVIDERDBLCLICKW)) ||
+                 (headerColumn ==
+                      compactRightColumn &&
+                  (header->code ==
+                       HDN_BEGINTRACKW ||
+                   header->code ==
+                       HDN_TRACKW ||
+                   header->code ==
+                       HDN_DIVIDERDBLCLICKW)))) {
                 return TRUE;
+            }
+
+            if (!g_advancedVisible &&
+                header->code ==
+                    HDN_TRACKW &&
+                headerColumn ==
+                    compactLeftColumn &&
+                headerNotification &&
+                headerNotification->pitem) {
+                const auto split =
+                    tp::CompactDividerWidths(
+                        headerNotification
+                            ->pitem->cxy,
+                        PackageListClientWidth(),
+                        kPackageColumnMinWidth);
+
+                headerNotification
+                    ->pitem->cxy =
+                    split[0];
+
+                ListView_SetColumnWidth(
+                    g_packageList,
+                    compactRightColumn,
+                    split[1]);
             }
 
             if (header->code ==
