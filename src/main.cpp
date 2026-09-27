@@ -569,6 +569,7 @@ int WindowWidthForClient(
 }
 
 void PositionBranchSelector();
+void ResizeListColumns();
 
 void UpdatePackageColumnEditingUi() {
     if (!g_packageList) {
