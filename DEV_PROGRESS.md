@@ -16,9 +16,9 @@
 - v0.3.11 self-update transport hardening + constrained/shared package-column layout: **implemented / CI-checked / merged / published; requested runtime matrix passed**. Installed update/startup-state passed. `Name`/`Status` stay in the first two positions and swap only with each other; Advanced-only columns stay to their right and reorder normally; Name/Status width sharing passed in both directions; persisted layout passed. Initial executable/checksum URLs must be HTTPS; GitHub release executable size is carried into the self-update decision and the streamed download must match it exactly; checksum text is capped at 64 KiB. The one adjacent Compact main-window-width regression found during this gate is fixed in v0.3.12.
 - v0.3.12 Compact main-window-width follow-up: **implemented / CI-checked / merged / published; partial runtime pass**. Compact width is captured before entering Advanced and restored on return. The `v0.3.11 -> v0.3.12` self-update/restart passed, but runtime testing exposed that the restore path incorrectly treated the 590 px startup default as a hard Compact minimum.
 - v0.3.13 default-vs-minimum width fix: **implemented / CI-checked / merged / published / runtime-accepted**. `ToggleAdvanced` uses the same content-derived Compact minimum as normal manual resizing; `kCompactWindowWidth` remains only the startup default. Narrower- and wider-than-default Compact widths now survive Compact -> Advanced -> Compact.
-- v0.3.14 Compact two-column fill/split UX: **implemented / CI-checked / merged / published; runtime gate pending**. Compact Name/Status always fit the list client width; window-width deltas are shared between the two columns; only the middle divider is drag-resizable and the companion column adjusts inversely; the outer/right divider is vetoed; Name/Status swap behavior is supported; Advanced behavior is unchanged.
-- Current goal: run the focused **published v0.3.14 runtime gate** for the Compact fill/split UX.
-- Current scope boundary: v0.3.14 is published and CI/release-verified but not yet runtime-accepted. Keep the separately observed Refresh All viewport jump queued and do not start it until this gate is resolved. Do not start async DLL discovery, Add-Git stale-request work, warning cleanup, rate-limit propagation, staging-name cleanup or unrelated UI work.
+- v0.3.14 Compact two-column fill/split UX: **implemented / CI-checked / merged / published; runtime gate failed on divider drag**. Window resizing works and the right-hand outer divider is locked, but dragging the middle divider can still grow the left column without atomically shrinking the right column, pushing column 2 out of view and creating a horizontal scrollbar. Fix this as a true give-and-take transaction before accepting v0.3.14.
+- Current goal: fix only the v0.3.14 Compact middle-divider transaction bug: every divider drag update must keep the two visible column widths summing exactly to the Compact list client width, so increasing one immediately decreases the other and no horizontal scrollbar can appear.
+- Current scope boundary: v0.3.14 is published but not runtime-accepted. Only the Compact middle-divider give-and-take fix is in scope. Keep the separately observed Refresh All viewport jump queued and do not start it until this gate is resolved. Do not start async DLL discovery, Add-Git stale-request work, warning cleanup, rate-limit propagation, staging-name cleanup or unrelated UI work.
 - Audit continuity: `audit_dump.md` is a temporary scratch checkpoint for the interrupted broad audit only; this file remains the sole authoritative live development source of truth.
 - Documentation-only commits after the release do not change the published runtime baseline.
 
@@ -487,18 +487,19 @@ The focused post-v0.3.6 branch/list issues remain runtime-confirmed fixed in v0.
 
 ### Next Runtime Test
 
-Published `v0.3.14` is the active focused runtime gate for the Compact two-column fill/split UX.
+Published `v0.3.14` runtime result on 2026-09-27:
+- self-update/startup: passed;
+- Compact window resize distribution: passed;
+- right-hand outer divider locked: passed;
+- **middle-divider give-and-take: failed** — oversizing the left visible column can push the right visible column out of view and create a horizontal scrollbar.
 
-Required checks:
-1. normal self-update from v0.3.13 to v0.3.14 and restart/state load;
-2. in Compact, confirm there is **no horizontal scrollbar**;
-3. drag the middle divider both directions and confirm the other visible column adjusts inversely so the two columns continue to fill the list;
-4. confirm the right edge of the right-hand visible column cannot be resized;
-5. swap Name/Status and repeat the divider/right-edge checks;
-6. widen and narrow the Compact window and confirm the width delta is distributed between both visible columns, with no horizontal scrollbar appearing;
-7. open Advanced and confirm its existing column resize/reorder behavior is unchanged.
-
-If these pass, accept v0.3.14. The separately recorded Refresh All viewport jump is the next narrow UI follow-up.
+After the focused patch release:
+1. drag the middle divider aggressively toward both extremes;
+2. confirm the opposite column shrinks/grows immediately and the two visible widths always fill exactly the Compact list width;
+3. confirm no horizontal scrollbar appears;
+4. repeat after swapping Name/Status;
+5. confirm whole-window resizing still distributes width correctly;
+6. quick Advanced regression smoke.
 
 A1's managed same-root replacement check remains deferred. The current product workflow has **Remove Addon**, not the old Uninstall flow.
 
@@ -583,10 +584,14 @@ Do not add support for user-uploaded ZIP/7z/RAR/installer/bundle release assets 
 
 ## Exact Next Step
 
-Run the published v0.3.14 runtime gate above. Do not begin another source slice until it is resolved.
+Fix the v0.3.14 Compact middle-divider behavior as a true give-and-take transaction. The native header must not be allowed to apply an independent left-column width that temporarily or finally makes the two visible columns wider than the list client area.
 
-The key Compact checks are: no horizontal scrollbar, only the middle divider is resizable, the companion column moves inversely, swapping Name/Status preserves the same behavior, and window resizing distributes the width change across both columns. Confirm Advanced behavior is unchanged.
+Keep the invariant during every divider update:
 
-If v0.3.14 passes, record it as runtime-accepted and then address the separately queued **Refresh All viewport jump** as the next narrow UI follow-up. Async latest-stable DLL discovery remains the next deferred robustness source slice after the active UI follow-up is resolved.
+`leftVisibleWidth + rightVisibleWidth == CompactListClientWidth`
 
-Keep the existing caveat explicit: A1 provides deterministic **process-restart** recovery, but full sudden-power-loss atomicity is not claimed until Windows directory-rename durability is separately verified.
+Clamp only to the existing minimum-width policy. Whichever primary column is visually left owns the middle divider; the visual right column remains non-resizable. Preserve the already-passing whole-window resize behavior and keep Advanced unchanged.
+
+Add deterministic coverage where practical, run Build/CTest, publish the patch release, and retest only this divider transaction plus the quick Compact/Advanced regression smoke.
+
+Keep the Refresh All viewport-jump issue separate and queued. Do not mix async DLL discovery, Add-Git stale-request work, warning cleanup, rate-limit propagation, staging-name cleanup or unrelated UI changes into this fix.
