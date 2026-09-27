@@ -354,4 +354,16 @@ if(BUILD_TESTING)
 
     add_test(NAME removal-prompt-model COMMAND TocPilotRemovalPromptTests)
 
+    add_executable(TocPilotWindowLayoutTests
+        tests/window_layout_tests.cpp
+    )
+    target_compile_features(TocPilotWindowLayoutTests PRIVATE cxx_std_20)
+    target_include_directories(TocPilotWindowLayoutTests PRIVATE src)
+
+    if(MSVC)
+        target_compile_options(TocPilotWindowLayoutTests PRIVATE /W4 /permissive- /utf-8)
+    endif()
+
+    add_test(NAME window-layout-roundtrip COMMAND TocPilotWindowLayoutTests)
+
 endif()
