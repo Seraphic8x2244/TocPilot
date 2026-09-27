@@ -5,16 +5,17 @@
 ## Current
 
 - Active branch: `main`.
-- Source/application version: `v0.3.10`.
-- Latest published release: `v0.3.10`.
-- Release/source commit and tag target: `be5a767a79b20751646fbd5f88c8da4a39c4697e` (merge of PR #13).
+- Source/application version: `v0.3.11`.
+- Latest published release: `v0.3.11`.
+- Release/source commit and tag target: `a6fc2bdb7721b85f58c6d0e42bc9eeaba16c2b1d` (merge of release-prep PR #15).
 - Latest runtime-confirmed release: `v0.3.10` at `be5a767a79b20751646fbd5f88c8da4a39c4697e`. The normal installed `v0.3.9 -> v0.3.10` self-update, restart/state load, `www` presentation/link behaviour, Compact presentation and update path were runtime-confirmed on 2026-09-27. Remove Addon was not retested in this gate and is explicitly deferred/non-blocking.
-- Latest verified `main` runtime source-changing head: `8ff352e58890399f95bf633ccfe58a32580f2be1` (merge of PR #12, A3 ZIP streaming + `www` presentation). Release-only version commit `be5a767a79b20751646fbd5f88c8da4a39c4697e` sits above it.
+- Latest verified `main` runtime source-changing head: `78bec799ae3e611a58fcd33d10a0e4d9d0f90d2e` (merge of PR #14, self-update transport hardening + constrained/shared package-column layout). Release-only version commit `a6fc2bdb7721b85f58c6d0e42bc9eeaba16c2b1d` sits above it.
 - A1 runtime gate: **accepted for forward development** on 2026-09-26. Fresh install, reinstall, Update New and Remove Addon passed. Managed same-root replacement runtime validation is explicitly deferred rather than blocking later work. The deterministic crash-window tests remain the primary validation for restart-recovery semantics.
 - A2 durable state semantic validation: **implemented / CI-checked / merged / published in v0.3.10 / runtime-accepted** as part of the combined v0.3.10 gate.
 - A3 + queued `www` presentation delta: **implemented / CI-checked / merged / published / runtime-accepted in v0.3.10**. ZIP members stream through miniz's extraction callback directly into staged files instead of allocating one full-member buffer; the existing 256 MiB per-entry and 1 GiB total policy limits remain. Deterministic archive coverage forges an oversized central-directory member size in a tiny fixture and verifies policy rejection before extraction staging. Advanced repository URLs are custom-drawn always blue + underlined and the header is lowercase `www`; Compact remained `Name | Status` in the accepted gate.
-- Current goal: implement the next focused build as **self-update transport hardening plus the explicitly queued Compact/Advanced column-layout rule**, with no other UI/audit work mixed in.
-- Current scope boundary: v0.3.10's runtime gate is accepted. The next build may combine only (1) self-update transport hardening and (2) the newly requested column-layout/width-sharing rule below; do not mix async DLL discovery, Add-Git stale-request work, warning cleanup, rate-limit propagation, staging-name cleanup or unrelated UI changes.
+- v0.3.11 self-update transport hardening + constrained/shared package-column layout: **implemented / CI-checked / merged / published; runtime gate pending**. Initial executable/checksum URLs must be HTTPS; GitHub release executable size is carried into the self-update decision and the streamed download must match it exactly; checksum text is capped at 64 KiB. `Name`/`Status` normalize to the first two display positions and may only swap with each other; Advanced-only columns stay to their right; `Name`/`Status` widths are shared between Compact and Advanced while Advanced-only widths/order remain preserved.
+- Current goal: run the focused **published v0.3.11 runtime gate** below before starting another source slice.
+- Current scope boundary: v0.3.11 is published and CI/release-verified but not yet runtime-accepted. Do not start async DLL discovery, Add-Git stale-request work, warning cleanup, rate-limit propagation, staging-name cleanup or unrelated UI work until this runtime gate is resolved.
 - Audit continuity: `audit_dump.md` is a temporary scratch checkpoint for the interrupted broad audit only; this file remains the sole authoritative live development source of truth.
 - Documentation-only commits after the release do not change the published runtime baseline.
 
@@ -173,6 +174,8 @@ Replacement uses the existing two-process updater handoff:
 
 A failed update must leave the old TocPilot runnable and clearly report failure.
 
+Starting with v0.3.11, self-update additionally requires the initial executable/checksum URLs to be HTTPS, carries GitHub's exact executable asset size into the download, rejects a streamed executable that is shorter or longer than that size before replacement, and caps checksum text at 64 KiB. SHA-256 verification remains mandatory.
+
 ### Concurrency
 
 - UI network/download work must not freeze the window.
@@ -191,7 +194,7 @@ Advanced mode:
 
 `Name/Status first | advanced-only columns after`
 
-Column layout rule queued for the next build:
+Column layout rule implemented in v0.3.11 (runtime gate pending):
 
 - `Name` and `Status` must always occupy columns 1 and 2;
 - users may swap `Name` and `Status` with each other, but neither may move behind an Advanced-only column;
@@ -228,7 +231,7 @@ Row semantics retained from v0.3.4:
 - Refresh All and Update New process packages in current visible list order;
 - Update New returns the package list to the top when complete.
 
-Advanced column widths/order are persisted. The dedicated Lock Columns UI/behaviour is removed in v0.3.6. Starting with the next build after v0.3.10, persistence must enforce the new two-column invariant: `Name` and `Status` are always the first two columns and may only swap with each other; Advanced-only columns stay to their right. `Name`/`Status` widths are one shared pair of values across Compact and Advanced, so resizing in either mode updates what the other mode inherits. Advanced-only widths/order remain Advanced-specific. The legacy JSON `package_columns_locked` field is retained for state compatibility but no longer controls the UI.
+Advanced column widths/order are persisted. The dedicated Lock Columns UI/behaviour is removed in v0.3.6. Starting with v0.3.11, persistence enforces the two-column invariant: `Name` and `Status` are always the first two columns and may only swap with each other; Advanced-only columns stay to their right. `Name`/`Status` widths are one shared pair of values across Compact and Advanced, so resizing in either mode updates what the other mode inherits. Advanced-only widths/order remain Advanced-specific. The legacy JSON `package_columns_locked` field is retained for state compatibility but no longer controls the UI.
 
 Branch-selector target behaviour after the v0.3.6 runtime follow-up:
 
@@ -255,6 +258,14 @@ Remove Addon uses the native expandable TaskDialog:
 Legacy Uninstall implementation code may remain as cleanup debt, but do not treat it as a current user workflow or required runtime test.
 
 ## Recent Relevant Commits / Release Provenance
+
+- `a6fc2bdb7721b85f58c6d0e42bc9eeaba16c2b1d` — merged release-prep PR #15 and exact `v0.3.11` release/tag target.
+- `78bec799ae3e611a58fcd33d10a0e4d9d0f90d2e` — merged PR #14, self-update transport hardening + constrained/shared package-column layout.
+- PR #14 head `a261b1b5bbde7644f57b371c67c7c9c177364adb` passed Build workflow run `36309719299` (#597), Windows x64 job `108593188173`.
+- PR #15 head `c9acffe37b72cec348c5e4e6cde230ea7516a042` passed Build workflow run `36309932860` (#599), Windows x64 job `108593782235`.
+- v0.3.11 Release workflow run `36310168201` (#54), Windows x64 Release job `108594444924`, rebuilt exact commit `a6fc2bdb7721b85f58c6d0e42bc9eeaba16c2b1d`, validated source version, passed **17/17 CTest tests**, generated the SHA-256 sidecar, created tag `v0.3.11` and published the direct assets.
+- Published v0.3.11 `TocPilot.exe`: 2,496,512 bytes, SHA-256 `fa1b0a097fa9afb346e7f9eff07708df37b46b062a73330ea6a15a0b3ceaf424`.
+- Published v0.3.11 `TocPilot.exe.sha256`: 78 bytes; asset SHA-256 `ace81b8f2c66747722531f8e032eed67e865c3d35126b8026e1830d11dfee6e6`.
 
 - `dcdd5058f50c83c427310feba083437db6368dcd` — merged PR #11, A2 durable state semantic validation; source version remains v0.3.9 and this commit is not yet published.
 - PR #11 head `262ad8806639d9b2c4461bb8fec687bb82a35cc1` passed Build workflow run `36255044602` (#585), Windows x64 job `108440109791`, including **17/17 CTest tests**.
@@ -343,6 +354,14 @@ Optional validation debt where a real fixture is available:
 
 ## Static / Automated Checks
 
+For v0.3.11 self-update transport + column-layout release:
+- PR #14 head `a261b1b5bbde7644f57b371c67c7c9c177364adb` passed Windows x64 Release build and the complete **17/17 CTest** suite in Build workflow run `36309719299` (#597), job `108593188173`.
+- PR #14 merged to `main` as `78bec799ae3e611a58fcd33d10a0e4d9d0f90d2e`; normal push Build workflow run `36309871572` (#598) completed successfully on that exact merge.
+- Release-prep PR #15 head `c9acffe37b72cec348c5e4e6cde230ea7516a042` changed only `CMakeLists.txt`, `src/version.h` and `.github/release-version`, and passed Build workflow run `36309932860` (#599), job `108593782235`.
+- PR #15 merged to exact release/source commit `a6fc2bdb7721b85f58c6d0e42bc9eeaba16c2b1d`; normal push Build workflow run `36310168226` (#600), job `108594445019`, completed successfully.
+- Release workflow run `36310168201` (#54), job `108594444924`, rebuilt exact commit `a6fc2bdb7721b85f58c6d0e42bc9eeaba16c2b1d`, validated source version, passed the complete **17/17 CTest** suite, generated the SHA-256 sidecar, created tag `v0.3.11` and published `TocPilot.exe` / `TocPilot.exe.sha256`.
+- v0.3.11 is therefore **published and CI/release-verified; runtime acceptance is pending**.
+
 For v0.3.10 A3 + `www` combined release:
 - PR #12 head `21930b18ca8dfbb5f4b81664361e45340a2c8f1a` passed Windows x64 Release build and the complete **17/17 CTest** suite in Build workflow run `36262546306` (#589), job `108460997745`.
 - PR #12 merged to `main` as `8ff352e58890399f95bf633ccfe58a32580f2be1`.
@@ -387,7 +406,7 @@ The prior v0.3.5 release also passed its documented 17/17 Release workflow valid
 
 ## Current Issues
 
-Published v0.3.10 contains A2 durable-state validation, A3 streamed ZIP-member extraction and the lowercase/always-link-styled `www` presentation. The combined v0.3.10 runtime gate is accepted on 2026-09-27. A1 remains accepted for forward development after fresh install, reinstall, Update New and Remove Addon passed in its earlier gate; managed same-root replacement remains explicit deferred runtime debt. Remove Addon was not repeated for the v0.3.10 gate and is non-blocking.
+Published v0.3.11 adds the focused self-update transport hardening and constrained/shared package-column layout on top of the runtime-accepted v0.3.10 baseline. v0.3.11 is CI/release-verified but its runtime gate is still pending. v0.3.10 therefore remains the latest runtime-accepted release. A1 remains accepted for forward development after fresh install, reinstall, Update New and Remove Addon passed in its earlier gate; managed same-root replacement remains explicit deferred runtime debt. Remove Addon was not repeated for the v0.3.10 gate and is non-blocking.
 
 P6A is complete. A1 transaction restart recovery is implemented, CI-checked and published in v0.3.8 at `17ce349273c6f2d76572c7107f3c6f7b139cf8d8`, and accepted for forward development with the same-root replacement runtime check deferred. It now writes a versioned, flushed pre-mutation journal; arms it with package/transaction identity, affected-root intent and durable pre/post state markers before live renames; recovers unfinished transactions before normal package mutation; and preserves evidence rather than guessing when durable state is ambiguous.
 
@@ -395,13 +414,10 @@ A2 durable state semantic validation is implemented, CI-checked, merged at `dcdd
 
 A3 ZIP single-member allocation hardening is implemented, CI-checked, merged at `8ff352e58890399f95bf633ccfe58a32580f2be1` and published as part of v0.3.10. ZIP members are streamed to staged files rather than buffered wholly in RAM; the existing archive/per-entry/total limits remain in force, and deterministic oversized-entry metadata coverage rejects policy violations before extraction staging.
 
-Remaining audited implementation priority after the v0.3.10 runtime gate starts with:
-
+Remaining audited implementation priority after the v0.3.11 runtime gate starts with:
 
 - the dedicated Add-Git branch dialog has no per-request generation/repository token. Closing and reopening it while its detached lookup is still running leaves a rare stale-result/HWND-reuse race; the main inline branch selector already has a generation + package-ID guard;
 - Add Git latest-stable DLL discovery performs provider network I/O synchronously on the dialog thread, including the DLL-fallback dialog creation path, so provider timeout/failure can freeze that UI;
-- self-update executable/checksum downloads lack explicit response-size limits/asset-size matching;
-- self-update release asset/checksum transport does not reject an initial non-HTTPS URL even though the rulebook requires HTTPS provider/download traffic; normal GitHub metadata currently supplies HTTPS URLs and WinHTTP's default redirect policy blocks HTTPS -> HTTP downgrades;
 - Update All does not treat branch-addon archive HTTP rate limiting as a queue-stop condition, unlike status refresh and direct-DLL update paths;
 - provider/repository staging-directory sanitization can collide for distinct identities.
 
@@ -412,8 +428,8 @@ Final severity/order:
 1. **HIGH — transaction restart recovery:** **IMPLEMENTED / CI-CHECKED / PUBLISHED / ACCEPTED**, with managed same-root replacement runtime validation deferred.
 2. **HIGH — durable state semantic validation:** **IMPLEMENTED / CI-CHECKED / MERGED / ACCEPTED FOR FORWARD DEVELOPMENT** at `dcdd5058f50c83c427310feba083437db6368dcd`; no standalone A2-only release gate required.
 3. **MEDIUM — ZIP member allocation bound:** **IMPLEMENTED / CI-CHECKED / PUBLISHED / RUNTIME-ACCEPTED in v0.3.10** — per-member extraction streams to the staged file rather than allocating the full uncompressed member in RAM; the existing 256 MiB per-entry policy remains enforced during archive inspection.
-4. **NEXT BUILD — self-update transport hardening + queued column-layout rule:** carry/check exact asset size, cap checksum text and reject initial non-HTTPS asset/checksum URLs; additionally enforce `Name`/`Status` as the first two swappable columns, keep all Advanced-only columns to their right, and share `Name`/`Status` widths bidirectionally between Compact and Advanced.
-5. **MEDIUM — async latest-stable DLL discovery:** remove provider I/O from the dialog thread.
+4. **SELF-UPDATE TRANSPORT + COLUMN LAYOUT:** **IMPLEMENTED / CI-CHECKED / MERGED / PUBLISHED in v0.3.11; RUNTIME GATE PENDING** — exact executable asset-size matching, 64 KiB checksum-text cap and initial HTTPS enforcement are in place; `Name`/`Status` are constrained to the first two swappable positions with shared Compact/Advanced widths and Advanced-only columns preserved to their right.
+5. **NEXT SOURCE WORK AFTER v0.3.11 RUNTIME GATE — async latest-stable DLL discovery:** remove provider I/O from the dialog thread.
 6. **MEDIUM/LOW — Add-Git branch-dialog request identity:** reject stale close/reopen completions.
 7. **MEDIUM/LOW — Update All archive rate-limit propagation:** confirmed provider 429 should stop later provider-heavy queue work.
 8. Remaining lower-priority work: separate live network smoke tests from deterministic default CTest; updater parent-wait handling; strict checksum-sidecar parsing; collision-proof staging identity; dead branch-combo removal; optional non-mutating shutdown cleanup; archive-test CRT/warning cleanup.
@@ -452,7 +468,7 @@ The focused post-v0.3.6 branch/list issues remain runtime-confirmed fixed in v0.
 
 ### Next Runtime Test
 
-The v0.3.10 runtime gate is complete and accepted. The next runtime gate belongs to the next published build after implementing self-update transport hardening plus the queued column-layout rule.
+The v0.3.10 runtime gate is complete and accepted. Published `v0.3.11` is the active runtime gate for the newly implemented self-update transport hardening plus constrained/shared column-layout rule.
 
 That gate must cover:
 - normal installed self-update into the new build;
