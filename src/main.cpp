@@ -6892,11 +6892,14 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
 
             if (!g_advancedVisible &&
                 header->code ==
-                    HDN_TRACKW &&
+                    HDN_ITEMCHANGINGW &&
                 headerColumn ==
                     compactLeftColumn &&
                 headerNotification &&
-                headerNotification->pitem) {
+                headerNotification->pitem &&
+                (headerNotification
+                     ->pitem->mask &
+                 HDI_WIDTH) != 0) {
                 const auto split =
                     tp::CompactDividerWidths(
                         headerNotification
@@ -6908,6 +6911,11 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                     ->pitem->cxy =
                     split[0];
 
+                // Apply the give before Windows commits
+                // the matching take to the left column.
+                // This keeps the total width at or below
+                // the Compact client width throughout the
+                // native header resize transaction.
                 ListView_SetColumnWidth(
                     g_packageList,
                     compactRightColumn,
