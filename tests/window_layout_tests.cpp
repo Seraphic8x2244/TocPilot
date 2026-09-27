@@ -27,6 +27,90 @@ void ExpectEqual(
 } // namespace
 
 int main() {
+
+    {
+        const auto widths =
+            tp::FitCompactColumnWidths(
+                240,
+                160,
+                500,
+                40);
+        ExpectEqual(
+            widths[0],
+            290,
+            "Compact growth should give half the extra width to the first column");
+        ExpectEqual(
+            widths[1],
+            210,
+            "Compact growth should give half the extra width to the second column");
+    }
+
+    {
+        const auto widths =
+            tp::FitCompactColumnWidths(
+                290,
+                210,
+                401,
+                40);
+        ExpectEqual(
+            widths[0],
+            241,
+            "Compact shrink should split the removed width as evenly as integer pixels allow");
+        ExpectEqual(
+            widths[1],
+            160,
+            "Compact fitted widths should exactly fill the available width");
+    }
+
+    {
+        const auto widths =
+            tp::FitCompactColumnWidths(
+                600,
+                40,
+                300,
+                40);
+        ExpectEqual(
+            widths[0],
+            260,
+            "Compact fitting should preserve the minimum width of the second column");
+        ExpectEqual(
+            widths[1],
+            40,
+            "Compact fitting should clamp only when required by the existing minimum");
+    }
+
+    {
+        const auto widths =
+            tp::CompactDividerWidths(
+                175,
+                500,
+                40);
+        ExpectEqual(
+            widths[0],
+            175,
+            "middle-divider drag should keep the proposed left width");
+        ExpectEqual(
+            widths[1],
+            325,
+            "middle-divider drag should resize the right column inversely");
+    }
+
+    {
+        const auto widths =
+            tp::CompactDividerWidths(
+                490,
+                500,
+                40);
+        ExpectEqual(
+            widths[0],
+            460,
+            "middle-divider drag should preserve the right column minimum");
+        ExpectEqual(
+            widths[1],
+            40,
+            "middle-divider drag should keep the total width fixed");
+    }
+
     constexpr int compactMinimum = 600;
     constexpr int advancedMinimum = 1300;
 
