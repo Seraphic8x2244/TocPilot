@@ -93,6 +93,10 @@ int main() {
             widths[1],
             325,
             "middle-divider drag should resize the right column inversely");
+        ExpectEqual(
+            widths[0] + widths[1],
+            500,
+            "middle-divider transaction should preserve the total Compact width");
     }
 
     {
