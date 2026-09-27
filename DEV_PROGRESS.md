@@ -20,8 +20,8 @@
 - v0.3.15 Compact divider transaction fix: **implemented / CI-checked / merged / published; partial runtime pass**. Expanding the left Compact column no longer creates a horizontal scrollbar immediately, but the divider transaction still clamps both primary columns only to the generic 40 px floor. This lets the right visible column shrink below its intended Compact minimum; after entering that invalid state, dragging back left can expose a horizontal scrollbar. Fix by enforcing the real per-column Compact minima throughout fitting and divider transactions.
 - v0.3.16 Compact minimum-width fix: **implemented / CI-checked / merged / published; partial runtime pass**. Self-update passed; the companion column now stops at its intended minimum in both column orders; whole-window resize and Advanced regression checks passed. Remaining failure: when dragging the middle divider back left after pushing it right, a horizontal scrollbar still appears. This is now isolated to reverse-direction transaction ordering rather than width limits.
 - v0.3.17 reverse-direction divider fix: **implemented / CI-checked / merged / published / runtime-accepted**. Compact divider dragging is a fully owned two-column transaction: the shrinking column is applied first, the growing column second, and the native one-column commit is cancelled under a re-entrancy guard. User runtime confirmed the rightward clamp, leftward reversal, both Name/Status orders, window resizing and Advanced regression checks all pass with no horizontal scrollbar.
-- Current goal: investigate and fix the separately queued **Refresh All viewport jump** in the addon list.
-- Current scope boundary: only the Refresh All viewport-jump issue is in scope for the next source slice. Do not mix async latest-stable DLL discovery, Add-Git stale-request work, warning cleanup, rate-limit propagation, staging-name cleanup or unrelated UI work into that fix.
+- Current goal: implement the focused **P6B icon-toolbar pass** agreed on 2026-09-28, before any art/skin pass.
+- Current scope boundary: toolbar presentation/naming only. Reuse the existing command IDs, handlers, enable/disable logic and package-operation behavior; do not duplicate live controls or mix the queued Refresh All viewport-jump fix, async latest-stable DLL discovery, Add-Git stale-request work, warning cleanup, rate-limit propagation or staging-name cleanup into this slice.
 - Audit continuity: `audit_dump.md` is a temporary scratch checkpoint for the interrupted broad audit only; this file remains the sole authoritative live development source of truth.
 - Documentation-only commits after the release do not change the published runtime baseline.
 
@@ -450,8 +450,9 @@ Final severity/order:
 3. **MEDIUM — ZIP member allocation bound:** **IMPLEMENTED / CI-CHECKED / PUBLISHED / RUNTIME-ACCEPTED in v0.3.10** — per-member extraction streams to the staged file rather than allocating the full uncompressed member in RAM; the existing 256 MiB per-entry policy remains enforced during archive inspection.
 4. **SELF-UPDATE TRANSPORT + COLUMN LAYOUT:** **IMPLEMENTED / CI-CHECKED / MERGED / PUBLISHED in v0.3.11; REQUESTED RUNTIME MATRIX PASSED** — installed update/startup-state and the constrained/shared column behavior passed on 2026-09-27.
 5. **COMPACT MAIN-WINDOW WIDTH FOLLOW-UP:** v0.3.12 implemented capture/restore; v0.3.13 fixed the startup-default-vs-real-minimum edge. **v0.3.13 PUBLISHED / CI-CHECKED / RUNTIME-ACCEPTED**.
-6. **NEXT NARROW UI FOLLOW-UP AFTER v0.3.14 RUNTIME GATE — Refresh All viewport jump:** investigate preserved top/selection identity across re-sort/repopulate.
-7. **NEXT ROBUSTNESS SOURCE WORK AFTER UI FOLLOW-UPS — async latest-stable DLL discovery:** remove provider I/O from the dialog thread.
+6. **CURRENT NARROW UI FOLLOW-UP — icon-toolbar pass:** replace the wide text toolbar presentation with compact icon buttons while preserving existing command behavior; details are locked under P6B below.
+7. **NEXT NARROW UI FOLLOW-UP AFTER TOOLBAR PASS — Refresh All viewport jump:** investigate preserved top/selection identity across re-sort/repopulate.
+8. **NEXT ROBUSTNESS SOURCE WORK AFTER UI FOLLOW-UPS — async latest-stable DLL discovery:** remove provider I/O from the dialog thread.
 6. **MEDIUM/LOW — Add-Git branch-dialog request identity:** reject stale close/reopen completions.
 7. **MEDIUM/LOW — Update All archive rate-limit propagation:** confirmed provider 429 should stop later provider-heavy queue work.
 8. Remaining lower-priority work: separate live network smoke tests from deterministic default CTest; updater parent-wait handling; strict checksum-sidecar parsing; collision-proof staging identity; dead branch-combo removal; optional non-mutating shutdown cleanup; archive-test CRT/warning cleanup.
@@ -502,7 +503,7 @@ Published `v0.3.17` runtime gate passed on 2026-09-27:
 
 The combined v0.3.14-v0.3.17 Compact two-column fill/split work is runtime-accepted.
 
-Next runtime gate will be for the separately queued **Refresh All viewport jump** after its focused fix is implemented and published.
+Next runtime gate will first cover the focused **P6B icon-toolbar pass**. The separately queued **Refresh All viewport jump** remains the next narrow UI follow-up after that pass.
 
 A1's managed same-root replacement check remains deferred. The current product workflow has **Remove Addon**, not the old Uninstall flow.
 
@@ -536,6 +537,34 @@ Audit output distinguishes confirmed defects, robustness risks, cleanup opportun
 Once robustness findings are under control, exercise every normal workflow as a product rather than as isolated features: startup/self-update, Compact/Advanced, Add Git, branch selection, Refresh All, Update New, install/reinstall, DLL management, Remove Addon and error/recovery paths.
 
 Review consistency of labels, button state, selection/focus, keyboard/mouse behaviour, progress/status feedback, sorting/reordering, confirmations, empty/loading/error states, resize/DPI/text-scale behaviour and unnecessary friction. Prefer small coherent UX fixes over adding new capability.
+
+##### Current icon-toolbar slice — agreed, implementation pending
+
+This is a functional/spacing pass only, not the later art-skin pass.
+
+- Use **32 x 32 px native buttons** with **16 x 16 px icons**.
+- Use the real **Font Awesome Free Solid** icons for standard actions; keep source icon resources under `resources/icons/fa-solid/` with the appropriate Font Awesome license/notice.
+- The one custom icon is **Reinstall Repository**: use the Font Awesome Solid `folder-plus` folder silhouette, replace the plus with a repeat symbol, and preserve the source icon's inner spacing/weight. Keep it under `resources/icons/custom/`.
+- **Launch** keeps its existing context/executable icon (WoW.exe or VanillaFixes.exe); do not replace it with Font Awesome.
+- Agreed icon mapping:
+  - Update -> `cloud-arrow-down`
+  - Refresh -> `arrows-rotate`
+  - Launch -> existing executable/context icon
+  - Add Repository -> `folder-plus`
+  - Reinstall Repository -> custom `folder-repeat`
+  - Remove Repository -> `folder-minus`
+  - Inspect -> `magnifying-glass`
+  - Scan -> `folder-open`
+  - TocPilot -> `circle-info`
+  - Advanced -> `screwdriver-wrench`
+- Agreed full relative order: **Update - Refresh - Launch - Add Repository - Reinstall Repository - Remove Repository - Inspect - Scan - TocPilot - Advanced**.
+- **Compact** shows only: **Update, Refresh, Launch, Add Repository, Remove Repository, Advanced**.
+- Compact grouping: **[Update Refresh] [Launch] [Add Repository Remove Repository] [Advanced]**.
+- Compact spacing: **6 px normal gap**; each group boundary adds **16 px extra** (22 px total at a group break). Centre the complete Compact button strip within the available toolbar content width.
+- **Advanced** shows all ten actions in the same relative order; Reinstall Repository, Inspect, Scan and TocPilot are Advanced-only.
+- Icon buttons are visually icon-only, but mouseover tooltips/accessibility text use the new names exactly: **Update, Refresh, Launch, Add Repository, Reinstall Repository, Remove Repository, Inspect, Scan, TocPilot, Advanced**.
+- Preserve the useful existing button behavior by reusing the current HWND globals/control IDs/WM_COMMAND paths and state logic. The new icon controls should be deliberately dumb presentation wrappers over those handlers.
+- Do **not** keep a second set of hidden live legacy buttons with duplicate IDs. Retain the old text-toolbar creation/layout code only as clearly commented legacy/reference code for the later art/UI pass, then create the icon controls into the existing globals.
 
 #### P6C — Visual polish / skin
 
@@ -583,14 +612,14 @@ Do not add support for user-uploaded ZIP/7z/RAR/installer/bundle release assets 
 - Published v0.3.17 `TocPilot.exe`: 2,498,048 bytes, SHA-256 `d073217456c7d9b4dabf488947fbecf2424f4655da145b51632d5f48fe8f42c8`.
 - Published v0.3.17 `TocPilot.exe.sha256`: 78 bytes; asset SHA-256 `343f45497193901851be3364c9f968b2246618527e54a8e2668d43eb2956fdf9`.
 - The combined v0.3.14-v0.3.17 Compact fill/split UX is runtime-accepted.
-- The Refresh All viewport jump is now the next narrow UI follow-up.
+- The 2026-09-28 icon-toolbar design is now the current narrow P6B UI slice; the Refresh All viewport jump remains queued immediately after it.
 
 ## Exact Next Step
 
-Investigate and fix only the queued **Refresh All viewport jump**.
+Implement only the agreed **P6B icon-toolbar slice** documented above.
 
-Current evidence already points to `RefreshPackageStateUi()`: it preserves the identity of the previous top/selected package across repopulate/re-sort. `StartAutoStatusRefresh()` clears session-updated package state before calling it, which can change the sort order; preserving the old top package by identity can therefore move the viewport to that package's new mid-list row. `FinishAutoStatusRefresh()` later calls `ScrollPackageListToTop()`, but the intermediate jump is still visible.
+Use the existing command/state machinery and replace only the toolbar presentation: add the real Font Awesome Free Solid resources under `resources/icons/fa-solid/`, the custom Reinstall Repository `folder-repeat` resource under `resources/icons/custom/`, and keep Launch on its current executable/context icon. Build 32 x 32 icon buttons with 16 x 16 glyphs, apply the agreed Compact/Advanced visibility/order, centre the grouped Compact strip, and update tooltips/accessibility text to the new names.
 
-Desired behavior: Refresh All should not visibly jump the package list to an arbitrary mid-list position during refresh. Determine the intended selection/viewport policy, fix the underlying preservation ordering rather than adding a cosmetic delay, add deterministic coverage where practical, run Build/CTest, and publish through the normal self-update path for runtime testing.
+Keep the current behavioral paths intact: no duplicate hidden live controls, no package-operation rewrite, and no art/skin work in this slice. Build/CTest after the focused change, then publish through the normal self-update path for runtime checking.
 
-Keep async latest-stable DLL discovery as the next deferred robustness slice after this UI follow-up. Do not mix Add-Git stale-request work, warning cleanup, rate-limit propagation, staging-name cleanup or unrelated UI changes into the Refresh fix.
+After this toolbar pass, return to the separately queued **Refresh All viewport jump** as the next narrow UI follow-up. Keep async latest-stable DLL discovery after the UI follow-ups; do not mix Add-Git stale-request work, warning cleanup, rate-limit propagation or staging-name cleanup into this toolbar slice.
