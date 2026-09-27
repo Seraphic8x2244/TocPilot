@@ -20,7 +20,7 @@
 - v0.3.15 Compact divider transaction fix: **implemented / CI-checked / merged / published; partial runtime pass**. Expanding the left Compact column no longer creates a horizontal scrollbar immediately, but the divider transaction still clamps both primary columns only to the generic 40 px floor. This lets the right visible column shrink below its intended Compact minimum; after entering that invalid state, dragging back left can expose a horizontal scrollbar. Fix by enforcing the real per-column Compact minima throughout fitting and divider transactions.
 - v0.3.16 Compact minimum-width fix: **implemented / CI-checked / merged / published; partial runtime pass**. Self-update passed; the companion column now stops at its intended minimum in both column orders; whole-window resize and Advanced regression checks passed. Remaining failure: when dragging the middle divider back left after pushing it right, a horizontal scrollbar still appears. This is now isolated to reverse-direction transaction ordering rather than width limits.
 - v0.3.17 reverse-direction divider fix: **implemented / CI-checked / merged / published / runtime-accepted**. Compact divider dragging is a fully owned two-column transaction: the shrinking column is applied first, the growing column second, and the native one-column commit is cancelled under a re-entrancy guard. User runtime confirmed the rightward clamp, leftward reversal, both Name/Status orders, window resizing and Advanced regression checks all pass with no horizontal scrollbar.
-- Current goal: complete the build/CI gate for the focused **P6B icon-toolbar pass**; implementation is now in source, with the queued **Refresh All viewport jump** next.
+- Current goal: investigate and fix the separately queued **Refresh All viewport jump** in the addon list. The focused **P6B icon-toolbar pass** is implemented and CI-checked.
 - Current scope boundary: toolbar presentation/naming only. Reuse the existing command IDs, handlers, enable/disable logic and package-operation behavior; do not duplicate live controls or mix the queued Refresh All viewport-jump fix, async latest-stable DLL discovery, Add-Git stale-request work, warning cleanup, rate-limit propagation or staging-name cleanup into this slice.
 - Audit continuity: `audit_dump.md` is a temporary scratch checkpoint for the interrupted broad audit only; this file remains the sole authoritative live development source of truth.
 - Documentation-only commits after the release do not change the published runtime baseline.
@@ -538,7 +538,7 @@ Once robustness findings are under control, exercise every normal workflow as a 
 
 Review consistency of labels, button state, selection/focus, keyboard/mouse behaviour, progress/status feedback, sorting/reordering, confirmations, empty/loading/error states, resize/DPI/text-scale behaviour and unnecessary friction. Prefer small coherent UX fixes over adding new capability.
 
-##### Current icon-toolbar slice — implemented, CI pending
+##### Current icon-toolbar slice — implemented / CI-checked
 
 This is a functional/spacing pass only, not the later art-skin pass.
 
@@ -612,11 +612,11 @@ Do not add support for user-uploaded ZIP/7z/RAR/installer/bundle release assets 
 - Published v0.3.17 `TocPilot.exe`: 2,498,048 bytes, SHA-256 `d073217456c7d9b4dabf488947fbecf2424f4655da145b51632d5f48fe8f42c8`.
 - Published v0.3.17 `TocPilot.exe.sha256`: 78 bytes; asset SHA-256 `343f45497193901851be3364c9f968b2246618527e54a8e2668d43eb2956fdf9`.
 - The combined v0.3.14-v0.3.17 Compact fill/split UX is runtime-accepted.
-- The 2026-09-28 icon-toolbar design is now the current narrow P6B UI slice; the Refresh All viewport jump remains queued immediately after it.
+- The 2026-09-28 P6B icon-toolbar implementation is CI-checked at `5dd02e0c87f87c226f433e6edb50bc5e7a5879dc`; the Refresh All viewport jump is now the next narrow UI slice.
 
 ## Exact Next Step
 
-The **P6B icon-toolbar source pass is implemented**. Build/CTest it without widening scope; after the P6B gate, return to the queued **Refresh All viewport jump**.
+The **P6B icon-toolbar pass is implemented and CI-checked**. Commit `5dd02e0c87f87c226f433e6edb50bc5e7a5879dc` passed Build workflow run `36360346329`, Windows x64 job `108736152644`, including **18/18 CTest tests**. The next source slice is the separately queued **Refresh All viewport jump**.
 
 Use the existing command/state machinery and replace only the toolbar presentation: add the real Font Awesome Free Solid resources under `resources/icons/fa-solid/`, the custom Reinstall Repository `folder-repeat` resource under `resources/icons/custom/`, and keep Launch on its current executable/context icon. Build 32 x 32 icon buttons with 16 x 16 glyphs, apply the agreed Compact/Advanced visibility/order, centre the grouped Compact strip, and update tooltips/accessibility text to the new names.
 
