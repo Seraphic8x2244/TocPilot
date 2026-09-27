@@ -70,7 +70,7 @@ std::string StateJsonWithPackages(
         "\"package_sort_column\":-1,"
         "\"package_sort_ascending\":true,"
         "\"package_column_widths\":[240,260,300,110,115,115,150],"
-        "\"package_column_order\":[0,1,2,3,4,5,6],"
+        "\"package_column_order\":[0,6,1,2,3,4,5],"
         "\"package_columns_locked\":false"
         "},\n"
         "  \"packages\": " +
@@ -358,6 +358,50 @@ void TestLegacyFiveColumnLayoutMigration(
                 6, 0, 1, 2, 3, 4, 5} ||
         !state.settings.packageColumnsLocked) {
         Fail("legacy five-column layout did not migrate");
+    }
+}
+
+void TestColumnLayoutPolicy() {
+    const auto oldNormal =
+        tp::NormalizePackageColumnOrder(
+            std::array<int, tp::kPackageColumnCount>{
+                0, 1, 2, 3, 4, 5, 6});
+    if (oldNormal !=
+        std::array<int, tp::kPackageColumnCount>{
+            0, 6, 1, 2, 3, 4, 5}) {
+        Fail("old normal column order did not migrate to Name/Status first");
+    }
+
+    const auto oldStatusFirst =
+        tp::NormalizePackageColumnOrder(
+            std::array<int, tp::kPackageColumnCount>{
+                2, 6, 1, 0, 5, 4, 3});
+    if (oldStatusFirst !=
+        std::array<int, tp::kPackageColumnCount>{
+            6, 0, 2, 1, 5, 4, 3}) {
+        Fail("column normalization did not preserve primary/advanced relative order");
+    }
+
+    const auto invalid =
+        tp::NormalizePackageColumnOrder(
+            std::array<int, tp::kPackageColumnCount>{
+                0, 0, 1, 2, 3, 4, 5});
+    if (invalid !=
+        tp::kDefaultPackageColumnOrder) {
+        Fail("invalid column order did not fall back to the constrained default");
+    }
+
+    if (!tp::PackageColumnMoveAllowed(0, 0) ||
+        !tp::PackageColumnMoveAllowed(0, 1) ||
+        !tp::PackageColumnMoveAllowed(6, 0) ||
+        !tp::PackageColumnMoveAllowed(6, 1) ||
+        tp::PackageColumnMoveAllowed(0, 2) ||
+        tp::PackageColumnMoveAllowed(6, 6) ||
+        tp::PackageColumnMoveAllowed(1, 0) ||
+        tp::PackageColumnMoveAllowed(5, 1) ||
+        !tp::PackageColumnMoveAllowed(1, 2) ||
+        !tp::PackageColumnMoveAllowed(5, 6)) {
+        Fail("column move policy did not enforce the two-column primary boundary");
     }
 }
 
@@ -1539,6 +1583,7 @@ int main() {
         TestCreateAddRoundTrip(root);
         TestLegacySixColumnLayoutMigration(root);
         TestLegacyFiveColumnLayoutMigration(root);
+        TestColumnLayoutPolicy();
         TestColumnLayoutValidation(root);
         TestDurableSemanticValidation(root);
         TestRemovePackageRecord(root);

@@ -1829,6 +1829,81 @@ bool ValidatePackageRecordSemantics(
 
 } // namespace
 
+std::array<int, kPackageColumnCount> NormalizePackageColumnOrder(
+    const std::array<int, kPackageColumnCount>& order) {
+    std::array<bool, kPackageColumnCount> seen{};
+
+    for (const int column : order) {
+        if (column < 0 ||
+            column >=
+                static_cast<int>(
+                    kPackageColumnCount) ||
+            seen[static_cast<std::size_t>(
+                column)]) {
+            return kDefaultPackageColumnOrder;
+        }
+
+        seen[static_cast<std::size_t>(
+            column)] = true;
+    }
+
+    const auto name =
+        std::find(
+            order.begin(),
+            order.end(),
+            0);
+    const auto status =
+        std::find(
+            order.begin(),
+            order.end(),
+            6);
+
+    std::array<int, kPackageColumnCount> normalized{};
+    normalized[0] =
+        name < status
+            ? 0
+            : 6;
+    normalized[1] =
+        name < status
+            ? 6
+            : 0;
+
+    std::size_t output = 2;
+    for (const int column : order) {
+        if (column == 0 ||
+            column == 6) {
+            continue;
+        }
+
+        normalized[output++] =
+            column;
+    }
+
+    return normalized;
+}
+
+bool PackageColumnMoveAllowed(
+    int column,
+    int targetOrder) {
+    if (column < 0 ||
+        column >=
+            static_cast<int>(
+                kPackageColumnCount) ||
+        targetOrder < 0 ||
+        targetOrder >=
+            static_cast<int>(
+                kPackageColumnCount)) {
+        return false;
+    }
+
+    if (column == 0 ||
+        column == 6) {
+        return targetOrder < 2;
+    }
+
+    return targetOrder >= 2;
+}
+
 std::filesystem::path StatePath(
     const std::filesystem::path& wowRoot) {
     return wowRoot / L"TocPilot.json";
@@ -2759,6 +2834,10 @@ bool LoadOrCreateState(
         }
     }
 
+    packageColumnOrder =
+        NormalizePackageColumnOrder(
+            packageColumnOrder);
+
     const bool legacySixColumnLayout =
         parsedColumnWidths.size() == 6 ||
         parsedColumnOrder.size() == 6;
@@ -2861,6 +2940,10 @@ bool SaveState(
     AppState& state,
     std::wstring& error) {
     error.clear();
+
+    state.settings.packageColumnOrder =
+        NormalizePackageColumnOrder(
+            state.settings.packageColumnOrder);
 
     std::string json = state.sourceJson.empty()
         ? DefaultJson(state)

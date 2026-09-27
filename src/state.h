@@ -25,12 +25,12 @@ kDefaultPackageColumnWidths{
 inline constexpr std::array<int, kPackageColumnCount>
 kDefaultPackageColumnOrder{
     0,
+    6,
     1,
     2,
     3,
     4,
-    5,
-    6
+    5
 };
 
 struct AppSettings {
@@ -79,6 +79,13 @@ struct AppState {
 };
 
 std::filesystem::path StatePath(const std::filesystem::path& wowRoot);
+
+std::array<int, kPackageColumnCount> NormalizePackageColumnOrder(
+    const std::array<int, kPackageColumnCount>& order);
+
+bool PackageColumnMoveAllowed(
+    int column,
+    int targetOrder);
 
 PackageRecord MakeRepositoryPackage(
     std::wstring provider,

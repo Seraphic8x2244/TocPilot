@@ -576,8 +576,7 @@ void UpdatePackageColumnEditingUi() {
     }
 
     const bool editingEnabled =
-        g_stateReady &&
-        g_advancedVisible;
+        g_stateReady;
 
     ListView_SetExtendedListViewStyleEx(
         g_packageList,
@@ -596,6 +595,9 @@ void ApplyPackageColumnOrder() {
         g_stateReady
             ? g_state.settings.packageColumnOrder
             : tp::kDefaultPackageColumnOrder;
+    order =
+        tp::NormalizePackageColumnOrder(
+            order);
 
     ListView_SetColumnOrderArray(
         g_packageList,
@@ -605,20 +607,40 @@ void ApplyPackageColumnOrder() {
 
 void SaveCurrentPackageColumnLayout() {
     if (!g_packageList ||
-        !g_stateReady ||
-        !g_advancedVisible) {
+        !g_stateReady) {
         return;
     }
 
-    std::array<int, tp::kPackageColumnCount> widths{};
-    for (int column = 0;
-         column < static_cast<int>(widths.size());
-         ++column) {
-        widths[static_cast<std::size_t>(column)] =
+    std::array<int, tp::kPackageColumnCount> widths =
+        g_state.settings.packageColumnWidths;
+
+    if (g_advancedVisible) {
+        for (int column = 0;
+             column < static_cast<int>(widths.size());
+             ++column) {
+            widths[static_cast<std::size_t>(column)] =
+                std::clamp(
+                    ListView_GetColumnWidth(
+                        g_packageList,
+                        column),
+                    40,
+                    2000);
+        }
+    } else {
+        widths[static_cast<std::size_t>(
+            kPackageColumnName)] =
             std::clamp(
                 ListView_GetColumnWidth(
                     g_packageList,
-                    column),
+                    kPackageColumnName),
+                40,
+                2000);
+        widths[static_cast<std::size_t>(
+            kPackageColumnStatus)] =
+            std::clamp(
+                ListView_GetColumnWidth(
+                    g_packageList,
+                    kPackageColumnStatus),
                 40,
                 2000);
     }
@@ -630,6 +652,10 @@ void SaveCurrentPackageColumnLayout() {
             order.data())) {
         return;
     }
+
+    order =
+        tp::NormalizePackageColumnOrder(
+            order);
 
     const bool changed =
         widths !=
@@ -655,16 +681,8 @@ void SaveCurrentPackageColumnLayout() {
         return;
     }
 
-    for (int column = 0;
-         column < static_cast<int>(widths.size());
-         ++column) {
-        ListView_SetColumnWidth(
-            g_packageList,
-            column,
-            widths[
-                static_cast<std::size_t>(
-                    column)]);
-    }
+    ApplyPackageColumnOrder();
+    ResizeListColumns();
 }
 
 void ResizeListColumns() {
@@ -672,25 +690,17 @@ void ResizeListColumns() {
         return;
     }
 
-    RECT rect{};
-    GetClientRect(g_packageList, &rect);
-    const int width =
-        std::max(
-            320,
-            static_cast<int>(
-                rect.right - rect.left - 4));
+    const auto widths =
+        g_stateReady
+            ? g_state.settings.packageColumnWidths
+            : tp::kDefaultPackageColumnWidths;
 
     if (!g_advancedVisible) {
-        const int statusWidth = 150;
-        const int nameWidth =
-            std::max(
-                170,
-                width - statusWidth);
-
         ListView_SetColumnWidth(
             g_packageList,
             kPackageColumnName,
-            nameWidth);
+            widths[static_cast<std::size_t>(
+                kPackageColumnName)]);
         for (int column = kPackageColumnWww;
              column < kPackageColumnStatus;
              ++column) {
@@ -702,14 +712,10 @@ void ResizeListColumns() {
         ListView_SetColumnWidth(
             g_packageList,
             kPackageColumnStatus,
-            statusWidth);
+            widths[static_cast<std::size_t>(
+                kPackageColumnStatus)]);
         return;
     }
-
-    const auto widths =
-        g_stateReady
-            ? g_state.settings.packageColumnWidths
-            : tp::kDefaultPackageColumnWidths;
 
     for (int column = 0;
          column < static_cast<int>(widths.size());
@@ -1532,6 +1538,49 @@ COLORREF PackageRowTextColour(
     return GetSysColor(COLOR_WINDOWTEXT);
 }
 
+bool PackageColumnCellRect(
+    int displayRow,
+    int column,
+    RECT& rect) {
+    if (!g_packageList) {
+        return false;
+    }
+
+    HWND header =
+        ListView_GetHeader(
+            g_packageList);
+    if (!header) {
+        return false;
+    }
+
+    RECT headerRect{};
+    RECT rowRect{};
+    if (!Header_GetItemRect(
+            header,
+            column,
+            &headerRect) ||
+        !ListView_GetItemRect(
+            g_packageList,
+            displayRow,
+            &rowRect,
+            LVIR_BOUNDS)) {
+        return false;
+    }
+
+    MapWindowPoints(
+        header,
+        g_packageList,
+        reinterpret_cast<POINT*>(
+            &headerRect),
+        2);
+
+    rect.left = headerRect.left;
+    rect.right = headerRect.right;
+    rect.top = rowRect.top;
+    rect.bottom = rowRect.bottom;
+    return true;
+}
+
 LRESULT HandlePackageListCustomDraw(
     LPARAM lParam) {
     auto* draw =
@@ -1637,19 +1686,12 @@ LRESULT HandlePackageListCustomDraw(
     RECT rect{};
 
     if (drawName) {
-        if (!ListView_GetItemRect(
-                g_packageList,
+        if (!PackageColumnCellRect(
                 displayRow,
-                &rect,
-                LVIR_BOUNDS)) {
+                kPackageColumnName,
+                rect)) {
             return CDRF_DODEFAULT;
         }
-
-        rect.right =
-            rect.left +
-            ListView_GetColumnWidth(
-                g_packageList,
-                0);
     } else if (drawWebsite) {
         if (!ListView_GetSubItemRect(
                 g_packageList,
@@ -6740,7 +6782,21 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             header->hwndFrom ==
                 ListView_GetHeader(
                     g_packageList)) {
+            const auto* headerNotification =
+                reinterpret_cast<NMHEADERW*>(
+                    lParam);
+            const int headerColumn =
+                headerNotification
+                    ? headerNotification->iItem
+                    : -1;
+            const bool primaryColumn =
+                headerColumn ==
+                    kPackageColumnName ||
+                headerColumn ==
+                    kPackageColumnStatus;
+
             if (!g_advancedVisible &&
+                !primaryColumn &&
                 (header->code ==
                      HDN_BEGINTRACKW ||
                  header->code ==
@@ -6751,9 +6807,23 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             }
 
             if (header->code ==
+                    HDN_ENDDRAG &&
+                headerNotification &&
+                headerNotification->pitem &&
+                (headerNotification->pitem->mask &
+                    HDI_ORDER) != 0 &&
+                !tp::PackageColumnMoveAllowed(
+                    headerColumn,
+                    headerNotification->pitem->iOrder)) {
+                return TRUE;
+            }
+
+            if (header->code ==
                     HDN_ENDTRACKW ||
                 header->code ==
-                    HDN_ENDDRAG) {
+                    HDN_ENDDRAG ||
+                header->code ==
+                    HDN_DIVIDERDBLCLICKW) {
                 PostMessageW(
                     hwnd,
                     WM_TP_SAVE_COLUMN_LAYOUT,
