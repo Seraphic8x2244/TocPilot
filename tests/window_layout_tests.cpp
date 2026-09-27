@@ -34,7 +34,8 @@ int main() {
                 240,
                 160,
                 500,
-                40);
+                220,
+                150);
         ExpectEqual(
             widths[0],
             290,
@@ -51,7 +52,8 @@ int main() {
                 290,
                 210,
                 401,
-                40);
+                220,
+                150);
         ExpectEqual(
             widths[0],
             241,
@@ -66,33 +68,35 @@ int main() {
         const auto widths =
             tp::FitCompactColumnWidths(
                 600,
-                40,
-                300,
-                40);
+                150,
+                400,
+                220,
+                150);
         ExpectEqual(
             widths[0],
-            260,
-            "Compact fitting should preserve the minimum width of the second column");
+            250,
+            "Compact fitting should preserve the Status minimum when Name is oversized");
         ExpectEqual(
             widths[1],
-            40,
-            "Compact fitting should clamp only when required by the existing minimum");
+            150,
+            "Compact fitting should not squeeze Status below its Compact minimum");
     }
 
     {
         const auto widths =
             tp::CompactDividerWidths(
-                175,
+                275,
                 500,
-                40);
+                220,
+                150);
         ExpectEqual(
             widths[0],
-            175,
-            "middle-divider drag should keep the proposed left width");
+            275,
+            "middle-divider drag should keep a valid proposed Name width");
         ExpectEqual(
             widths[1],
-            325,
-            "middle-divider drag should resize the right column inversely");
+            225,
+            "middle-divider drag should resize Status inversely");
         ExpectEqual(
             widths[0] + widths[1],
             500,
@@ -104,15 +108,33 @@ int main() {
             tp::CompactDividerWidths(
                 490,
                 500,
-                40);
+                220,
+                150);
         ExpectEqual(
             widths[0],
-            460,
-            "middle-divider drag should preserve the right column minimum");
+            350,
+            "middle-divider drag should stop Name before Status drops below its Compact minimum");
         ExpectEqual(
             widths[1],
-            40,
-            "middle-divider drag should keep the total width fixed");
+            150,
+            "middle-divider drag should preserve the Status Compact minimum");
+    }
+
+    {
+        const auto widths =
+            tp::CompactDividerWidths(
+                400,
+                500,
+                150,
+                220);
+        ExpectEqual(
+            widths[0],
+            280,
+            "swapped Compact order should respect the Name minimum on the right");
+        ExpectEqual(
+            widths[1],
+            220,
+            "swapped Compact order should preserve the Name Compact minimum");
     }
 
     constexpr int compactMinimum = 600;
