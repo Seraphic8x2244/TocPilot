@@ -8,13 +8,13 @@
 - Source/application version: `v0.3.10`.
 - Latest published release: `v0.3.10`.
 - Release/source commit and tag target: `be5a767a79b20751646fbd5f88c8da4a39c4697e` (merge of PR #13).
-- Latest runtime-confirmed release: `v0.3.8` at `17ce349273c6f2d76572c7107f3c6f7b139cf8d8` for the normal installed self-update path. v0.3.10 is published/CI-checked, but the combined A2 + A3 + `www` runtime gate is still pending.
+- Latest runtime-confirmed release: `v0.3.10` at `be5a767a79b20751646fbd5f88c8da4a39c4697e`. The normal installed `v0.3.9 -> v0.3.10` self-update, restart/state load, `www` presentation/link behaviour, Compact presentation and update path were runtime-confirmed on 2026-09-27. Remove Addon was not retested in this gate and is explicitly deferred/non-blocking.
 - Latest verified `main` runtime source-changing head: `8ff352e58890399f95bf633ccfe58a32580f2be1` (merge of PR #12, A3 ZIP streaming + `www` presentation). Release-only version commit `be5a767a79b20751646fbd5f88c8da4a39c4697e` sits above it.
 - A1 runtime gate: **accepted for forward development** on 2026-09-26. Fresh install, reinstall, Update New and Remove Addon passed. Managed same-root replacement runtime validation is explicitly deferred rather than blocking later work. The deterministic crash-window tests remain the primary validation for restart-recovery semantics.
-- A2 durable state semantic validation: **implemented / CI-checked / merged / published in v0.3.10 / accepted for forward development**. It was not given a separate A2-only runtime gate; the combined v0.3.10 runtime gate is pending.
-- A3 + queued `www` presentation delta: **implemented / CI-checked / merged / published in v0.3.10; runtime gate pending**. ZIP members stream through miniz's extraction callback directly into staged files instead of allocating one full-member buffer; the existing 256 MiB per-entry and 1 GiB total policy limits remain. Deterministic archive coverage forges an oversized central-directory member size in a tiny fixture and verifies policy rejection before extraction staging. Advanced repository URLs are custom-drawn always blue + underlined and the header is lowercase `www`; Compact is unchanged.
-- Current goal: runtime-gate installed `v0.3.9 -> v0.3.10` through TocPilot's normal self-updater, then record the result before starting self-update transport hardening.
-- Current scope boundary: do not begin self-update hardening, async DLL discovery, warning cleanup or other audited work until the v0.3.10 runtime gate result is recorded.
+- A2 durable state semantic validation: **implemented / CI-checked / merged / published in v0.3.10 / runtime-accepted** as part of the combined v0.3.10 gate.
+- A3 + queued `www` presentation delta: **implemented / CI-checked / merged / published / runtime-accepted in v0.3.10**. ZIP members stream through miniz's extraction callback directly into staged files instead of allocating one full-member buffer; the existing 256 MiB per-entry and 1 GiB total policy limits remain. Deterministic archive coverage forges an oversized central-directory member size in a tiny fixture and verifies policy rejection before extraction staging. Advanced repository URLs are custom-drawn always blue + underlined and the header is lowercase `www`; Compact remained `Name | Status` in the accepted gate.
+- Current goal: implement the next focused build as **self-update transport hardening plus the explicitly queued Compact/Advanced column-layout rule**, with no other UI/audit work mixed in.
+- Current scope boundary: v0.3.10's runtime gate is accepted. The next build may combine only (1) self-update transport hardening and (2) the newly requested column-layout/width-sharing rule below; do not mix async DLL discovery, Add-Git stale-request work, warning cleanup, rate-limit propagation, staging-name cleanup or unrelated UI changes.
 - Audit continuity: `audit_dump.md` is a temporary scratch checkpoint for the interrupted broad audit only; this file remains the sole authoritative live development source of truth.
 - Documentation-only commits after the release do not change the published runtime baseline.
 
@@ -189,9 +189,17 @@ Compact mode:
 
 Advanced mode:
 
-`Name | WWW | Branch | Version | Local SHA | Git SHA | Status`
+`Name/Status first | advanced-only columns after`
 
-`WWW` is derived from the package's existing provider/repository identity (GitHub/GitLab), displays the repository URL and opens that repository in the default browser on a single click. It adds no duplicate durable source field.
+Column layout rule queued for the next build:
+
+- `Name` and `Status` must always occupy columns 1 and 2;
+- users may swap `Name` and `Status` with each other, but neither may move behind an Advanced-only column;
+- all Advanced-only columns (`www`, Branch, Version, Local SHA, Git SHA) must always remain to the right of those first two columns, while retaining their own reorderability within that right-hand group;
+- `Name` and `Status` widths are shared between Compact and Advanced: resizing either in one mode must be inherited by the other mode in both directions;
+- switching modes must not create separate divergent widths for `Name` or `Status`.
+
+`www` is derived from the package's existing provider/repository identity (GitHub/GitLab), displays the repository URL and opens that repository in the default browser on a single click. It adds no duplicate durable source field.
 
 Version semantics are local-only:
 
@@ -220,7 +228,7 @@ Row semantics retained from v0.3.4:
 - Refresh All and Update New process packages in current visible list order;
 - Update New returns the package list to the top when complete.
 
-Advanced column widths/order are persisted. The dedicated Lock Columns UI/behaviour is removed in v0.3.6; Advanced columns remain directly resizable/reorderable, while Compact must not overwrite the saved Advanced layout. The legacy JSON `package_columns_locked` field is retained for state compatibility but no longer controls the UI.
+Advanced column widths/order are persisted. The dedicated Lock Columns UI/behaviour is removed in v0.3.6. Starting with the next build after v0.3.10, persistence must enforce the new two-column invariant: `Name` and `Status` are always the first two columns and may only swap with each other; Advanced-only columns stay to their right. `Name`/`Status` widths are one shared pair of values across Compact and Advanced, so resizing in either mode updates what the other mode inherits. Advanced-only widths/order remain Advanced-specific. The legacy JSON `package_columns_locked` field is retained for state compatibility but no longer controls the UI.
 
 Branch-selector target behaviour after the v0.3.6 runtime follow-up:
 
@@ -341,7 +349,7 @@ For v0.3.10 A3 + `www` combined release:
 - Release-prep PR #13 head `2999ca4d2996bc8d2a8553566b6273a81434245c` changed only `CMakeLists.txt`, `src/version.h` and `.github/release-version`, and passed the complete **17/17 CTest** suite in Build workflow run `36262852969` (#591), job `108461843800`.
 - PR #13 merged to exact release/source commit `be5a767a79b20751646fbd5f88c8da4a39c4697e`; normal push Build workflow run `36263029991` (#592) also completed successfully.
 - Release workflow run `36263030432` (#53), job `108462335143`, rebuilt exact commit `be5a767a79b20751646fbd5f88c8da4a39c4697e`, passed source-version validation and the complete **17/17 CTest** suite, generated the SHA-256 sidecar, created tag `v0.3.10` against that exact commit and published direct `TocPilot.exe` / `TocPilot.exe.sha256` assets.
-- v0.3.10 is therefore **published and CI/release-verified; runtime confirmation is still pending**.
+- v0.3.10 is therefore **published, CI/release-verified and runtime-accepted**. The user confirmed the installed v0.3.9 -> v0.3.10 self-update/restart/state-load path, lowercase always-blue/underlined `www` links including semantic/selected rows, correct repository opening, Compact `Name | Status`, and a working update operation on 2026-09-27. Remove Addon was not retested and is deferred/non-blocking.
 
 For A1 durable addon-transaction restart recovery (post-v0.3.7 source):
 
@@ -379,7 +387,7 @@ The prior v0.3.5 release also passed its documented 17/17 Release workflow valid
 
 ## Current Issues
 
-Published v0.3.10 now contains A2 durable-state validation, A3 streamed ZIP-member extraction and the final lowercase/always-link-styled `www` presentation. The combined v0.3.10 runtime gate is still pending. A1 remains accepted for forward development after fresh install, reinstall, Update New and Remove Addon passed; managed same-root replacement remains explicit deferred runtime debt.
+Published v0.3.10 contains A2 durable-state validation, A3 streamed ZIP-member extraction and the lowercase/always-link-styled `www` presentation. The combined v0.3.10 runtime gate is accepted on 2026-09-27. A1 remains accepted for forward development after fresh install, reinstall, Update New and Remove Addon passed in its earlier gate; managed same-root replacement remains explicit deferred runtime debt. Remove Addon was not repeated for the v0.3.10 gate and is non-blocking.
 
 P6A is complete. A1 transaction restart recovery is implemented, CI-checked and published in v0.3.8 at `17ce349273c6f2d76572c7107f3c6f7b139cf8d8`, and accepted for forward development with the same-root replacement runtime check deferred. It now writes a versioned, flushed pre-mutation journal; arms it with package/transaction identity, affected-root intent and durable pre/post state markers before live renames; recovers unfinished transactions before normal package mutation; and preserves evidence rather than guessing when durable state is ambiguous.
 
@@ -403,8 +411,8 @@ Final severity/order:
 
 1. **HIGH — transaction restart recovery:** **IMPLEMENTED / CI-CHECKED / PUBLISHED / ACCEPTED**, with managed same-root replacement runtime validation deferred.
 2. **HIGH — durable state semantic validation:** **IMPLEMENTED / CI-CHECKED / MERGED / ACCEPTED FOR FORWARD DEVELOPMENT** at `dcdd5058f50c83c427310feba083437db6368dcd`; no standalone A2-only release gate required.
-3. **MEDIUM — ZIP member allocation bound:** **IMPLEMENTED / CI-CHECKED / PUBLISHED in v0.3.10; runtime gate pending** — per-member extraction streams to the staged file rather than allocating the full uncompressed member in RAM; the existing 256 MiB per-entry policy remains enforced during archive inspection.
-4. **MEDIUM — self-update transport hardening:** carry/check exact asset size, cap checksum text and reject initial non-HTTPS asset/checksum URLs.
+3. **MEDIUM — ZIP member allocation bound:** **IMPLEMENTED / CI-CHECKED / PUBLISHED / RUNTIME-ACCEPTED in v0.3.10** — per-member extraction streams to the staged file rather than allocating the full uncompressed member in RAM; the existing 256 MiB per-entry policy remains enforced during archive inspection.
+4. **NEXT BUILD — self-update transport hardening + queued column-layout rule:** carry/check exact asset size, cap checksum text and reject initial non-HTTPS asset/checksum URLs; additionally enforce `Name`/`Status` as the first two swappable columns, keep all Advanced-only columns to their right, and share `Name`/`Status` widths bidirectionally between Compact and Advanced.
 5. **MEDIUM — async latest-stable DLL discovery:** remove provider I/O from the dialog thread.
 6. **MEDIUM/LOW — Add-Git branch-dialog request identity:** reject stale close/reopen completions.
 7. **MEDIUM/LOW — Update All archive rate-limit propagation:** confirmed provider 429 should stop later provider-heavy queue work.
@@ -424,6 +432,7 @@ The focused post-v0.3.6 branch/list issues remain runtime-confirmed fixed in v0.
 
 ### Last Runtime Baselines
 
+- Published `v0.3.10` normal installed self-update `v0.3.9 -> v0.3.10`: passed on 2026-09-27 through TocPilot's real self-updater. Restart and existing-state load passed; lowercase `www`, blue + underlined repository links across normal/selected/orange/green row states, correct repo opening, Compact `Name | Status`, and a representative update operation passed. Remove Addon was not retested and is deferred/non-blocking.
 - Published `v0.3.8` normal installed self-update `v0.3.7 -> v0.3.8`: passed on 2026-09-26 through TocPilot's real self-updater; no manual EXE replacement was required.
 - Published `v0.3.7` branch/list matrix: passed on 2026-09-25, including branch re-sort anchoring, correct arrow affordance, selected semantic row colours, and live remote branch add/delete discovery through Refresh All without restarting TocPilot.
 - Published `v0.3.6` focused runtime matrix: passed on 2026-09-24.
@@ -443,15 +452,17 @@ The focused post-v0.3.6 branch/list issues remain runtime-confirmed fixed in v0.
 
 ### Next Runtime Test
 
-`v0.3.10` is published. The next user runtime gate is installed `v0.3.9 -> v0.3.10` through TocPilot's normal self-updater.
+The v0.3.10 runtime gate is complete and accepted. The next runtime gate belongs to the next published build after implementing self-update transport hardening plus the queued column-layout rule.
 
-Runtime focus:
-- normal self-update from installed v0.3.9 succeeds;
-- normal startup/state load succeeds with the user's existing TocPilot.json;
-- Advanced repository column is headed `www`, and repository links are always blue + underlined while still opening the correct source;
-- Compact remains `Name | Status`;
-- ordinary package listing/refresh/install/reinstall/Update New/Remove Addon remain regression-free;
-- no destructive malformed-state or huge-ZIP runtime fixture is required from the user because those rejection paths should be deterministic in CI.
+That gate must cover:
+- normal installed self-update into the new build;
+- startup/state load with the existing TocPilot.json;
+- Compact and Advanced both keep `Name`/`Status` as columns 1 and 2, allowing only those two to swap positions;
+- all Advanced-only columns remain to their right;
+- resizing `Name` or `Status` in Compact is inherited by Advanced, and resizing either in Advanced is inherited by Compact;
+- existing Advanced-only column order/width persistence remains intact;
+- `www` remains lowercase, blue + underlined and clickable;
+- representative package refresh/update smoke remains regression-free.
 
 A1's managed same-root replacement check remains deferred. The current product workflow has **Remove Addon**, not the old Uninstall flow.
 
@@ -525,23 +536,20 @@ Do not add support for user-uploaded ZIP/7z/RAR/installer/bundle release assets 
 
 - Current published release is `v0.3.10` at `be5a767a79b20751646fbd5f88c8da4a39c4697e`.
 - Release workflow run `36263030432` (#53), job `108462335143`, is the authoritative v0.3.10 product build; it passed exact-source version validation and **17/17 CTest**, created tag `v0.3.10` at that exact commit, and published direct EXE/checksum assets.
-- A2 + A3 + the narrow `www` presentation follow-up are now published together in v0.3.10. Do not describe them as runtime-confirmed until the installed v0.3.9 -> v0.3.10 gate is completed.
-- Latest runtime-confirmed self-update/product baseline remains v0.3.8; A1 remains accepted for forward development with managed same-root replacement explicitly deferred.
+- A2 + A3 + the narrow `www` presentation follow-up are published together in v0.3.10 and runtime-confirmed through the installed v0.3.9 -> v0.3.10 gate on 2026-09-27.
+- Latest runtime-confirmed self-update/product baseline is v0.3.10; A1 remains accepted for forward development with managed same-root replacement explicitly deferred.
 - Documentation-only commits after v0.3.10 do not imply a new runtime build and require no version bump/release.
 - Version remains local installed TOC metadata; do not persist a second Version value into JSON unless the product contract is deliberately changed.
 - The legacy `package_columns_locked` JSON field remains accepted for compatibility but no longer controls v0.3.6 UI behaviour.
 
 ## Exact Next Step
 
-Runtime-test the published **v0.3.10** combined gate before beginning the next audit item.
+Implement the next focused build from the accepted v0.3.10 baseline.
 
-1. start from the user's currently installed `v0.3.9` and use TocPilot's normal self-updater to reach `v0.3.10`;
-2. confirm TocPilot restarts and loads the existing valid `TocPilot.json` normally;
-3. in Advanced mode, confirm the header is lowercase `www`, repository URLs remain blue + underlined on normal, selected, orange/update-available and green/updated-this-session rows, and clicking a URL still opens the correct GitHub/GitLab repository;
-4. confirm Compact remains `Name | Status`;
-5. smoke normal package listing/Refresh All plus a representative install/reinstall, Update New and Remove Addon path as practical; no destructive malformed-state or huge-ZIP fixture is required because those rejection paths are deterministic in CI;
-6. record the v0.3.10 runtime result here. Only after that gate is accepted, continue with **self-update transport hardening** (exact asset-size propagation/checking, checksum-text cap and initial non-HTTPS rejection) as the next implementation slice.
+1. **Self-update transport hardening:** propagate/check the exact release-asset size, cap checksum-text downloads, and reject initial non-HTTPS executable/checksum URLs.
+2. **Queued column-layout rule:** make `Name` and `Status` permanently occupy columns 1 and 2 while allowing those two to swap with each other; force every Advanced-only column to remain to their right; share `Name` and `Status` widths bidirectionally between Compact and Advanced while preserving Advanced-only order/width persistence.
+3. Add/update deterministic coverage for both slices, then build/CTest and prepare the next release/runtime gate.
 
-Do not mix async DLL discovery, Add-Git branch-dialog request identity, warning cleanup, rate-limit propagation, staging-name cleanup or other UI work into the self-update hardening slice.
+This is an explicit scope change requested after the v0.3.10 gate: the narrow column-layout rule is allowed in the same next build as self-update transport hardening. Do not mix async DLL discovery, Add-Git branch-dialog request identity, warning cleanup, rate-limit propagation, staging-name cleanup or any other UI work into that build.
 
 Keep the existing caveat explicit: A1 provides deterministic **process-restart** recovery, but full sudden-power-loss atomicity is not claimed until Windows directory-rename durability is separately verified.
