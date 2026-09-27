@@ -8,14 +8,14 @@
 - Source/application version: `v0.3.11`.
 - Latest published release: `v0.3.11`.
 - Release/source commit and tag target: `a6fc2bdb7721b85f58c6d0e42bc9eeaba16c2b1d` (merge of release-prep PR #15).
-- Latest runtime-confirmed release: `v0.3.10` at `be5a767a79b20751646fbd5f88c8da4a39c4697e`. The normal installed `v0.3.9 -> v0.3.10` self-update, restart/state load, `www` presentation/link behaviour, Compact presentation and update path were runtime-confirmed on 2026-09-27. Remove Addon was not retested in this gate and is explicitly deferred/non-blocking.
+- Latest fully runtime-accepted release: `v0.3.10` at `be5a767a79b20751646fbd5f88c8da4a39c4697e`. Published `v0.3.11` has now passed its installed self-update/startup-state checks and the requested constrained/shared column-layout matrix, but the gate remains open for one adjacent UI regression: a manually resized Compact main-window width is not preserved across a Compact -> Advanced -> Compact round trip.
 - Latest verified `main` runtime source-changing head: `78bec799ae3e611a58fcd33d10a0e4d9d0f90d2e` (merge of PR #14, self-update transport hardening + constrained/shared package-column layout). Release-only version commit `a6fc2bdb7721b85f58c6d0e42bc9eeaba16c2b1d` sits above it.
 - A1 runtime gate: **accepted for forward development** on 2026-09-26. Fresh install, reinstall, Update New and Remove Addon passed. Managed same-root replacement runtime validation is explicitly deferred rather than blocking later work. The deterministic crash-window tests remain the primary validation for restart-recovery semantics.
 - A2 durable state semantic validation: **implemented / CI-checked / merged / published in v0.3.10 / runtime-accepted** as part of the combined v0.3.10 gate.
 - A3 + queued `www` presentation delta: **implemented / CI-checked / merged / published / runtime-accepted in v0.3.10**. ZIP members stream through miniz's extraction callback directly into staged files instead of allocating one full-member buffer; the existing 256 MiB per-entry and 1 GiB total policy limits remain. Deterministic archive coverage forges an oversized central-directory member size in a tiny fixture and verifies policy rejection before extraction staging. Advanced repository URLs are custom-drawn always blue + underlined and the header is lowercase `www`; Compact remained `Name | Status` in the accepted gate.
-- v0.3.11 self-update transport hardening + constrained/shared package-column layout: **implemented / CI-checked / merged / published; runtime gate pending**. Initial executable/checksum URLs must be HTTPS; GitHub release executable size is carried into the self-update decision and the streamed download must match it exactly; checksum text is capped at 64 KiB. `Name`/`Status` normalize to the first two display positions and may only swap with each other; Advanced-only columns stay to their right; `Name`/`Status` widths are shared between Compact and Advanced while Advanced-only widths/order remain preserved.
-- Current goal: run the focused **published v0.3.11 runtime gate** below before starting another source slice.
-- Current scope boundary: v0.3.11 is published and CI/release-verified but not yet runtime-accepted. Do not start async DLL discovery, Add-Git stale-request work, warning cleanup, rate-limit propagation, staging-name cleanup or unrelated UI work until this runtime gate is resolved.
+- v0.3.11 self-update transport hardening + constrained/shared package-column layout: **implemented / CI-checked / merged / published; focused runtime matrix passed, gate held only for Compact main-window-width round-trip regression**. Installed update/startup-state passed. `Name`/`Status` stay in the first two positions and swap only with each other; Advanced-only columns stay to their right and reorder normally; Name/Status width sharing passed in both directions; persisted layout passed. Initial executable/checksum URLs must be HTTPS; GitHub release executable size is carried into the self-update decision and the streamed download must match it exactly; checksum text is capped at 64 KiB.
+- Current goal: fix only the Compact main-window-width round-trip regression found during the published **v0.3.11 runtime gate**, then retest that narrow behavior and close the gate.
+- Current scope boundary: do not start async DLL discovery, Add-Git stale-request work, warning cleanup, rate-limit propagation, staging-name cleanup or unrelated UI work. The only allowed source follow-up before closing the v0.3.11 gate is preserving a manually resized Compact main-window width across Compact -> Advanced -> Compact.
 - Audit continuity: `audit_dump.md` is a temporary scratch checkpoint for the interrupted broad audit only; this file remains the sole authoritative live development source of truth.
 - Documentation-only commits after the release do not change the published runtime baseline.
 
@@ -194,7 +194,7 @@ Advanced mode:
 
 `Name/Status first | advanced-only columns after`
 
-Column layout rule implemented in v0.3.11 (runtime gate pending):
+Column layout rule implemented in v0.3.11 (runtime-verified on 2026-09-27; gate remains open only for the separate main-window-width round-trip issue):
 
 - `Name` and `Status` must always occupy columns 1 and 2;
 - users may swap `Name` and `Status` with each other, but neither may move behind an Advanced-only column;
@@ -406,7 +406,7 @@ The prior v0.3.5 release also passed its documented 17/17 Release workflow valid
 
 ## Current Issues
 
-Published v0.3.11 adds the focused self-update transport hardening and constrained/shared package-column layout on top of the runtime-accepted v0.3.10 baseline. v0.3.11 is CI/release-verified but its runtime gate is still pending. v0.3.10 therefore remains the latest runtime-accepted release. A1 remains accepted for forward development after fresh install, reinstall, Update New and Remove Addon passed in its earlier gate; managed same-root replacement remains explicit deferred runtime debt. Remove Addon was not repeated for the v0.3.10 gate and is non-blocking.
+Published v0.3.11 adds the focused self-update transport hardening and constrained/shared package-column layout on top of the runtime-accepted v0.3.10 baseline. On 2026-09-27 the installed self-update/startup-state path and requested column-layout matrix passed: Compact/Advanced primary-column constraints, Advanced-only boundary/reordering, bidirectional Name/Status width sharing, and persisted layout all passed. One adjacent UI regression remains before accepting the release: if the Compact main window has been manually resized, a Compact -> Advanced -> Compact round trip does not preserve that custom main-window width. v0.3.10 therefore remains the latest fully runtime-accepted release until that focused follow-up is fixed and retested. A1 remains accepted for forward development after fresh install, reinstall, Update New and Remove Addon passed in its earlier gate; managed same-root replacement remains explicit deferred runtime debt. Remove Addon was not repeated for the v0.3.10 gate and is non-blocking.
 
 P6A is complete. A1 transaction restart recovery is implemented, CI-checked and published in v0.3.8 at `17ce349273c6f2d76572c7107f3c6f7b139cf8d8`, and accepted for forward development with the same-root replacement runtime check deferred. It now writes a versioned, flushed pre-mutation journal; arms it with package/transaction identity, affected-root intent and durable pre/post state markers before live renames; recovers unfinished transactions before normal package mutation; and preserves evidence rather than guessing when durable state is ambiguous.
 
@@ -428,8 +428,9 @@ Final severity/order:
 1. **HIGH — transaction restart recovery:** **IMPLEMENTED / CI-CHECKED / PUBLISHED / ACCEPTED**, with managed same-root replacement runtime validation deferred.
 2. **HIGH — durable state semantic validation:** **IMPLEMENTED / CI-CHECKED / MERGED / ACCEPTED FOR FORWARD DEVELOPMENT** at `dcdd5058f50c83c427310feba083437db6368dcd`; no standalone A2-only release gate required.
 3. **MEDIUM — ZIP member allocation bound:** **IMPLEMENTED / CI-CHECKED / PUBLISHED / RUNTIME-ACCEPTED in v0.3.10** — per-member extraction streams to the staged file rather than allocating the full uncompressed member in RAM; the existing 256 MiB per-entry policy remains enforced during archive inspection.
-4. **SELF-UPDATE TRANSPORT + COLUMN LAYOUT:** **IMPLEMENTED / CI-CHECKED / MERGED / PUBLISHED in v0.3.11; RUNTIME GATE PENDING** — exact executable asset-size matching, 64 KiB checksum-text cap and initial HTTPS enforcement are in place; `Name`/`Status` are constrained to the first two swappable positions with shared Compact/Advanced widths and Advanced-only columns preserved to their right.
-5. **NEXT SOURCE WORK AFTER v0.3.11 RUNTIME GATE — async latest-stable DLL discovery:** remove provider I/O from the dialog thread.
+4. **SELF-UPDATE TRANSPORT + COLUMN LAYOUT:** **IMPLEMENTED / CI-CHECKED / MERGED / PUBLISHED in v0.3.11; REQUESTED RUNTIME MATRIX PASSED** — installed update/startup-state and the constrained/shared column behavior passed on 2026-09-27. The release gate is held only for the adjacent Compact main-window-width round-trip regression.
+5. **ACTIVE GATE FOLLOW-UP — Compact main-window width:** preserve a manually resized Compact width across Compact -> Advanced -> Compact without changing the accepted column-layout behavior.
+6. **NEXT SOURCE WORK AFTER v0.3.11 RUNTIME GATE — async latest-stable DLL discovery:** remove provider I/O from the dialog thread.
 6. **MEDIUM/LOW — Add-Git branch-dialog request identity:** reject stale close/reopen completions.
 7. **MEDIUM/LOW — Update All archive rate-limit propagation:** confirmed provider 429 should stop later provider-heavy queue work.
 8. Remaining lower-priority work: separate live network smoke tests from deterministic default CTest; updater parent-wait handling; strict checksum-sidecar parsing; collision-proof staging identity; dead branch-combo removal; optional non-mutating shutdown cleanup; archive-test CRT/warning cleanup.
@@ -468,17 +469,14 @@ The focused post-v0.3.6 branch/list issues remain runtime-confirmed fixed in v0.
 
 ### Next Runtime Test
 
-The v0.3.10 runtime gate is complete and accepted. Published `v0.3.11` is the active runtime gate for the newly implemented self-update transport hardening plus constrained/shared column-layout rule.
+Published `v0.3.11` was exercised on 2026-09-27. Passed: installed self-update, restart/existing-state load, Compact/Advanced `Name`/`Status` first-two constraint and swap-only rule, Advanced-only boundary and reorderability, Compact -> Advanced and Advanced -> Compact Name/Status width sharing, and layout persistence across restart. The user's test-6 caveat is specifically the **main window width**, not the shared column widths: after manually resizing the Compact window, Compact -> Advanced -> Compact loses the custom Compact window width.
 
-That gate must cover:
-- normal installed self-update into the new build;
-- startup/state load with the existing TocPilot.json;
-- Compact and Advanced both keep `Name`/`Status` as columns 1 and 2, allowing only those two to swap positions;
-- all Advanced-only columns remain to their right;
-- resizing `Name` or `Status` in Compact is inherited by Advanced, and resizing either in Advanced is inherited by Compact;
-- existing Advanced-only column order/width persistence remains intact;
-- `www` remains lowercase, blue + underlined and clickable;
-- representative package refresh/update smoke remains regression-free.
+Next runtime check after the focused fix:
+- manually resize the Compact main window to an obvious custom width;
+- enter Advanced and return to Compact;
+- confirm the exact practical Compact width is restored;
+- repeat after resizing Compact to a second width;
+- confirm Name/Status widths and the already-passing column order constraints remain unchanged.
 
 A1's managed same-root replacement check remains deferred. The current product workflow has **Remove Addon**, not the old Uninstall flow.
 
@@ -560,12 +558,8 @@ Do not add support for user-uploaded ZIP/7z/RAR/installer/bundle release assets 
 
 ## Exact Next Step
 
-Implement the next focused build from the accepted v0.3.10 baseline.
+Fix the single runtime follow-up found in published v0.3.11: preserve a manually resized **Compact main-window width** across a Compact -> Advanced -> Compact round trip. Keep the already-passing Name/Status and Advanced-only column behavior unchanged. Add the narrowest practical deterministic coverage if the sizing calculation can be isolated, run the normal Build/CTest gate, publish the patch release, and retest only this focused window-width round trip plus a quick column-regression check.
 
-1. **Self-update transport hardening:** propagate/check the exact release-asset size, cap checksum-text downloads, and reject initial non-HTTPS executable/checksum URLs.
-2. **Queued column-layout rule:** make `Name` and `Status` permanently occupy columns 1 and 2 while allowing those two to swap with each other; force every Advanced-only column to remain to their right; share `Name` and `Status` widths bidirectionally between Compact and Advanced while preserving Advanced-only order/width persistence.
-3. Add/update deterministic coverage for both slices, then build/CTest and prepare the next release/runtime gate.
-
-This is an explicit scope change requested after the v0.3.10 gate: the narrow column-layout rule is allowed in the same next build as self-update transport hardening. Do not mix async DLL discovery, Add-Git branch-dialog request identity, warning cleanup, rate-limit propagation, staging-name cleanup or any other UI work into that build.
+Do not mix async DLL discovery, Add-Git branch-dialog request identity, warning cleanup, rate-limit propagation, staging-name cleanup or any other UI changes into this follow-up.
 
 Keep the existing caveat explicit: A1 provides deterministic **process-restart** recovery, but full sudden-power-loss atomicity is not claimed until Windows directory-rename durability is separately verified.
