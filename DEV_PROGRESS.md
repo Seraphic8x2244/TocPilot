@@ -5,11 +5,11 @@
 ## Current
 
 - Active branch: `main`.
-- Source/application version: `v0.3.16`.
-- Latest published release: `v0.3.16`.
-- Release/source commit and tag target: `758eb6f28612b6e05589ca763e9c7757dcb64b76` (merge of release-prep PR #25).
+- Source/application version: `v0.3.17`.
+- Latest published release: `v0.3.17`.
+- Release/source commit and tag target: `a636d1eb0d1a3c213bb96c84ecbce2b22ca09d82` (merge of release-prep PR #27).
 - Latest fully runtime-accepted release is now `v0.3.13` at `a7caa0cb3bc5c2a6d7a51f7fd2e370e7628da183`. The combined v0.3.11-v0.3.13 runtime gate passed on 2026-09-27: hardened updater path, restart/state load, constrained/shared Name/Status columns, Compact width restore below and above the startup default, and the Advanced round trip are accepted.
-- Latest verified `main` source-changing head: `13fa1ee8f80c10ed6036510d364b206c1b4dc689` (merge of PR #24, Compact asymmetric Name/Status minimum enforcement). Release-only version commit `758eb6f28612b6e05589ca763e9c7757dcb64b76` sits above it.
+- Latest verified `main` source-changing head: `2c7dd510e04be7cd28263fa004b65d32033a9056` (merge of PR #26, direction-safe fully owned Compact divider transaction). Release-only version commit `a636d1eb0d1a3c213bb96c84ecbce2b22ca09d82` sits above it.
 - A1 runtime gate: **accepted for forward development** on 2026-09-26. Fresh install, reinstall, Update New and Remove Addon passed. Managed same-root replacement runtime validation is explicitly deferred rather than blocking later work. The deterministic crash-window tests remain the primary validation for restart-recovery semantics.
 - A2 durable state semantic validation: **implemented / CI-checked / merged / published in v0.3.10 / runtime-accepted** as part of the combined v0.3.10 gate.
 - A3 + queued `www` presentation delta: **implemented / CI-checked / merged / published / runtime-accepted in v0.3.10**. ZIP members stream through miniz's extraction callback directly into staged files instead of allocating one full-member buffer; the existing 256 MiB per-entry and 1 GiB total policy limits remain. Deterministic archive coverage forges an oversized central-directory member size in a tiny fixture and verifies policy rejection before extraction staging. Advanced repository URLs are custom-drawn always blue + underlined and the header is lowercase `www`; Compact remained `Name | Status` in the accepted gate.
@@ -19,8 +19,9 @@
 - v0.3.14 Compact two-column fill/split UX: **implemented / CI-checked / merged / published; runtime gate failed on divider drag**. Window resizing works and the right-hand outer divider is locked, but dragging the middle divider can still grow the left column without atomically shrinking the right column, pushing column 2 out of view and creating a horizontal scrollbar. Fix this as a true give-and-take transaction before accepting v0.3.14.
 - v0.3.15 Compact divider transaction fix: **implemented / CI-checked / merged / published; partial runtime pass**. Expanding the left Compact column no longer creates a horizontal scrollbar immediately, but the divider transaction still clamps both primary columns only to the generic 40 px floor. This lets the right visible column shrink below its intended Compact minimum; after entering that invalid state, dragging back left can expose a horizontal scrollbar. Fix by enforcing the real per-column Compact minima throughout fitting and divider transactions.
 - v0.3.16 Compact minimum-width fix: **implemented / CI-checked / merged / published; partial runtime pass**. Self-update passed; the companion column now stops at its intended minimum in both column orders; whole-window resize and Advanced regression checks passed. Remaining failure: when dragging the middle divider back left after pushing it right, a horizontal scrollbar still appears. This is now isolated to reverse-direction transaction ordering rather than width limits.
-- Current goal: fix only the remaining reverse-direction Compact divider transaction bug. The width limits are now correct; the remaining problem is that growing the right column before Windows commits the left-column shrink can transiently make the total width exceed the client area and create the scrollbar.
-- Current scope boundary: v0.3.16 is published but not runtime-accepted. Only the direction-safe Compact divider transaction ordering is in scope. Keep the separately observed Refresh All viewport jump queued and do not start it until this gate is resolved. Do not start async DLL discovery, Add-Git stale-request work, warning cleanup, rate-limit propagation, staging-name cleanup or unrelated UI work.
+- v0.3.17 reverse-direction divider fix: **implemented / CI-checked / merged / published; runtime gate pending**. Compact divider dragging is now a fully owned two-column transaction: the shrinking column is applied first, the growing column second, and the native one-column commit is cancelled under a re-entrancy guard. This removes the transient overflow path in either drag direction.
+- Current goal: run the focused **published v0.3.17 runtime gate** for the exact right-to-left reversal failure and quick regressions.
+- Current scope boundary: v0.3.17 is published and CI/release-verified but not yet runtime-accepted. Keep the separately observed Refresh All viewport jump queued and do not start it until this gate is resolved. Do not start async DLL discovery, Add-Git stale-request work, warning cleanup, rate-limit propagation, staging-name cleanup or unrelated UI work.
 - Audit continuity: `audit_dump.md` is a temporary scratch checkpoint for the interrupted broad audit only; this file remains the sole authoritative live development source of truth.
 - Documentation-only commits after the release do not change the published runtime baseline.
 
@@ -489,22 +490,24 @@ The focused post-v0.3.6 branch/list issues remain runtime-confirmed fixed in v0.
 
 ### Next Runtime Test
 
-Published `v0.3.16` runtime result on 2026-09-27:
-- self-update/startup: passed;
-- dragging right now stops the companion column at its intended Compact minimum: passed;
-- the same minimum behavior works in both Name/Status orders: passed;
-- whole-window resize distribution: passed;
-- Advanced resize/reorder regression smoke: passed;
-- **remaining failure:** when reversing the middle divider back left after pushing it right, a horizontal scrollbar still appears.
+Published `v0.3.17` is the active focused runtime gate.
 
-Interpretation: the minima fix worked. The remaining bug is transaction ordering on reverse drag: the companion/right column is expanded before the native header has committed the left-column shrink, so the two widths temporarily exceed the Compact client width.
+v0.3.16 runtime history:
+- self-update/startup passed;
+- per-column Compact minimums passed in both Name/Status orders;
+- whole-window resize distribution passed;
+- Advanced resize/reorder regression smoke passed;
+- remaining failure: after pushing the middle divider right, reversing it left created a horizontal scrollbar because the right column was expanded before the left column had actually shrunk.
 
-After the focused patch release:
-1. push the middle divider hard right to the minimum clamp;
-2. reverse it hard left;
-3. confirm no horizontal scrollbar appears at any point;
-4. repeat in both Name/Status orders;
-5. confirm minima, whole-window resize, locked outer divider and Advanced behavior remain correct.
+Required v0.3.17 checks:
+1. normal self-update from v0.3.16 to v0.3.17 and restart/state load;
+2. push the Compact middle divider hard right to the minimum clamp;
+3. reverse it hard left;
+4. confirm no horizontal scrollbar appears at any point;
+5. repeat in both Name/Status orders;
+6. confirm Name/Status minimums, whole-window resize distribution, locked outer divider and Advanced resize/reorder behavior remain correct.
+
+If these pass, accept the combined v0.3.14-v0.3.17 Compact fill/split work. The separately recorded Refresh All viewport jump is then the next narrow UI follow-up.
 
 A1's managed same-root replacement check remains deferred. The current product workflow has **Remove Addon**, not the old Uninstall flow.
 
@@ -576,31 +579,26 @@ Do not add support for user-uploaded ZIP/7z/RAR/installer/bundle release assets 
 
 ## Release / Documentation Notes
 
-- Current published release is `v0.3.16` at `758eb6f28612b6e05589ca763e9c7757dcb64b76`.
-- v0.3.15 remains a partial runtime result: transactional give-and-take improved the drag behavior, but the generic 40 px floor still allowed the companion Compact column below its intended minimum and exposed a reversal scrollbar.
-- PR #24 head `fce36afc652cb1e6fc77b7f6daa538fbc6ebca6a` passed Build workflow run `36321551019`, Windows x64 job `108626236584`, including **18/18 CTest tests** with asymmetric-minimum and swapped-order coverage.
-- PR #24 merged the Compact per-column minimum fix as `13fa1ee8f80c10ed6036510d364b206c1b4dc689`.
-- PR #25 head `fc3564c947086f2e2c88f3ff6d0873ad45fdd11c` changed only release/version metadata and passed Build workflow run `36321858303`, Windows x64 job `108627105408`, including **18/18 CTest tests**.
-- Main push Build workflow run `36322068215`, Windows x64 job `108627691922`, passed **18/18 CTest tests**.
-- v0.3.16 Release workflow run `36322068248`, Windows x64 Release job `108627692055`, validated exact source version, passed **18/18 CTest tests**, generated the SHA-256 sidecar, created tag `v0.3.16` and published direct assets.
-- Published v0.3.16 `TocPilot.exe`: 2,497,536 bytes, SHA-256 `080114c8c5f5c4d54b65605b94701400cb71dbdfae75f386ddd4e15de74a3e87`.
-- Published v0.3.16 `TocPilot.exe.sha256`: 78 bytes; asset SHA-256 `890c9d111d6f228bb5f85e860795a9d4b61bc073d4265945b8eecbb6cb802c96`.
-- Latest fully runtime-accepted release remains v0.3.13 until the focused v0.3.16 gate passes.
-- The Refresh-list viewport jump remains recorded separately and was intentionally not mixed into v0.3.16.
+- Current published release is `v0.3.17` at `a636d1eb0d1a3c213bb96c84ecbce2b22ca09d82`.
+- v0.3.16 remains a partial runtime result: all intended Compact minima and other regressions passed, but reverse divider drag could still transiently overflow the list because the growing column was applied before the shrinking column.
+- PR #26 head `bf9ee839f6d7ab722c6841648a642a4c4b5073aa` passed Build workflow run `36325300444`, Windows x64 job `108636801237`, including **18/18 CTest tests** with explicit shrink-first direction coverage.
+- PR #26 merged the fully owned direction-safe divider transaction as `2c7dd510e04be7cd28263fa004b65d32033a9056`.
+- PR #27 head `7d4256d7bb5a0a715ab52e8de89655f018221f5b` changed only release/version metadata and passed Build workflow run `36325571382`, Windows x64 job `108637574892`, including **18/18 CTest tests**.
+- Main push Build workflow run `36325809455`, Windows x64 job `108638240899`, passed **18/18 CTest tests**.
+- v0.3.17 Release workflow run `36325809412`, Windows x64 Release job `108638240745`, validated exact source version, passed **18/18 CTest tests**, generated the SHA-256 sidecar, created tag `v0.3.17` and published direct assets.
+- Published v0.3.17 `TocPilot.exe`: 2,498,048 bytes, SHA-256 `d073217456c7d9b4dabf488947fbecf2424f4655da145b51632d5f48fe8f42c8`.
+- Published v0.3.17 `TocPilot.exe.sha256`: 78 bytes; asset SHA-256 `343f45497193901851be3364c9f968b2246618527e54a8e2668d43eb2956fdf9`.
+- Latest fully runtime-accepted release remains v0.3.13 until the focused v0.3.17 gate passes.
+- The Refresh-list viewport jump remains recorded separately and was intentionally not mixed into v0.3.17.
 
 ## Exact Next Step
 
-Fix only the reverse-direction Compact divider transaction ordering.
+Run the published v0.3.17 runtime gate above. Do not begin another source slice until it is resolved.
 
-The current pre-change handler safely processes rightward drag because it shrinks the companion column before Windows grows the left column. On leftward drag it does the opposite unsafe sequence: it grows the companion column before Windows has shrunk the left column, transiently exceeding the Compact client width.
+The critical regression is the exact v0.3.16 failure: push the Compact middle divider hard right, then reverse it hard left. The two columns should resize as one transaction with the shrinking side applied first in either direction, and no horizontal scrollbar should appear.
 
-Implement the divider resize as a fully owned transaction:
-- compute the final left/right widths;
-- cancel the native proposed single-column commit;
-- under a re-entrancy guard, apply the **shrinking column first**, then the growing column;
-- preserve the invariant throughout the transaction so total visible width never exceeds the Compact list client width;
-- keep the established Name 220 px / Status 150 px minima, swapped-order handling, locked outer divider, window-resize distribution and Advanced behavior unchanged.
+Repeat with Name/Status swapped, then verify the already-passing minimum clamps, whole-window resize, locked outer divider and quick Advanced resize/reorder smoke.
 
-Add deterministic coverage for direction/order selection where practical, run Build/CTest, publish the patch release, and retest only this reverse-drag edge plus the quick regressions.
+If v0.3.17 passes, record the combined v0.3.14-v0.3.17 Compact fill/split work as runtime-accepted and address the separately queued **Refresh All viewport jump** next. Async latest-stable DLL discovery remains the next deferred robustness slice after that UI follow-up.
 
-Keep the Refresh All viewport-jump issue separate and queued. Do not mix async DLL discovery, Add-Git stale-request work, warning cleanup, rate-limit propagation, staging-name cleanup or unrelated UI changes into this fix.
+Do not mix Add-Git stale-request work, warning cleanup, rate-limit propagation, staging-name cleanup or unrelated UI changes into this gate.
