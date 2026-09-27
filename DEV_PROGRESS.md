@@ -5,19 +5,20 @@
 ## Current
 
 - Active branch: `main`.
-- Source/application version: `v0.3.13`.
-- Latest published release: `v0.3.13`.
-- Release/source commit and tag target: `a7caa0cb3bc5c2a6d7a51f7fd2e370e7628da183` (merge of release-prep PR #19).
+- Source/application version: `v0.3.14`.
+- Latest published release: `v0.3.14`.
+- Release/source commit and tag target: `d563ab619e075ce7a54d51aead8670bfd6b4f6b4` (merge of release-prep PR #21).
 - Latest fully runtime-accepted release is now `v0.3.13` at `a7caa0cb3bc5c2a6d7a51f7fd2e370e7628da183`. The combined v0.3.11-v0.3.13 runtime gate passed on 2026-09-27: hardened updater path, restart/state load, constrained/shared Name/Status columns, Compact width restore below and above the startup default, and the Advanced round trip are accepted.
-- Latest verified `main` source-changing head: `227fa19b02dc0ecf75bf36835c4205eea07951ec` (merge of PR #18, Compact startup-default vs actual-minimum width fix). Release-only version commit `a7caa0cb3bc5c2a6d7a51f7fd2e370e7628da183` sits above it.
+- Latest verified `main` source-changing head: `a4a384e834730534695d7d77625566dbdceae6a9` (merge of PR #20, Compact two-column fill/split UX). Release-only version commit `d563ab619e075ce7a54d51aead8670bfd6b4f6b4` sits above it.
 - A1 runtime gate: **accepted for forward development** on 2026-09-26. Fresh install, reinstall, Update New and Remove Addon passed. Managed same-root replacement runtime validation is explicitly deferred rather than blocking later work. The deterministic crash-window tests remain the primary validation for restart-recovery semantics.
 - A2 durable state semantic validation: **implemented / CI-checked / merged / published in v0.3.10 / runtime-accepted** as part of the combined v0.3.10 gate.
 - A3 + queued `www` presentation delta: **implemented / CI-checked / merged / published / runtime-accepted in v0.3.10**. ZIP members stream through miniz's extraction callback directly into staged files instead of allocating one full-member buffer; the existing 256 MiB per-entry and 1 GiB total policy limits remain. Deterministic archive coverage forges an oversized central-directory member size in a tiny fixture and verifies policy rejection before extraction staging. Advanced repository URLs are custom-drawn always blue + underlined and the header is lowercase `www`; Compact remained `Name | Status` in the accepted gate.
 - v0.3.11 self-update transport hardening + constrained/shared package-column layout: **implemented / CI-checked / merged / published; requested runtime matrix passed**. Installed update/startup-state passed. `Name`/`Status` stay in the first two positions and swap only with each other; Advanced-only columns stay to their right and reorder normally; Name/Status width sharing passed in both directions; persisted layout passed. Initial executable/checksum URLs must be HTTPS; GitHub release executable size is carried into the self-update decision and the streamed download must match it exactly; checksum text is capped at 64 KiB. The one adjacent Compact main-window-width regression found during this gate is fixed in v0.3.12.
 - v0.3.12 Compact main-window-width follow-up: **implemented / CI-checked / merged / published; partial runtime pass**. Compact width is captured before entering Advanced and restored on return. The `v0.3.11 -> v0.3.12` self-update/restart passed, but runtime testing exposed that the restore path incorrectly treated the 590 px startup default as a hard Compact minimum.
 - v0.3.13 default-vs-minimum width fix: **implemented / CI-checked / merged / published / runtime-accepted**. `ToggleAdvanced` uses the same content-derived Compact minimum as normal manual resizing; `kCompactWindowWidth` remains only the startup default. Narrower- and wider-than-default Compact widths now survive Compact -> Advanced -> Compact.
-- Current goal: implement the user-requested **Compact two-column fill/split UX** on top of the accepted v0.3.13 baseline.
-- Current scope boundary: only the Compact two-column fill/split UX is in scope for the next build. Keep Advanced behavior unchanged. Keep the separately observed Refresh All viewport jump queued and do not mix it into this slice. Do not start async DLL discovery, Add-Git stale-request work, warning cleanup, rate-limit propagation, staging-name cleanup or unrelated UI work.
+- v0.3.14 Compact two-column fill/split UX: **implemented / CI-checked / merged / published; runtime gate pending**. Compact Name/Status always fit the list client width; window-width deltas are shared between the two columns; only the middle divider is drag-resizable and the companion column adjusts inversely; the outer/right divider is vetoed; Name/Status swap behavior is supported; Advanced behavior is unchanged.
+- Current goal: run the focused **published v0.3.14 runtime gate** for the Compact fill/split UX.
+- Current scope boundary: v0.3.14 is published and CI/release-verified but not yet runtime-accepted. Keep the separately observed Refresh All viewport jump queued and do not start it until this gate is resolved. Do not start async DLL discovery, Add-Git stale-request work, warning cleanup, rate-limit propagation, staging-name cleanup or unrelated UI work.
 - Audit continuity: `audit_dump.md` is a temporary scratch checkpoint for the interrupted broad audit only; this file remains the sole authoritative live development source of truth.
 - Documentation-only commits after the release do not change the published runtime baseline.
 
@@ -446,7 +447,7 @@ Final severity/order:
 3. **MEDIUM — ZIP member allocation bound:** **IMPLEMENTED / CI-CHECKED / PUBLISHED / RUNTIME-ACCEPTED in v0.3.10** — per-member extraction streams to the staged file rather than allocating the full uncompressed member in RAM; the existing 256 MiB per-entry policy remains enforced during archive inspection.
 4. **SELF-UPDATE TRANSPORT + COLUMN LAYOUT:** **IMPLEMENTED / CI-CHECKED / MERGED / PUBLISHED in v0.3.11; REQUESTED RUNTIME MATRIX PASSED** — installed update/startup-state and the constrained/shared column behavior passed on 2026-09-27.
 5. **COMPACT MAIN-WINDOW WIDTH FOLLOW-UP:** v0.3.12 implemented capture/restore; v0.3.13 fixed the startup-default-vs-real-minimum edge. **v0.3.13 PUBLISHED / CI-CHECKED / RUNTIME-ACCEPTED**.
-6. **NEXT NARROW UI FOLLOW-UP AFTER v0.3.13 GATE — Refresh All viewport jump:** investigate preserved top/selection identity across re-sort/repopulate.
+6. **NEXT NARROW UI FOLLOW-UP AFTER v0.3.14 RUNTIME GATE — Refresh All viewport jump:** investigate preserved top/selection identity across re-sort/repopulate.
 7. **NEXT ROBUSTNESS SOURCE WORK AFTER UI FOLLOW-UPS — async latest-stable DLL discovery:** remove provider I/O from the dialog thread.
 6. **MEDIUM/LOW — Add-Git branch-dialog request identity:** reject stale close/reopen completions.
 7. **MEDIUM/LOW — Update All archive rate-limit propagation:** confirmed provider 429 should stop later provider-heavy queue work.
@@ -486,15 +487,18 @@ The focused post-v0.3.6 branch/list issues remain runtime-confirmed fixed in v0.
 
 ### Next Runtime Test
 
-Published `v0.3.13` is runtime-accepted. No runtime gate is currently open.
+Published `v0.3.14` is the active focused runtime gate for the Compact two-column fill/split UX.
 
-Next runtime gate will cover the Compact two-column fill/split UX after it is implemented and published:
-- no horizontal scrollbar in Compact;
-- only the middle divider is draggable, regardless of whether Name or Status is first;
-- dragging the middle divider keeps the two visible columns filling the list exactly;
-- the right edge of the right-hand visible column cannot be resized;
-- widening/narrowing the Compact window splits the width delta between the two visible columns;
-- Advanced column behavior remains unchanged.
+Required checks:
+1. normal self-update from v0.3.13 to v0.3.14 and restart/state load;
+2. in Compact, confirm there is **no horizontal scrollbar**;
+3. drag the middle divider both directions and confirm the other visible column adjusts inversely so the two columns continue to fill the list;
+4. confirm the right edge of the right-hand visible column cannot be resized;
+5. swap Name/Status and repeat the divider/right-edge checks;
+6. widen and narrow the Compact window and confirm the width delta is distributed between both visible columns, with no horizontal scrollbar appearing;
+7. open Advanced and confirm its existing column resize/reorder behavior is unchanged.
+
+If these pass, accept v0.3.14. The separately recorded Refresh All viewport jump is the next narrow UI follow-up.
 
 A1's managed same-root replacement check remains deferred. The current product workflow has **Remove Addon**, not the old Uninstall flow.
 
@@ -566,28 +570,23 @@ Do not add support for user-uploaded ZIP/7z/RAR/installer/bundle release assets 
 
 ## Release / Documentation Notes
 
-- Current published release is `v0.3.13` at `a7caa0cb3bc5c2a6d7a51f7fd2e370e7628da183`.
-- PR #18 head `62f8f2657f3fa63f56c51933a0bcbf2d76454879` passed Build workflow run `36312330172`, Windows x64 job `108600545003`, including **18/18 CTest tests**.
-- PR #18 merged the focused default-vs-minimum fix as `227fa19b02dc0ecf75bf36835c4205eea07951ec`.
-- PR #19 head `ea51064b94ccf9ca4bd3a6960a9a5dda8a03e217` changed only release/version metadata and passed Build workflow run `36312574847`, Windows x64 job `108601215446`, including **18/18 CTest tests**.
-- Main push Build workflow run `36312776480`, Windows x64 job `108601763516`, passed **18/18 CTest tests**.
-- v0.3.13 Release workflow run `36312776432`, Windows x64 Release job `108601763290`, validated exact source version, passed **18/18 CTest tests**, generated the SHA-256 sidecar, created tag `v0.3.13` and published direct assets.
-- Published v0.3.13 `TocPilot.exe`: 2,496,512 bytes, SHA-256 `9603cb2e9353f079f159f4df2d9ca62633adf36c596cc8f069af1944e2ccbbf7`.
-- Published v0.3.13 `TocPilot.exe.sha256`: 78 bytes; asset SHA-256 `80891e91116c0038b7b17a4059866415fe3e8109edd42ee8295ca7bf38fe2ddf`.
-- Latest fully runtime-accepted release remains v0.3.10 until the focused v0.3.13 gate passes.
-- The Refresh-list viewport jump is recorded separately and was intentionally not mixed into v0.3.13.
+- Current published release is `v0.3.14` at `d563ab619e075ce7a54d51aead8670bfd6b4f6b4`.
+- PR #20 head `427ce3f6aec1cd9483468c2a61c2ae2d32052e17` passed Build workflow run `36319055568`, Windows x64 job `108619219428`, including **18/18 CTest tests** with expanded `window-layout-roundtrip` coverage.
+- PR #20 merged the Compact fill/split UX as `a4a384e834730534695d7d77625566dbdceae6a9`.
+- PR #21 head `ce47c9a224de47b080fb6ea7ddded6a7aea87afa` changed only release/version metadata and passed Build workflow run `36319292743`, Windows x64 job `108619889051`, including **18/18 CTest tests**.
+- Main push Build workflow run `36319503414`, Windows x64 job `108620472847`, passed **18/18 CTest tests**.
+- v0.3.14 Release workflow run `36319503408`, Windows x64 Release job `108620472715`, validated exact source version, passed **18/18 CTest tests**, generated the SHA-256 sidecar, created tag `v0.3.14` and published direct assets.
+- Published v0.3.14 `TocPilot.exe`: 2,497,536 bytes, SHA-256 `df6422176892459dc60bbf2e7a7afef91cb8893f5bb3123b97931efac2f19d24`.
+- Published v0.3.14 `TocPilot.exe.sha256`: 78 bytes; asset SHA-256 `c01c58bb2a54c5650fd3455d0befab9d9e82f2a89be96089203a1dde817fc9e8`.
+- Latest fully runtime-accepted release is v0.3.13 until the focused v0.3.14 gate passes.
+- The Refresh-list viewport jump remains recorded separately and was intentionally not mixed into v0.3.14.
 
 ## Exact Next Step
 
-Implement the focused Compact two-column fill/split UX from the accepted v0.3.13 baseline.
+Run the published v0.3.14 runtime gate above. Do not begin another source slice until it is resolved.
 
-1. In Compact, keep exactly two visible columns whose combined width always matches the list client width so no horizontal scrollbar appears.
-2. Allow resize only on the **middle divider**. Whichever of Name/Status is currently displayed left is the resizable column; veto resizing of the outer/right edge of the right-hand visible column.
-3. When the user moves the middle divider, adjust the other visible column inversely so the total remains fixed.
-4. When the Compact window/list width changes, divide the width delta equally between the two visible columns while preserving the existing split as closely as integer pixels allow.
-5. Preserve Name/Status swap behavior and existing Compact/Advanced shared-width semantics as coherently as possible; keep Advanced-specific columns and Advanced resize behavior unchanged.
-6. Add deterministic coverage for the width-allocation/split calculations, run Build/CTest, then publish through the normal self-update path for runtime testing.
+The key Compact checks are: no horizontal scrollbar, only the middle divider is resizable, the companion column moves inversely, swapping Name/Status preserves the same behavior, and window resizing distributes the width change across both columns. Confirm Advanced behavior is unchanged.
 
-Keep the Refresh All viewport-jump issue separate and queued. Do not mix async DLL discovery, Add-Git stale-request work, warning cleanup, rate-limit propagation, staging-name cleanup or unrelated UI changes into this slice.
+If v0.3.14 passes, record it as runtime-accepted and then address the separately queued **Refresh All viewport jump** as the next narrow UI follow-up. Async latest-stable DLL discovery remains the next deferred robustness source slice after the active UI follow-up is resolved.
 
 Keep the existing caveat explicit: A1 provides deterministic **process-restart** recovery, but full sudden-power-loss atomicity is not claimed until Windows directory-rename durability is separately verified.
