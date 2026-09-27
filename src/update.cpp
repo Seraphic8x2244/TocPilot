@@ -145,6 +145,11 @@ bool OpenRequest(
         return false;
     }
 
+    if (!parts.secure) {
+        error = L"Self-update transport requires an initial HTTPS URL.";
+        return false;
+    }
+
     handles.session = WinHttpOpen(
         kUserAgent,
         WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY,
@@ -275,6 +280,7 @@ bool QueryEffectiveUrl(
 
 bool HttpGetString(
     const std::wstring& url,
+    std::size_t maxBytes,
     std::string& body,
     DWORD& status,
     std::wstring& error) {
@@ -301,6 +307,13 @@ bool HttpGetString(
             break;
         }
 
+        if (body.size() > maxBytes ||
+            static_cast<std::size_t>(bytesRead) >
+                maxBytes - body.size()) {
+            error = L"Checksum response exceeds the 64 KiB limit.";
+            return false;
+        }
+
         body.append(buffer.data(), bytesRead);
     }
 
@@ -310,6 +323,7 @@ bool HttpGetString(
 bool DownloadFile(
     const std::wstring& url,
     const std::filesystem::path& destination,
+    std::uint64_t expectedSize,
     std::wstring& error) {
     InternetHandles handles;
     DWORD status = 0;
@@ -337,6 +351,7 @@ bool DownloadFile(
     }
 
     bool ok = true;
+    std::uint64_t totalBytes = 0;
     std::array<unsigned char, 65536> buffer{};
 
     for (;;) {
@@ -355,6 +370,15 @@ bool DownloadFile(
             break;
         }
 
+        if (totalBytes > expectedSize ||
+            static_cast<std::uint64_t>(bytesRead) >
+                expectedSize - totalBytes) {
+            error =
+                L"Downloaded update is larger than the release asset size.";
+            ok = false;
+            break;
+        }
+
         DWORD bytesWritten = 0;
         if (!WriteFile(
                 file,
@@ -367,6 +391,17 @@ bool DownloadFile(
             ok = false;
             break;
         }
+
+        totalBytes +=
+            static_cast<std::uint64_t>(bytesWritten);
+    }
+
+    if (ok &&
+        !ValidateSelfUpdateDownloadSize(
+            expectedSize,
+            totalBytes,
+            error)) {
+        ok = false;
     }
 
     if (ok && !FlushFileBuffers(file)) {
@@ -645,6 +680,8 @@ bool ResolveExpectedDigest(
     DWORD checksumStatus = 0;
     if (!HttpGetString(
             release.checksumUrl,
+            static_cast<std::size_t>(
+                kMaxSelfUpdateChecksumBytes),
             checksumBody,
             checksumStatus,
             error)) {
@@ -878,6 +915,83 @@ bool ResolveLatestReleaseTag(
         error);
 }
 
+bool ValidateSelfUpdateRelease(
+    const ReleaseInfo& release,
+    std::wstring& error) {
+    error.clear();
+
+    if (release.assetUrl.empty()) {
+        error = L"No update asset URL is available.";
+        return false;
+    }
+
+    UrlParts assetParts;
+    if (!CrackUrl(
+            release.assetUrl,
+            assetParts,
+            error)) {
+        error =
+            L"Invalid update asset URL: " +
+            error;
+        return false;
+    }
+
+    if (!assetParts.secure) {
+        error =
+            L"Update executable URL must use HTTPS.";
+        return false;
+    }
+
+    if (release.assetSize == 0) {
+        error =
+            L"Update executable has an invalid zero-byte release asset size.";
+        return false;
+    }
+
+    if (!release.checksumUrl.empty()) {
+        UrlParts checksumParts;
+        if (!CrackUrl(
+                release.checksumUrl,
+                checksumParts,
+                error)) {
+            error =
+                L"Invalid update checksum URL: " +
+                error;
+            return false;
+        }
+
+        if (!checksumParts.secure) {
+            error =
+                L"Update checksum URL must use HTTPS.";
+            return false;
+        }
+
+        if (release.checksumSize >
+            kMaxSelfUpdateChecksumBytes) {
+            error =
+                L"Update checksum asset exceeds the 64 KiB limit.";
+            return false;
+        }
+    }
+
+    return true;
+}
+
+bool ValidateSelfUpdateDownloadSize(
+    std::uint64_t expectedSize,
+    std::uint64_t actualSize,
+    std::wstring& error) {
+    if (actualSize == expectedSize) {
+        return true;
+    }
+
+    error =
+        actualSize < expectedSize
+            ? L"Downloaded update is smaller than the release asset size."
+            : L"Downloaded update is larger than the release asset size.";
+    return false;
+}
+
 std::filesystem::path ExecutablePath() {
     std::wstring buffer(32768, L'\0');
     const DWORD length = GetModuleFileNameW(
@@ -927,6 +1041,7 @@ bool CheckLatestRelease(
     release.tag = metadata.tag;
     release.assetUrl = executable.downloadUrl;
     release.assetDigest = executable.digest;
+    release.assetSize = executable.size;
 
     GitHubReleaseAsset checksum;
     std::wstring checksumError;
@@ -937,6 +1052,14 @@ bool CheckLatestRelease(
             checksumError)) {
         release.checksumUrl =
             checksum.downloadUrl;
+        release.checksumSize =
+            checksum.size;
+    }
+
+    if (!ValidateSelfUpdateRelease(
+            release,
+            error)) {
+        return false;
     }
 
     state = IsNewer(release.tag, TOCPILOT_VERSION_TAG_W)
@@ -951,8 +1074,9 @@ bool DownloadVerifyAndLaunchUpdater(
     const std::filesystem::path& targetExe,
     const std::filesystem::path& workingDirectory,
     std::wstring& error) {
-    if (release.assetUrl.empty()) {
-        error = L"No update asset URL is available.";
+    if (!ValidateSelfUpdateRelease(
+            release,
+            error)) {
         return false;
     }
 
@@ -983,7 +1107,11 @@ bool DownloadVerifyAndLaunchUpdater(
 
     const auto stagedExe = stageDirectory / L"TocPilot.exe";
 
-    if (!DownloadFile(release.assetUrl, stagedExe, error)) {
+    if (!DownloadFile(
+            release.assetUrl,
+            stagedExe,
+            release.assetSize,
+            error)) {
         std::filesystem::remove_all(stageDirectory, ec);
         return false;
     }

@@ -32,6 +32,83 @@ bool LooksLikeVersionTag(const std::wstring& tag) {
     return dots == 2;
 }
 
+void TestSelfUpdateTransportPolicy() {
+    const std::wstring digest =
+        L"sha256:0123456789abcdef0123456789abcdef"
+        L"0123456789abcdef0123456789abcdef";
+
+    tp::ReleaseInfo release;
+    release.tag = L"v9.9.9";
+    release.assetUrl =
+        L"https://example.invalid/TocPilot.exe";
+    release.assetDigest = digest;
+    release.assetSize = 1234;
+    release.checksumUrl =
+        L"https://example.invalid/TocPilot.exe.sha256";
+    release.checksumSize = 80;
+
+    std::wstring error;
+    if (!tp::ValidateSelfUpdateRelease(
+            release,
+            error)) {
+        Fail("valid HTTPS self-update metadata was rejected");
+    }
+
+    auto invalid = release;
+    invalid.assetUrl =
+        L"http://example.invalid/TocPilot.exe";
+    if (tp::ValidateSelfUpdateRelease(
+            invalid,
+            error)) {
+        Fail("HTTP self-update executable URL was accepted");
+    }
+
+    invalid = release;
+    invalid.checksumUrl =
+        L"http://example.invalid/TocPilot.exe.sha256";
+    if (tp::ValidateSelfUpdateRelease(
+            invalid,
+            error)) {
+        Fail("HTTP self-update checksum URL was accepted");
+    }
+
+    invalid = release;
+    invalid.checksumSize =
+        tp::kMaxSelfUpdateChecksumBytes + 1;
+    if (tp::ValidateSelfUpdateRelease(
+            invalid,
+            error)) {
+        Fail("oversized self-update checksum metadata was accepted");
+    }
+
+    invalid = release;
+    invalid.assetSize = 0;
+    if (tp::ValidateSelfUpdateRelease(
+            invalid,
+            error)) {
+        Fail("zero-byte self-update executable metadata was accepted");
+    }
+
+    if (!tp::ValidateSelfUpdateDownloadSize(
+            1234,
+            1234,
+            error)) {
+        Fail("matching self-update asset size was rejected");
+    }
+    if (tp::ValidateSelfUpdateDownloadSize(
+            1234,
+            1233,
+            error)) {
+        Fail("short self-update asset size was accepted");
+    }
+    if (tp::ValidateSelfUpdateDownloadSize(
+            1234,
+            1235,
+            error)) {
+        Fail("oversized self-update asset size was accepted");
+    }
+}
+
 } // namespace
 
 int main(int argc, char** argv) {
@@ -76,8 +153,12 @@ int main(int argc, char** argv) {
 
         if (release.tag != tag ||
             release.assetUrl != expectedBase + L"TocPilot.exe" ||
+            release.assetSize == 0 ||
             release.checksumUrl !=
-                expectedBase + L"TocPilot.exe.sha256") {
+                expectedBase + L"TocPilot.exe.sha256" ||
+            release.checksumSize == 0 ||
+            release.checksumSize >
+                tp::kMaxSelfUpdateChecksumBytes) {
             std::wcerr
                 << L"live latest-release asset URLs were not constructed correctly\n";
             return 1;
@@ -89,6 +170,8 @@ int main(int argc, char** argv) {
             << L'\n';
         return 0;
     }
+
+    TestSelfUpdateTransportPolicy();
 
     {
         std::wstring tag;
