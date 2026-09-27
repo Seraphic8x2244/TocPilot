@@ -17,6 +17,7 @@
 #include "update_all.h"
 #include "ui_dialog.h"
 #include "version.h"
+#include "window_layout.h"
 #include "resource.h"
 
 #include <windows.h>
@@ -176,6 +177,7 @@ bool g_appUpdateStartedFromStartup = false;
 bool g_startupAppUpdateFailed = false;
 bool g_autoStatusRefreshInProgress = false;
 bool g_advancedVisible = false;
+int g_compactWindowWidthBeforeAdvanced = 0;
 bool g_hasVanillaFixes = false;
 bool g_branchSelectorUpdating = false;
 bool g_branchSelectorLoadInProgress = false;
@@ -6248,8 +6250,20 @@ void ToggleAdvanced(HWND hwnd) {
         return;
     }
 
-    g_advancedVisible =
+    const int currentWidth =
+        rect.right - rect.left;
+    const int currentHeight =
+        rect.bottom - rect.top;
+    const bool enteringAdvanced =
         !g_advancedVisible;
+
+    if (enteringAdvanced) {
+        g_compactWindowWidthBeforeAdvanced =
+            currentWidth;
+    }
+
+    g_advancedVisible =
+        enteringAdvanced;
 
     if (!g_advancedVisible) {
         g_branchSelectorOpenPackageId.clear();
@@ -6262,11 +6276,6 @@ void ToggleAdvanced(HWND hwnd) {
                 ? L"< Advanced"
                 : L"Advanced >");
     }
-
-    const int currentWidth =
-        rect.right - rect.left;
-    const int currentHeight =
-        rect.bottom - rect.top;
 
     const int compactMinimum =
         std::max(
@@ -6282,20 +6291,17 @@ void ToggleAdvanced(HWND hwnd) {
                 hwnd,
                 RequiredClientWidth(
                     true)));
-    const int widthDelta =
-        advancedMinimum -
-        compactMinimum;
-
     const int newWidth =
         g_advancedVisible
-            ? std::max(
-                advancedMinimum,
-                currentWidth +
-                    widthDelta)
-            : std::max(
+            ? tp::ExpandedWindowWidth(
+                currentWidth,
                 compactMinimum,
-                currentWidth -
-                    widthDelta);
+                advancedMinimum)
+            : tp::RestoredCompactWindowWidth(
+                g_compactWindowWidthBeforeAdvanced,
+                currentWidth,
+                compactMinimum,
+                advancedMinimum);
 
     SetWindowPos(
         hwnd,
