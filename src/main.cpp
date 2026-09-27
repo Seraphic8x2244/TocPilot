@@ -6278,12 +6278,10 @@ void ToggleAdvanced(HWND hwnd) {
     }
 
     const int compactMinimum =
-        std::max(
-            kCompactWindowWidth,
-            WindowWidthForClient(
-                hwnd,
-                RequiredClientWidth(
-                    false)));
+        WindowWidthForClient(
+            hwnd,
+            RequiredClientWidth(
+                false));
     const int advancedMinimum =
         std::max(
             compactMinimum,
