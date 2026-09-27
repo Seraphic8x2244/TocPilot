@@ -69,6 +69,15 @@ int main() {
 
     ExpectEqual(
         tp::RestoredCompactWindowWidth(
+            540,
+            1600,
+            480,
+            advancedMinimum),
+        540,
+        "compact width below the startup default should still restore when above the actual content minimum");
+
+    ExpectEqual(
+        tp::RestoredCompactWindowWidth(
             0,
             expanded,
             compactMinimum,
