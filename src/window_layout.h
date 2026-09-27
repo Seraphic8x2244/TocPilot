@@ -53,6 +53,33 @@ inline std::array<int, 2> FitCompactColumnWidths(
         total - first};
 }
 
+enum class CompactResizeFirst {
+    None,
+    Left,
+    Right
+};
+
+inline CompactResizeFirst CompactResizeFirstColumn(
+    int currentLeftWidth,
+    int targetLeftWidth,
+    int currentRightWidth,
+    int targetRightWidth) {
+    if (targetLeftWidth <
+        currentLeftWidth) {
+        return
+            CompactResizeFirst::Left;
+    }
+
+    if (targetRightWidth <
+        currentRightWidth) {
+        return
+            CompactResizeFirst::Right;
+    }
+
+    return
+        CompactResizeFirst::None;
+}
+
 inline std::array<int, 2> CompactDividerWidths(
     int proposedLeftWidth,
     int totalWidth,
