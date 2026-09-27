@@ -18,9 +18,9 @@
 - v0.3.13 default-vs-minimum width fix: **implemented / CI-checked / merged / published / runtime-accepted**. `ToggleAdvanced` uses the same content-derived Compact minimum as normal manual resizing; `kCompactWindowWidth` remains only the startup default. Narrower- and wider-than-default Compact widths now survive Compact -> Advanced -> Compact.
 - v0.3.14 Compact two-column fill/split UX: **implemented / CI-checked / merged / published; runtime gate failed on divider drag**. Window resizing works and the right-hand outer divider is locked, but dragging the middle divider can still grow the left column without atomically shrinking the right column, pushing column 2 out of view and creating a horizontal scrollbar. Fix this as a true give-and-take transaction before accepting v0.3.14.
 - v0.3.15 Compact divider transaction fix: **implemented / CI-checked / merged / published; partial runtime pass**. Expanding the left Compact column no longer creates a horizontal scrollbar immediately, but the divider transaction still clamps both primary columns only to the generic 40 px floor. This lets the right visible column shrink below its intended Compact minimum; after entering that invalid state, dragging back left can expose a horizontal scrollbar. Fix by enforcing the real per-column Compact minima throughout fitting and divider transactions.
-- v0.3.16 Compact minimum-width fix: **implemented / CI-checked / merged / published; runtime gate pending**. Compact fitting and divider transactions now use the real asymmetric minimums: Name 220 px and Status 150 px, mapped by logical column even when swapped. The divider cannot drive the companion column below its Compact minimum.
-- Current goal: run the focused **published v0.3.16 runtime gate** for the oversize-then-reverse divider case and quick regressions.
-- Current scope boundary: v0.3.16 is published and CI/release-verified but not yet runtime-accepted. Keep the separately observed Refresh All viewport jump queued and do not start it until this gate is resolved. Do not start async DLL discovery, Add-Git stale-request work, warning cleanup, rate-limit propagation, staging-name cleanup or unrelated UI work.
+- v0.3.16 Compact minimum-width fix: **implemented / CI-checked / merged / published; partial runtime pass**. Self-update passed; the companion column now stops at its intended minimum in both column orders; whole-window resize and Advanced regression checks passed. Remaining failure: when dragging the middle divider back left after pushing it right, a horizontal scrollbar still appears. This is now isolated to reverse-direction transaction ordering rather than width limits.
+- Current goal: fix only the remaining reverse-direction Compact divider transaction bug. The width limits are now correct; the remaining problem is that growing the right column before Windows commits the left-column shrink can transiently make the total width exceed the client area and create the scrollbar.
+- Current scope boundary: v0.3.16 is published but not runtime-accepted. Only the direction-safe Compact divider transaction ordering is in scope. Keep the separately observed Refresh All viewport jump queued and do not start it until this gate is resolved. Do not start async DLL discovery, Add-Git stale-request work, warning cleanup, rate-limit propagation, staging-name cleanup or unrelated UI work.
 - Audit continuity: `audit_dump.md` is a temporary scratch checkpoint for the interrupted broad audit only; this file remains the sole authoritative live development source of truth.
 - Documentation-only commits after the release do not change the published runtime baseline.
 
@@ -489,26 +489,22 @@ The focused post-v0.3.6 branch/list issues remain runtime-confirmed fixed in v0.
 
 ### Next Runtime Test
 
-Published `v0.3.16` is the active focused runtime gate.
+Published `v0.3.16` runtime result on 2026-09-27:
+- self-update/startup: passed;
+- dragging right now stops the companion column at its intended Compact minimum: passed;
+- the same minimum behavior works in both Name/Status orders: passed;
+- whole-window resize distribution: passed;
+- Advanced resize/reorder regression smoke: passed;
+- **remaining failure:** when reversing the middle divider back left after pushing it right, a horizontal scrollbar still appears.
 
-v0.3.15 runtime history:
-- self-update/startup passed;
-- whole-window resize distribution passed;
-- right-hand outer divider lock passed;
-- middle-divider give-and-take was much closer: growing the left column no longer immediately created a horizontal scrollbar;
-- remaining failure: the companion column could be squeezed below its intended Compact minimum because the transaction still used the generic 40 px floor; reversing the divider after that could expose a horizontal scrollbar.
+Interpretation: the minima fix worked. The remaining bug is transaction ordering on reverse drag: the companion/right column is expanded before the native header has committed the left-column shrink, so the two widths temporarily exceed the Compact client width.
 
-Required v0.3.16 checks:
-1. normal self-update from v0.3.15 to v0.3.16 and restart/state load;
-2. drag the Compact middle divider hard toward the right until it stops;
-3. confirm the companion column stops at its intended minimum rather than truncating further;
-4. reverse the divider hard back left and confirm **no horizontal scrollbar appears**;
-5. repeat with Name/Status swapped;
-6. confirm the far-right outer divider remains locked;
-7. confirm whole-window resizing still distributes width correctly;
-8. quick Advanced resize/reorder regression smoke.
-
-If these pass, accept the combined v0.3.14-v0.3.16 Compact fill/split work. The separately recorded Refresh All viewport jump is then the next narrow UI follow-up.
+After the focused patch release:
+1. push the middle divider hard right to the minimum clamp;
+2. reverse it hard left;
+3. confirm no horizontal scrollbar appears at any point;
+4. repeat in both Name/Status orders;
+5. confirm minima, whole-window resize, locked outer divider and Advanced behavior remain correct.
 
 A1's managed same-root replacement check remains deferred. The current product workflow has **Remove Addon**, not the old Uninstall flow.
 
@@ -594,12 +590,17 @@ Do not add support for user-uploaded ZIP/7z/RAR/installer/bundle release assets 
 
 ## Exact Next Step
 
-Run the published v0.3.16 runtime gate above. Do not begin another source slice until it is resolved.
+Fix only the reverse-direction Compact divider transaction ordering.
 
-The critical regression is the exact runtime failure from v0.3.15: drag the visually left Compact column as wide as possible, verify the companion column stops at its real Compact minimum, then reverse the drag and verify no horizontal scrollbar appears. Repeat with Name/Status swapped.
+The current pre-change handler safely processes rightward drag because it shrinks the companion column before Windows grows the left column. On leftward drag it does the opposite unsafe sequence: it grows the companion column before Windows has shrunk the left column, transiently exceeding the Compact client width.
 
-Also verify the already-passing outer-divider lock and whole-window resize behavior, then do a quick Advanced resize/reorder smoke.
+Implement the divider resize as a fully owned transaction:
+- compute the final left/right widths;
+- cancel the native proposed single-column commit;
+- under a re-entrancy guard, apply the **shrinking column first**, then the growing column;
+- preserve the invariant throughout the transaction so total visible width never exceeds the Compact list client width;
+- keep the established Name 220 px / Status 150 px minima, swapped-order handling, locked outer divider, window-resize distribution and Advanced behavior unchanged.
 
-If v0.3.16 passes, record the combined v0.3.14-v0.3.16 Compact fill/split work as runtime-accepted and address the separately queued **Refresh All viewport jump** next. Async latest-stable DLL discovery remains the next deferred robustness slice after that UI follow-up.
+Add deterministic coverage for direction/order selection where practical, run Build/CTest, publish the patch release, and retest only this reverse-drag edge plus the quick regressions.
 
-Do not mix Add-Git stale-request work, warning cleanup, rate-limit propagation, staging-name cleanup or unrelated UI changes into this gate.
+Keep the Refresh All viewport-jump issue separate and queued. Do not mix async DLL discovery, Add-Git stale-request work, warning cleanup, rate-limit propagation, staging-name cleanup or unrelated UI changes into this fix.
