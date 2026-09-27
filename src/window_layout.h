@@ -10,20 +10,28 @@ inline std::array<int, 2> FitCompactColumnWidths(
     int firstWidth,
     int secondWidth,
     int totalWidth,
-    int minimumWidth) {
+    int firstMinimumWidth,
+    int secondMinimumWidth) {
     const int total =
         std::max(
             0,
             totalWidth);
-    const int minimum =
+    const int firstMinimum =
         std::max(
             0,
-            minimumWidth);
+            firstMinimumWidth);
+    const int secondMinimum =
+        std::max(
+            0,
+            secondMinimumWidth);
 
     if (total <=
-        minimum * 2) {
+        firstMinimum +
+            secondMinimum) {
         const int first =
-            total / 2;
+            std::min(
+                total,
+                firstMinimum);
         return {
             first,
             total - first};
@@ -37,8 +45,8 @@ inline std::array<int, 2> FitCompactColumnWidths(
         std::clamp(
             firstWidth +
                 delta / 2,
-            minimum,
-            total - minimum);
+            firstMinimum,
+            total - secondMinimum);
 
     return {
         first,
@@ -48,20 +56,28 @@ inline std::array<int, 2> FitCompactColumnWidths(
 inline std::array<int, 2> CompactDividerWidths(
     int proposedLeftWidth,
     int totalWidth,
-    int minimumWidth) {
+    int leftMinimumWidth,
+    int rightMinimumWidth) {
     const int total =
         std::max(
             0,
             totalWidth);
-    const int minimum =
+    const int leftMinimum =
         std::max(
             0,
-            minimumWidth);
+            leftMinimumWidth);
+    const int rightMinimum =
+        std::max(
+            0,
+            rightMinimumWidth);
 
     if (total <=
-        minimum * 2) {
+        leftMinimum +
+            rightMinimum) {
         const int left =
-            total / 2;
+            std::min(
+                total,
+                leftMinimum);
         return {
             left,
             total - left};
@@ -70,8 +86,8 @@ inline std::array<int, 2> CompactDividerWidths(
     const int left =
         std::clamp(
             proposedLeftWidth,
-            minimum,
-            total - minimum);
+            leftMinimum,
+            total - rightMinimum);
 
     return {
         left,
