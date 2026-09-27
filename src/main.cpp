@@ -593,6 +593,24 @@ int PackageListClientWidth() {
             client.left));
 }
 
+int CompactColumnMinimumWidth(
+    int column) {
+    if (column ==
+        kPackageColumnName) {
+        return
+            kCompactNameColumnMinWidth;
+    }
+
+    if (column ==
+        kPackageColumnStatus) {
+        return
+            kCompactStatusColumnMinWidth;
+    }
+
+    return
+        kPackageColumnMinWidth;
+}
+
 std::array<int, tp::kPackageColumnCount>
 CurrentPackageColumnOrder() {
     std::array<int, tp::kPackageColumnCount> order =
@@ -687,7 +705,10 @@ void SaveCurrentPackageColumnLayout() {
                     g_packageList,
                     leftColumn),
                 PackageListClientWidth(),
-                kPackageColumnMinWidth);
+                CompactColumnMinimumWidth(
+                    leftColumn),
+                CompactColumnMinimumWidth(
+                    rightColumn));
 
         ListView_SetColumnWidth(
             g_packageList,
@@ -771,7 +792,8 @@ void ResizeListColumns() {
                 widths[static_cast<std::size_t>(
                     kPackageColumnStatus)],
                 PackageListClientWidth(),
-                kPackageColumnMinWidth);
+                kCompactNameColumnMinWidth,
+                kCompactStatusColumnMinWidth);
 
         ListView_SetColumnWidth(
             g_packageList,
@@ -6905,7 +6927,10 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                         headerNotification
                             ->pitem->cxy,
                         PackageListClientWidth(),
-                        kPackageColumnMinWidth);
+                        CompactColumnMinimumWidth(
+                            compactLeftColumn),
+                        CompactColumnMinimumWidth(
+                            compactRightColumn));
 
                 headerNotification
                     ->pitem->cxy =
