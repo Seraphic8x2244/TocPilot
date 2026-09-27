@@ -2,17 +2,23 @@
 
 #include <windows.h>
 
+#include <cstdint>
 #include <filesystem>
 #include <string>
 #include <string_view>
 
 namespace tp {
 
+inline constexpr std::uint64_t kMaxSelfUpdateChecksumBytes =
+    64 * 1024;
+
 struct ReleaseInfo {
     std::wstring tag;
     std::wstring assetUrl;
     std::wstring assetDigest;
     std::wstring checksumUrl;
+    std::uint64_t assetSize = 0;
+    std::uint64_t checksumSize = 0;
 };
 
 enum class ReleaseCheckState {
@@ -35,6 +41,15 @@ bool ResolveLatestReleaseTag(
 bool CheckLatestRelease(
     ReleaseInfo& release,
     ReleaseCheckState& state,
+    std::wstring& error);
+
+bool ValidateSelfUpdateRelease(
+    const ReleaseInfo& release,
+    std::wstring& error);
+
+bool ValidateSelfUpdateDownloadSize(
+    std::uint64_t expectedSize,
+    std::uint64_t actualSize,
     std::wstring& error);
 
 bool DownloadVerifyAndLaunchUpdater(
