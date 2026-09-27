@@ -5,11 +5,11 @@
 ## Current
 
 - Active branch: `main`.
-- Source/application version: `v0.3.14`.
-- Latest published release: `v0.3.14`.
-- Release/source commit and tag target: `d563ab619e075ce7a54d51aead8670bfd6b4f6b4` (merge of release-prep PR #21).
+- Source/application version: `v0.3.15`.
+- Latest published release: `v0.3.15`.
+- Release/source commit and tag target: `511ea29eb533c7a601340b569123fa8ce7a6c77c` (merge of release-prep PR #23).
 - Latest fully runtime-accepted release is now `v0.3.13` at `a7caa0cb3bc5c2a6d7a51f7fd2e370e7628da183`. The combined v0.3.11-v0.3.13 runtime gate passed on 2026-09-27: hardened updater path, restart/state load, constrained/shared Name/Status columns, Compact width restore below and above the startup default, and the Advanced round trip are accepted.
-- Latest verified `main` source-changing head: `a4a384e834730534695d7d77625566dbdceae6a9` (merge of PR #20, Compact two-column fill/split UX). Release-only version commit `d563ab619e075ce7a54d51aead8670bfd6b4f6b4` sits above it.
+- Latest verified `main` source-changing head: `4278745f8aef6372c7f49a7c1a3612e52ae7b634` (merge of PR #22, Compact middle-divider transactional resize fix). Release-only version commit `511ea29eb533c7a601340b569123fa8ce7a6c77c` sits above it.
 - A1 runtime gate: **accepted for forward development** on 2026-09-26. Fresh install, reinstall, Update New and Remove Addon passed. Managed same-root replacement runtime validation is explicitly deferred rather than blocking later work. The deterministic crash-window tests remain the primary validation for restart-recovery semantics.
 - A2 durable state semantic validation: **implemented / CI-checked / merged / published in v0.3.10 / runtime-accepted** as part of the combined v0.3.10 gate.
 - A3 + queued `www` presentation delta: **implemented / CI-checked / merged / published / runtime-accepted in v0.3.10**. ZIP members stream through miniz's extraction callback directly into staged files instead of allocating one full-member buffer; the existing 256 MiB per-entry and 1 GiB total policy limits remain. Deterministic archive coverage forges an oversized central-directory member size in a tiny fixture and verifies policy rejection before extraction staging. Advanced repository URLs are custom-drawn always blue + underlined and the header is lowercase `www`; Compact remained `Name | Status` in the accepted gate.
@@ -17,8 +17,9 @@
 - v0.3.12 Compact main-window-width follow-up: **implemented / CI-checked / merged / published; partial runtime pass**. Compact width is captured before entering Advanced and restored on return. The `v0.3.11 -> v0.3.12` self-update/restart passed, but runtime testing exposed that the restore path incorrectly treated the 590 px startup default as a hard Compact minimum.
 - v0.3.13 default-vs-minimum width fix: **implemented / CI-checked / merged / published / runtime-accepted**. `ToggleAdvanced` uses the same content-derived Compact minimum as normal manual resizing; `kCompactWindowWidth` remains only the startup default. Narrower- and wider-than-default Compact widths now survive Compact -> Advanced -> Compact.
 - v0.3.14 Compact two-column fill/split UX: **implemented / CI-checked / merged / published; runtime gate failed on divider drag**. Window resizing works and the right-hand outer divider is locked, but dragging the middle divider can still grow the left column without atomically shrinking the right column, pushing column 2 out of view and creating a horizontal scrollbar. Fix this as a true give-and-take transaction before accepting v0.3.14.
-- Current goal: fix only the v0.3.14 Compact middle-divider transaction bug: every divider drag update must keep the two visible column widths summing exactly to the Compact list client width, so increasing one immediately decreases the other and no horizontal scrollbar can appear.
-- Current scope boundary: v0.3.14 is published but not runtime-accepted. Only the Compact middle-divider give-and-take fix is in scope. Keep the separately observed Refresh All viewport jump queued and do not start it until this gate is resolved. Do not start async DLL discovery, Add-Git stale-request work, warning cleanup, rate-limit propagation, staging-name cleanup or unrelated UI work.
+- v0.3.15 Compact divider transaction fix: **implemented / CI-checked / merged / published; runtime gate pending**. The give-and-take now runs at `HDN_ITEMCHANGINGW`, before Windows commits the dragged width, and the companion column is updated first so the Compact total remains bounded by the list client width throughout the native resize.
+- Current goal: run the focused **published v0.3.15 runtime gate** for aggressive middle-divider dragging and the already-passing Compact/Advanced regressions.
+- Current scope boundary: v0.3.15 is published and CI/release-verified but not yet runtime-accepted. Keep the separately observed Refresh All viewport jump queued and do not start it until this gate is resolved. Do not start async DLL discovery, Add-Git stale-request work, warning cleanup, rate-limit propagation, staging-name cleanup or unrelated UI work.
 - Audit continuity: `audit_dump.md` is a temporary scratch checkpoint for the interrupted broad audit only; this file remains the sole authoritative live development source of truth.
 - Documentation-only commits after the release do not change the published runtime baseline.
 
@@ -487,19 +488,24 @@ The focused post-v0.3.6 branch/list issues remain runtime-confirmed fixed in v0.
 
 ### Next Runtime Test
 
-Published `v0.3.14` runtime result on 2026-09-27:
-- self-update/startup: passed;
-- Compact window resize distribution: passed;
-- right-hand outer divider locked: passed;
-- **middle-divider give-and-take: failed** — oversizing the left visible column can push the right visible column out of view and create a horizontal scrollbar.
+Published `v0.3.15` is the active focused runtime gate.
 
-After the focused patch release:
-1. drag the middle divider aggressively toward both extremes;
-2. confirm the opposite column shrinks/grows immediately and the two visible widths always fill exactly the Compact list width;
-3. confirm no horizontal scrollbar appears;
+v0.3.14 runtime history:
+- self-update/startup passed;
+- Compact whole-window resize distribution passed;
+- right-hand outer divider lock passed;
+- middle-divider give-and-take failed because the native header could commit the left-column growth independently and create a horizontal scrollbar.
+
+Required v0.3.15 checks:
+1. normal self-update from v0.3.14 to v0.3.15 and restart/state load;
+2. drag the Compact middle divider aggressively toward both extremes;
+3. confirm the opposite visible column shrinks/grows immediately and the two visible columns continue to fill the list without a horizontal scrollbar;
 4. repeat after swapping Name/Status;
-5. confirm whole-window resizing still distributes width correctly;
-6. quick Advanced regression smoke.
+5. confirm the far-right outer divider is still locked;
+6. confirm whole-window resizing still distributes width correctly;
+7. quick Advanced resize/reorder regression smoke.
+
+If these pass, accept the combined v0.3.14-v0.3.15 Compact fill/split gate. The separately recorded Refresh All viewport jump is then the next narrow UI follow-up.
 
 A1's managed same-root replacement check remains deferred. The current product workflow has **Remove Addon**, not the old Uninstall flow.
 
@@ -571,27 +577,26 @@ Do not add support for user-uploaded ZIP/7z/RAR/installer/bundle release assets 
 
 ## Release / Documentation Notes
 
-- Current published release is `v0.3.14` at `d563ab619e075ce7a54d51aead8670bfd6b4f6b4`.
-- PR #20 head `427ce3f6aec1cd9483468c2a61c2ae2d32052e17` passed Build workflow run `36319055568`, Windows x64 job `108619219428`, including **18/18 CTest tests** with expanded `window-layout-roundtrip` coverage.
-- PR #20 merged the Compact fill/split UX as `a4a384e834730534695d7d77625566dbdceae6a9`.
-- PR #21 head `ce47c9a224de47b080fb6ea7ddded6a7aea87afa` changed only release/version metadata and passed Build workflow run `36319292743`, Windows x64 job `108619889051`, including **18/18 CTest tests**.
-- Main push Build workflow run `36319503414`, Windows x64 job `108620472847`, passed **18/18 CTest tests**.
-- v0.3.14 Release workflow run `36319503408`, Windows x64 Release job `108620472715`, validated exact source version, passed **18/18 CTest tests**, generated the SHA-256 sidecar, created tag `v0.3.14` and published direct assets.
-- Published v0.3.14 `TocPilot.exe`: 2,497,536 bytes, SHA-256 `df6422176892459dc60bbf2e7a7afef91cb8893f5bb3123b97931efac2f19d24`.
-- Published v0.3.14 `TocPilot.exe.sha256`: 78 bytes; asset SHA-256 `c01c58bb2a54c5650fd3455d0befab9d9e82f2a89be96089203a1dde817fc9e8`.
-- Latest fully runtime-accepted release is v0.3.13 until the focused v0.3.14 gate passes.
-- The Refresh-list viewport jump remains recorded separately and was intentionally not mixed into v0.3.14.
+- Current published release is `v0.3.15` at `511ea29eb533c7a601340b569123fa8ce7a6c77c`.
+- v0.3.14 remains a partial runtime result: whole-window width distribution and the locked outer divider passed, while the middle-divider give-and-take failed.
+- PR #22 head `ed5298c42a9bab3c9af9e843a252775fec6b25ec` passed Build workflow run `36320065685`, Windows x64 job `108622059387`, including **18/18 CTest tests** and an explicit Compact total-width invariant assertion.
+- PR #22 merged the transactional divider fix as `4278745f8aef6372c7f49a7c1a3612e52ae7b634`.
+- PR #23 head `5c0a07107ff2a80ca008f918d423a9cc60be7162` changed only release/version metadata and passed Build workflow run `36320278118`, Windows x64 job `108622661651`, including **18/18 CTest tests**.
+- Main push Build workflow run `36320555682`, Windows x64 job `108623441134`, passed **18/18 CTest tests**.
+- v0.3.15 Release workflow run `36320555638`, Windows x64 Release job `108623440989`, validated exact source version, passed **18/18 CTest tests**, generated the SHA-256 sidecar, created tag `v0.3.15` and published direct assets.
+- Published v0.3.15 `TocPilot.exe`: 2,497,536 bytes, SHA-256 `75a5821eabf50f3b58e367f0a7be4d3a81fa07d5b1b8e3abc9e03d9b863595e0`.
+- Published v0.3.15 `TocPilot.exe.sha256`: 78 bytes; asset SHA-256 `4783b11c8429ed84098bfc6e5efe2549182a0933c24f2da53aa001e45bf72e2c`.
+- Latest fully runtime-accepted release remains v0.3.13 until the focused v0.3.15 gate passes.
+- The Refresh-list viewport jump remains recorded separately and was intentionally not mixed into v0.3.15.
 
 ## Exact Next Step
 
-Fix the v0.3.14 Compact middle-divider behavior as a true give-and-take transaction. The native header must not be allowed to apply an independent left-column width that temporarily or finally makes the two visible columns wider than the list client area.
+Run the published v0.3.15 runtime gate above. Do not begin another source slice until it is resolved.
 
-Keep the invariant during every divider update:
+The critical check is the Compact **middle-divider give-and-take** under aggressive dragging: increasing the visually left column must immediately decrease the visually right column, the total must remain the Compact list client width, and no horizontal scrollbar may appear. Repeat with Name/Status swapped.
 
-`leftVisibleWidth + rightVisibleWidth == CompactListClientWidth`
+Also verify the already-passing outer-divider lock and whole-window resize behavior, then do a quick Advanced resize/reorder smoke.
 
-Clamp only to the existing minimum-width policy. Whichever primary column is visually left owns the middle divider; the visual right column remains non-resizable. Preserve the already-passing whole-window resize behavior and keep Advanced unchanged.
+If v0.3.15 passes, record the combined v0.3.14-v0.3.15 Compact fill/split work as runtime-accepted and address the separately queued **Refresh All viewport jump** next. Async latest-stable DLL discovery remains the next deferred robustness slice after that UI follow-up.
 
-Add deterministic coverage where practical, run Build/CTest, publish the patch release, and retest only this divider transaction plus the quick Compact/Advanced regression smoke.
-
-Keep the Refresh All viewport-jump issue separate and queued. Do not mix async DLL discovery, Add-Git stale-request work, warning cleanup, rate-limit propagation, staging-name cleanup or unrelated UI changes into this fix.
+Do not mix Add-Git stale-request work, warning cleanup, rate-limit propagation, staging-name cleanup or unrelated UI changes into this gate.
