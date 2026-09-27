@@ -20,7 +20,7 @@
 - v0.3.15 Compact divider transaction fix: **implemented / CI-checked / merged / published; partial runtime pass**. Expanding the left Compact column no longer creates a horizontal scrollbar immediately, but the divider transaction still clamps both primary columns only to the generic 40 px floor. This lets the right visible column shrink below its intended Compact minimum; after entering that invalid state, dragging back left can expose a horizontal scrollbar. Fix by enforcing the real per-column Compact minima throughout fitting and divider transactions.
 - v0.3.16 Compact minimum-width fix: **implemented / CI-checked / merged / published; partial runtime pass**. Self-update passed; the companion column now stops at its intended minimum in both column orders; whole-window resize and Advanced regression checks passed. Remaining failure: when dragging the middle divider back left after pushing it right, a horizontal scrollbar still appears. This is now isolated to reverse-direction transaction ordering rather than width limits.
 - v0.3.17 reverse-direction divider fix: **implemented / CI-checked / merged / published / runtime-accepted**. Compact divider dragging is a fully owned two-column transaction: the shrinking column is applied first, the growing column second, and the native one-column commit is cancelled under a re-entrancy guard. User runtime confirmed the rightward clamp, leftward reversal, both Name/Status orders, window resizing and Advanced regression checks all pass with no horizontal scrollbar.
-- Current goal: implement the focused **P6B icon-toolbar pass** agreed on 2026-09-28, before any art/skin pass.
+- Current goal: complete the build/CI gate for the focused **P6B icon-toolbar pass**; implementation is now in source, with the queued **Refresh All viewport jump** next.
 - Current scope boundary: toolbar presentation/naming only. Reuse the existing command IDs, handlers, enable/disable logic and package-operation behavior; do not duplicate live controls or mix the queued Refresh All viewport-jump fix, async latest-stable DLL discovery, Add-Git stale-request work, warning cleanup, rate-limit propagation or staging-name cleanup into this slice.
 - Audit continuity: `audit_dump.md` is a temporary scratch checkpoint for the interrupted broad audit only; this file remains the sole authoritative live development source of truth.
 - Documentation-only commits after the release do not change the published runtime baseline.
@@ -538,7 +538,7 @@ Once robustness findings are under control, exercise every normal workflow as a 
 
 Review consistency of labels, button state, selection/focus, keyboard/mouse behaviour, progress/status feedback, sorting/reordering, confirmations, empty/loading/error states, resize/DPI/text-scale behaviour and unnecessary friction. Prefer small coherent UX fixes over adding new capability.
 
-##### Current icon-toolbar slice — agreed, implementation pending
+##### Current icon-toolbar slice — implemented, CI pending
 
 This is a functional/spacing pass only, not the later art-skin pass.
 
@@ -616,7 +616,7 @@ Do not add support for user-uploaded ZIP/7z/RAR/installer/bundle release assets 
 
 ## Exact Next Step
 
-Implement only the agreed **P6B icon-toolbar slice** documented above.
+The **P6B icon-toolbar source pass is implemented**. Build/CTest it without widening scope; after the P6B gate, return to the queued **Refresh All viewport jump**.
 
 Use the existing command/state machinery and replace only the toolbar presentation: add the real Font Awesome Free Solid resources under `resources/icons/fa-solid/`, the custom Reinstall Repository `folder-repeat` resource under `resources/icons/custom/`, and keep Launch on its current executable/context icon. Build 32 x 32 icon buttons with 16 x 16 glyphs, apply the agreed Compact/Advanced visibility/order, centre the grouped Compact strip, and update tooltips/accessibility text to the new names.
 

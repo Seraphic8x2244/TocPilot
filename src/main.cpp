@@ -13,6 +13,7 @@
 #include "removal_prompt.h"
 #include "state.h"
 #include "splash.h"
+#include "toolbar_icons.h"
 #include "update.h"
 #include "update_all.h"
 #include "ui_dialog.h"
@@ -84,11 +85,12 @@ constexpr int IDC_BRANCH_SELECTOR = 1024;
 
 constexpr int kCompactWindowWidth = 590;
 constexpr int kDefaultWindowHeight = 480;
-constexpr int kCompactButtonMinWidth = 100;
-constexpr int kAdvancedButtonMinWidth = 150;
+constexpr int kToolbarButtonSize = 32;
+constexpr int kToolbarIconSize = 16;
 constexpr int kToolbarButtonGap = 6;
-constexpr int kCompactPrimaryButtonCount = 4;
-constexpr int kAdvancedButtonCount = 8;
+constexpr int kToolbarGroupExtraGap = 16;
+constexpr int kCompactPrimaryButtonCount = 6;
+constexpr int kAdvancedButtonCount = 10;
 constexpr int kCompactNameColumnMinWidth = 220;
 constexpr int kCompactStatusColumnMinWidth = 150;
 constexpr int kPackageColumnMinWidth = 40;
@@ -161,6 +163,8 @@ HFONT g_boldUiFont = nullptr;
 HFONT g_linkUiFont = nullptr;
 HICON g_wowIcon = nullptr;
 HICON g_vanillaFixesIcon = nullptr;
+tp::ToolbarIcons g_toolbarIcons;
+HWND g_toolbarTooltip = nullptr;
 
 tp::ReleaseInfo g_release;
 tp::AppState g_state;
@@ -509,22 +513,29 @@ void SetTextScaleSelection() {
     ComboBox_SetCurSel(g_textScaleCombo, bestIndex);
 }
 
+int ToolbarStripWidth(bool advanced) {
+    if (advanced) {
+        return
+            kAdvancedButtonCount *
+                kToolbarButtonSize +
+            (kAdvancedButtonCount - 1) *
+                kToolbarButtonGap;
+    }
+
+    constexpr int compactGroupBreaks = 3;
+    return
+        kCompactPrimaryButtonCount *
+            kToolbarButtonSize +
+        (kCompactPrimaryButtonCount - 1) *
+            kToolbarButtonGap +
+        compactGroupBreaks *
+            kToolbarGroupExtraGap;
+}
+
 int RequiredClientWidth(
     bool advanced) {
-    const int buttonCount =
-        advanced
-            ? kAdvancedButtonCount
-            : kCompactPrimaryButtonCount;
-    const int buttonMinWidth =
-        advanced
-            ? kAdvancedButtonMinWidth
-            : kCompactButtonMinWidth;
-
     const int toolbarWidth =
-        buttonCount *
-            buttonMinWidth +
-        (buttonCount - 1) *
-            kToolbarButtonGap;
+        ToolbarStripWidth(advanced);
 
     const int columnsWidth =
         advanced
@@ -819,6 +830,9 @@ void ResizeListColumns() {
     }
 }
 
+// Legacy wide text-toolbar layout retained as reference for the
+// later P6C visual pass. This code is not live.
+#if 0
 void LayoutControls(HWND hwnd) {
     RECT client{};
     GetClientRect(hwnd, &client);
@@ -992,6 +1006,186 @@ void LayoutControls(HWND hwnd) {
             iconSize,
             TRUE);
     }
+}
+
+#endif
+
+void LayoutControls(HWND hwnd) {
+    RECT client{};
+    GetClientRect(hwnd, &client);
+
+    const int width =
+        client.right - client.left;
+    const int height =
+        client.bottom - client.top;
+    const int contentWidth =
+        std::max(
+            320,
+            width - 40);
+
+    if (g_rootLabel) {
+        ShowWindow(g_rootLabel, SW_HIDE);
+    }
+    if (g_wowStatus) {
+        ShowWindow(g_wowStatus, SW_HIDE);
+    }
+    if (g_githubStatus) {
+        ShowWindow(g_githubStatus, SW_HIDE);
+    }
+    if (g_releaseStatus) {
+        ShowWindow(g_releaseStatus, SW_HIDE);
+    }
+    if (g_stateStatus) {
+        ShowWindow(g_stateStatus, SW_HIDE);
+    }
+    if (g_packageHint) {
+        ShowWindow(g_packageHint, SW_HIDE);
+    }
+    if (g_uninstallPackageButton) {
+        ShowWindow(g_uninstallPackageButton, SW_HIDE);
+    }
+    if (g_textScaleLabel) {
+        ShowWindow(g_textScaleLabel, SW_HIDE);
+    }
+    if (g_textScaleCombo) {
+        ShowWindow(g_textScaleCombo, SW_HIDE);
+    }
+
+    constexpr int buttonY = 16;
+    const std::array<HWND, 10> toolbarControls{
+        g_updateAllButton,
+        g_refreshPackagesButton,
+        g_launchWowButton,
+        g_addPackageButton,
+        g_installPackageButton,
+        g_removePackageButton,
+        g_inspectPackageButton,
+        g_adoptGitButton,
+        g_tocPilotButton,
+        g_advancedButton
+    };
+
+    for (HWND control : toolbarControls) {
+        if (control) {
+            ShowWindow(control, SW_HIDE);
+        }
+    }
+
+    const auto placeStrip =
+        [&](const auto& controls,
+            const auto& gaps) {
+            int stripWidth =
+                static_cast<int>(
+                    controls.size()) *
+                    kToolbarButtonSize;
+
+            for (const int gap : gaps) {
+                stripWidth += gap;
+            }
+
+            int x =
+                20 +
+                std::max(
+                    0,
+                    (contentWidth -
+                     stripWidth) /
+                        2);
+
+            for (std::size_t index = 0;
+                 index < controls.size();
+                 ++index) {
+                HWND control =
+                    controls[index];
+
+                if (control) {
+                    ShowWindow(
+                        control,
+                        SW_SHOW);
+                    MoveWindow(
+                        control,
+                        x,
+                        buttonY,
+                        kToolbarButtonSize,
+                        kToolbarButtonSize,
+                        TRUE);
+                }
+
+                if (index < gaps.size()) {
+                    x +=
+                        kToolbarButtonSize +
+                        gaps[index];
+                }
+            }
+        };
+
+    if (!g_advancedVisible) {
+        const std::array<HWND, 6> controls{
+            g_updateAllButton,
+            g_refreshPackagesButton,
+            g_launchWowButton,
+            g_addPackageButton,
+            g_removePackageButton,
+            g_advancedButton
+        };
+        constexpr std::array<int, 5> gaps{
+            kToolbarButtonGap,
+            kToolbarButtonGap +
+                kToolbarGroupExtraGap,
+            kToolbarButtonGap +
+                kToolbarGroupExtraGap,
+            kToolbarButtonGap,
+            kToolbarButtonGap +
+                kToolbarGroupExtraGap
+        };
+        placeStrip(controls, gaps);
+    } else {
+        const std::array<HWND, 10> controls{
+            g_updateAllButton,
+            g_refreshPackagesButton,
+            g_launchWowButton,
+            g_addPackageButton,
+            g_installPackageButton,
+            g_removePackageButton,
+            g_inspectPackageButton,
+            g_adoptGitButton,
+            g_tocPilotButton,
+            g_advancedButton
+        };
+        constexpr std::array<int, 9> gaps{
+            kToolbarButtonGap,
+            kToolbarButtonGap,
+            kToolbarButtonGap,
+            kToolbarButtonGap,
+            kToolbarButtonGap,
+            kToolbarButtonGap,
+            kToolbarButtonGap,
+            kToolbarButtonGap,
+            kToolbarButtonGap
+        };
+        placeStrip(controls, gaps);
+    }
+
+    const int listTop = 62;
+    const int listBottomPadding = 20;
+    const int listHeight =
+        std::max(
+            220,
+            height -
+                listTop -
+                listBottomPadding);
+
+    if (g_packageList) {
+        MoveWindow(
+            g_packageList,
+            20,
+            listTop,
+            contentWidth,
+            listHeight,
+            TRUE);
+        ResizeListColumns();
+    }
+
+    PositionBranchSelector();
 }
 
 void AddPackageListColumns() {
@@ -3304,25 +3498,9 @@ void UpdatePackageButtons() {
     }
 
     if (g_installPackageButton) {
-        const wchar_t* label =
-            L"Install Addon";
-
-        if (selectedPackage &&
-            selectedPackage->mode == L"release") {
-            label =
-                selectedPackage->installedRevision.empty()
-                    ? L"Install DLL"
-                    : L"Update DLL";
-        } else if (
-            selectedPackage &&
-            !selectedPackage->installedRevision.empty()) {
-            label =
-                L"Reinstall Addon";
-        }
-
         SetWindowTextW(
             g_installPackageButton,
-            label);
+            L"Reinstall Repository");
         EnableWindow(
             g_installPackageButton,
             canInstall && !packageBusy
@@ -4427,7 +4605,7 @@ void FinishAutoStatusRefresh(HWND hwnd) {
     if (g_refreshPackagesButton) {
         SetWindowTextW(
             g_refreshPackagesButton,
-            L"Refresh All");
+            L"Refresh");
     }
 
     RefreshPackageStateUi();
@@ -4578,7 +4756,7 @@ void StartAutoStatusRefresh(HWND hwnd) {
     if (g_refreshPackagesButton) {
         SetWindowTextW(
             g_refreshPackagesButton,
-            L"Refreshing...");
+            L"Refresh");
     }
 
     UpdatePackageButtons();
@@ -4603,7 +4781,7 @@ void FinishUpdateAll() {
     g_updateAllInProgress = false;
     SetWindowTextW(
         g_updateAllButton,
-        L"Update New");
+        L"Update");
 
     RefreshPackageStateUi();
     ScrollPackageListToTop();
@@ -4691,8 +4869,8 @@ void CompleteUpdateAllStep(
             error)) {
         g_updateAllInProgress = false;
         SetWindowTextW(
-            g_updateAllButton,
-            L"Update New");
+        g_updateAllButton,
+        L"Update");
         UpdatePackageButtons();
 
         MessageBoxW(
@@ -4780,7 +4958,7 @@ void StartUpdateAll(HWND hwnd) {
     g_updateAllInProgress = true;
     SetWindowTextW(
         g_updateAllButton,
-        L"Updating...");
+        L"Update");
     UpdatePackageButtons();
 
     ContinueUpdateAll(hwnd);
@@ -6360,9 +6538,7 @@ void ToggleAdvanced(HWND hwnd) {
     if (g_advancedButton) {
         SetWindowTextW(
             g_advancedButton,
-            g_advancedVisible
-                ? L"< Advanced"
-                : L"Advanced >");
+            L"Advanced");
     }
 
     const int compactMinimum =
@@ -6485,6 +6661,9 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             GetModuleHandleW(nullptr),
             nullptr);
 
+        // Legacy wide text-toolbar creation retained as reference for the
+        // later P6C visual pass. These controls are not live.
+#if 0
         g_updateAllButton = CreateWindowExW(
             0,
             L"BUTTON",
@@ -6631,6 +6810,114 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             GetModuleHandleW(nullptr),
             nullptr);
 
+#endif
+
+        const auto createToolbarButton =
+            [&](const wchar_t* name,
+                int controlId) {
+                return CreateWindowExW(
+                    0,
+                    L"BUTTON",
+                    name,
+                    WS_CHILD | WS_VISIBLE |
+                        WS_TABSTOP |
+                        BS_PUSHBUTTON |
+                        BS_ICON,
+                    0,
+                    0,
+                    kToolbarButtonSize,
+                    kToolbarButtonSize,
+                    hwnd,
+                    reinterpret_cast<HMENU>(
+                        static_cast<INT_PTR>(
+                            controlId)),
+                    GetModuleHandleW(nullptr),
+                    nullptr);
+            };
+
+        g_updateAllButton =
+            createToolbarButton(
+                L"Update",
+                IDC_UPDATE_ALL);
+        g_refreshPackagesButton =
+            createToolbarButton(
+                L"Refresh",
+                IDC_REFRESH_PACKAGES);
+        g_launchWowButton =
+            createToolbarButton(
+                L"Launch",
+                IDC_LAUNCH_WOW);
+        g_addPackageButton =
+            createToolbarButton(
+                L"Add Repository",
+                IDC_ADD_PACKAGE);
+        g_installPackageButton =
+            createToolbarButton(
+                L"Reinstall Repository",
+                IDC_INSTALL_PACKAGE);
+        g_removePackageButton =
+            createToolbarButton(
+                L"Remove Repository",
+                IDC_REMOVE_PACKAGE);
+        g_inspectPackageButton =
+            createToolbarButton(
+                L"Inspect",
+                IDC_INSPECT_PACKAGE);
+        g_adoptGitButton =
+            createToolbarButton(
+                L"Scan",
+                IDC_ADOPT_GIT);
+        g_tocPilotButton =
+            createToolbarButton(
+                L"TocPilot",
+                IDC_TOCPILOT);
+        g_advancedButton =
+            createToolbarButton(
+                L"Advanced",
+                IDC_ADVANCED);
+
+        // Preserve the existing non-toolbar legacy control/state path.
+        g_uninstallPackageButton = CreateWindowExW(
+            0,
+            L"BUTTON",
+            L"Uninstall",
+            WS_CHILD | WS_TABSTOP | BS_PUSHBUTTON,
+            0,
+            0,
+            80,
+            32,
+            hwnd,
+            reinterpret_cast<HMENU>(
+                static_cast<INT_PTR>(
+                    IDC_UNINSTALL_PACKAGE)),
+            GetModuleHandleW(nullptr),
+            nullptr);
+
+        tp::InitializeToolbarIcons(
+            GetModuleHandleW(nullptr),
+            g_toolbarIcons);
+        tp::ApplyToolbarIcon(g_updateAllButton, g_toolbarIcons.update, L"Update");
+        tp::ApplyToolbarIcon(g_refreshPackagesButton, g_toolbarIcons.refresh, L"Refresh");
+        tp::ApplyToolbarIcon(g_addPackageButton, g_toolbarIcons.addRepository, L"Add Repository");
+        tp::ApplyToolbarIcon(g_installPackageButton, g_toolbarIcons.reinstallRepository, L"Reinstall Repository");
+        tp::ApplyToolbarIcon(g_removePackageButton, g_toolbarIcons.removeRepository, L"Remove Repository");
+        tp::ApplyToolbarIcon(g_inspectPackageButton, g_toolbarIcons.inspect, L"Inspect");
+        tp::ApplyToolbarIcon(g_adoptGitButton, g_toolbarIcons.scan, L"Scan");
+        tp::ApplyToolbarIcon(g_tocPilotButton, g_toolbarIcons.tocPilot, L"TocPilot");
+        tp::ApplyToolbarIcon(g_advancedButton, g_toolbarIcons.advanced, L"Advanced");
+
+        g_toolbarTooltip = tp::CreateToolbarTooltip(hwnd);
+        tp::AddToolbarTooltip(g_toolbarTooltip, hwnd, g_updateAllButton, L"Update");
+        tp::AddToolbarTooltip(g_toolbarTooltip, hwnd, g_refreshPackagesButton, L"Refresh");
+        tp::AddToolbarTooltip(g_toolbarTooltip, hwnd, g_launchWowButton, L"Launch");
+        tp::AddToolbarTooltip(g_toolbarTooltip, hwnd, g_addPackageButton, L"Add Repository");
+        tp::AddToolbarTooltip(g_toolbarTooltip, hwnd, g_installPackageButton, L"Reinstall Repository");
+        tp::AddToolbarTooltip(g_toolbarTooltip, hwnd, g_removePackageButton, L"Remove Repository");
+        tp::AddToolbarTooltip(g_toolbarTooltip, hwnd, g_inspectPackageButton, L"Inspect");
+        tp::AddToolbarTooltip(g_toolbarTooltip, hwnd, g_adoptGitButton, L"Scan");
+        tp::AddToolbarTooltip(g_toolbarTooltip, hwnd, g_tocPilotButton, L"TocPilot");
+        tp::AddToolbarTooltip(g_toolbarTooltip, hwnd, g_advancedButton, L"Advanced");
+
         EnableWindow(g_updateAllButton, FALSE);
         EnableWindow(g_refreshPackagesButton, FALSE);
         EnableWindow(g_inspectPackageButton, FALSE);
@@ -6745,27 +7032,10 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             g_branchSelector,
             SW_HIDE);
 
-        g_launchWowButton = CreateWindowExW(
-            0,
-            L"BUTTON",
-            L"Launch WoW",
-            WS_CHILD | WS_VISIBLE | WS_TABSTOP |
-                BS_PUSHBUTTON | BS_ICON,
-            0,
-            0,
-            40,
-            40,
-            hwnd,
-            reinterpret_cast<HMENU>(
-                static_cast<INT_PTR>(
-                    IDC_LAUNCH_WOW)),
-            GetModuleHandleW(nullptr),
-            nullptr);
-
         g_wowIcon =
             LoadExecutableIcon(
                 g_root / L"WoW.exe",
-                36);
+                kToolbarIconSize);
 
         std::error_code vanillaFixesEc;
         g_hasVanillaFixes =
@@ -6779,7 +7049,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                 LoadExecutableIcon(
                     g_root /
                         L"VanillaFixes.exe",
-                    36);
+                    kToolbarIconSize);
         }
 
         const HICON launchIcon =
@@ -6790,9 +7060,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
 
         SetWindowTextW(
             g_launchWowButton,
-            g_hasVanillaFixes
-                ? L"Launch VanillaFixes"
-                : L"Launch WoW");
+            L"Launch");
 
         if (launchIcon) {
             SendMessageW(
@@ -9181,6 +9449,9 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             DestroyIcon(g_vanillaFixesIcon);
             g_vanillaFixesIcon = nullptr;
         }
+        tp::DestroyToolbarIcons(
+            g_toolbarIcons);
+        g_toolbarTooltip = nullptr;
         if (g_uiFont) {
             DeleteObject(g_uiFont);
             g_uiFont = nullptr;

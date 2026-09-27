@@ -41,6 +41,7 @@ add_executable(TocPilot WIN32
     src/removal_prompt.cpp
     src/state.cpp
     src/splash.cpp
+    src/toolbar_icons.cpp
     src/update.cpp
     src/update_all.cpp
     src/ui_dialog.cpp

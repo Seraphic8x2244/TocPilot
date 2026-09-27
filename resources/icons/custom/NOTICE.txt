@@ -1,0 +1,4 @@
+TocPilot folder-repeat is derived from Font Awesome Free 6.7.2 folder and repeat icons.
+Font Awesome Free by Fonticons, Inc. (https://fontawesome.com).
+Icon source is licensed under CC BY 4.0: https://creativecommons.org/licenses/by/4.0/
+Copyright 2024 Fonticons, Inc.
