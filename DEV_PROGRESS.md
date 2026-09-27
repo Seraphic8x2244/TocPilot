@@ -8,7 +8,7 @@
 - Source/application version: `v0.3.17`.
 - Latest published release: `v0.3.17`.
 - Release/source commit and tag target: `a636d1eb0d1a3c213bb96c84ecbce2b22ca09d82` (merge of release-prep PR #27).
-- Latest fully runtime-accepted release is now `v0.3.13` at `a7caa0cb3bc5c2a6d7a51f7fd2e370e7628da183`. The combined v0.3.11-v0.3.13 runtime gate passed on 2026-09-27: hardened updater path, restart/state load, constrained/shared Name/Status columns, Compact width restore below and above the startup default, and the Advanced round trip are accepted.
+- Latest fully runtime-accepted release is now `v0.3.17` at `a636d1eb0d1a3c213bb96c84ecbce2b22ca09d82`. The combined v0.3.14-v0.3.17 Compact fill/split gate passed on 2026-09-27: no Compact horizontal scrollbar under divider reversal, real Name/Status minimums hold in both orders, the far-right edge stays locked, whole-window resizing distributes width correctly, and Advanced resize/reorder behavior remains intact.
 - Latest verified `main` source-changing head: `2c7dd510e04be7cd28263fa004b65d32033a9056` (merge of PR #26, direction-safe fully owned Compact divider transaction). Release-only version commit `a636d1eb0d1a3c213bb96c84ecbce2b22ca09d82` sits above it.
 - A1 runtime gate: **accepted for forward development** on 2026-09-26. Fresh install, reinstall, Update New and Remove Addon passed. Managed same-root replacement runtime validation is explicitly deferred rather than blocking later work. The deterministic crash-window tests remain the primary validation for restart-recovery semantics.
 - A2 durable state semantic validation: **implemented / CI-checked / merged / published in v0.3.10 / runtime-accepted** as part of the combined v0.3.10 gate.
@@ -19,9 +19,9 @@
 - v0.3.14 Compact two-column fill/split UX: **implemented / CI-checked / merged / published; runtime gate failed on divider drag**. Window resizing works and the right-hand outer divider is locked, but dragging the middle divider can still grow the left column without atomically shrinking the right column, pushing column 2 out of view and creating a horizontal scrollbar. Fix this as a true give-and-take transaction before accepting v0.3.14.
 - v0.3.15 Compact divider transaction fix: **implemented / CI-checked / merged / published; partial runtime pass**. Expanding the left Compact column no longer creates a horizontal scrollbar immediately, but the divider transaction still clamps both primary columns only to the generic 40 px floor. This lets the right visible column shrink below its intended Compact minimum; after entering that invalid state, dragging back left can expose a horizontal scrollbar. Fix by enforcing the real per-column Compact minima throughout fitting and divider transactions.
 - v0.3.16 Compact minimum-width fix: **implemented / CI-checked / merged / published; partial runtime pass**. Self-update passed; the companion column now stops at its intended minimum in both column orders; whole-window resize and Advanced regression checks passed. Remaining failure: when dragging the middle divider back left after pushing it right, a horizontal scrollbar still appears. This is now isolated to reverse-direction transaction ordering rather than width limits.
-- v0.3.17 reverse-direction divider fix: **implemented / CI-checked / merged / published; runtime gate pending**. Compact divider dragging is now a fully owned two-column transaction: the shrinking column is applied first, the growing column second, and the native one-column commit is cancelled under a re-entrancy guard. This removes the transient overflow path in either drag direction.
-- Current goal: run the focused **published v0.3.17 runtime gate** for the exact right-to-left reversal failure and quick regressions.
-- Current scope boundary: v0.3.17 is published and CI/release-verified but not yet runtime-accepted. Keep the separately observed Refresh All viewport jump queued and do not start it until this gate is resolved. Do not start async DLL discovery, Add-Git stale-request work, warning cleanup, rate-limit propagation, staging-name cleanup or unrelated UI work.
+- v0.3.17 reverse-direction divider fix: **implemented / CI-checked / merged / published / runtime-accepted**. Compact divider dragging is a fully owned two-column transaction: the shrinking column is applied first, the growing column second, and the native one-column commit is cancelled under a re-entrancy guard. User runtime confirmed the rightward clamp, leftward reversal, both Name/Status orders, window resizing and Advanced regression checks all pass with no horizontal scrollbar.
+- Current goal: investigate and fix the separately queued **Refresh All viewport jump** in the addon list.
+- Current scope boundary: only the Refresh All viewport-jump issue is in scope for the next source slice. Do not mix async latest-stable DLL discovery, Add-Git stale-request work, warning cleanup, rate-limit propagation, staging-name cleanup or unrelated UI work into that fix.
 - Audit continuity: `audit_dump.md` is a temporary scratch checkpoint for the interrupted broad audit only; this file remains the sole authoritative live development source of truth.
 - Documentation-only commits after the release do not change the published runtime baseline.
 
@@ -490,24 +490,19 @@ The focused post-v0.3.6 branch/list issues remain runtime-confirmed fixed in v0.
 
 ### Next Runtime Test
 
-Published `v0.3.17` is the active focused runtime gate.
+Published `v0.3.17` runtime gate passed on 2026-09-27:
+- self-update/startup: passed;
+- pushing the Compact middle divider hard right to the minimum clamp: passed;
+- reversing it hard left: passed with **no horizontal scrollbar**;
+- both Name/Status orders: passed;
+- Name/Status minimums: passed;
+- far-right outer divider lock: passed;
+- whole-window resize distribution: passed;
+- Advanced resize/reorder regression smoke: passed.
 
-v0.3.16 runtime history:
-- self-update/startup passed;
-- per-column Compact minimums passed in both Name/Status orders;
-- whole-window resize distribution passed;
-- Advanced resize/reorder regression smoke passed;
-- remaining failure: after pushing the middle divider right, reversing it left created a horizontal scrollbar because the right column was expanded before the left column had actually shrunk.
+The combined v0.3.14-v0.3.17 Compact two-column fill/split work is runtime-accepted.
 
-Required v0.3.17 checks:
-1. normal self-update from v0.3.16 to v0.3.17 and restart/state load;
-2. push the Compact middle divider hard right to the minimum clamp;
-3. reverse it hard left;
-4. confirm no horizontal scrollbar appears at any point;
-5. repeat in both Name/Status orders;
-6. confirm Name/Status minimums, whole-window resize distribution, locked outer divider and Advanced resize/reorder behavior remain correct.
-
-If these pass, accept the combined v0.3.14-v0.3.17 Compact fill/split work. The separately recorded Refresh All viewport jump is then the next narrow UI follow-up.
+Next runtime gate will be for the separately queued **Refresh All viewport jump** after its focused fix is implemented and published.
 
 A1's managed same-root replacement check remains deferred. The current product workflow has **Remove Addon**, not the old Uninstall flow.
 
@@ -579,8 +574,7 @@ Do not add support for user-uploaded ZIP/7z/RAR/installer/bundle release assets 
 
 ## Release / Documentation Notes
 
-- Current published release is `v0.3.17` at `a636d1eb0d1a3c213bb96c84ecbce2b22ca09d82`.
-- v0.3.16 remains a partial runtime result: all intended Compact minima and other regressions passed, but reverse divider drag could still transiently overflow the list because the growing column was applied before the shrinking column.
+- Current published and fully runtime-accepted release is `v0.3.17` at `a636d1eb0d1a3c213bb96c84ecbce2b22ca09d82`.
 - PR #26 head `bf9ee839f6d7ab722c6841648a642a4c4b5073aa` passed Build workflow run `36325300444`, Windows x64 job `108636801237`, including **18/18 CTest tests** with explicit shrink-first direction coverage.
 - PR #26 merged the fully owned direction-safe divider transaction as `2c7dd510e04be7cd28263fa004b65d32033a9056`.
 - PR #27 head `7d4256d7bb5a0a715ab52e8de89655f018221f5b` changed only release/version metadata and passed Build workflow run `36325571382`, Windows x64 job `108637574892`, including **18/18 CTest tests**.
@@ -588,17 +582,15 @@ Do not add support for user-uploaded ZIP/7z/RAR/installer/bundle release assets 
 - v0.3.17 Release workflow run `36325809412`, Windows x64 Release job `108638240745`, validated exact source version, passed **18/18 CTest tests**, generated the SHA-256 sidecar, created tag `v0.3.17` and published direct assets.
 - Published v0.3.17 `TocPilot.exe`: 2,498,048 bytes, SHA-256 `d073217456c7d9b4dabf488947fbecf2424f4655da145b51632d5f48fe8f42c8`.
 - Published v0.3.17 `TocPilot.exe.sha256`: 78 bytes; asset SHA-256 `343f45497193901851be3364c9f968b2246618527e54a8e2668d43eb2956fdf9`.
-- Latest fully runtime-accepted release remains v0.3.13 until the focused v0.3.17 gate passes.
-- The Refresh-list viewport jump remains recorded separately and was intentionally not mixed into v0.3.17.
+- The combined v0.3.14-v0.3.17 Compact fill/split UX is runtime-accepted.
+- The Refresh All viewport jump is now the next narrow UI follow-up.
 
 ## Exact Next Step
 
-Run the published v0.3.17 runtime gate above. Do not begin another source slice until it is resolved.
+Investigate and fix only the queued **Refresh All viewport jump**.
 
-The critical regression is the exact v0.3.16 failure: push the Compact middle divider hard right, then reverse it hard left. The two columns should resize as one transaction with the shrinking side applied first in either direction, and no horizontal scrollbar should appear.
+Current evidence already points to `RefreshPackageStateUi()`: it preserves the identity of the previous top/selected package across repopulate/re-sort. `StartAutoStatusRefresh()` clears session-updated package state before calling it, which can change the sort order; preserving the old top package by identity can therefore move the viewport to that package's new mid-list row. `FinishAutoStatusRefresh()` later calls `ScrollPackageListToTop()`, but the intermediate jump is still visible.
 
-Repeat with Name/Status swapped, then verify the already-passing minimum clamps, whole-window resize, locked outer divider and quick Advanced resize/reorder smoke.
+Desired behavior: Refresh All should not visibly jump the package list to an arbitrary mid-list position during refresh. Determine the intended selection/viewport policy, fix the underlying preservation ordering rather than adding a cosmetic delay, add deterministic coverage where practical, run Build/CTest, and publish through the normal self-update path for runtime testing.
 
-If v0.3.17 passes, record the combined v0.3.14-v0.3.17 Compact fill/split work as runtime-accepted and address the separately queued **Refresh All viewport jump** next. Async latest-stable DLL discovery remains the next deferred robustness slice after that UI follow-up.
-
-Do not mix Add-Git stale-request work, warning cleanup, rate-limit propagation, staging-name cleanup or unrelated UI changes into this gate.
+Keep async latest-stable DLL discovery as the next deferred robustness slice after this UI follow-up. Do not mix Add-Git stale-request work, warning cleanup, rate-limit propagation, staging-name cleanup or unrelated UI changes into the Refresh fix.
