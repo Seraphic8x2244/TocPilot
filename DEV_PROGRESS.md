@@ -15,7 +15,7 @@
 - A3 + queued `www` presentation delta: **implemented / CI-checked / merged / published / runtime-accepted in v0.3.10**. ZIP members stream through miniz's extraction callback directly into staged files instead of allocating one full-member buffer; the existing 256 MiB per-entry and 1 GiB total policy limits remain. Deterministic archive coverage forges an oversized central-directory member size in a tiny fixture and verifies policy rejection before extraction staging. Advanced repository URLs are custom-drawn always blue + underlined and the header is lowercase `www`; Compact remained `Name | Status` in the accepted gate.
 - v0.3.11 self-update transport hardening + constrained/shared package-column layout: **implemented / CI-checked / merged / published; requested runtime matrix passed**. Installed update/startup-state passed. `Name`/`Status` stay in the first two positions and swap only with each other; Advanced-only columns stay to their right and reorder normally; Name/Status width sharing passed in both directions; persisted layout passed. Initial executable/checksum URLs must be HTTPS; GitHub release executable size is carried into the self-update decision and the streamed download must match it exactly; checksum text is capped at 64 KiB. The one adjacent Compact main-window-width regression found during this gate is fixed in v0.3.12.
 - v0.3.12 Compact main-window-width follow-up: **implemented / CI-checked / merged / published; runtime gate pending**. Compact width is captured before entering Advanced and restored on return (subject to the current Compact minimum), rather than inferred by subtracting a fixed mode-width delta. Deterministic `window-layout-roundtrip` coverage verifies normal restore, restore after resizing the Advanced window, minimum clamping, and the historical fallback.
-- Current goal: run the focused **published v0.3.12 runtime gate**. This should verify the real `v0.3.11 -> v0.3.12` self-update (thereby exercising the hardened updater introduced in v0.3.11), then confirm the Compact main-window width round trip and a quick column-layout regression smoke.
+- Current goal: resolve the still-open **published v0.3.12 runtime gate**. The real `v0.3.11 -> v0.3.12` self-update/restart passed, but the Compact main-window width round trip still fails. User observation: Advanced may be widening/reflowing toolbar buttons and the return-to-Compact layout may then force a wider minimum/window. Investigate only that sizing interaction before another patch. A separate Refresh-list scroll jump was also observed and is recorded as deferred UI follow-up, not part of this gate fix.
 - Current scope boundary: v0.3.12 is published and CI/release-verified but not yet runtime-accepted. Do not start async DLL discovery, Add-Git stale-request work, warning cleanup, rate-limit propagation, staging-name cleanup or unrelated UI work until this narrow runtime gate is resolved.
 - Audit continuity: `audit_dump.md` is a temporary scratch checkpoint for the interrupted broad audit only; this file remains the sole authoritative live development source of truth.
 - Documentation-only commits after the release do not change the published runtime baseline.
@@ -433,7 +433,9 @@ Remaining audited implementation priority after the v0.3.11 runtime gate starts 
 - Update All does not treat branch-addon archive HTTP rate limiting as a queue-stop condition, unlike status refresh and direct-DLL update paths;
 - provider/repository staging-directory sanitization can collide for distinct identities.
 
-Lower-priority/test/build findings and contract-driven direct-DLL risks are retained in `audit_dump.md`. The async/UI pass found no high/medium GDI/icon ownership leak. It did confirm low-priority cleanup/debt: the old hidden branch COMBOBOX is now dead infrastructure after the list-cell popup redesign; main close can abandon non-install async work/staging; several rare Win32 control/subclass/timer/GetMessage failures are not surfaced.
+Lower-priority/test/build findings and contract-driven direct-DLL risks are retained in `audit_dump.md`.
+
+New deferred UI observation from 2026-09-27: after **Refresh All**, the addon package list appears to scroll to an arbitrary mid-list position (possibly tied to the first/selected package after repopulation). Record and investigate after the active v0.3.12 width gate; do not mix it into the current sizing fix unless the same root cause is proven. The async/UI pass found no high/medium GDI/icon ownership leak. It did confirm low-priority cleanup/debt: the old hidden branch COMBOBOX is now dead infrastructure after the list-cell popup redesign; main close can abandon non-install async work/staging; several rare Win32 control/subclass/timer/GetMessage failures are not surfaced.
 
 Final severity/order:
 
@@ -481,7 +483,7 @@ The focused post-v0.3.6 branch/list issues remain runtime-confirmed fixed in v0.
 
 ### Next Runtime Test
 
-Published `v0.3.12` is the active focused gate.
+Published `v0.3.12` is the active focused gate. Runtime results on 2026-09-27: (1) normal `v0.3.11 -> v0.3.12` self-update/restart passed; (2) manually resizing Compact passed as a setup step; (3) Compact -> Advanced -> Compact still failed to restore the intended Compact width. User suspects the mode-specific button layout/minimum-width calculation may be feeding back into the window width.
 
 1. From installed v0.3.11, allow the normal TocPilot self-update to v0.3.12 and confirm restart/state load succeeds. This transition is important because the updater doing the download is now v0.3.11, so it exercises the hardened HTTPS/exact-size/checksum-cap path introduced in v0.3.11.
 2. In Compact, manually resize the **main application window** to an obvious custom width.
@@ -571,7 +573,7 @@ Do not add support for user-uploaded ZIP/7z/RAR/installer/bundle release assets 
 
 ## Exact Next Step
 
-Run the published v0.3.12 runtime gate above. Do not begin another source slice until it is resolved.
+The v0.3.12 runtime gate is still open: self-update/restart passed, but the Compact main-window width round trip did not. Inspect the interaction between `ToggleAdvanced`, `RequiredClientWidth`, and mode-specific toolbar button sizing/minimums; fix only the proven cause and retest. Do not begin another source slice until this gate is resolved.
 
 The only required checks are the real v0.3.11 -> v0.3.12 self-update/restart, the Compact main-window-width round trip at two manually chosen widths, and a quick regression smoke of the already-accepted constrained/shared column behavior.
 
