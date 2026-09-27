@@ -178,6 +178,7 @@ bool g_appUpdateStartedFromStartup = false;
 bool g_startupAppUpdateFailed = false;
 bool g_autoStatusRefreshInProgress = false;
 bool g_advancedVisible = false;
+bool g_compactColumnResizeInProgress = false;
 int g_compactWindowWidthBeforeAdvanced = 0;
 bool g_hasVanillaFixes = false;
 bool g_branchSelectorUpdating = false;
@@ -6913,6 +6914,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             }
 
             if (!g_advancedVisible &&
+                !g_compactColumnResizeInProgress &&
                 header->code ==
                     HDN_ITEMCHANGINGW &&
                 headerColumn ==
@@ -6922,6 +6924,14 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                 (headerNotification
                      ->pitem->mask &
                  HDI_WIDTH) != 0) {
+                const int currentLeftWidth =
+                    ListView_GetColumnWidth(
+                        g_packageList,
+                        compactLeftColumn);
+                const int currentRightWidth =
+                    ListView_GetColumnWidth(
+                        g_packageList,
+                        compactRightColumn);
                 const auto split =
                     tp::CompactDividerWidths(
                         headerNotification
@@ -6931,20 +6941,46 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                             compactLeftColumn),
                         CompactColumnMinimumWidth(
                             compactRightColumn));
+                const auto first =
+                    tp::CompactResizeFirstColumn(
+                        currentLeftWidth,
+                        split[0],
+                        currentRightWidth,
+                        split[1]);
 
-                headerNotification
-                    ->pitem->cxy =
-                    split[0];
+                g_compactColumnResizeInProgress =
+                    true;
 
-                // Apply the give before Windows commits
-                // the matching take to the left column.
-                // This keeps the total width at or below
-                // the Compact client width throughout the
-                // native header resize transaction.
-                ListView_SetColumnWidth(
-                    g_packageList,
-                    compactRightColumn,
-                    split[1]);
+                if (first ==
+                    tp::CompactResizeFirst::Left) {
+                    ListView_SetColumnWidth(
+                        g_packageList,
+                        compactLeftColumn,
+                        split[0]);
+                    ListView_SetColumnWidth(
+                        g_packageList,
+                        compactRightColumn,
+                        split[1]);
+                } else if (first ==
+                           tp::CompactResizeFirst::Right) {
+                    ListView_SetColumnWidth(
+                        g_packageList,
+                        compactRightColumn,
+                        split[1]);
+                    ListView_SetColumnWidth(
+                        g_packageList,
+                        compactLeftColumn,
+                        split[0]);
+                }
+
+                g_compactColumnResizeInProgress =
+                    false;
+
+                // We own the complete two-column change.
+                // Cancel the native one-column commit so
+                // neither drag direction can temporarily
+                // exceed the Compact client width.
+                return TRUE;
             }
 
             if (header->code ==

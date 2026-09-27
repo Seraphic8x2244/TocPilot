@@ -137,6 +137,28 @@ int main() {
             "swapped Compact order should preserve the Name Compact minimum");
     }
 
+    ExpectEqual(
+        static_cast<int>(
+            tp::CompactResizeFirstColumn(
+                350,
+                250,
+                150,
+                250)),
+        static_cast<int>(
+            tp::CompactResizeFirst::Left),
+        "reverse drag should shrink the left column before growing the right");
+
+    ExpectEqual(
+        static_cast<int>(
+            tp::CompactResizeFirstColumn(
+                250,
+                350,
+                250,
+                150)),
+        static_cast<int>(
+            tp::CompactResizeFirst::Right),
+        "forward drag should shrink the right column before growing the left");
+
     constexpr int compactMinimum = 600;
     constexpr int advancedMinimum = 1300;
 
