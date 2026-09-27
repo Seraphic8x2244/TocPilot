@@ -6811,8 +6811,6 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                     HDN_ENDDRAG &&
                 headerNotification &&
                 headerNotification->pitem &&
-                (headerNotification->pitem->mask &
-                    HDI_ORDER) != 0 &&
                 !tp::PackageColumnMoveAllowed(
                     headerColumn,
                     headerNotification->pitem->iOrder)) {
