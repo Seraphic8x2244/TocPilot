@@ -6417,6 +6417,434 @@ HICON LoadExecutableIcon(
     return icon;
 }
 
+const wchar_t* ToolbarButtonName(
+    HWND control) {
+    if (control == g_updateAllButton) {
+        return L"Update";
+    }
+    if (control == g_refreshPackagesButton) {
+        return L"Refresh";
+    }
+    if (control == g_launchWowButton) {
+        return L"Launch";
+    }
+    if (control == g_addPackageButton) {
+        return L"Add Repository";
+    }
+    if (control == g_installPackageButton) {
+        return L"Reinstall Repository";
+    }
+    if (control == g_removePackageButton) {
+        return L"Remove Repository";
+    }
+    if (control == g_inspectPackageButton) {
+        return L"Inspect";
+    }
+    if (control == g_adoptGitButton) {
+        return L"Scan";
+    }
+    if (control == g_tocPilotButton) {
+        return L"TocPilot";
+    }
+    if (control == g_advancedButton) {
+        return L"Advanced";
+    }
+    return L"";
+}
+
+const tp::ToolbarIcon*
+ToolbarFontAwesomeIcon(
+    HWND control) {
+    if (control == g_updateAllButton) {
+        return &g_toolbarIcons.update;
+    }
+    if (control == g_refreshPackagesButton) {
+        return &g_toolbarIcons.refresh;
+    }
+    if (control == g_addPackageButton) {
+        return
+            &g_toolbarIcons.addRepository;
+    }
+    if (control == g_installPackageButton) {
+        return
+            &g_toolbarIcons.reinstallRepository;
+    }
+    if (control == g_removePackageButton) {
+        return
+            &g_toolbarIcons.removeRepository;
+    }
+    if (control == g_inspectPackageButton) {
+        return &g_toolbarIcons.inspect;
+    }
+    if (control == g_adoptGitButton) {
+        return &g_toolbarIcons.scan;
+    }
+    if (control == g_tocPilotButton) {
+        return &g_toolbarIcons.tocPilot;
+    }
+    if (control == g_advancedButton) {
+        return &g_toolbarIcons.advanced;
+    }
+    return nullptr;
+}
+
+HICON ToolbarButtonIcon(
+    HWND control,
+    bool disabled) {
+    if (control == g_launchWowButton) {
+        return
+            g_hasVanillaFixes &&
+                    g_vanillaFixesIcon
+                ? g_vanillaFixesIcon
+                : g_wowIcon;
+    }
+
+    const auto* icon =
+        ToolbarFontAwesomeIcon(
+            control);
+
+    if (!icon) {
+        return nullptr;
+    }
+
+    return
+        disabled
+            ? icon->disabled
+            : icon->normal;
+}
+
+void ReloadToolbarImages(
+    HWND hwnd) {
+    const int iconPixels =
+        ScaleUi(
+            hwnd,
+            kToolbarIconSize);
+
+    tp::InitializeToolbarIcons(
+        GetModuleHandleW(nullptr),
+        iconPixels,
+        g_toolbarIcons);
+
+    if (g_wowIcon) {
+        DestroyIcon(g_wowIcon);
+        g_wowIcon = nullptr;
+    }
+
+    if (g_vanillaFixesIcon) {
+        DestroyIcon(g_vanillaFixesIcon);
+        g_vanillaFixesIcon = nullptr;
+    }
+
+    g_wowIcon =
+        LoadExecutableIcon(
+            g_root / L"WoW.exe",
+            iconPixels);
+
+    if (g_hasVanillaFixes) {
+        g_vanillaFixesIcon =
+            LoadExecutableIcon(
+                g_root /
+                    L"VanillaFixes.exe",
+                iconPixels);
+    }
+}
+
+void ApplyToolbarPresentation(
+    HWND hwnd) {
+    const std::array<HWND, 10>
+        controls{
+            g_updateAllButton,
+            g_refreshPackagesButton,
+            g_launchWowButton,
+            g_addPackageButton,
+            g_installPackageButton,
+            g_removePackageButton,
+            g_inspectPackageButton,
+            g_adoptGitButton,
+            g_tocPilotButton,
+            g_advancedButton
+        };
+
+    for (HWND control :
+         controls) {
+        if (!control) {
+            continue;
+        }
+
+        LONG_PTR style =
+            GetWindowLongPtrW(
+                control,
+                GWL_STYLE);
+
+        style &= ~BS_TYPEMASK;
+        style |=
+            ToolbarUsesIcons()
+                ? BS_OWNERDRAW
+                : BS_PUSHBUTTON;
+
+        SetWindowLongPtrW(
+            control,
+            GWL_STYLE,
+            style);
+
+        SetWindowTextW(
+            control,
+            ToolbarButtonName(
+                control));
+
+        SendMessageW(
+            control,
+            BM_SETIMAGE,
+            IMAGE_ICON,
+            0);
+
+        SetWindowPos(
+            control,
+            nullptr,
+            0,
+            0,
+            0,
+            0,
+            SWP_NOMOVE |
+                SWP_NOSIZE |
+                SWP_NOZORDER |
+                SWP_NOACTIVATE |
+                SWP_FRAMECHANGED);
+
+        InvalidateRect(
+            control,
+            nullptr,
+            TRUE);
+    }
+
+    LayoutControls(hwnd);
+}
+
+bool DrawToolbarButton(
+    const DRAWITEMSTRUCT* draw) {
+    if (!draw ||
+        !ToolbarUsesIcons()) {
+        return false;
+    }
+
+    HWND control =
+        draw->hwndItem;
+
+    if (!control ||
+        !ToolbarButtonIcon(
+            control,
+            false)) {
+        return false;
+    }
+
+    RECT rect =
+        draw->rcItem;
+
+    UINT frameState =
+        DFCS_BUTTONPUSH;
+
+    if ((draw->itemState &
+         ODS_DISABLED) != 0) {
+        frameState |=
+            DFCS_INACTIVE;
+    }
+
+    if ((draw->itemState &
+         ODS_SELECTED) != 0) {
+        frameState |=
+            DFCS_PUSHED;
+    }
+
+    if ((draw->itemState &
+         ODS_HOTLIGHT) != 0) {
+        frameState |=
+            DFCS_HOT;
+    }
+
+    DrawFrameControl(
+        draw->hDC,
+        &rect,
+        DFC_BUTTON,
+        frameState);
+
+    const bool disabled =
+        (draw->itemState &
+         ODS_DISABLED) != 0;
+
+    HICON icon =
+        ToolbarButtonIcon(
+            control,
+            disabled);
+
+    if (!icon) {
+        icon =
+            ToolbarButtonIcon(
+                control,
+                false);
+    }
+
+    const int iconSize =
+        ScaleUi(
+            control,
+            kToolbarIconSize);
+
+    int x =
+        rect.left +
+        (rect.right -
+         rect.left -
+         iconSize) /
+            2;
+
+    int y =
+        rect.top +
+        (rect.bottom -
+         rect.top -
+         iconSize) /
+            2;
+
+    if ((draw->itemState &
+         ODS_SELECTED) != 0) {
+        const int offset =
+            std::max(
+                1,
+                ScaleUi(
+                    control,
+                    1));
+
+        x += offset;
+        y += offset;
+    }
+
+    if (icon) {
+        DrawIconEx(
+            draw->hDC,
+            x,
+            y,
+            icon,
+            iconSize,
+            iconSize,
+            0,
+            nullptr,
+            DI_NORMAL);
+    }
+
+    if ((draw->itemState &
+         ODS_FOCUS) != 0) {
+        RECT focus =
+            rect;
+
+        const int inset =
+            ScaleUi(
+                control,
+                3);
+
+        InflateRect(
+            &focus,
+            -inset,
+            -inset);
+
+        DrawFocusRect(
+            draw->hDC,
+            &focus);
+    }
+
+    return true;
+}
+
+void EnsureToolbarMinimumWidth(
+    HWND hwnd) {
+    RECT rect{};
+
+    if (!GetWindowRect(
+            hwnd,
+            &rect)) {
+        return;
+    }
+
+    const int minimum =
+        WindowWidthForClient(
+            hwnd,
+            RequiredClientWidth(
+                hwnd,
+                g_advancedVisible));
+
+    const int current =
+        rect.right -
+        rect.left;
+
+    if (current >= minimum) {
+        return;
+    }
+
+    SetWindowPos(
+        hwnd,
+        nullptr,
+        0,
+        0,
+        minimum,
+        rect.bottom -
+            rect.top,
+        SWP_NOMOVE |
+            SWP_NOZORDER |
+            SWP_NOACTIVATE);
+}
+
+void SetToolbarPresentation(
+    HWND owner,
+    bool icons) {
+    if (!owner ||
+        !g_stateReady ||
+        g_state.settings.toolbarIcons ==
+            icons) {
+        return;
+    }
+
+    const bool previous =
+        g_state.settings.toolbarIcons;
+
+    g_state.settings.toolbarIcons =
+        icons;
+
+    std::wstring error;
+    if (!tp::SaveState(
+            g_root,
+            g_state,
+            error)) {
+        g_state.settings.toolbarIcons =
+            previous;
+        g_stateError = error;
+        return;
+    }
+
+    ApplyToolbarPresentation(
+        owner);
+
+    EnsureToolbarMinimumWidth(
+        owner);
+
+    LayoutControls(owner);
+
+    if (g_toolbarIconsRadio) {
+        SendMessageW(
+            g_toolbarIconsRadio,
+            BM_SETCHECK,
+            icons
+                ? BST_CHECKED
+                : BST_UNCHECKED,
+            0);
+    }
+
+    if (g_toolbarWordsRadio) {
+        SendMessageW(
+            g_toolbarWordsRadio,
+            BM_SETCHECK,
+            icons
+                ? BST_UNCHECKED
+                : BST_CHECKED,
+            0);
+    }
+}
+
 void LaunchSiblingExecutable(
     HWND hwnd,
     std::wstring_view filename) {
@@ -7079,8 +7507,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                     name,
                     WS_CHILD | WS_VISIBLE |
                         WS_TABSTOP |
-                        BS_PUSHBUTTON |
-                        BS_ICON,
+                        BS_PUSHBUTTON,
                     0,
                     0,
                     kToolbarButtonSize,
@@ -7151,18 +7578,8 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             GetModuleHandleW(nullptr),
             nullptr);
 
-        tp::InitializeToolbarIcons(
-            GetModuleHandleW(nullptr),
-            g_toolbarIcons);
-        tp::ApplyToolbarIcon(g_updateAllButton, g_toolbarIcons.update, L"Update");
-        tp::ApplyToolbarIcon(g_refreshPackagesButton, g_toolbarIcons.refresh, L"Refresh");
-        tp::ApplyToolbarIcon(g_addPackageButton, g_toolbarIcons.addRepository, L"Add Repository");
-        tp::ApplyToolbarIcon(g_installPackageButton, g_toolbarIcons.reinstallRepository, L"Reinstall Repository");
-        tp::ApplyToolbarIcon(g_removePackageButton, g_toolbarIcons.removeRepository, L"Remove Repository");
-        tp::ApplyToolbarIcon(g_inspectPackageButton, g_toolbarIcons.inspect, L"Inspect");
-        tp::ApplyToolbarIcon(g_adoptGitButton, g_toolbarIcons.scan, L"Scan");
-        tp::ApplyToolbarIcon(g_tocPilotButton, g_toolbarIcons.tocPilot, L"TocPilot");
-        tp::ApplyToolbarIcon(g_advancedButton, g_toolbarIcons.advanced, L"Advanced");
+        // Presentation is applied after the executable-derived
+        // Launch icon source is resolved.
 
         g_toolbarTooltip = tp::CreateToolbarTooltip(hwnd);
         tp::AddToolbarTooltip(g_toolbarTooltip, hwnd, g_updateAllButton, L"Update");
@@ -7290,11 +7707,6 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             g_branchSelector,
             SW_HIDE);
 
-        g_wowIcon =
-            LoadExecutableIcon(
-                g_root / L"WoW.exe",
-                kToolbarIconSize);
-
         std::error_code vanillaFixesEc;
         g_hasVanillaFixes =
             std::filesystem::is_regular_file(
@@ -7302,32 +7714,8 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                     L"VanillaFixes.exe",
                 vanillaFixesEc);
 
-        if (g_hasVanillaFixes) {
-            g_vanillaFixesIcon =
-                LoadExecutableIcon(
-                    g_root /
-                        L"VanillaFixes.exe",
-                    kToolbarIconSize);
-        }
-
-        const HICON launchIcon =
-            g_hasVanillaFixes &&
-                    g_vanillaFixesIcon
-                ? g_vanillaFixesIcon
-                : g_wowIcon;
-
-        SetWindowTextW(
-            g_launchWowButton,
-            L"Launch");
-
-        if (launchIcon) {
-            SendMessageW(
-                g_launchWowButton,
-                BM_SETIMAGE,
-                IMAGE_ICON,
-                reinterpret_cast<LPARAM>(
-                    launchIcon));
-        }
+        ReloadToolbarImages(hwnd);
+        ApplyToolbarPresentation(hwnd);
 
         AddPackageListColumns();
         PopulatePackageList();
