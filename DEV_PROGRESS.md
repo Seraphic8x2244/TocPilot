@@ -5,8 +5,8 @@
 ## Current
 
 - Active branch: `main`.
-- Source/application version: `v0.3.19`.
-- Latest published release: `v0.3.19`.
+- Source/application version: `v0.3.20`.
+- Latest published release: `v0.3.19` (v0.3.20 release pending).
 - Release/source commit and tag target: `347d76a289b229c56c4c789c9badec6f76d2980d` (`v0.3.19`).
 - Latest fully runtime-accepted release is now `v0.3.17` at `a636d1eb0d1a3c213bb96c84ecbce2b22ca09d82`. The combined v0.3.14-v0.3.17 Compact fill/split gate passed on 2026-09-27: no Compact horizontal scrollbar under divider reversal, real Name/Status minimums hold in both orders, the far-right edge stays locked, whole-window resizing distributes width correctly, and Advanced resize/reorder behavior remains intact.
 - Latest verified `main` source-changing head: `5dd02e0c87f87c226f433e6edb50bc5e7a5879dc` (P6B icon toolbar). Release/version commit `928b26797d8d1b14bdbb07c2e2baf49ea896b2dc` sits above it.
@@ -624,7 +624,7 @@ Do not add support for user-uploaded ZIP/7z/RAR/installer/bundle release assets 
 
 ## Exact Next Step
 
-Build and runtime-check the P6B sizing/group-spacing follow-up: **48 x 48 buttons**, **36 x 36 freshly rendered/extracted icons**, Compact grouping unchanged, and Advanced grouped as **[Update Refresh] [Launch] [Add Repository Reinstall Repository Remove Repository] [Inspect Scan] [TocPilot] [Advanced]** with 6 px normal gaps and +16 px at group breaks.
+Publish and runtime-check the P6B sizing/group-spacing follow-up: **48 x 48 buttons**, **36 x 36 freshly rendered/extracted icons**, Compact grouping unchanged, and Advanced grouped as **[Update Refresh] [Launch] [Add Repository Reinstall Repository Remove Repository] [Inspect Scan] [TocPilot] [Advanced]** with 6 px normal gaps and +16 px at group breaks.
 
 Compact minimum width must remain list-driven: the 48 px toolbar is 366 px wide versus the existing 370 px Name + Status column minimum, so RequiredClientWidth remains unchanged. The list begins 14 px below the taller toolbar.
 
