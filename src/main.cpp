@@ -82,6 +82,8 @@ constexpr int IDC_TOCPILOT_UPDATE = 1021;
 constexpr int IDC_TOCPILOT_GITHUB = 1022;
 constexpr int IDC_TOCPILOT_RELEASES = 1023;
 constexpr int IDC_BRANCH_SELECTOR = 1024;
+constexpr int IDC_TOOLBAR_ICONS = 1025;
+constexpr int IDC_TOOLBAR_WORDS = 1026;
 
 constexpr int kCompactWindowWidth = 590;
 constexpr int kDefaultWindowHeight = 480;
@@ -89,6 +91,8 @@ constexpr int kToolbarButtonSize = 48;
 constexpr int kToolbarIconSize = 36;
 constexpr int kToolbarButtonGap = 6;
 constexpr int kToolbarGroupExtraGap = 16;
+constexpr int kToolbarWordButtonWidth = 125;
+constexpr int kToolbarWordButtonHeight = 32;
 constexpr int kCompactPrimaryButtonCount = 6;
 constexpr int kAdvancedButtonCount = 10;
 constexpr int kCompactNameColumnMinWidth = 220;
@@ -165,6 +169,8 @@ HICON g_wowIcon = nullptr;
 HICON g_vanillaFixesIcon = nullptr;
 tp::ToolbarIcons g_toolbarIcons;
 HWND g_toolbarTooltip = nullptr;
+HWND g_toolbarIconsRadio = nullptr;
+HWND g_toolbarWordsRadio = nullptr;
 
 tp::ReleaseInfo g_release;
 tp::AppState g_state;
@@ -373,6 +379,152 @@ std::wstring PackageHintText() {
         L"Forget removes only the TocPilot record.";
 }
 
+UINT SystemDpi() {
+    using GetDpiForSystemFn =
+        UINT(WINAPI*)();
+
+    static const auto getDpiForSystem =
+        reinterpret_cast<GetDpiForSystemFn>(
+            GetProcAddress(
+                GetModuleHandleW(
+                    L"user32.dll"),
+                "GetDpiForSystem"));
+
+    if (getDpiForSystem) {
+        const UINT dpi =
+            getDpiForSystem();
+        if (dpi != 0) {
+            return dpi;
+        }
+    }
+
+    HDC dc = GetDC(nullptr);
+    const UINT dpi =
+        dc
+            ? static_cast<UINT>(
+                GetDeviceCaps(
+                    dc,
+                    LOGPIXELSX))
+            : 96;
+
+    if (dc) {
+        ReleaseDC(nullptr, dc);
+    }
+
+    return dpi == 0
+        ? 96
+        : dpi;
+}
+
+UINT WindowDpi(HWND hwnd) {
+    using GetDpiForWindowFn =
+        UINT(WINAPI*)(HWND);
+
+    static const auto getDpiForWindow =
+        reinterpret_cast<GetDpiForWindowFn>(
+            GetProcAddress(
+                GetModuleHandleW(
+                    L"user32.dll"),
+                "GetDpiForWindow"));
+
+    if (hwnd &&
+        getDpiForWindow) {
+        const UINT dpi =
+            getDpiForWindow(hwnd);
+        if (dpi != 0) {
+            return dpi;
+        }
+    }
+
+    HDC dc = GetDC(hwnd);
+    const UINT dpi =
+        dc
+            ? static_cast<UINT>(
+                GetDeviceCaps(
+                    dc,
+                    LOGPIXELSX))
+            : SystemDpi();
+
+    if (dc) {
+        ReleaseDC(hwnd, dc);
+    }
+
+    return dpi == 0
+        ? 96
+        : dpi;
+}
+
+int ScaleForDpi(
+    int value,
+    UINT dpi) {
+    return MulDiv(
+        value,
+        static_cast<int>(dpi),
+        96);
+}
+
+int ScaleUi(
+    HWND hwnd,
+    int value) {
+    return ScaleForDpi(
+        value,
+        WindowDpi(hwnd));
+}
+
+int UnscaleUi(
+    HWND hwnd,
+    int value) {
+    return MulDiv(
+        value,
+        96,
+        static_cast<int>(
+            WindowDpi(hwnd)));
+}
+
+BOOL AdjustWindowRectForDpi(
+    RECT* rect,
+    DWORD style,
+    BOOL menu,
+    DWORD exStyle,
+    UINT dpi) {
+    using AdjustWindowRectExForDpiFn =
+        BOOL(WINAPI*)(
+            LPRECT,
+            DWORD,
+            BOOL,
+            DWORD,
+            UINT);
+
+    static const auto adjustForDpi =
+        reinterpret_cast<
+            AdjustWindowRectExForDpiFn>(
+            GetProcAddress(
+                GetModuleHandleW(
+                    L"user32.dll"),
+                "AdjustWindowRectExForDpi"));
+
+    if (adjustForDpi) {
+        return adjustForDpi(
+            rect,
+            style,
+            menu,
+            exStyle,
+            dpi);
+    }
+
+    return AdjustWindowRectEx(
+        rect,
+        style,
+        menu,
+        exStyle);
+}
+
+bool ToolbarUsesIcons() {
+    return
+        !g_stateReady ||
+        g_state.settings.toolbarIcons;
+}
+
 BOOL CALLBACK ApplyFontToChild(HWND child, LPARAM fontValue) {
     SendMessageW(
         child,
@@ -383,11 +535,9 @@ BOOL CALLBACK ApplyFontToChild(HWND child, LPARAM fontValue) {
 }
 
 void ApplyUiFont(HWND hwnd) {
-    HDC dc = GetDC(hwnd);
-    const int dpi = dc ? GetDeviceCaps(dc, LOGPIXELSY) : 96;
-    if (dc) {
-        ReleaseDC(hwnd, dc);
-    }
+    const int dpi =
+        static_cast<int>(
+            WindowDpi(hwnd));
 
     const double scale = g_stateReady
         ? g_state.settings.textScale
@@ -513,32 +663,38 @@ void SetTextScaleSelection() {
     ComboBox_SetCurSel(g_textScaleCombo, bestIndex);
 }
 
-int ToolbarStripWidth(bool advanced) {
-    if (advanced) {
-        constexpr int advancedGroupBreaks = 5;
-        return
-            kAdvancedButtonCount *
-                kToolbarButtonSize +
-            (kAdvancedButtonCount - 1) *
-                kToolbarButtonGap +
-            advancedGroupBreaks *
-                kToolbarGroupExtraGap;
-    }
+int ToolbarStripWidthDesign(
+    bool advanced) {
+    const int buttonWidth =
+        ToolbarUsesIcons()
+            ? kToolbarButtonSize
+            : kToolbarWordButtonWidth;
 
-    constexpr int compactGroupBreaks = 3;
+    const int count =
+        advanced
+            ? kAdvancedButtonCount
+            : kCompactPrimaryButtonCount;
+
+    const int groupBreaks =
+        advanced
+            ? 5
+            : 3;
+
     return
-        kCompactPrimaryButtonCount *
-            kToolbarButtonSize +
-        (kCompactPrimaryButtonCount - 1) *
+        count *
+            buttonWidth +
+        (count - 1) *
             kToolbarButtonGap +
-        compactGroupBreaks *
+        groupBreaks *
             kToolbarGroupExtraGap;
 }
 
 int RequiredClientWidth(
+    HWND hwnd,
     bool advanced) {
     const int toolbarWidth =
-        ToolbarStripWidth(advanced);
+        ToolbarStripWidthDesign(
+            advanced);
 
     const int columnsWidth =
         advanced
@@ -552,11 +708,12 @@ int RequiredClientWidth(
             : kCompactNameColumnMinWidth +
                 kCompactStatusColumnMinWidth;
 
-    return
+    return ScaleUi(
+        hwnd,
         40 +
-        std::max(
-            toolbarWidth,
-            columnsWidth);
+            std::max(
+                toolbarWidth,
+                columnsWidth));
 }
 
 int WindowWidthForClient(
@@ -566,9 +723,9 @@ int WindowWidthForClient(
         0,
         0,
         clientWidth,
-        400};
+        ScaleUi(hwnd, 400)};
 
-    AdjustWindowRectEx(
+    AdjustWindowRectForDpi(
         &rect,
         static_cast<DWORD>(
             GetWindowLongPtrW(
@@ -578,7 +735,8 @@ int WindowWidthForClient(
         static_cast<DWORD>(
             GetWindowLongPtrW(
                 hwnd,
-                GWL_EXSTYLE)));
+                GWL_EXSTYLE)),
+        WindowDpi(hwnd));
 
     return
         static_cast<int>(
@@ -613,17 +771,23 @@ int CompactColumnMinimumWidth(
     if (column ==
         kPackageColumnName) {
         return
-            kCompactNameColumnMinWidth;
+            ScaleUi(
+                g_packageList,
+                kCompactNameColumnMinWidth);
     }
 
     if (column ==
         kPackageColumnStatus) {
         return
-            kCompactStatusColumnMinWidth;
+            ScaleUi(
+                g_packageList,
+                kCompactStatusColumnMinWidth);
     }
 
     return
-        kPackageColumnMinWidth;
+        ScaleUi(
+            g_packageList,
+            kPackageColumnMinWidth);
 }
 
 std::array<int, tp::kPackageColumnCount>
@@ -703,9 +867,11 @@ void SaveCurrentPackageColumnLayout() {
              ++column) {
             widths[static_cast<std::size_t>(column)] =
                 std::clamp(
-                    ListView_GetColumnWidth(
+                    UnscaleUi(
                         g_packageList,
-                        column),
+                        ListView_GetColumnWidth(
+                            g_packageList,
+                            column)),
                     kPackageColumnMinWidth,
                     2000);
         }
@@ -737,17 +903,21 @@ void SaveCurrentPackageColumnLayout() {
         widths[static_cast<std::size_t>(
             kPackageColumnName)] =
             std::clamp(
-                ListView_GetColumnWidth(
+                UnscaleUi(
                     g_packageList,
-                    kPackageColumnName),
+                    ListView_GetColumnWidth(
+                        g_packageList,
+                        kPackageColumnName)),
                 kPackageColumnMinWidth,
                 2000);
         widths[static_cast<std::size_t>(
             kPackageColumnStatus)] =
             std::clamp(
-                ListView_GetColumnWidth(
+                UnscaleUi(
                     g_packageList,
-                    kPackageColumnStatus),
+                    ListView_GetColumnWidth(
+                        g_packageList,
+                        kPackageColumnStatus)),
                 kPackageColumnMinWidth,
                 2000);
     }
@@ -802,13 +972,19 @@ void ResizeListColumns() {
 
         const auto fitted =
             tp::FitCompactColumnWidths(
-                widths[static_cast<std::size_t>(
-                    kPackageColumnName)],
-                widths[static_cast<std::size_t>(
-                    kPackageColumnStatus)],
+                ScaleUi(
+                    g_packageList,
+                    widths[static_cast<std::size_t>(
+                        kPackageColumnName)]),
+                ScaleUi(
+                    g_packageList,
+                    widths[static_cast<std::size_t>(
+                        kPackageColumnStatus)]),
                 PackageListClientWidth(),
-                kCompactNameColumnMinWidth,
-                kCompactStatusColumnMinWidth);
+                CompactColumnMinimumWidth(
+                    kPackageColumnName),
+                CompactColumnMinimumWidth(
+                    kPackageColumnStatus));
 
         ListView_SetColumnWidth(
             g_packageList,
@@ -827,9 +1003,11 @@ void ResizeListColumns() {
         ListView_SetColumnWidth(
             g_packageList,
             column,
-            widths[
-                static_cast<std::size_t>(
-                    column)]);
+            ScaleUi(
+                g_packageList,
+                widths[
+                    static_cast<std::size_t>(
+                        column)]));
     }
 }
 
@@ -1021,10 +1199,15 @@ void LayoutControls(HWND hwnd) {
         client.right - client.left;
     const int height =
         client.bottom - client.top;
+
+    const int margin =
+        ScaleUi(hwnd, 20);
+
     const int contentWidth =
         std::max(
-            320,
-            width - 40);
+            ScaleUi(hwnd, 320),
+            width -
+                margin * 2);
 
     if (g_rootLabel) {
         ShowWindow(g_rootLabel, SW_HIDE);
@@ -1045,7 +1228,9 @@ void LayoutControls(HWND hwnd) {
         ShowWindow(g_packageHint, SW_HIDE);
     }
     if (g_uninstallPackageButton) {
-        ShowWindow(g_uninstallPackageButton, SW_HIDE);
+        ShowWindow(
+            g_uninstallPackageButton,
+            SW_HIDE);
     }
     if (g_textScaleLabel) {
         ShowWindow(g_textScaleLabel, SW_HIDE);
@@ -1054,95 +1239,18 @@ void LayoutControls(HWND hwnd) {
         ShowWindow(g_textScaleCombo, SW_HIDE);
     }
 
-    constexpr int buttonY = 16;
-    const std::array<HWND, 10> toolbarControls{
-        g_updateAllButton,
-        g_refreshPackagesButton,
-        g_launchWowButton,
-        g_addPackageButton,
-        g_installPackageButton,
-        g_removePackageButton,
-        g_inspectPackageButton,
-        g_adoptGitButton,
-        g_tocPilotButton,
-        g_advancedButton
-    };
+    const int buttonY =
+        ScaleUi(hwnd, 16);
 
-    for (HWND control : toolbarControls) {
-        if (control) {
-            ShowWindow(control, SW_HIDE);
-        }
-    }
+    const int buttonHeight =
+        ScaleUi(
+            hwnd,
+            ToolbarUsesIcons()
+                ? kToolbarButtonSize
+                : kToolbarWordButtonHeight);
 
-    const auto placeStrip =
-        [&](const auto& controls,
-            const auto& gaps) {
-            int stripWidth =
-                static_cast<int>(
-                    controls.size()) *
-                    kToolbarButtonSize;
-
-            for (const int gap : gaps) {
-                stripWidth += gap;
-            }
-
-            int x =
-                20 +
-                std::max(
-                    0,
-                    (contentWidth -
-                     stripWidth) /
-                        2);
-
-            for (std::size_t index = 0;
-                 index < controls.size();
-                 ++index) {
-                HWND control =
-                    controls[index];
-
-                if (control) {
-                    ShowWindow(
-                        control,
-                        SW_SHOW);
-                    MoveWindow(
-                        control,
-                        x,
-                        buttonY,
-                        kToolbarButtonSize,
-                        kToolbarButtonSize,
-                        TRUE);
-                }
-
-                if (index < gaps.size()) {
-                    x +=
-                        kToolbarButtonSize +
-                        gaps[index];
-                }
-            }
-        };
-
-    if (!g_advancedVisible) {
-        const std::array<HWND, 6> controls{
-            g_updateAllButton,
-            g_refreshPackagesButton,
-            g_launchWowButton,
-            g_addPackageButton,
-            g_removePackageButton,
-            g_advancedButton
-        };
-        constexpr std::array<int, 5> gaps{
-            kToolbarButtonGap,
-            kToolbarButtonGap +
-                kToolbarGroupExtraGap,
-            kToolbarButtonGap +
-                kToolbarGroupExtraGap,
-            kToolbarButtonGap,
-            kToolbarButtonGap +
-                kToolbarGroupExtraGap
-        };
-        placeStrip(controls, gaps);
-    } else {
-        const std::array<HWND, 10> controls{
+    const std::array<HWND, 10>
+        toolbarControls{
             g_updateAllButton,
             g_refreshPackagesButton,
             g_launchWowButton,
@@ -1154,33 +1262,166 @@ void LayoutControls(HWND hwnd) {
             g_tocPilotButton,
             g_advancedButton
         };
-        constexpr std::array<int, 9> gaps{
-            kToolbarButtonGap,
-            kToolbarButtonGap +
-                kToolbarGroupExtraGap,
-            kToolbarButtonGap +
-                kToolbarGroupExtraGap,
-            kToolbarButtonGap,
-            kToolbarButtonGap,
-            kToolbarButtonGap +
-                kToolbarGroupExtraGap,
-            kToolbarButtonGap,
-            kToolbarButtonGap +
-                kToolbarGroupExtraGap,
-            kToolbarButtonGap +
-                kToolbarGroupExtraGap
+
+    for (HWND control :
+         toolbarControls) {
+        if (control) {
+            ShowWindow(
+                control,
+                SW_HIDE);
+        }
+    }
+
+    const auto placeStrip =
+        [&](const auto& controls,
+            const auto& gaps) {
+            int gapTotal = 0;
+            for (const int gap :
+                 gaps) {
+                gapTotal +=
+                    ScaleUi(
+                        hwnd,
+                        gap);
+            }
+
+            int buttonWidth =
+                ScaleUi(
+                    hwnd,
+                    ToolbarUsesIcons()
+                        ? kToolbarButtonSize
+                        : kToolbarWordButtonWidth);
+
+            if (!ToolbarUsesIcons()) {
+                buttonWidth =
+                    std::max(
+                        buttonWidth,
+                        (contentWidth -
+                         gapTotal) /
+                            static_cast<int>(
+                                controls.size()));
+            }
+
+            const int stripWidth =
+                static_cast<int>(
+                    controls.size()) *
+                    buttonWidth +
+                gapTotal;
+
+            int x =
+                margin +
+                std::max(
+                    0,
+                    (contentWidth -
+                     stripWidth) /
+                        2);
+
+            for (std::size_t index = 0;
+                 index <
+                    controls.size();
+                 ++index) {
+                HWND control =
+                    controls[index];
+
+                if (control) {
+                    ShowWindow(
+                        control,
+                        SW_SHOW);
+
+                    MoveWindow(
+                        control,
+                        x,
+                        buttonY,
+                        buttonWidth,
+                        buttonHeight,
+                        TRUE);
+                }
+
+                if (index <
+                    gaps.size()) {
+                    x +=
+                        buttonWidth +
+                        ScaleUi(
+                            hwnd,
+                            gaps[index]);
+                }
+            }
         };
-        placeStrip(controls, gaps);
+
+    if (!g_advancedVisible) {
+        const std::array<HWND, 6>
+            controls{
+                g_updateAllButton,
+                g_refreshPackagesButton,
+                g_launchWowButton,
+                g_addPackageButton,
+                g_removePackageButton,
+                g_advancedButton
+            };
+
+        constexpr std::array<int, 5>
+            gaps{
+                kToolbarButtonGap,
+                kToolbarButtonGap +
+                    kToolbarGroupExtraGap,
+                kToolbarButtonGap +
+                    kToolbarGroupExtraGap,
+                kToolbarButtonGap,
+                kToolbarButtonGap +
+                    kToolbarGroupExtraGap
+            };
+
+        placeStrip(
+            controls,
+            gaps);
+    } else {
+        const std::array<HWND, 10>
+            controls{
+                g_updateAllButton,
+                g_refreshPackagesButton,
+                g_launchWowButton,
+                g_addPackageButton,
+                g_installPackageButton,
+                g_removePackageButton,
+                g_inspectPackageButton,
+                g_adoptGitButton,
+                g_tocPilotButton,
+                g_advancedButton
+            };
+
+        constexpr std::array<int, 9>
+            gaps{
+                kToolbarButtonGap,
+                kToolbarButtonGap +
+                    kToolbarGroupExtraGap,
+                kToolbarButtonGap +
+                    kToolbarGroupExtraGap,
+                kToolbarButtonGap,
+                kToolbarButtonGap,
+                kToolbarButtonGap +
+                    kToolbarGroupExtraGap,
+                kToolbarButtonGap,
+                kToolbarButtonGap +
+                    kToolbarGroupExtraGap,
+                kToolbarButtonGap +
+                    kToolbarGroupExtraGap
+            };
+
+        placeStrip(
+            controls,
+            gaps);
     }
 
     const int listTop =
         buttonY +
-        kToolbarButtonSize +
-        14;
-    const int listBottomPadding = 20;
+        buttonHeight +
+        ScaleUi(hwnd, 14);
+
+    const int listBottomPadding =
+        ScaleUi(hwnd, 20);
+
     const int listHeight =
         std::max(
-            220,
+            ScaleUi(hwnd, 220),
             height -
                 listTop -
                 listBottomPadding);
@@ -1188,11 +1429,12 @@ void LayoutControls(HWND hwnd) {
     if (g_packageList) {
         MoveWindow(
             g_packageList,
-            20,
+            margin,
             listTop,
             contentWidth,
             listHeight,
             TRUE);
+
         ResizeListColumns();
     }
 
@@ -1222,7 +1464,12 @@ void AddPackageListColumns() {
         column.mask = LVCF_TEXT | LVCF_WIDTH | LVCF_SUBITEM;
         column.pszText = const_cast<LPWSTR>(
             columns[static_cast<std::size_t>(index)].name);
-        column.cx = columns[static_cast<std::size_t>(index)].width;
+        column.cx =
+            ScaleUi(
+                g_packageList,
+                columns[
+                    static_cast<std::size_t>(
+                        index)].width);
         column.iSubItem = index;
         ListView_InsertColumn(g_packageList, index, &column);
     }
