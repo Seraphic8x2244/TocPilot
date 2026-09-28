@@ -5,8 +5,8 @@
 ## Current
 
 - Active branch: `main`.
-- Source/application version: `v0.3.21`.
-- Latest published release: `v0.3.21`.
+- Source/application version: `v0.3.22`.
+- Latest published release: `v0.3.21` (v0.3.22 release pending).
 - Release/source commit and tag target: `06f1d253ab7c16efb34c75ea85aa43f890fa2e84` (`v0.3.21`).
 - Latest fully runtime-accepted release is now `v0.3.17` at `a636d1eb0d1a3c213bb96c84ecbce2b22ca09d82`. The combined v0.3.14-v0.3.17 Compact fill/split gate passed on 2026-09-27: no Compact horizontal scrollbar under divider reversal, real Name/Status minimums hold in both orders, the far-right edge stays locked, whole-window resizing distributes width correctly, and Advanced resize/reorder behavior remains intact.
 - Latest verified `main` source-changing head: `5dd02e0c87f87c226f433e6edb50bc5e7a5879dc` (P6B icon toolbar). Release/version commit `928b26797d8d1b14bdbb07c2e2baf49ea896b2dc` sits above it.
@@ -20,7 +20,7 @@
 - v0.3.15 Compact divider transaction fix: **implemented / CI-checked / merged / published; partial runtime pass**. Expanding the left Compact column no longer creates a horizontal scrollbar immediately, but the divider transaction still clamps both primary columns only to the generic 40 px floor. This lets the right visible column shrink below its intended Compact minimum; after entering that invalid state, dragging back left can expose a horizontal scrollbar. Fix by enforcing the real per-column Compact minima throughout fitting and divider transactions.
 - v0.3.16 Compact minimum-width fix: **implemented / CI-checked / merged / published; partial runtime pass**. Self-update passed; the companion column now stops at its intended minimum in both column orders; whole-window resize and Advanced regression checks passed. Remaining failure: when dragging the middle divider back left after pushing it right, a horizontal scrollbar still appears. This is now isolated to reverse-direction transaction ordering rather than width limits.
 - v0.3.17 reverse-direction divider fix: **implemented / CI-checked / merged / published / runtime-accepted**. Compact divider dragging is a fully owned two-column transaction: the shrinking column is applied first, the growing column second, and the native one-column commit is cancelled under a re-entrancy guard. User runtime confirmed the rightward clamp, leftward reversal, both Name/Status orders, window resizing and Advanced regression checks all pass with no horizontal scrollbar.
-- Current goal: implement/runtime-check the v0.3.21 follow-up: remembered Advanced width, reduced Compact Words actions, and Launch permanently icon-only at the far right. The Refresh All viewport jump remains queued immediately after acceptance.
+- Current goal: publish/runtime-check **v0.3.22** for remembered Advanced width, reduced Compact Words actions, and Launch permanently icon-only at the far right. The Refresh All viewport jump remains queued immediately after acceptance.
 - Current scope boundary: only this P6B toolbar/window-width follow-up is in scope. Do not mix the queued Refresh All viewport-jump fix, async latest-stable DLL discovery, Add-Git stale-request work, warning cleanup, rate-limit propagation, staging-name cleanup or P6C art/skin work into this gate.
 - Audit continuity: `audit_dump.md` is a temporary scratch checkpoint for the interrupted broad audit only; this file remains the sole authoritative live development source of truth.
 - Documentation-only commits after the release do not change the published runtime baseline.
