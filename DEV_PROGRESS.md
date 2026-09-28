@@ -10,7 +10,7 @@
 - Release/source commit and tag target: `8678334c0a0015eba14aecf58f7c416c045f6581` (`v0.3.22`).
 - Latest fully runtime-accepted release is `v0.3.22` at `8678334c0a0015eba14aecf58f7c416c045f6581`. Runtime acceptance on 2026-09-28 covers the 48 x 48 / 36 x 36 toolbar presentation, Per-Monitor V2 DPI behaviour, Compact/Advanced Words/Icon presentation, persistent Advanced width, and Launch remaining the executable icon at the far right. Slight softness at Windows 125% scaling is accepted as normal fractional-DPI rendering; do not reopen DPI work without new evidence.
 - Last known-good Account-Sync-free code baseline is published/runtime-accepted `v0.3.22` at `8678334c0a0015eba14aecf58f7c416c045f6581`. The final pre-Account-Sync repository commit is documentation-only `6fcf117cf4f639612827acf88b10c6933f4b7802`, so its executable source is equivalent to that accepted v0.3.22 baseline.
-- Current `main` head is `fbd8cef2ceb2626ad3e4e7f296f9b8de2b9e0fd6` (`fix: preserve ctrl launch intent through sync`) above Account Sync implementation commit `232e2fb5f8ff843f10e164658efa728926988da6`. **Current main is not buildable/validated**: Build workflow run `36426680219`, Windows x64 job `108942244145`, fails during Release compilation before CTest.
+- Recovered Account Sync code head is `2e80b1378a7a01bb311140828e4e54069b1576d6` (`test: complete account sync recovery coverage`). Build workflow run `36440593954`, Windows x64 job `108989739617`, passed Release build and **19/19 CTest tests**, including `account-sync-safety`. Account Sync is now CI-recovered and has an untagged dev/test build; **runtime validation is still pending**, so `v0.3.22` remains the last published/runtime-accepted release.
 - A1 runtime gate: **accepted for forward development** on 2026-09-26. Fresh install, reinstall, Update New and Remove Addon passed. Managed same-root replacement runtime validation is explicitly deferred rather than blocking later work. The deterministic crash-window tests remain the primary validation for restart-recovery semantics.
 - A2 durable state semantic validation: **implemented / CI-checked / merged / published in v0.3.10 / runtime-accepted** as part of the combined v0.3.10 gate.
 - A3 + queued `www` presentation delta: **implemented / CI-checked / merged / published / runtime-accepted in v0.3.10**. ZIP members stream through miniz's extraction callback directly into staged files instead of allocating one full-member buffer; the existing 256 MiB per-entry and 1 GiB total policy limits remain. Deterministic archive coverage forges an oversized central-directory member size in a tiny fixture and verifies policy rejection before extraction staging. Advanced repository URLs are custom-drawn always blue + underlined and the header is lowercase `www`; Compact remained `Name | Status` in the accepted gate.
@@ -321,27 +321,24 @@ Audit result beyond compilation:
 - State loading remains backward-compatible with pre-Account-Sync `TocPilot.json`; missing new Account Sync fields default safely rather than invalidating old state.
 - A suspected main-window-height problem was rechecked and is **not** a finding: the existing 400 design-px minimum is sufficient for the current panel layout.
 
-Current test coverage exists in `tests/account_sync_tests.cpp`, but it has **not run in CI yet because compilation fails first**. Existing intended coverage includes pfUI comparison, confirmed copy+backup, cache-only/fallback behavior, equal timestamps/decline, backup failure, and state persistence.
+Recovery result:
 
-Add/verify before a test release:
-
-- copy failure after successful backup -> backup remains + fatal result;
-- backup run-folder collision -> `-02`;
-- no-source item;
-- a mixed 3+ account case covering equivalent + cache-only + confirmation + equal-timestamp targets together;
-- parser-fallback execution path, not only preview/inspection;
-- loading a pre-Account-Sync state file explicitly;
-- focused integration validation that Ctrl-click intent survives confirmation dialogs and Sync-before-Launch.
-
-Recovery sequence:
-
-1. **Do not reset or revert main to v0.3.22 as the first move.** Preserve `232e2fb5...` + `fbd8cef2...` and fix the two known compile blockers in place; the audit found useful implementation worth recovering.
-2. Rebuild Release and run the complete deterministic CTest suite. Account Sync is not considered recovered until `account-sync-safety` actually executes and passes.
-3. Fix any real compiler/test failures exposed after the initial parser cascades disappear. Keep changes narrow to Account Sync/recovery; do not mix the queued Refresh All viewport work or unrelated audit debt.
-4. Add the focused missing safety/regression tests above, then rerun CI cleanly.
-5. Only after clean CI, produce a **dev/test build** (do not publish a normal release yet) for runtime Account Sync validation against real WTF account data.
-6. Runtime gate should first verify configuration persistence/discovery and preview rows, then manual sync with confirmation/decline and backup inspection, then pfUI cache-only behavior, then Sync-before-Launch and Ctrl-click `-console`, and finally an induced safe failure proving Launch is blocked.
-7. If recovery proves unexpectedly invasive or semantics diverge from the BAT, compare against `6fcf117c...` / `8678334c...` as the clean baseline and reassess before proceeding; do not silently discard the accepted v0.3.22 behavior.
+- Compile blocker fixes:
+  - `83f5e83bda71061d2f68c4ead442d5340b91443d` — repairs the malformed pfUI raw regex literals using a custom delimiter without changing regex semantics.
+  - `8099915046e319b373f220e3b63fbeb5da7a3594` — fixes the Account Sync window `LONG`/`int` coordinate arithmetic by matching the existing Info-window pattern.
+- The first recovered Release build then exposed one real runtime-path defect in `account-sync-safety`: a missing destination could surface as `std::errc::no_such_file_or_directory` and abort analysis before confirmation. `089e1b44769aec6f21aa4132e0b8d414597f6cbe` fixes that narrowly by treating an actually missing sync file as a valid missing target while preserving all other filesystem errors.
+- Build workflow run `36438966237` for `089e1b4...` passed Release build and all **19/19 existing CTest tests**.
+- `2e80b1378a7a01bb311140828e4e54069b1576d6` adds the focused recovery coverage and a small testable pre-launch seam without changing the locked launch semantics. Added/verified cases are:
+  - copy failure after successful backup -> backup remains + fatal result;
+  - backup run-folder collision -> `-02`;
+  - no-source item;
+  - mixed 5-account pfUI case combining equivalent, cache-only, settings-confirmation, and equal-timestamp targets;
+  - parser-fallback execution through confirmation/copy, not only preview;
+  - explicit pre-Account-Sync state-file loading with safe defaults;
+  - Ctrl-click console intent captured before Sync-before-Launch confirmation flow, plus fatal sync blocking Launch.
+- Final recovery CI: Build workflow run `36440593954`, Windows x64 job `108989739617`, passed Release build and **19/19 CTest tests**; `account-sync-safety` passed.
+- Untagged dev/test artifact from that exact run: GitHub artifact `TocPilot-windows-x64` / ID `10977293329`. Extracted `TocPilot.exe`: **3,076,608 bytes**, SHA-256 `930dc5d90c9e285d88e4a28187818d88d99b09c1b1bec24163d5abd55db6e68a`. This is for runtime validation only; do not publish it as a normal release.
+- The accepted rollback/reference baseline remains `8678334c0a0015eba14aecf58f7c416c045f6581` (`v0.3.22`) / pre-feature documentation checkpoint `6fcf117cf4f639612827acf88b10c6933f4b7802`.
 
 ### Removal UX
 
@@ -722,22 +719,21 @@ Do not add support for user-uploaded ZIP/7z/RAR/installer/bundle release assets 
 
 ## Handoff — 2026-09-28
 
-- Audit/recovery documentation commit: `73d7270b9ec2415a9fca8bf54481428f968f5572`.
-- Current feature head remains `fbd8cef2ceb2626ad3e4e7f296f9b8de2b9e0fd6`; no Account Sync source fixes have been applied since the audit.
-- Recovery target is to preserve the existing implementation and repair the two confirmed compile blockers first.
-- Do not publish or runtime-test Account Sync until Release build + full CTest are clean.
-- Last known-good code baseline remains `8678334c0a0015eba14aecf58f7c416c045f6581` (`v0.3.22`); final pre-Account-Sync repository checkpoint is `6fcf117cf4f639612827acf88b10c6933f4b7802`.
-- After compile recovery, add the focused safety/regression tests recorded in the Account Sync audit section, then produce a dev/test build for the ordered runtime gate.
+- Account Sync recovery is complete through compile, deterministic tests, and dev/test build.
+- Recovered code head: `2e80b1378a7a01bb311140828e4e54069b1576d6`.
+- Final recovery CI: run `36440593954`, job `108989739617`: Release build + **19/19 CTest passed**.
+- Runtime-test EXE from artifact `10977293329`: 3,076,608 bytes; SHA-256 `930dc5d90c9e285d88e4a28187818d88d99b09c1b1bec24163d5abd55db6e68a`.
+- Do **not** publish Account Sync yet. `v0.3.22` at `8678334c0a0015eba14aecf58f7c416c045f6581` remains the last published/runtime-accepted release and rollback baseline.
 - Keep **Refresh All viewport jump** queued after Account Sync. Keep **Clear WDB folder** and **DXVK advanced logging checkbox** deferred.
 
 ## Exact Next Step
 
-Recover Account Sync from current `main` rather than reimplementing it:
+Runtime-test the untagged Account Sync dev build against real WTF data, in this order:
 
-1. Fix the malformed raw regex literals in `src/account_sync.cpp` and the `std::max` `int`/`LONG` mismatch in `ShowAccountSyncWindow()`.
-2. Build Release and run the full CTest suite; investigate any non-cascade failures that appear.
-3. Add the focused missing Account Sync safety/regression tests listed in the audit checkpoint and obtain clean CI.
-4. Produce a **dev/test build only** and runtime-test Account Sync against real WTF data using the ordered gate in the audit checkpoint.
-5. Keep `8678334c0a0015eba14aecf58f7c416c045f6581` (`v0.3.22`) as the last published/runtime-accepted code baseline and `6fcf117cf4f639612827acf88b10c6933f4b7802` as the final pre-Account-Sync repository checkpoint.
+1. Open Account Sync; verify account discovery, selection/config persistence, enabled items, and the three main-window preview/status rows.
+2. Run **Sync Now** with an older/missing macros or keybindings target; test both confirmation and decline. Inspect `WTF\\tocpilot\\<run>\\<account>\\...` and verify existing destinations are backed up before overwrite while missing destinations do not create fake backups.
+3. Exercise pfUI cache-only difference and confirm it auto-syncs without a settings-overwrite prompt; then exercise a meaningful settings difference and confirm it does prompt.
+4. Enable **Sync before Launch**; verify ordinary Launch works, then Ctrl-click Launch and confirm WoW receives `-console` even when Account Sync displays a confirmation dialog.
+5. Induce a safe backup/copy failure and verify sync reports the error and **Launch is blocked** without overwriting the destination.
 
-Do not publish Account Sync or move on to **Refresh All viewport jump** until recovery CI and the focused Account Sync runtime gate pass. Retain deferred **Clear WDB folder** and **DXVK advanced logging checkbox** work; do not mix unrelated robustness/audit/P6C changes into recovery.
+Only after that runtime gate passes should Account Sync be considered release-ready or work move on to **Refresh All viewport jump**. Retain deferred **Clear WDB folder** and **DXVK advanced logging checkbox** work; do not mix them into this runtime gate.
