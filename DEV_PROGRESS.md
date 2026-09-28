@@ -20,7 +20,7 @@
 - v0.3.15 Compact divider transaction fix: **implemented / CI-checked / merged / published; partial runtime pass**. Expanding the left Compact column no longer creates a horizontal scrollbar immediately, but the divider transaction still clamps both primary columns only to the generic 40 px floor. This lets the right visible column shrink below its intended Compact minimum; after entering that invalid state, dragging back left can expose a horizontal scrollbar. Fix by enforcing the real per-column Compact minima throughout fitting and divider transactions.
 - v0.3.16 Compact minimum-width fix: **implemented / CI-checked / merged / published; partial runtime pass**. Self-update passed; the companion column now stops at its intended minimum in both column orders; whole-window resize and Advanced regression checks passed. Remaining failure: when dragging the middle divider back left after pushing it right, a horizontal scrollbar still appears. This is now isolated to reverse-direction transaction ordering rather than width limits.
 - v0.3.17 reverse-direction divider fix: **implemented / CI-checked / merged / published / runtime-accepted**. Compact divider dragging is a fully owned two-column transaction: the shrinking column is applied first, the growing column second, and the native one-column commit is cancelled under a re-entrancy guard. User runtime confirmed the rightward clamp, leftward reversal, both Name/Status orders, window resizing and Advanced regression checks all pass with no horizontal scrollbar.
-- Current goal: runtime-check published **v0.3.20** for the P6B sizing/group-spacing follow-up: **48 x 48 buttons, 36 x 36 icons, Advanced group gaps**. The Refresh All viewport jump remains queued immediately after acceptance.
+- Current goal: build/runtime-check the **DPI-sharp toolbar correction + persistent Icons/Words presentation option**. The Refresh All viewport jump remains queued immediately after this gate.
 - Current scope boundary: only the P6B sizing/group-spacing follow-up is in scope. Do not mix the queued Refresh All viewport-jump fix, async latest-stable DLL discovery, Add-Git stale-request work, warning cleanup, rate-limit propagation, staging-name cleanup or P6C art/skin work into this gate.
 - Audit continuity: `audit_dump.md` is a temporary scratch checkpoint for the interrupted broad audit only; this file remains the sole authoritative live development source of truth.
 - Documentation-only commits after the release do not change the published runtime baseline.
@@ -628,8 +628,14 @@ Do not add support for user-uploaded ZIP/7z/RAR/installer/bundle release assets 
 
 ## Exact Next Step
 
-Runtime-check published `v0.3.20`: **48 x 48 buttons**, **36 x 36 freshly rendered/extracted icons**, Compact grouping unchanged, and Advanced grouped as **[Update Refresh] [Launch] [Add Repository Reinstall Repository Remove Repository] [Inspect Scan] [TocPilot] [Advanced]** with 6 px normal gaps and +16 px at group breaks.
+Finish the build/CTest gate for the current DPI/presentation source, then publish the next release and runtime-check at the user's normal **125% Windows display scaling**.
 
-Compact minimum width remains list-driven: the toolbar is 366 px wide versus the existing 370 px Name + Status column minimum, so RequiredClientWidth is unchanged. The list begins 14 px below the taller toolbar.
+Acceptance:
+- list/header text is natively sharp rather than bitmap-stretched;
+- 48 x 48 toolbar buttons and 36 x 36 icon design size retain the intended apparent size through DPI scaling;
+- Font Awesome and Launch icons are rerendered/extracted at the actual monitor pixel size;
+- disabled icon buttons remain clean and recognisable, not dithered/corrupt;
+- TocPilot/info popup exposes persistent **Toolbar buttons: Icons / Words**;
+- Words mode uses the existing command controls and current Compact/Advanced action ordering/grouping.
 
-After this runtime gate, return to the separately queued **Refresh All viewport jump**.
+After this runtime gate, return to the separately queued **Refresh All viewport jump**. Do not mix async DLL, Add-Git stale-request, cleanup, or P6C art/skin work into this pass.
