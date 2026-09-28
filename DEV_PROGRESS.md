@@ -6,8 +6,8 @@
 
 - Active branch: `main`.
 - Source/application version: `v0.3.22`.
-- Latest published release: `v0.3.21` (v0.3.22 release pending).
-- Release/source commit and tag target: `06f1d253ab7c16efb34c75ea85aa43f890fa2e84` (`v0.3.21`).
+- Latest published release: `v0.3.22`.
+- Release/source commit and tag target: `8678334c0a0015eba14aecf58f7c416c045f6581` (`v0.3.22`).
 - Latest fully runtime-accepted release is now `v0.3.17` at `a636d1eb0d1a3c213bb96c84ecbce2b22ca09d82`. The combined v0.3.14-v0.3.17 Compact fill/split gate passed on 2026-09-27: no Compact horizontal scrollbar under divider reversal, real Name/Status minimums hold in both orders, the far-right edge stays locked, whole-window resizing distributes width correctly, and Advanced resize/reorder behavior remains intact.
 - Latest verified `main` source-changing head: `5dd02e0c87f87c226f433e6edb50bc5e7a5879dc` (P6B icon toolbar). Release/version commit `928b26797d8d1b14bdbb07c2e2baf49ea896b2dc` sits above it.
 - A1 runtime gate: **accepted for forward development** on 2026-09-26. Fresh install, reinstall, Update New and Remove Addon passed. Managed same-root replacement runtime validation is explicitly deferred rather than blocking later work. The deterministic crash-window tests remain the primary validation for restart-recovery semantics.
@@ -20,7 +20,7 @@
 - v0.3.15 Compact divider transaction fix: **implemented / CI-checked / merged / published; partial runtime pass**. Expanding the left Compact column no longer creates a horizontal scrollbar immediately, but the divider transaction still clamps both primary columns only to the generic 40 px floor. This lets the right visible column shrink below its intended Compact minimum; after entering that invalid state, dragging back left can expose a horizontal scrollbar. Fix by enforcing the real per-column Compact minima throughout fitting and divider transactions.
 - v0.3.16 Compact minimum-width fix: **implemented / CI-checked / merged / published; partial runtime pass**. Self-update passed; the companion column now stops at its intended minimum in both column orders; whole-window resize and Advanced regression checks passed. Remaining failure: when dragging the middle divider back left after pushing it right, a horizontal scrollbar still appears. This is now isolated to reverse-direction transaction ordering rather than width limits.
 - v0.3.17 reverse-direction divider fix: **implemented / CI-checked / merged / published / runtime-accepted**. Compact divider dragging is a fully owned two-column transaction: the shrinking column is applied first, the growing column second, and the native one-column commit is cancelled under a re-entrancy guard. User runtime confirmed the rightward clamp, leftward reversal, both Name/Status orders, window resizing and Advanced regression checks all pass with no horizontal scrollbar.
-- Current goal: publish/runtime-check **v0.3.22** for remembered Advanced width, reduced Compact Words actions, and Launch permanently icon-only at the far right. The Refresh All viewport jump remains queued immediately after acceptance.
+- Current goal: runtime-check published **v0.3.22** for remembered Advanced width, reduced Compact Words actions, and Launch permanently icon-only at the far right. The Refresh All viewport jump remains queued immediately after acceptance.
 - Current scope boundary: only this P6B toolbar/window-width follow-up is in scope. Do not mix the queued Refresh All viewport-jump fix, async latest-stable DLL discovery, Add-Git stale-request work, warning cleanup, rate-limit propagation, staging-name cleanup or P6C art/skin work into this gate.
 - Audit continuity: `audit_dump.md` is a temporary scratch checkpoint for the interrupted broad audit only; this file remains the sole authoritative live development source of truth.
 - Documentation-only commits after the release do not change the published runtime baseline.
@@ -628,13 +628,19 @@ Do not add support for user-uploaded ZIP/7z/RAR/installer/bundle release assets 
 
 ## Exact Next Step
 
-Build, publish and runtime-check the current narrow P6B follow-up:
+Runtime-check published `v0.3.22`:
 
-- **Advanced width:** remember the user-resized Advanced client width in 96-DPI design units, restore it on later Advanced entries, and persist it across restarts as `settings.advanced_window_client_width`. Compact width restoration remains independent.
-- **Compact Icons:** keep the accepted actions, reordered to **[Update Refresh] [Add Repository Remove Repository] [Advanced] [Launch]**.
-- **Compact Words:** show only **[Update Refresh] [Advanced] [Launch]** so Words mode does not force an oversized Compact window.
-- **Advanced Icons/Words:** keep all actions, reordered to **[Update Refresh] [Add Repository Reinstall Repository Remove Repository] [Inspect Scan] [TocPilot] [Advanced] [Launch]**.
-- **Launch:** always remains the WoW/VanillaFixes executable icon button even when the toolbar preference is Words, and always sits furthest right after an extra group gap.
-- Keep current Per-Monitor V2 DPI behavior and accepted 48 x 48 / 36 x 36 icon-mode sizing otherwise unchanged.
+- resize Advanced, return to Compact, then re-enter Advanced: the Advanced width should restore;
+- restart TocPilot and enter Advanced again: the remembered Advanced width should still restore;
+- Compact Icons: **[Update Refresh] [Add Repository Remove Repository] [Advanced] [Launch]**;
+- Compact Words: **[Update Refresh] [Advanced] [Launch]** only;
+- Advanced Icons/Words: **[Update Refresh] [Add Repository Reinstall Repository Remove Repository] [Inspect Scan] [TocPilot] [Advanced] [Launch]**;
+- Launch remains the WoW/VanillaFixes executable icon button in both presentation modes and is always furthest right after a group gap.
+
+Source commit `c324d9d9acd28a93dfde5ff7eed29be419973f55` passed Build workflow run `36413284624`, Windows x64 job `108898322756`, with **18/18 CTest tests**.
+
+Release commit `8678334c0a0015eba14aecf58f7c416c045f6581` passed Release workflow run `36413642021`, Windows x64 job `108899489583`, with **18/18 CTest tests**, checksum generation, tag creation and asset publication.
+
+Published `TocPilot.exe`: 2,940,928 bytes, SHA-256 `2e11fbefb90d9f614ff5559294c074e691784adb05393fab9decbe000961051c`.
 
 After this runtime gate, return to the separately queued **Refresh All viewport jump**. Do not mix async DLL, Add-Git stale-request, cleanup, or P6C art/skin work into this pass.
