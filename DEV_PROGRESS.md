@@ -6,8 +6,8 @@
 
 - Active branch: `main`.
 - Source/application version: `v0.3.20`.
-- Latest published release: `v0.3.19` (v0.3.20 release pending).
-- Release/source commit and tag target: `347d76a289b229c56c4c789c9badec6f76d2980d` (`v0.3.19`).
+- Latest published release: `v0.3.20`.
+- Release/source commit and tag target: `6bbc7c505bd6ed2643b9c25a7e9f8dab7a78fecc` (`v0.3.20`).
 - Latest fully runtime-accepted release is now `v0.3.17` at `a636d1eb0d1a3c213bb96c84ecbce2b22ca09d82`. The combined v0.3.14-v0.3.17 Compact fill/split gate passed on 2026-09-27: no Compact horizontal scrollbar under divider reversal, real Name/Status minimums hold in both orders, the far-right edge stays locked, whole-window resizing distributes width correctly, and Advanced resize/reorder behavior remains intact.
 - Latest verified `main` source-changing head: `5dd02e0c87f87c226f433e6edb50bc5e7a5879dc` (P6B icon toolbar). Release/version commit `928b26797d8d1b14bdbb07c2e2baf49ea896b2dc` sits above it.
 - A1 runtime gate: **accepted for forward development** on 2026-09-26. Fresh install, reinstall, Update New and Remove Addon passed. Managed same-root replacement runtime validation is explicitly deferred rather than blocking later work. The deterministic crash-window tests remain the primary validation for restart-recovery semantics.
@@ -20,7 +20,7 @@
 - v0.3.15 Compact divider transaction fix: **implemented / CI-checked / merged / published; partial runtime pass**. Expanding the left Compact column no longer creates a horizontal scrollbar immediately, but the divider transaction still clamps both primary columns only to the generic 40 px floor. This lets the right visible column shrink below its intended Compact minimum; after entering that invalid state, dragging back left can expose a horizontal scrollbar. Fix by enforcing the real per-column Compact minima throughout fitting and divider transactions.
 - v0.3.16 Compact minimum-width fix: **implemented / CI-checked / merged / published; partial runtime pass**. Self-update passed; the companion column now stops at its intended minimum in both column orders; whole-window resize and Advanced regression checks passed. Remaining failure: when dragging the middle divider back left after pushing it right, a horizontal scrollbar still appears. This is now isolated to reverse-direction transaction ordering rather than width limits.
 - v0.3.17 reverse-direction divider fix: **implemented / CI-checked / merged / published / runtime-accepted**. Compact divider dragging is a fully owned two-column transaction: the shrinking column is applied first, the growing column second, and the native one-column commit is cancelled under a re-entrancy guard. User runtime confirmed the rightward clamp, leftward reversal, both Name/Status orders, window resizing and Advanced regression checks all pass with no horizontal scrollbar.
-- Current goal: runtime-check the P6B sizing/group-spacing follow-up: **48 x 48 buttons, 36 x 36 icons, Advanced group gaps**. The Refresh All viewport jump remains queued immediately after acceptance.
+- Current goal: runtime-check published **v0.3.20** for the P6B sizing/group-spacing follow-up: **48 x 48 buttons, 36 x 36 icons, Advanced group gaps**. The Refresh All viewport jump remains queued immediately after acceptance.
 - Current scope boundary: only the P6B sizing/group-spacing follow-up is in scope. Do not mix the queued Refresh All viewport-jump fix, async latest-stable DLL discovery, Add-Git stale-request work, warning cleanup, rate-limit propagation, staging-name cleanup or P6C art/skin work into this gate.
 - Audit continuity: `audit_dump.md` is a temporary scratch checkpoint for the interrupted broad audit only; this file remains the sole authoritative live development source of truth.
 - Documentation-only commits after the release do not change the published runtime baseline.
@@ -621,11 +621,15 @@ Do not add support for user-uploaded ZIP/7z/RAR/installer/bundle release assets 
 - Published v0.3.19 `TocPilot.exe`: 2,928,128 bytes, SHA-256 `863035585cff4c9e2549b9862f5f5791941289c2de093e2ec09a4390b1fe3b51`.
 - Published v0.3.19 `TocPilot.exe.sha256`: 78 bytes; asset SHA-256 `92a3f5fdcf4de9e6843ad6bcc036fa509b786cd2d56784b65f4b30d68eef907d`.
 - The Refresh All viewport jump remains queued immediately after the corrected toolbar runtime gate.
+- P6B sizing/group-spacing source commit `8f768825221513021fc23d58ca5fe3ec03cd2d8c` changes toolbar buttons to **48 x 48**, renders/extracts icons at **36 x 36**, preserves Compact grouping, adds Advanced grouping **[Update Refresh] [Launch] [Add Reinstall Remove] [Inspect Scan] [TocPilot] [Advanced]**, and moves the list top to preserve the existing 14 px toolbar/list gap. Compact toolbar width is 366 px versus the unchanged 370 px Name + Status minimum, so Compact minimum width remains list-driven.
+- v0.3.20 release commit `6bbc7c505bd6ed2643b9c25a7e9f8dab7a78fecc` is published. Release workflow run `36405469945`, Windows x64 Release job `108873033011`, passed exact-version validation, Release build, **18/18 CTest tests**, checksum generation, tag creation and asset publication.
+- Published v0.3.20 `TocPilot.exe`: 2,928,128 bytes, SHA-256 `1c38a0186fbc30245e4b6876833704e7d5fc3245a95388e166ae922258b72c6f`.
+- Published v0.3.20 `TocPilot.exe.sha256`: 78 bytes; asset SHA-256 `7509b88569f884e8c67d73406bbc75fa7e4b679593f8bdcc4b8651900ec15b1e`.
 
 ## Exact Next Step
 
-Publish and runtime-check the P6B sizing/group-spacing follow-up: **48 x 48 buttons**, **36 x 36 freshly rendered/extracted icons**, Compact grouping unchanged, and Advanced grouped as **[Update Refresh] [Launch] [Add Repository Reinstall Repository Remove Repository] [Inspect Scan] [TocPilot] [Advanced]** with 6 px normal gaps and +16 px at group breaks.
+Runtime-check published `v0.3.20`: **48 x 48 buttons**, **36 x 36 freshly rendered/extracted icons**, Compact grouping unchanged, and Advanced grouped as **[Update Refresh] [Launch] [Add Repository Reinstall Repository Remove Repository] [Inspect Scan] [TocPilot] [Advanced]** with 6 px normal gaps and +16 px at group breaks.
 
-Compact minimum width must remain list-driven: the 48 px toolbar is 366 px wide versus the existing 370 px Name + Status column minimum, so RequiredClientWidth remains unchanged. The list begins 14 px below the taller toolbar.
+Compact minimum width remains list-driven: the toolbar is 366 px wide versus the existing 370 px Name + Status column minimum, so RequiredClientWidth is unchanged. The list begins 14 px below the taller toolbar.
 
 After this runtime gate, return to the separately queued **Refresh All viewport jump**.
