@@ -6,10 +6,10 @@
 
 - Active branch: `main`.
 - Source/application version: `v0.3.18`.
-- Latest published release: `v0.3.17` (v0.3.18 release workflow pending).
-- Release/source commit and tag target: `a636d1eb0d1a3c213bb96c84ecbce2b22ca09d82` (merge of release-prep PR #27).
+- Latest published release: `v0.3.18`.
+- Release/source commit and tag target: `928b26797d8d1b14bdbb07c2e2baf49ea896b2dc` (`v0.3.18`).
 - Latest fully runtime-accepted release is now `v0.3.17` at `a636d1eb0d1a3c213bb96c84ecbce2b22ca09d82`. The combined v0.3.14-v0.3.17 Compact fill/split gate passed on 2026-09-27: no Compact horizontal scrollbar under divider reversal, real Name/Status minimums hold in both orders, the far-right edge stays locked, whole-window resizing distributes width correctly, and Advanced resize/reorder behavior remains intact.
-- Latest verified `main` source-changing head: `2c7dd510e04be7cd28263fa004b65d32033a9056` (merge of PR #26, direction-safe fully owned Compact divider transaction). Release-only version commit `a636d1eb0d1a3c213bb96c84ecbce2b22ca09d82` sits above it.
+- Latest verified `main` source-changing head: `5dd02e0c87f87c226f433e6edb50bc5e7a5879dc` (P6B icon toolbar). Release/version commit `928b26797d8d1b14bdbb07c2e2baf49ea896b2dc` sits above it.
 - A1 runtime gate: **accepted for forward development** on 2026-09-26. Fresh install, reinstall, Update New and Remove Addon passed. Managed same-root replacement runtime validation is explicitly deferred rather than blocking later work. The deterministic crash-window tests remain the primary validation for restart-recovery semantics.
 - A2 durable state semantic validation: **implemented / CI-checked / merged / published in v0.3.10 / runtime-accepted** as part of the combined v0.3.10 gate.
 - A3 + queued `www` presentation delta: **implemented / CI-checked / merged / published / runtime-accepted in v0.3.10**. ZIP members stream through miniz's extraction callback directly into staged files instead of allocating one full-member buffer; the existing 256 MiB per-entry and 1 GiB total policy limits remain. Deterministic archive coverage forges an oversized central-directory member size in a tiny fixture and verifies policy rejection before extraction staging. Advanced repository URLs are custom-drawn always blue + underlined and the header is lowercase `www`; Compact remained `Name | Status` in the accepted gate.
@@ -21,7 +21,7 @@
 - v0.3.16 Compact minimum-width fix: **implemented / CI-checked / merged / published; partial runtime pass**. Self-update passed; the companion column now stops at its intended minimum in both column orders; whole-window resize and Advanced regression checks passed. Remaining failure: when dragging the middle divider back left after pushing it right, a horizontal scrollbar still appears. This is now isolated to reverse-direction transaction ordering rather than width limits.
 - v0.3.17 reverse-direction divider fix: **implemented / CI-checked / merged / published / runtime-accepted**. Compact divider dragging is a fully owned two-column transaction: the shrinking column is applied first, the growing column second, and the native one-column commit is cancelled under a re-entrancy guard. User runtime confirmed the rightward clamp, leftward reversal, both Name/Status orders, window resizing and Advanced regression checks all pass with no horizontal scrollbar.
 - Current goal: investigate and fix the separately queued **Refresh All viewport jump** in the addon list. The focused **P6B icon-toolbar pass** is implemented and CI-checked.
-- Current scope boundary: toolbar presentation/naming only. Reuse the existing command IDs, handlers, enable/disable logic and package-operation behavior; do not duplicate live controls or mix the queued Refresh All viewport-jump fix, async latest-stable DLL discovery, Add-Git stale-request work, warning cleanup, rate-limit propagation or staging-name cleanup into this slice.
+- Current scope boundary: only the **Refresh All viewport-jump** issue is in scope for the next source slice. Do not mix async latest-stable DLL discovery, Add-Git stale-request work, warning cleanup, rate-limit propagation, staging-name cleanup or P6C art/skin work into that fix.
 - Audit continuity: `audit_dump.md` is a temporary scratch checkpoint for the interrupted broad audit only; this file remains the sole authoritative live development source of truth.
 - Documentation-only commits after the release do not change the published runtime baseline.
 
@@ -603,7 +603,7 @@ Do not add support for user-uploaded ZIP/7z/RAR/installer/bundle release assets 
 
 ## Release / Documentation Notes
 
-- Current published and fully runtime-accepted release is `v0.3.17` at `a636d1eb0d1a3c213bb96c84ecbce2b22ca09d82`.
+- Current published release is `v0.3.18` at `928b26797d8d1b14bdbb07c2e2baf49ea896b2dc`; latest fully runtime-accepted release remains `v0.3.17` until the P6B self-update/runtime gate is checked.
 - PR #26 head `bf9ee839f6d7ab722c6841648a642a4c4b5073aa` passed Build workflow run `36325300444`, Windows x64 job `108636801237`, including **18/18 CTest tests** with explicit shrink-first direction coverage.
 - PR #26 merged the fully owned direction-safe divider transaction as `2c7dd510e04be7cd28263fa004b65d32033a9056`.
 - PR #27 head `7d4256d7bb5a0a715ab52e8de89655f018221f5b` changed only release/version metadata and passed Build workflow run `36325571382`, Windows x64 job `108637574892`, including **18/18 CTest tests**.
@@ -612,14 +612,14 @@ Do not add support for user-uploaded ZIP/7z/RAR/installer/bundle release assets 
 - Published v0.3.17 `TocPilot.exe`: 2,498,048 bytes, SHA-256 `d073217456c7d9b4dabf488947fbecf2424f4655da145b51632d5f48fe8f42c8`.
 - Published v0.3.17 `TocPilot.exe.sha256`: 78 bytes; asset SHA-256 `343f45497193901851be3364c9f968b2246618527e54a8e2668d43eb2956fdf9`.
 - The combined v0.3.14-v0.3.17 Compact fill/split UX is runtime-accepted.
-- The 2026-09-28 P6B icon-toolbar implementation is CI-checked at `5dd02e0c87f87c226f433e6edb50bc5e7a5879dc`; the Refresh All viewport jump is now the next narrow UI slice.
+- The 2026-09-28 P6B icon-toolbar implementation is CI-checked at `5dd02e0c87f87c226f433e6edb50bc5e7a5879dc` and published in `v0.3.18`.
+- v0.3.18 Release workflow run `36360720566`, Windows x64 Release job `108737243385`, validated the exact source version, passed the Release build and **18/18 CTest tests**, generated the SHA-256 sidecar, created tag `v0.3.18`, and published direct assets.
+- Published v0.3.18 `TocPilot.exe`: 2,927,616 bytes, SHA-256 `b082c6af0cbb05af6f172470cfb48cf312606a4d4dfb7c6681e35217486c70c8`.
+- Published v0.3.18 `TocPilot.exe.sha256`: 78 bytes; asset SHA-256 `cf3ef06099ea1b479e2669b1aea138d14b86d9946d7b4d8a6fc19e1d26052592`.
+- The Refresh All viewport jump is now the next narrow UI source slice.
 
 ## Exact Next Step
 
-The **P6B icon-toolbar pass is implemented and CI-checked**. Commit `5dd02e0c87f87c226f433e6edb50bc5e7a5879dc` passed Build workflow run `36360346329`, Windows x64 job `108736152644`, including **18/18 CTest tests**. The next source slice is the separately queued **Refresh All viewport jump**.
+Runtime-check the normal self-update from `v0.3.17` to published `v0.3.18` for the P6B icon toolbar. Once that delivery gate is confirmed, implement only the separately queued **Refresh All viewport jump**.
 
-Use the existing command/state machinery and replace only the toolbar presentation: add the real Font Awesome Free Solid resources under `resources/icons/fa-solid/`, the custom Reinstall Repository `folder-repeat` resource under `resources/icons/custom/`, and keep Launch on its current executable/context icon. Build 32 x 32 icon buttons with 16 x 16 glyphs, apply the agreed Compact/Advanced visibility/order, centre the grouped Compact strip, and update tooltips/accessibility text to the new names.
-
-Keep the current behavioral paths intact: no duplicate hidden live controls, no package-operation rewrite, and no art/skin work in this slice. Build/CTest after the focused change, then publish through the normal self-update path for runtime checking.
-
-After this toolbar pass, return to the separately queued **Refresh All viewport jump** as the next narrow UI follow-up. Keep async latest-stable DLL discovery after the UI follow-ups; do not mix Add-Git stale-request work, warning cleanup, rate-limit propagation or staging-name cleanup into this toolbar slice.
+For the viewport fix, investigate and preserve the addon list's current top/selection identity across Refresh All re-sort/repopulate. Keep the fix narrow: do not mix async latest-stable DLL discovery, Add-Git stale-request work, warning cleanup, rate-limit propagation, staging-name cleanup or P6C art/skin work into it.
