@@ -720,6 +720,16 @@ Do not add support for user-uploaded ZIP/7z/RAR/installer/bundle release assets 
 - Published v0.3.20 `TocPilot.exe`: 2,928,128 bytes, SHA-256 `1c38a0186fbc30245e4b6876833704e7d5fc3245a95388e166ae922258b72c6f`.
 - Published v0.3.20 `TocPilot.exe.sha256`: 78 bytes; asset SHA-256 `7509b88569f884e8c67d73406bbc75fa7e4b679593f8bdcc4b8651900ec15b1e`.
 
+## Handoff — 2026-09-28
+
+- Audit/recovery documentation commit: `73d7270b9ec2415a9fca8bf54481428f968f5572`.
+- Current feature head remains `fbd8cef2ceb2626ad3e4e7f296f9b8de2b9e0fd6`; no Account Sync source fixes have been applied since the audit.
+- Recovery target is to preserve the existing implementation and repair the two confirmed compile blockers first.
+- Do not publish or runtime-test Account Sync until Release build + full CTest are clean.
+- Last known-good code baseline remains `8678334c0a0015eba14aecf58f7c416c045f6581` (`v0.3.22`); final pre-Account-Sync repository checkpoint is `6fcf117cf4f639612827acf88b10c6933f4b7802`.
+- After compile recovery, add the focused safety/regression tests recorded in the Account Sync audit section, then produce a dev/test build for the ordered runtime gate.
+- Keep **Refresh All viewport jump** queued after Account Sync. Keep **Clear WDB folder** and **DXVK advanced logging checkbox** deferred.
+
 ## Exact Next Step
 
 Recover Account Sync from current `main` rather than reimplementing it:
