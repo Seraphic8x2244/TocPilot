@@ -202,6 +202,7 @@ void TestCreateAddRoundTrip(
 
     state.settings.textScale = 1.25;
     state.settings.toolbarIcons = false;
+    state.settings.advancedWindowClientWidth = 1440;
     state.settings.packageSortColumn = 6;
     state.settings.packageSortAscending = false;
     state.settings.packageColumnWidths = {
@@ -254,6 +255,7 @@ void TestCreateAddRoundTrip(
             L"transaction-roundtrip-marker" ||
         loaded.settings.textScale != 1.25 ||
         loaded.settings.toolbarIcons ||
+        loaded.settings.advancedWindowClientWidth != 1440 ||
         loaded.settings.packageSortColumn != 6 ||
         loaded.settings.packageSortAscending ||
         loaded.settings.packageColumnWidths !=

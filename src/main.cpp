@@ -525,6 +525,14 @@ bool ToolbarUsesIcons() {
         g_state.settings.toolbarIcons;
 }
 
+bool ToolbarControlUsesIcon(
+    HWND control) {
+    return
+        ToolbarUsesIcons() ||
+        control ==
+            g_launchWowButton;
+}
+
 BOOL CALLBACK ApplyFontToChild(HWND child, LPARAM fontValue) {
     SendMessageW(
         child,
@@ -665,25 +673,42 @@ void SetTextScaleSelection() {
 
 int ToolbarStripWidthDesign(
     bool advanced) {
-    const int buttonWidth =
-        ToolbarUsesIcons()
-            ? kToolbarButtonSize
-            : kToolbarWordButtonWidth;
+    if (ToolbarUsesIcons()) {
+        const int count =
+            advanced
+                ? kAdvancedButtonCount
+                : kCompactPrimaryButtonCount;
 
-    const int count =
+        const int groupBreaks =
+            advanced
+                ? 5
+                : 3;
+
+        return
+            count *
+                kToolbarButtonSize +
+            (count - 1) *
+                kToolbarButtonGap +
+            groupBreaks *
+                kToolbarGroupExtraGap;
+    }
+
+    const int wordButtonCount =
         advanced
-            ? kAdvancedButtonCount
-            : kCompactPrimaryButtonCount;
-
+            ? 9
+            : 3;
+    const int totalButtonCount =
+        wordButtonCount + 1;
     const int groupBreaks =
         advanced
             ? 5
-            : 3;
+            : 2;
 
     return
-        count *
-            buttonWidth +
-        (count - 1) *
+        wordButtonCount *
+            kToolbarWordButtonWidth +
+        kToolbarButtonSize +
+        (totalButtonCount - 1) *
             kToolbarButtonGap +
         groupBreaks *
             kToolbarGroupExtraGap;
@@ -1241,13 +1266,10 @@ void LayoutControls(HWND hwnd) {
 
     const int buttonY =
         ScaleUi(hwnd, 16);
-
-    const int buttonHeight =
+    const int toolbarRowHeight =
         ScaleUi(
             hwnd,
-            ToolbarUsesIcons()
-                ? kToolbarButtonSize
-                : kToolbarWordButtonHeight);
+            kToolbarButtonSize);
 
     const std::array<HWND, 10>
         toolbarControls{
@@ -1284,28 +1306,45 @@ void LayoutControls(HWND hwnd) {
                         gap);
             }
 
-            int buttonWidth =
-                ScaleUi(
-                    hwnd,
-                    ToolbarUsesIcons()
-                        ? kToolbarButtonSize
-                        : kToolbarWordButtonWidth);
+            int fixedIconWidth = 0;
+            int wordButtonCount = 0;
 
-            if (!ToolbarUsesIcons()) {
-                buttonWidth =
-                    std::max(
-                        buttonWidth,
-                        (contentWidth -
-                         gapTotal) /
-                            static_cast<int>(
-                                controls.size()));
+            for (HWND control :
+                 controls) {
+                if (ToolbarControlUsesIcon(
+                        control)) {
+                    fixedIconWidth +=
+                        ScaleUi(
+                            hwnd,
+                            kToolbarButtonSize);
+                } else {
+                    ++wordButtonCount;
+                }
             }
 
-            const int stripWidth =
-                static_cast<int>(
-                    controls.size()) *
-                    buttonWidth +
-                gapTotal;
+            int wordButtonWidth =
+                ScaleUi(
+                    hwnd,
+                    kToolbarWordButtonWidth);
+
+            if (wordButtonCount > 0) {
+                const int availableForWords =
+                    contentWidth -
+                    gapTotal -
+                    fixedIconWidth;
+
+                wordButtonWidth =
+                    std::max(
+                        wordButtonWidth,
+                        availableForWords /
+                            wordButtonCount);
+            }
+
+            int stripWidth =
+                gapTotal +
+                fixedIconWidth +
+                wordButtonCount *
+                    wordButtonWidth;
 
             int x =
                 margin +
@@ -1322,6 +1361,30 @@ void LayoutControls(HWND hwnd) {
                 HWND control =
                     controls[index];
 
+                const bool iconControl =
+                    ToolbarControlUsesIcon(
+                        control);
+
+                const int controlWidth =
+                    iconControl
+                        ? ScaleUi(
+                            hwnd,
+                            kToolbarButtonSize)
+                        : wordButtonWidth;
+
+                const int controlHeight =
+                    ScaleUi(
+                        hwnd,
+                        iconControl
+                            ? kToolbarButtonSize
+                            : kToolbarWordButtonHeight);
+
+                const int controlY =
+                    buttonY +
+                    (toolbarRowHeight -
+                     controlHeight) /
+                        2;
+
                 if (control) {
                     ShowWindow(
                         control,
@@ -1330,16 +1393,16 @@ void LayoutControls(HWND hwnd) {
                     MoveWindow(
                         control,
                         x,
-                        buttonY,
-                        buttonWidth,
-                        buttonHeight,
+                        controlY,
+                        controlWidth,
+                        controlHeight,
                         TRUE);
                 }
 
                 if (index <
                     gaps.size()) {
                     x +=
-                        buttonWidth +
+                        controlWidth +
                         ScaleUi(
                             hwnd,
                             gaps[index]);
@@ -1348,44 +1411,67 @@ void LayoutControls(HWND hwnd) {
         };
 
     if (!g_advancedVisible) {
-        const std::array<HWND, 6>
-            controls{
-                g_updateAllButton,
-                g_refreshPackagesButton,
-                g_launchWowButton,
-                g_addPackageButton,
-                g_removePackageButton,
-                g_advancedButton
-            };
+        if (ToolbarUsesIcons()) {
+            const std::array<HWND, 6>
+                controls{
+                    g_updateAllButton,
+                    g_refreshPackagesButton,
+                    g_addPackageButton,
+                    g_removePackageButton,
+                    g_advancedButton,
+                    g_launchWowButton
+                };
 
-        constexpr std::array<int, 5>
-            gaps{
-                kToolbarButtonGap,
-                kToolbarButtonGap +
-                    kToolbarGroupExtraGap,
-                kToolbarButtonGap +
-                    kToolbarGroupExtraGap,
-                kToolbarButtonGap,
-                kToolbarButtonGap +
-                    kToolbarGroupExtraGap
-            };
+            constexpr std::array<int, 5>
+                gaps{
+                    kToolbarButtonGap,
+                    kToolbarButtonGap +
+                        kToolbarGroupExtraGap,
+                    kToolbarButtonGap,
+                    kToolbarButtonGap +
+                        kToolbarGroupExtraGap,
+                    kToolbarButtonGap +
+                        kToolbarGroupExtraGap
+                };
 
-        placeStrip(
-            controls,
-            gaps);
+            placeStrip(
+                controls,
+                gaps);
+        } else {
+            const std::array<HWND, 4>
+                controls{
+                    g_updateAllButton,
+                    g_refreshPackagesButton,
+                    g_advancedButton,
+                    g_launchWowButton
+                };
+
+            constexpr std::array<int, 3>
+                gaps{
+                    kToolbarButtonGap,
+                    kToolbarButtonGap +
+                        kToolbarGroupExtraGap,
+                    kToolbarButtonGap +
+                        kToolbarGroupExtraGap
+                };
+
+            placeStrip(
+                controls,
+                gaps);
+        }
     } else {
         const std::array<HWND, 10>
             controls{
                 g_updateAllButton,
                 g_refreshPackagesButton,
-                g_launchWowButton,
                 g_addPackageButton,
                 g_installPackageButton,
                 g_removePackageButton,
                 g_inspectPackageButton,
                 g_adoptGitButton,
                 g_tocPilotButton,
-                g_advancedButton
+                g_advancedButton,
+                g_launchWowButton
             };
 
         constexpr std::array<int, 9>
@@ -1393,13 +1479,13 @@ void LayoutControls(HWND hwnd) {
                 kToolbarButtonGap,
                 kToolbarButtonGap +
                     kToolbarGroupExtraGap,
-                kToolbarButtonGap +
-                    kToolbarGroupExtraGap,
                 kToolbarButtonGap,
                 kToolbarButtonGap,
                 kToolbarButtonGap +
                     kToolbarGroupExtraGap,
                 kToolbarButtonGap,
+                kToolbarButtonGap +
+                    kToolbarGroupExtraGap,
                 kToolbarButtonGap +
                     kToolbarGroupExtraGap,
                 kToolbarButtonGap +
@@ -1413,7 +1499,7 @@ void LayoutControls(HWND hwnd) {
 
     const int listTop =
         buttonY +
-        buttonHeight +
+        toolbarRowHeight +
         ScaleUi(hwnd, 14);
 
     const int listBottomPadding =
@@ -6578,7 +6664,8 @@ void ApplyToolbarPresentation(
 
         style &= ~BS_TYPEMASK;
         style |=
-            ToolbarUsesIcons()
+            ToolbarControlUsesIcon(
+                control)
                 ? BS_OWNERDRAW
                 : BS_PUSHBUTTON;
 
@@ -6622,13 +6709,17 @@ void ApplyToolbarPresentation(
 
 bool DrawToolbarButton(
     const DRAWITEMSTRUCT* draw) {
-    if (!draw ||
-        !ToolbarUsesIcons()) {
+    if (!draw) {
         return false;
     }
 
     HWND control =
         draw->hwndItem;
+
+    if (!ToolbarControlUsesIcon(
+            control)) {
+        return false;
+    }
 
     if (!control ||
         !ToolbarButtonIcon(
@@ -7338,6 +7429,57 @@ void ShowTocPilotWindow(
     StartUpdateCheck(owner);
 }
 
+void RememberAdvancedWindowWidth(
+    HWND hwnd) {
+    if (!g_stateReady ||
+        !g_advancedVisible) {
+        return;
+    }
+
+    RECT client{};
+    if (!GetClientRect(
+            hwnd,
+            &client)) {
+        return;
+    }
+
+    const int designWidth =
+        std::clamp(
+            UnscaleUi(
+                hwnd,
+                static_cast<int>(
+                    client.right -
+                    client.left)),
+            0,
+            10000);
+
+    if (designWidth ==
+        g_state.settings
+            .advancedWindowClientWidth) {
+        return;
+    }
+
+    const int previous =
+        g_state.settings
+            .advancedWindowClientWidth;
+
+    g_state.settings
+        .advancedWindowClientWidth =
+        designWidth;
+
+    std::wstring saveError;
+    if (!tp::SaveState(
+            g_root,
+            g_state,
+            saveError)) {
+        g_state.settings
+            .advancedWindowClientWidth =
+            previous;
+        g_stateError =
+            saveError;
+    }
+}
+
 void ToggleAdvanced(HWND hwnd) {
     RECT rect{};
     if (!GetWindowRect(
@@ -7356,6 +7498,9 @@ void ToggleAdvanced(HWND hwnd) {
     if (enteringAdvanced) {
         g_compactWindowWidthBeforeAdvanced =
             currentWidth;
+    } else {
+        RememberAdvancedWindowWidth(
+            hwnd);
     }
 
     g_advancedVisible =
@@ -7385,17 +7530,48 @@ void ToggleAdvanced(HWND hwnd) {
                 RequiredClientWidth(
                     hwnd,
                     true)));
-    const int newWidth =
-        g_advancedVisible
-            ? tp::ExpandedWindowWidth(
-                currentWidth,
-                compactMinimum,
-                advancedMinimum)
-            : tp::RestoredCompactWindowWidth(
+    int newWidth = 0;
+
+    if (g_advancedVisible) {
+        if (g_stateReady &&
+            g_state.settings
+                    .advancedWindowClientWidth >
+                0) {
+            const int rememberedClientWidth =
+                std::max(
+                    RequiredClientWidth(
+                        hwnd,
+                        true),
+                    ScaleUi(
+                        hwnd,
+                        g_state.settings
+                            .advancedWindowClientWidth));
+
+            const int rememberedWindowWidth =
+                WindowWidthForClient(
+                    hwnd,
+                    rememberedClientWidth);
+
+            newWidth =
+                std::max({
+                    currentWidth,
+                    advancedMinimum,
+                    rememberedWindowWidth});
+        } else {
+            newWidth =
+                tp::ExpandedWindowWidth(
+                    currentWidth,
+                    compactMinimum,
+                    advancedMinimum);
+        }
+    } else {
+        newWidth =
+            tp::RestoredCompactWindowWidth(
                 g_compactWindowWidthBeforeAdvanced,
                 currentWidth,
                 compactMinimum,
                 advancedMinimum);
+    }
 
     SetWindowPos(
         hwnd,
@@ -10264,6 +10440,9 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
         break;
 
     case WM_DESTROY:
+        RememberAdvancedWindowWidth(
+            hwnd);
+
         ++g_branchSelectorGeneration;
 
         if (g_packageList) {

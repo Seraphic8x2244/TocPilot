@@ -37,6 +37,7 @@ struct AppSettings {
     double textScale = 1.0;
     bool checkAppUpdates = true;
     bool toolbarIcons = true;
+    int advancedWindowClientWidth = 0;
     int packageSortColumn = -1;
     bool packageSortAscending = true;
     std::array<int, kPackageColumnCount> packageColumnWidths =

@@ -1028,6 +1028,9 @@ std::string DefaultJson(const AppState& state) {
         << "    \"toolbar_icons\": "
         << (state.settings.toolbarIcons ? "true" : "false")
         << ",\n"
+        << "    \"advanced_window_client_width\": "
+        << state.settings.advancedWindowClientWidth
+        << ",\n"
         << "    \"package_sort_column\": "
         << state.settings.packageSortColumn
         << ",\n"
@@ -2637,6 +2640,35 @@ bool LoadOrCreateState(
         return false;
     }
 
+    int advancedWindowClientWidth = 0;
+    std::size_t advancedWidthStart = 0;
+    std::size_t advancedWidthEnd = 0;
+    if (FindObjectMember(
+            json,
+            settingsStart,
+            settingsEnd,
+            "advanced_window_client_width",
+            advancedWidthStart,
+            advancedWidthEnd)) {
+        if (!ParseIntegerToken(
+                std::string_view(json).substr(
+                    advancedWidthStart,
+                    advancedWidthEnd - advancedWidthStart),
+                advancedWindowClientWidth) ||
+            advancedWindowClientWidth < 0) {
+            error =
+                L"TocPilot.json has an invalid "
+                L"settings.advanced_window_client_width value.";
+            return false;
+        }
+
+        advancedWindowClientWidth =
+            std::clamp(
+                advancedWindowClientWidth,
+                0,
+                10000);
+    }
+
     int packageSortColumn = -1;
     bool packageSortAscending = true;
 
@@ -2950,6 +2982,8 @@ bool LoadOrCreateState(
         std::clamp(textScale, 0.75, 2.0);
     state.settings.checkAppUpdates = checkUpdates;
     state.settings.toolbarIcons = toolbarIcons;
+    state.settings.advancedWindowClientWidth =
+        advancedWindowClientWidth;
     state.settings.packageSortColumn = packageSortColumn;
     state.settings.packageSortAscending = packageSortAscending;
     state.settings.packageColumnWidths = packageColumnWidths;
@@ -2990,6 +3024,11 @@ bool SaveState(
             state.settings.toolbarIcons
                 ? "true"
                 : "false") ||
+        !SetSettingsMemberJson(
+            json,
+            "advanced_window_client_width",
+            std::to_string(
+                state.settings.advancedWindowClientWidth)) ||
         !SetSettingsMemberJson(
             json,
             "package_sort_column",
