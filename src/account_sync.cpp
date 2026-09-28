@@ -387,9 +387,9 @@ bool NormalizePfUi(
     static const std::regex rootPattern(
         R"(^([A-Za-z_][A-Za-z0-9_]*)\s*=\s*\{$)");
     static const std::regex tablePattern(
-        R"(^\[(?:"((?:[^"\\]|\\.)*)"|(\d+))\]\s*=\s*\{$)");
+        R"tp(^\[(?:"((?:[^"\\]|\\.)*)"|(\d+))\]\s*=\s*\{$)tp");
     static const std::regex valuePattern(
-        R"(^\[(?:"((?:[^"\\]|\\.)*)"|(\d+))\]\s*=\s*(.+),$)");
+        R"tp(^\[(?:"((?:[^"\\]|\\.)*)"|(\d+))\]\s*=\s*(.+),$)tp");
 
     std::vector<std::string> stack;
 
