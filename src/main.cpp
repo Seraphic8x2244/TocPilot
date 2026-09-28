@@ -6934,34 +6934,45 @@ LRESULT CALLBACK TocPilotWindowProc(
     LPARAM lParam) {
     switch (message) {
     case WM_CREATE: {
+        const auto px =
+            [&](int value) {
+                return
+                    ScaleUi(
+                        hwnd,
+                        value);
+            };
+
         std::wstring versionText =
             L"TocPilot ";
         versionText +=
             TOCPILOT_VERSION_TAG_W;
 
-        HWND version = CreateWindowExW(
-            0,
-            L"STATIC",
-            versionText.c_str(),
-            WS_CHILD | WS_VISIBLE,
-            18,
-            16,
-            330,
-            24,
-            hwnd,
-            nullptr,
-            GetModuleHandleW(nullptr),
-            nullptr);
+        HWND version =
+            CreateWindowExW(
+                0,
+                L"STATIC",
+                versionText.c_str(),
+                WS_CHILD | WS_VISIBLE,
+                px(18),
+                px(16),
+                px(330),
+                px(24),
+                hwnd,
+                nullptr,
+                GetModuleHandleW(nullptr),
+                nullptr);
 
         CreateWindowExW(
             0,
             WC_LINK,
             L"<a id=\"github\">GitHub repository</a>",
-            WS_CHILD | WS_VISIBLE | WS_TABSTOP,
-            18,
-            48,
-            150,
-            24,
+            WS_CHILD |
+                WS_VISIBLE |
+                WS_TABSTOP,
+            px(18),
+            px(48),
+            px(150),
+            px(24),
             hwnd,
             reinterpret_cast<HMENU>(
                 static_cast<INT_PTR>(
@@ -6973,11 +6984,13 @@ LRESULT CALLBACK TocPilotWindowProc(
             0,
             WC_LINK,
             L"<a id=\"releases\">Releases</a>",
-            WS_CHILD | WS_VISIBLE | WS_TABSTOP,
-            182,
-            48,
-            100,
-            24,
+            WS_CHILD |
+                WS_VISIBLE |
+                WS_TABSTOP,
+            px(182),
+            px(48),
+            px(100),
+            px(24),
             hwnd,
             reinterpret_cast<HMENU>(
                 static_cast<INT_PTR>(
@@ -6989,12 +7002,13 @@ LRESULT CALLBACK TocPilotWindowProc(
             0,
             L"BUTTON",
             L"TocPilot Update",
-            WS_CHILD | WS_VISIBLE |
+            WS_CHILD |
+                WS_VISIBLE |
                 BS_GROUPBOX,
-            14,
-            78,
-            344,
-            112,
+            px(14),
+            px(78),
+            px(344),
+            px(112),
             hwnd,
             nullptr,
             GetModuleHandleW(nullptr),
@@ -7005,12 +7019,13 @@ LRESULT CALLBACK TocPilotWindowProc(
                 0,
                 L"STATIC",
                 L"Ready to check for updates.",
-                WS_CHILD | WS_VISIBLE |
+                WS_CHILD |
+                    WS_VISIBLE |
                     SS_LEFT,
-                28,
-                102,
-                316,
-                38,
+                px(28),
+                px(102),
+                px(316),
+                px(38),
                 hwnd,
                 nullptr,
                 GetModuleHandleW(nullptr),
@@ -7021,19 +7036,97 @@ LRESULT CALLBACK TocPilotWindowProc(
                 0,
                 L"BUTTON",
                 L"Check for Updates",
-                WS_CHILD | WS_VISIBLE |
+                WS_CHILD |
+                    WS_VISIBLE |
                     WS_TABSTOP |
                     BS_PUSHBUTTON,
-                28,
-                148,
-                316,
-                30,
+                px(28),
+                px(148),
+                px(316),
+                px(30),
                 hwnd,
                 reinterpret_cast<HMENU>(
                     static_cast<INT_PTR>(
                         IDC_TOCPILOT_UPDATE)),
                 GetModuleHandleW(nullptr),
                 nullptr);
+
+        CreateWindowExW(
+            0,
+            L"BUTTON",
+            L"Toolbar buttons",
+            WS_CHILD |
+                WS_VISIBLE |
+                BS_GROUPBOX,
+            px(14),
+            px(198),
+            px(344),
+            px(70),
+            hwnd,
+            nullptr,
+            GetModuleHandleW(nullptr),
+            nullptr);
+
+        g_toolbarIconsRadio =
+            CreateWindowExW(
+                0,
+                L"BUTTON",
+                L"Icons",
+                WS_CHILD |
+                    WS_VISIBLE |
+                    WS_TABSTOP |
+                    WS_GROUP |
+                    BS_AUTORADIOBUTTON,
+                px(28),
+                px(222),
+                px(120),
+                px(28),
+                hwnd,
+                reinterpret_cast<HMENU>(
+                    static_cast<INT_PTR>(
+                        IDC_TOOLBAR_ICONS)),
+                GetModuleHandleW(nullptr),
+                nullptr);
+
+        g_toolbarWordsRadio =
+            CreateWindowExW(
+                0,
+                L"BUTTON",
+                L"Words",
+                WS_CHILD |
+                    WS_VISIBLE |
+                    WS_TABSTOP |
+                    BS_AUTORADIOBUTTON,
+                px(170),
+                px(222),
+                px(120),
+                px(28),
+                hwnd,
+                reinterpret_cast<HMENU>(
+                    static_cast<INT_PTR>(
+                        IDC_TOOLBAR_WORDS)),
+                GetModuleHandleW(nullptr),
+                nullptr);
+
+        SendMessageW(
+            ToolbarUsesIcons()
+                ? g_toolbarIconsRadio
+                : g_toolbarWordsRadio,
+            BM_SETCHECK,
+            BST_CHECKED,
+            0);
+
+        EnableWindow(
+            g_toolbarIconsRadio,
+            g_stateReady
+                ? TRUE
+                : FALSE);
+
+        EnableWindow(
+            g_toolbarWordsRadio,
+            g_stateReady
+                ? TRUE
+                : FALSE);
 
         if (g_uiFont) {
             SendMessageW(
@@ -7042,6 +7135,7 @@ LRESULT CALLBACK TocPilotWindowProc(
                 reinterpret_cast<WPARAM>(
                     g_uiFont),
                 TRUE);
+
             EnumChildWindows(
                 hwnd,
                 ApplyFontToChild,
@@ -7049,6 +7143,29 @@ LRESULT CALLBACK TocPilotWindowProc(
                     g_uiFont));
         }
 
+        return 0;
+    }
+
+    case WM_DPICHANGED: {
+        const auto* suggested =
+            reinterpret_cast<RECT*>(
+                lParam);
+
+        if (suggested) {
+            SetWindowPos(
+                hwnd,
+                nullptr,
+                suggested->left,
+                suggested->top,
+                suggested->right -
+                    suggested->left,
+                suggested->bottom -
+                    suggested->top,
+                SWP_NOZORDER |
+                    SWP_NOACTIVATE);
+        }
+
+        ApplyUiFont(hwnd);
         return 0;
     }
 
@@ -7078,13 +7195,19 @@ LRESULT CALLBACK TocPilotWindowProc(
                 kTocPilotReleasesUrl);
             return 0;
         }
+
         break;
     }
 
-    case WM_COMMAND:
-        if (LOWORD(wParam) ==
+    case WM_COMMAND: {
+        const int id =
+            LOWORD(wParam);
+        const int code =
+            HIWORD(wParam);
+
+        if (id ==
                 IDC_TOCPILOT_UPDATE &&
-            HIWORD(wParam) ==
+            code ==
                 BN_CLICKED) {
             if (!g_release.assetUrl.empty()) {
                 StartUpdate(
@@ -7099,7 +7222,24 @@ LRESULT CALLBACK TocPilotWindowProc(
             }
             return 0;
         }
+
+        if (code ==
+                BN_CLICKED &&
+            (id ==
+                 IDC_TOOLBAR_ICONS ||
+             id ==
+                 IDC_TOOLBAR_WORDS)) {
+            SetToolbarPresentation(
+                GetWindow(
+                    hwnd,
+                    GW_OWNER),
+                id ==
+                    IDC_TOOLBAR_ICONS);
+            return 0;
+        }
+
         break;
+    }
 
     case WM_CLOSE:
         DestroyWindow(hwnd);
@@ -7109,6 +7249,8 @@ LRESULT CALLBACK TocPilotWindowProc(
         g_tocPilotWindow = nullptr;
         g_tocPilotUpdateStatus = nullptr;
         g_updateButton = nullptr;
+        g_toolbarIconsRadio = nullptr;
+        g_toolbarWordsRadio = nullptr;
         return 0;
     }
 
@@ -7137,8 +7279,10 @@ void ShowTocPilotWindow(
         owner,
         &ownerRect);
 
-    constexpr int windowWidth = 390;
-    constexpr int windowHeight = 245;
+    const int windowWidth =
+        ScaleUi(owner, 390);
+    const int windowHeight =
+        ScaleUi(owner, 315);
     const int x =
         static_cast<int>(
             ownerRect.left) +
@@ -7231,6 +7375,7 @@ void ToggleAdvanced(HWND hwnd) {
         WindowWidthForClient(
             hwnd,
             RequiredClientWidth(
+                hwnd,
                 false));
     const int advancedMinimum =
         std::max(
@@ -7238,6 +7383,7 @@ void ToggleAdvanced(HWND hwnd) {
             WindowWidthForClient(
                 hwnd,
                 RequiredClientWidth(
+                    hwnd,
                     true)));
     const int newWidth =
         g_advancedVisible
@@ -7721,6 +7867,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
         PopulatePackageList();
         UpdatePackageButtons();
         ApplyUiFont(hwnd);
+        EnsureToolbarMinimumWidth(hwnd);
         LayoutControls(hwnd);
 
         return 0;
@@ -7729,6 +7876,41 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
     case WM_SIZE:
         LayoutControls(hwnd);
         return 0;
+
+    case WM_DPICHANGED: {
+        const auto* suggested =
+            reinterpret_cast<RECT*>(
+                lParam);
+
+        if (suggested) {
+            SetWindowPos(
+                hwnd,
+                nullptr,
+                suggested->left,
+                suggested->top,
+                suggested->right -
+                    suggested->left,
+                suggested->bottom -
+                    suggested->top,
+                SWP_NOZORDER |
+                    SWP_NOACTIVATE);
+        }
+
+        ApplyUiFont(hwnd);
+        ReloadToolbarImages(hwnd);
+        ApplyToolbarPresentation(hwnd);
+        LayoutControls(hwnd);
+        return 0;
+    }
+
+    case WM_DRAWITEM:
+        if (DrawToolbarButton(
+                reinterpret_cast<
+                    DRAWITEMSTRUCT*>(
+                        lParam))) {
+            return TRUE;
+        }
+        break;
 
     case WM_TP_POSITION_BRANCH_SELECTOR:
         PositionBranchSelector();
@@ -7748,10 +7930,13 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             0,
             0,
             RequiredClientWidth(
+                hwnd,
                 g_advancedVisible),
-            400};
+            ScaleUi(
+                hwnd,
+                400)};
 
-        AdjustWindowRectEx(
+        AdjustWindowRectForDpi(
             &minimum,
             static_cast<DWORD>(
                 GetWindowLongPtrW(
@@ -7761,7 +7946,8 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             static_cast<DWORD>(
                 GetWindowLongPtrW(
                     hwnd,
-                    GWL_EXSTYLE)));
+                    GWL_EXSTYLE)),
+            WindowDpi(hwnd));
 
         info->ptMinTrackSize.x =
             minimum.right -
@@ -10412,8 +10598,12 @@ int RunMainWindow(HINSTANCE instance) {
         WS_OVERLAPPEDWINDOW,
         CW_USEDEFAULT,
         CW_USEDEFAULT,
-        kCompactWindowWidth,
-        kDefaultWindowHeight,
+        ScaleForDpi(
+            kCompactWindowWidth,
+            SystemDpi()),
+        ScaleForDpi(
+            kDefaultWindowHeight,
+            SystemDpi()),
         nullptr,
         nullptr,
         instance,
