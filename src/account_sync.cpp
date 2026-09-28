@@ -523,6 +523,13 @@ bool InspectCopy(
             path,
             ec);
 
+    if (ec ==
+        std::errc::no_such_file_or_directory) {
+        ec.clear();
+        exists = false;
+        return true;
+    }
+
     if (ec) {
         error =
             L"Could not inspect Account Sync file '" +
