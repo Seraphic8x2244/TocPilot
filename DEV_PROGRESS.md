@@ -8,7 +8,7 @@
 - Source/application version: `v0.3.22`.
 - Latest published release: `v0.3.22`.
 - Release/source commit and tag target: `8678334c0a0015eba14aecf58f7c416c045f6581` (`v0.3.22`).
-- Latest fully runtime-accepted release is now `v0.3.17` at `a636d1eb0d1a3c213bb96c84ecbce2b22ca09d82`. The combined v0.3.14-v0.3.17 Compact fill/split gate passed on 2026-09-27: no Compact horizontal scrollbar under divider reversal, real Name/Status minimums hold in both orders, the far-right edge stays locked, whole-window resizing distributes width correctly, and Advanced resize/reorder behavior remains intact.
+- Latest fully runtime-accepted release is `v0.3.22` at `8678334c0a0015eba14aecf58f7c416c045f6581`. Runtime acceptance on 2026-09-28 covers the 48 x 48 / 36 x 36 toolbar presentation, Per-Monitor V2 DPI behaviour, Compact/Advanced Words/Icon presentation, persistent Advanced width, and Launch remaining the executable icon at the far right. Slight softness at Windows 125% scaling is accepted as normal fractional-DPI rendering; do not reopen DPI work without new evidence.
 - Latest verified `main` source-changing head: `5dd02e0c87f87c226f433e6edb50bc5e7a5879dc` (P6B icon toolbar). Release/version commit `928b26797d8d1b14bdbb07c2e2baf49ea896b2dc` sits above it.
 - A1 runtime gate: **accepted for forward development** on 2026-09-26. Fresh install, reinstall, Update New and Remove Addon passed. Managed same-root replacement runtime validation is explicitly deferred rather than blocking later work. The deterministic crash-window tests remain the primary validation for restart-recovery semantics.
 - A2 durable state semantic validation: **implemented / CI-checked / merged / published in v0.3.10 / runtime-accepted** as part of the combined v0.3.10 gate.
@@ -20,8 +20,8 @@
 - v0.3.15 Compact divider transaction fix: **implemented / CI-checked / merged / published; partial runtime pass**. Expanding the left Compact column no longer creates a horizontal scrollbar immediately, but the divider transaction still clamps both primary columns only to the generic 40 px floor. This lets the right visible column shrink below its intended Compact minimum; after entering that invalid state, dragging back left can expose a horizontal scrollbar. Fix by enforcing the real per-column Compact minima throughout fitting and divider transactions.
 - v0.3.16 Compact minimum-width fix: **implemented / CI-checked / merged / published; partial runtime pass**. Self-update passed; the companion column now stops at its intended minimum in both column orders; whole-window resize and Advanced regression checks passed. Remaining failure: when dragging the middle divider back left after pushing it right, a horizontal scrollbar still appears. This is now isolated to reverse-direction transaction ordering rather than width limits.
 - v0.3.17 reverse-direction divider fix: **implemented / CI-checked / merged / published / runtime-accepted**. Compact divider dragging is a fully owned two-column transaction: the shrinking column is applied first, the growing column second, and the native one-column commit is cancelled under a re-entrancy guard. User runtime confirmed the rightward clamp, leftward reversal, both Name/Status orders, window resizing and Advanced regression checks all pass with no horizontal scrollbar.
-- Current goal: runtime-check published **v0.3.22** for remembered Advanced width, reduced Compact Words actions, and Launch permanently icon-only at the far right. The Refresh All viewport jump remains queued immediately after acceptance.
-- Current scope boundary: only this P6B toolbar/window-width follow-up is in scope. Do not mix the queued Refresh All viewport-jump fix, async latest-stable DLL discovery, Add-Git stale-request work, warning cleanup, rate-limit propagation, staging-name cleanup or P6C art/skin work into this gate.
+- Current goal: implement the agreed **Account Sync** feature that replaces the user's existing `wtf_sync.bat` workflow while preserving its safety/backup semantics. No Account Sync code has been started yet.
+- Current scope boundary: Account Sync is the next feature. Preserve the runtime-accepted v0.3.22 toolbar/DPI behaviour. Keep the Refresh All viewport-jump fix queued after Account Sync and do not mix async latest-stable DLL discovery, Add-Git stale-request work, warning cleanup, rate-limit propagation, staging-name cleanup or P6C art/skin work into this feature.
 - Audit continuity: `audit_dump.md` is a temporary scratch checkpoint for the interrupted broad audit only; this file remains the sole authoritative live development source of truth.
 - Documentation-only commits after the release do not change the published runtime baseline.
 
@@ -251,6 +251,50 @@ Branch-selector target behaviour after the v0.3.6 runtime follow-up:
 - remote branch lists are transient remote metadata and should not be duplicated into durable package state merely for UI rendering;
 - Add Git already fetches the full Git smart-HTTP branch advertisement in the branch chooser; reuse that result to seed runtime metadata rather than immediately fetching it again;
 - normal branch-head refresh also fetches the full advertisement internally, so retain/reuse that information to discover newly added/removed remote branches during ordinary startup/Refresh All checks without an extra branch-list request.
+
+### Account Sync — agreed design / not implemented
+
+Goal: retire the user's current `wtf_sync.bat` by moving its account-data synchronization and launch convenience into TocPilot without adding a menu-heavy launch flow.
+
+UI / workflow contract:
+
+- Rename the existing **TocPilot** toolbar action to **Info** when this feature lands; clean its popup into the application/version/update/interface-preferences window.
+- Add a separate **Account Sync** action in Advanced only, with a new dedicated sync/transfer icon in Icons mode and `Account Sync` text in Words mode.
+- Account Sync popup is configuration only: discovered `WTF\Account\` accounts with checkboxes on the left; **Macros**, **Keybindings**, **pfUI**, and **Sync before Launch** on the right; retain a manual **Sync Now** action. Do not put runtime status/history in this popup.
+- When Account Sync is enabled, show a compact main-window panel below addon management with exactly three rows (**Macros**, **Keybindings**, **pfUI**) and columns for item, status, and action/confirmation. This is the runtime view; do not turn it into a scrolling debug console.
+- Normal daily flow is one-click: when **Sync before Launch** is enabled, Launch performs Account Sync automatically and then starts WoW. Only genuinely confirmation-required overwrites should interrupt.
+- Click **Launch** normally for the existing launch path; **Ctrl-click Launch** adds `-console`. Account Sync runs before either launch form.
+- User-declined optional overwrite skips that item and Launch may continue. Backup/copy failure is a real error and blocks Launch.
+
+Files / source selection:
+
+- Macros: `macros-cache.txt`.
+- Keybindings: `bindings-cache.wtf`.
+- pfUI: `SavedVariables\pfUI.lua`.
+- Selected checked accounts form the sync group; there is no fixed global source/destination.
+- For each enabled item independently, inspect selected accounts and choose the newest existing copy by `LastWriteTimeUtc`.
+- Equal modified timestamps are left untouched.
+- If no selected account has the source item, skip/warn; never synthesize data.
+- Macros/keybindings: an older or missing target requires confirmation before copying.
+
+pfUI comparison must preserve the supplied BAT's conservative semantic rules rather than becoming timestamp-only:
+
+- ignore `pfUI_cache.chathistory` as junk;
+- treat `pfUI_cache.libhealth`, `pfUI_cache.prediction`, and `pfUI_cache.gold` as cache data;
+- normalize Lua table/write ordering so ordering alone is not a settings change;
+- cache-only differences may auto-sync from the newest copy;
+- meaningful settings differences require confirmation;
+- unknown/new pfUI sections are meaningful settings by default;
+- comparer/parser failure must fail safe into ordinary modification-time handling/confirmation, never silent overwrite.
+
+Backup safety is mandatory:
+
+- Existing destination -> successful backup -> only then overwrite.
+- Missing destination needs no backup.
+- New backup root is **`WTF\tocpilot\`** (requested as `..\WTF\tocpilot\` relative to account directories), not the BAT's previous backup location.
+- Preserve timestamped backup-run directories and account-relative structure beneath each run; retain collision suffix handling such as `-02`, `-03`.
+- Backup failure means do not overwrite and block Launch.
+- Copy failure after a successful backup leaves the backup intact and blocks Launch.
 
 ### Removal UX
 
@@ -578,6 +622,9 @@ After P6 is accepted, reprioritize the deferred feature backlog rather than auto
 
 Current deferred work includes:
 
+- **Refresh All viewport jump** — still queued after Account Sync; investigate preserved top/selection identity across re-sort/repopulate;
+- **Clear WDB folder** — future Advanced feature;
+- **DXVK advanced logging checkbox** — future Advanced option; the BAT's current `DXVK_LOG_LEVEL=debug` behaviour should become optional rather than forced. `WoW_d3d9.log` archival can be reconsidered with this work and is not part of the locked Account Sync scope;
 - P5 import/export;
 - P5 package-edit flow;
 - better ambiguous archive mapping;
@@ -603,7 +650,7 @@ Do not add support for user-uploaded ZIP/7z/RAR/installer/bundle release assets 
 
 ## Release / Documentation Notes
 
-- Current published release is `v0.3.18` at `928b26797d8d1b14bdbb07c2e2baf49ea896b2dc`; latest fully runtime-accepted release remains `v0.3.17` until the P6B self-update/runtime gate is checked.
+- Current published and fully runtime-accepted release is `v0.3.22` at `8678334c0a0015eba14aecf58f7c416c045f6581`.
 - PR #26 head `bf9ee839f6d7ab722c6841648a642a4c4b5073aa` passed Build workflow run `36325300444`, Windows x64 job `108636801237`, including **18/18 CTest tests** with explicit shrink-first direction coverage.
 - PR #26 merged the fully owned direction-safe divider transaction as `2c7dd510e04be7cd28263fa004b65d32033a9056`.
 - PR #27 head `7d4256d7bb5a0a715ab52e8de89655f018221f5b` changed only release/version metadata and passed Build workflow run `36325571382`, Windows x64 job `108637574892`, including **18/18 CTest tests**.
@@ -628,19 +675,8 @@ Do not add support for user-uploaded ZIP/7z/RAR/installer/bundle release assets 
 
 ## Exact Next Step
 
-Runtime-check published `v0.3.22`:
+Begin the **Account Sync** implementation from the locked design above. Preserve the accepted v0.3.22 toolbar/DPI behaviour and the supplied BAT's safety semantics exactly. The first implementation must include the configuration/state model, safe sync engine + backups under `WTF\tocpilot\`, main-window three-row Account Sync status/action panel, Advanced-only Account Sync popup/action, **TocPilot -> Info** rename/cleanup, automatic sync-before-Launch, and **Ctrl-click Launch -> `-console`**.
 
-- resize Advanced, return to Compact, then re-enter Advanced: the Advanced width should restore;
-- restart TocPilot and enter Advanced again: the remembered Advanced width should still restore;
-- Compact Icons: **[Update Refresh] [Add Repository Remove Repository] [Advanced] [Launch]**;
-- Compact Words: **[Update Refresh] [Advanced] [Launch]** only;
-- Advanced Icons/Words: **[Update Refresh] [Add Repository Reinstall Repository Remove Repository] [Inspect Scan] [TocPilot] [Advanced] [Launch]**;
-- Launch remains the WoW/VanillaFixes executable icon button in both presentation modes and is always furthest right after a group gap.
+Account Sync is design-only at this checkpoint; no feature code has been started.
 
-Source commit `c324d9d9acd28a93dfde5ff7eed29be419973f55` passed Build workflow run `36413284624`, Windows x64 job `108898322756`, with **18/18 CTest tests**.
-
-Release commit `8678334c0a0015eba14aecf58f7c416c045f6581` passed Release workflow run `36413642021`, Windows x64 job `108899489583`, with **18/18 CTest tests**, checksum generation, tag creation and asset publication.
-
-Published `TocPilot.exe`: 2,940,928 bytes, SHA-256 `2e11fbefb90d9f614ff5559294c074e691784adb05393fab9decbe000961051c`.
-
-After this runtime gate, return to the separately queued **Refresh All viewport jump**. Do not mix async DLL, Add-Git stale-request, cleanup, or P6C art/skin work into this pass.
+Keep **Refresh All viewport jump** queued after Account Sync. Also retain deferred **Clear WDB folder** and **DXVK advanced logging checkbox** work. Do not mix unrelated robustness/audit/P6C work into the Account Sync implementation.
