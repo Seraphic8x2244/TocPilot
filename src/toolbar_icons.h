@@ -17,7 +17,8 @@ struct ToolbarIcons {
     ToolbarIcon removeRepository;
     ToolbarIcon inspect;
     ToolbarIcon scan;
-    ToolbarIcon tocPilot;
+    ToolbarIcon accountSync;
+    ToolbarIcon info;
     ToolbarIcon advanced;
     HANDLE fontResource = nullptr;
     int pixelSize = 0;

@@ -38,6 +38,11 @@ struct AppSettings {
     bool checkAppUpdates = true;
     bool toolbarIcons = true;
     int advancedWindowClientWidth = 0;
+    std::vector<std::wstring> accountSyncAccounts;
+    bool accountSyncMacros = false;
+    bool accountSyncKeybindings = false;
+    bool accountSyncPfUi = false;
+    bool accountSyncBeforeLaunch = false;
     int packageSortColumn = -1;
     bool packageSortAscending = true;
     std::array<int, kPackageColumnCount> packageColumnWidths =

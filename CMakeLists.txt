@@ -23,6 +23,7 @@ if(MSVC)
 endif()
 
 add_executable(TocPilot WIN32
+    src/account_sync.cpp
     src/addon_scan.cpp
     src/adoption.cpp
     src/add_package_dialog.cpp
@@ -366,5 +367,26 @@ if(BUILD_TESTING)
     endif()
 
     add_test(NAME window-layout-roundtrip COMMAND TocPilotWindowLayoutTests)
+
+
+    add_executable(TocPilotAccountSyncTests
+        tests/account_sync_tests.cpp
+        src/account_sync.cpp
+        src/state.cpp
+    )
+    target_compile_features(TocPilotAccountSyncTests PRIVATE cxx_std_20)
+    target_compile_definitions(TocPilotAccountSyncTests PRIVATE
+        UNICODE
+        _UNICODE
+        WIN32_LEAN_AND_MEAN
+        NOMINMAX
+    )
+    target_include_directories(TocPilotAccountSyncTests PRIVATE src)
+
+    if(MSVC)
+        target_compile_options(TocPilotAccountSyncTests PRIVATE /W4 /permissive- /utf-8)
+    endif()
+
+    add_test(NAME account-sync-safety COMMAND TocPilotAccountSyncTests)
 
 endif()

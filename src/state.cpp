@@ -1031,6 +1031,21 @@ std::string DefaultJson(const AppState& state) {
         << "    \"advanced_window_client_width\": "
         << state.settings.advancedWindowClientWidth
         << ",\n"
+        << "    \"account_sync_accounts\": "
+        << JsonStringArray(state.settings.accountSyncAccounts)
+        << ",\n"
+        << "    \"account_sync_macros\": "
+        << (state.settings.accountSyncMacros ? "true" : "false")
+        << ",\n"
+        << "    \"account_sync_keybindings\": "
+        << (state.settings.accountSyncKeybindings ? "true" : "false")
+        << ",\n"
+        << "    \"account_sync_pfui\": "
+        << (state.settings.accountSyncPfUi ? "true" : "false")
+        << ",\n"
+        << "    \"account_sync_before_launch\": "
+        << (state.settings.accountSyncBeforeLaunch ? "true" : "false")
+        << ",\n"
         << "    \"package_sort_column\": "
         << state.settings.packageSortColumn
         << ",\n"
@@ -2943,6 +2958,66 @@ bool LoadOrCreateState(
         return false;
     }
 
+    std::vector<std::wstring>
+        accountSyncAccounts;
+
+    if (!GetStringArrayMember(
+            json,
+            settingsStart,
+            settingsEnd,
+            "account_sync_accounts",
+            accountSyncAccounts)) {
+        error =
+            L"TocPilot.json has an invalid "
+            L"settings.account_sync_accounts value.";
+        return false;
+    }
+
+    bool accountSyncMacros = false;
+    bool accountSyncKeybindings = false;
+    bool accountSyncPfUi = false;
+    bool accountSyncBeforeLaunch = false;
+
+    const auto readOptionalBool =
+        [&](std::string_view key,
+            bool& value) {
+            std::size_t start = 0;
+            std::size_t end = 0;
+
+            if (!FindObjectMember(
+                    json,
+                    settingsStart,
+                    settingsEnd,
+                    key,
+                    start,
+                    end)) {
+                return true;
+            }
+
+            return ParseBoolToken(
+                std::string_view(json).substr(
+                    start,
+                    end - start),
+                value);
+        };
+
+    if (!readOptionalBool(
+            "account_sync_macros",
+            accountSyncMacros) ||
+        !readOptionalBool(
+            "account_sync_keybindings",
+            accountSyncKeybindings) ||
+        !readOptionalBool(
+            "account_sync_pfui",
+            accountSyncPfUi) ||
+        !readOptionalBool(
+            "account_sync_before_launch",
+            accountSyncBeforeLaunch)) {
+        error =
+            L"TocPilot.json has an invalid Account Sync boolean setting.";
+        return false;
+    }
+
     std::size_t packagesStart = 0;
     std::size_t packagesEnd = 0;
     if (!GetRootMember(
@@ -2984,6 +3059,16 @@ bool LoadOrCreateState(
     state.settings.toolbarIcons = toolbarIcons;
     state.settings.advancedWindowClientWidth =
         advancedWindowClientWidth;
+    state.settings.accountSyncAccounts =
+        std::move(accountSyncAccounts);
+    state.settings.accountSyncMacros =
+        accountSyncMacros;
+    state.settings.accountSyncKeybindings =
+        accountSyncKeybindings;
+    state.settings.accountSyncPfUi =
+        accountSyncPfUi;
+    state.settings.accountSyncBeforeLaunch =
+        accountSyncBeforeLaunch;
     state.settings.packageSortColumn = packageSortColumn;
     state.settings.packageSortAscending = packageSortAscending;
     state.settings.packageColumnWidths = packageColumnWidths;
@@ -3029,6 +3114,35 @@ bool SaveState(
             "advanced_window_client_width",
             std::to_string(
                 state.settings.advancedWindowClientWidth)) ||
+        !SetSettingsMemberJson(
+            json,
+            "account_sync_accounts",
+            JsonStringArray(
+                state.settings.accountSyncAccounts)) ||
+        !SetSettingsMemberJson(
+            json,
+            "account_sync_macros",
+            state.settings.accountSyncMacros
+                ? "true"
+                : "false") ||
+        !SetSettingsMemberJson(
+            json,
+            "account_sync_keybindings",
+            state.settings.accountSyncKeybindings
+                ? "true"
+                : "false") ||
+        !SetSettingsMemberJson(
+            json,
+            "account_sync_pfui",
+            state.settings.accountSyncPfUi
+                ? "true"
+                : "false") ||
+        !SetSettingsMemberJson(
+            json,
+            "account_sync_before_launch",
+            state.settings.accountSyncBeforeLaunch
+                ? "true"
+                : "false") ||
         !SetSettingsMemberJson(
             json,
             "package_sort_column",

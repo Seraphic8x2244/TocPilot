@@ -43,6 +43,7 @@ bool HasToolbarGlyphs(HFONT font) {
         L'\uf65d',
         L'\uf002',
         L'\uf07c',
+        L'\uf362',
         L'\uf05a',
         L'\uf7d9'
     };
@@ -453,7 +454,12 @@ bool InitializeToolbarIcons(
             iconFont,
             L'\uf07c',
             pixelSize);
-    icons.tocPilot =
+    icons.accountSync =
+        CreatePair(
+            iconFont,
+            L'\uf362',
+            pixelSize);
+    icons.info =
         CreatePair(
             iconFont,
             L'\uf05a',
@@ -480,7 +486,8 @@ bool InitializeToolbarIcons(
             icons.removeRepository) &&
         PairReady(icons.inspect) &&
         PairReady(icons.scan) &&
-        PairReady(icons.tocPilot) &&
+        PairReady(icons.accountSync) &&
+        PairReady(icons.info) &&
         PairReady(icons.advanced);
 
     if (!ready) {
@@ -502,7 +509,8 @@ void DestroyToolbarIcons(
         icons.removeRepository);
     DestroyPair(icons.inspect);
     DestroyPair(icons.scan);
-    DestroyPair(icons.tocPilot);
+    DestroyPair(icons.accountSync);
+    DestroyPair(icons.info);
     DestroyPair(icons.advanced);
 
     icons.pixelSize = 0;

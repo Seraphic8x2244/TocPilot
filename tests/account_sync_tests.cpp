@@ -1,0 +1,797 @@
+#include "account_sync.h"
+#include "state.h"
+
+#include <windows.h>
+
+#include <chrono>
+#include <filesystem>
+#include <fstream>
+#include <iostream>
+#include <iterator>
+#include <string>
+#include <vector>
+
+namespace {
+
+int g_failures = 0;
+
+void Check(
+    bool condition,
+    const char* message) {
+    if (condition) {
+        return;
+    }
+
+    std::cerr <<
+        "FAIL: " <<
+        message <<
+        "\n";
+    ++g_failures;
+}
+
+std::filesystem::path TestRoot(
+    const wchar_t* name) {
+    return
+        std::filesystem::temp_directory_path() /
+        (std::wstring(
+             L"TocPilotAccountSyncTests-") +
+         std::to_wstring(
+             GetCurrentProcessId()) +
+         L"-" +
+         name);
+}
+
+void ResetRoot(
+    const std::filesystem::path& root) {
+    std::error_code ec;
+    std::filesystem::remove_all(
+        root,
+        ec);
+    ec.clear();
+    std::filesystem::create_directories(
+        root,
+        ec);
+    Check(
+        !ec,
+        "test root should be creatable");
+}
+
+void WriteText(
+    const std::filesystem::path& path,
+    const std::string& content) {
+    std::error_code ec;
+    std::filesystem::create_directories(
+        path.parent_path(),
+        ec);
+    Check(
+        !ec,
+        "parent folder should be creatable");
+
+    std::ofstream stream(
+        path,
+        std::ios::binary |
+            std::ios::trunc);
+    stream.write(
+        content.data(),
+        static_cast<std::streamsize>(
+            content.size()));
+    Check(
+        static_cast<bool>(stream),
+        "test file should be writable");
+}
+
+std::string ReadText(
+    const std::filesystem::path& path) {
+    std::ifstream stream(
+        path,
+        std::ios::binary);
+
+    return std::string(
+        std::istreambuf_iterator<char>(
+            stream),
+        std::istreambuf_iterator<char>());
+}
+
+std::filesystem::path AccountFile(
+    const std::filesystem::path& root,
+    const wchar_t* account,
+    const wchar_t* relative) {
+    return
+        root /
+        L"WTF" /
+        L"Account" /
+        account /
+        relative;
+}
+
+void MakeNewer(
+    const std::filesystem::path& newer,
+    const std::filesystem::path& older) {
+    std::error_code ec;
+    const auto base =
+        std::filesystem::file_time_type::
+            clock::now();
+
+    std::filesystem::last_write_time(
+        older,
+        base -
+            std::chrono::seconds(30),
+        ec);
+    Check(
+        !ec,
+        "older timestamp should be set");
+
+    ec.clear();
+
+    std::filesystem::last_write_time(
+        newer,
+        base,
+        ec);
+    Check(
+        !ec,
+        "newer timestamp should be set");
+}
+
+std::string PfUiText(
+    const char* width,
+    const char* gold,
+    const char* history,
+    bool unknown = false,
+    bool reverse = false) {
+    std::string cache =
+        "pfUI_cache = {\n"
+        "[\"gold\"] = {\n"
+        "[\"value\"] = \"" +
+        std::string(gold) +
+        "\",\n"
+        "},\n"
+        "[\"chathistory\"] = {\n"
+        "[1] = \"" +
+        std::string(history) +
+        "\",\n"
+        "},\n";
+
+    if (unknown) {
+        cache +=
+            "[\"future_section\"] = {\n"
+            "[\"value\"] = \"new\",\n"
+            "},\n";
+    }
+
+    cache += "}\n";
+
+    const std::string settings =
+        "pfUI_profiles = {\n"
+        "[\"default\"] = {\n"
+        "[\"width\"] = \"" +
+        std::string(width) +
+        "\",\n"
+        "},\n"
+        "}\n";
+
+    return
+        reverse
+            ? settings + cache
+            : cache + settings;
+}
+
+void TestPfUiComparison() {
+    const auto root =
+        TestRoot(L"pfui");
+    ResetRoot(root);
+
+    const auto a =
+        root / L"a.lua";
+    const auto b =
+        root / L"b.lua";
+
+    WriteText(
+        a,
+        PfUiText(
+            "160",
+            "100",
+            "alpha",
+            false,
+            false));
+    WriteText(
+        b,
+        PfUiText(
+            "160",
+            "100",
+            "different history",
+            false,
+            true));
+
+    tp::PfUiComparison comparison;
+    std::wstring error;
+
+    Check(
+        tp::ComparePfUiFiles(
+            a,
+            b,
+            comparison,
+            error),
+        "pfUI equivalent comparison should parse");
+    Check(
+        comparison.equivalent,
+        "table order and chathistory should be ignored");
+
+    WriteText(
+        b,
+        PfUiText(
+            "160",
+            "250",
+            "different history",
+            false,
+            true));
+
+    Check(
+        tp::ComparePfUiFiles(
+            a,
+            b,
+            comparison,
+            error),
+        "pfUI cache comparison should parse");
+    Check(
+        comparison.cacheOnly,
+        "gold-only difference should be cache-only");
+
+    WriteText(
+        b,
+        PfUiText(
+            "161",
+            "100",
+            "alpha",
+            false,
+            false));
+
+    Check(
+        tp::ComparePfUiFiles(
+            a,
+            b,
+            comparison,
+            error),
+        "pfUI settings comparison should parse");
+    Check(
+        comparison.settingsChanged,
+        "profile setting difference should be meaningful");
+
+    WriteText(
+        b,
+        PfUiText(
+            "160",
+            "100",
+            "alpha",
+            true,
+            false));
+
+    Check(
+        tp::ComparePfUiFiles(
+            a,
+            b,
+            comparison,
+            error),
+        "unknown pfUI section should still parse");
+    Check(
+        comparison.settingsChanged,
+        "unknown pfUI section should default to settings");
+
+    WriteText(
+        b,
+        "pfUI_profiles = {\n"
+        "this is not supported\n"
+        "}\n");
+
+    Check(
+        !tp::ComparePfUiFiles(
+            a,
+            b,
+            comparison,
+            error),
+        "unexpected pfUI syntax should fail safe");
+
+    std::error_code ec;
+    std::filesystem::remove_all(
+        root,
+        ec);
+}
+
+void TestConfirmedCopyAndBackup() {
+    const auto root =
+        TestRoot(L"backup");
+    ResetRoot(root);
+
+    const auto source =
+        AccountFile(
+            root,
+            L"ALPHA",
+            L"macros-cache.txt");
+    const auto older =
+        AccountFile(
+            root,
+            L"BETA",
+            L"macros-cache.txt");
+
+    WriteText(
+        source,
+        "new macros");
+    WriteText(
+        older,
+        "old macros");
+    MakeNewer(
+        source,
+        older);
+
+    std::error_code ec;
+    std::filesystem::create_directories(
+        root /
+            L"WTF" /
+            L"Account" /
+            L"GAMMA",
+        ec);
+    Check(
+        !ec,
+        "missing-target account should exist");
+
+    tp::AccountSyncConfig config;
+    config.accounts = {
+        L"ALPHA",
+        L"BETA",
+        L"GAMMA"
+    };
+    config.macros = true;
+
+    tp::AccountSyncRunResult result;
+    std::wstring error;
+    int confirmations = 0;
+
+    const bool ran =
+        tp::RunAccountSync(
+            root,
+            config,
+            [&](tp::AccountSyncItem item,
+                std::wstring_view sourceAccount,
+                const std::vector<std::wstring>& targets,
+                bool fallback) {
+                ++confirmations;
+                Check(
+                    item ==
+                        tp::AccountSyncItem::Macros,
+                    "macro copy should prompt as macros");
+                Check(
+                    sourceAccount == L"ALPHA",
+                    "newest account should be source");
+                Check(
+                    targets.size() == 2,
+                    "older and missing targets should share one prompt");
+                Check(
+                    !fallback,
+                    "macros should not use pfUI fallback");
+                return true;
+            },
+            result,
+            error);
+
+    Check(
+        ran,
+        "macro sync should run");
+    Check(
+        !result.fatal,
+        "confirmed macro sync should not be fatal");
+    Check(
+        confirmations == 1,
+        "macro sync should prompt once per item");
+    Check(
+        ReadText(older) ==
+            "new macros",
+        "older macro target should be replaced");
+
+    const auto missing =
+        AccountFile(
+            root,
+            L"GAMMA",
+            L"macros-cache.txt");
+
+    Check(
+        ReadText(missing) ==
+            "new macros",
+        "missing macro target should be created");
+
+    const auto backupRoot =
+        root /
+        L"WTF" /
+        L"tocpilot";
+
+    std::vector<std::filesystem::path>
+        runFolders;
+
+    for (const auto& entry :
+         std::filesystem::directory_iterator(
+             backupRoot)) {
+        if (entry.is_directory()) {
+            runFolders.push_back(
+                entry.path());
+        }
+    }
+
+    Check(
+        runFolders.size() == 1,
+        "one backup run folder should be created");
+
+    if (runFolders.size() == 1) {
+        const auto backup =
+            runFolders.front() /
+            L"BETA" /
+            L"macros-cache.txt";
+
+        Check(
+            ReadText(backup) ==
+                "old macros",
+            "existing destination must be backed up before overwrite");
+
+        const auto noBackup =
+            runFolders.front() /
+            L"GAMMA" /
+            L"macros-cache.txt";
+
+        Check(
+            !std::filesystem::exists(
+                noBackup),
+            "missing destination must not create a fake backup");
+    }
+
+    std::filesystem::remove_all(
+        root,
+        ec);
+}
+
+void TestPfUiAutomaticAndFallback() {
+    const auto root =
+        TestRoot(L"pfui-run");
+    ResetRoot(root);
+
+    const auto source =
+        AccountFile(
+            root,
+            L"ALPHA",
+            L"SavedVariables\\pfUI.lua");
+    const auto target =
+        AccountFile(
+            root,
+            L"BETA",
+            L"SavedVariables\\pfUI.lua");
+
+    WriteText(
+        source,
+        PfUiText(
+            "160",
+            "500",
+            "source",
+            false,
+            false));
+    WriteText(
+        target,
+        PfUiText(
+            "160",
+            "100",
+            "target",
+            false,
+            true));
+    MakeNewer(
+        source,
+        target);
+
+    tp::AccountSyncConfig config;
+    config.accounts = {
+        L"ALPHA",
+        L"BETA"
+    };
+    config.pfUi = true;
+
+    tp::AccountSyncRunResult result;
+    std::wstring error;
+    int confirmations = 0;
+
+    Check(
+        tp::RunAccountSync(
+            root,
+            config,
+            [&](tp::AccountSyncItem,
+                std::wstring_view,
+                const std::vector<std::wstring>&,
+                bool) {
+                ++confirmations;
+                return false;
+            },
+            result,
+            error),
+        "pfUI cache-only sync should run");
+
+    Check(
+        confirmations == 0,
+        "pfUI cache-only difference should not prompt");
+    Check(
+        !result.fatal,
+        "pfUI cache-only auto sync should not be fatal");
+    Check(
+        ReadText(target) ==
+            ReadText(source),
+        "pfUI cache-only target should receive complete newest file");
+
+    WriteText(
+        target,
+        "pfUI_profiles = {\n"
+        "unsupported line\n"
+        "}\n");
+    MakeNewer(
+        source,
+        target);
+
+    std::array<
+        tp::AccountSyncItemResult,
+        tp::kAccountSyncItemCount>
+        preview{};
+
+    Check(
+        tp::InspectAccountSync(
+            root,
+            config,
+            preview,
+            error),
+        "pfUI fallback preview should succeed");
+
+    const auto& pfui =
+        preview[
+            static_cast<std::size_t>(
+                tp::AccountSyncItem::PfUi)];
+
+    Check(
+        pfui.confirmationRequired,
+        "pfUI parser failure should fall back to confirmation");
+    Check(
+        pfui.comparerFallback,
+        "pfUI parser failure should be reported as safe fallback");
+
+    std::error_code ec;
+    std::filesystem::remove_all(
+        root,
+        ec);
+}
+
+
+void TestEqualTimestampAndDecline() {
+    const auto root =
+        TestRoot(L"equal-decline");
+    ResetRoot(root);
+
+    const auto source =
+        AccountFile(
+            root,
+            L"ALPHA",
+            L"bindings-cache.wtf");
+    const auto target =
+        AccountFile(
+            root,
+            L"BETA",
+            L"bindings-cache.wtf");
+
+    WriteText(source, "alpha");
+    WriteText(target, "beta");
+
+    std::error_code ec;
+    const auto equalTime =
+        std::filesystem::file_time_type::
+            clock::now();
+
+    std::filesystem::last_write_time(
+        source,
+        equalTime,
+        ec);
+    Check(!ec, "source equal timestamp should be set");
+    ec.clear();
+    std::filesystem::last_write_time(
+        target,
+        equalTime,
+        ec);
+    Check(!ec, "target equal timestamp should be set");
+
+    tp::AccountSyncConfig config;
+    config.accounts = {
+        L"ALPHA",
+        L"BETA"
+    };
+    config.keybindings = true;
+
+    tp::AccountSyncRunResult result;
+    std::wstring error;
+    int confirmations = 0;
+
+    Check(
+        tp::RunAccountSync(
+            root,
+            config,
+            [&](tp::AccountSyncItem,
+                std::wstring_view,
+                const std::vector<std::wstring>&,
+                bool) {
+                ++confirmations;
+                return true;
+            },
+            result,
+            error),
+        "equal timestamp sync should run");
+    Check(
+        confirmations == 0,
+        "equal timestamps must remain untouched without confirmation");
+    Check(
+        ReadText(target) == "beta",
+        "equal timestamp target must remain unchanged");
+
+    MakeNewer(source, target);
+    confirmations = 0;
+    result = {};
+
+    Check(
+        tp::RunAccountSync(
+            root,
+            config,
+            [&](tp::AccountSyncItem,
+                std::wstring_view,
+                const std::vector<std::wstring>&,
+                bool) {
+                ++confirmations;
+                return false;
+            },
+            result,
+            error),
+        "declined confirmation sync should run");
+    Check(
+        confirmations == 1,
+        "older keybindings should require one confirmation");
+    Check(
+        !result.fatal,
+        "declined confirmation must not be fatal");
+    Check(
+        ReadText(target) == "beta",
+        "declined target must remain unchanged");
+
+    std::filesystem::remove_all(
+        root,
+        ec);
+}
+
+void TestBackupFailureBlocksOverwrite() {
+    const auto root =
+        TestRoot(L"backup-failure");
+    ResetRoot(root);
+
+    const auto source =
+        AccountFile(
+            root,
+            L"ALPHA",
+            L"macros-cache.txt");
+    const auto target =
+        AccountFile(
+            root,
+            L"BETA",
+            L"macros-cache.txt");
+
+    WriteText(source, "new");
+    WriteText(target, "old");
+    MakeNewer(source, target);
+
+    WriteText(
+        root /
+            L"WTF" /
+            L"tocpilot",
+        "not a directory");
+
+    tp::AccountSyncConfig config;
+    config.accounts = {
+        L"ALPHA",
+        L"BETA"
+    };
+    config.macros = true;
+
+    tp::AccountSyncRunResult result;
+    std::wstring error;
+
+    Check(
+        tp::RunAccountSync(
+            root,
+            config,
+            [](tp::AccountSyncItem,
+               std::wstring_view,
+               const std::vector<std::wstring>&,
+               bool) {
+                return true;
+            },
+            result,
+            error),
+        "backup failure should be reported through run result");
+    Check(
+        result.fatal,
+        "backup failure must be fatal to Launch");
+    Check(
+        ReadText(target) == "old",
+        "backup failure must prevent destination overwrite");
+
+    std::error_code ec;
+    std::filesystem::remove_all(
+        root,
+        ec);
+}
+
+void TestStatePersistence() {
+    const auto root =
+        TestRoot(L"state");
+    ResetRoot(root);
+
+    tp::AppState state;
+    state.settings.accountSyncAccounts = {
+        L"ALPHA",
+        L"BETA"
+    };
+    state.settings.accountSyncMacros = true;
+    state.settings.accountSyncKeybindings = true;
+    state.settings.accountSyncPfUi = true;
+    state.settings.accountSyncBeforeLaunch = true;
+
+    std::wstring error;
+
+    Check(
+        tp::SaveState(
+            root,
+            state,
+            error),
+        "Account Sync settings should save");
+
+    tp::AppState loaded;
+    bool created = false;
+
+    Check(
+        tp::LoadOrCreateState(
+            root,
+            loaded,
+            created,
+            error),
+        "Account Sync settings should load");
+
+    Check(
+        loaded.settings.accountSyncAccounts ==
+            state.settings.accountSyncAccounts,
+        "selected Account Sync accounts should round-trip");
+    Check(
+        loaded.settings.accountSyncMacros &&
+        loaded.settings.accountSyncKeybindings &&
+        loaded.settings.accountSyncPfUi &&
+        loaded.settings.accountSyncBeforeLaunch,
+        "Account Sync booleans should round-trip");
+
+    std::error_code ec;
+    std::filesystem::remove_all(
+        root,
+        ec);
+}
+
+} // namespace
+
+int main() {
+    TestPfUiComparison();
+    TestConfirmedCopyAndBackup();
+    TestPfUiAutomaticAndFallback();
+    TestEqualTimestampAndDecline();
+    TestBackupFailureBlocksOverwrite();
+    TestStatePersistence();
+
+    if (g_failures != 0) {
+        std::cerr <<
+            g_failures <<
+            " failure(s)\n";
+        return 1;
+    }
+
+    std::cout <<
+        "Account Sync tests passed\n";
+    return 0;
+}

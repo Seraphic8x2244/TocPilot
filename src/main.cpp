@@ -1,3 +1,4 @@
+#include "account_sync.h"
 #include "addon_scan.h"
 #include "adoption.h"
 #include "add_package_dialog.h"
@@ -46,6 +47,7 @@ namespace {
 
 constexpr wchar_t kWindowClassBase[] = L"TocPilotMainWindow";
 constexpr wchar_t kTocPilotWindowClass[] = L"TocPilotToolWindow";
+constexpr wchar_t kAccountSyncWindowClass[] = L"TocPilotAccountSyncWindow";
 constexpr wchar_t kTocPilotGitHubUrl[] =
     L"https://github.com/Seraphic8x2244/TocPilot";
 constexpr wchar_t kTocPilotReleasesUrl[] =
@@ -84,6 +86,14 @@ constexpr int IDC_TOCPILOT_RELEASES = 1023;
 constexpr int IDC_BRANCH_SELECTOR = 1024;
 constexpr int IDC_TOOLBAR_ICONS = 1025;
 constexpr int IDC_TOOLBAR_WORDS = 1026;
+constexpr int IDC_ACCOUNT_SYNC = 1027;
+constexpr int IDC_ACCOUNT_SYNC_ACCOUNTS = 1028;
+constexpr int IDC_ACCOUNT_SYNC_MACROS = 1029;
+constexpr int IDC_ACCOUNT_SYNC_KEYBINDINGS = 1030;
+constexpr int IDC_ACCOUNT_SYNC_PFUI = 1031;
+constexpr int IDC_ACCOUNT_SYNC_BEFORE_LAUNCH = 1032;
+constexpr int IDC_ACCOUNT_SYNC_NOW = 1033;
+constexpr int IDC_ACCOUNT_SYNC_STATUS = 1034;
 
 constexpr int kCompactWindowWidth = 590;
 constexpr int kDefaultWindowHeight = 480;
@@ -94,7 +104,7 @@ constexpr int kToolbarGroupExtraGap = 16;
 constexpr int kToolbarWordButtonWidth = 125;
 constexpr int kToolbarWordButtonHeight = 32;
 constexpr int kCompactPrimaryButtonCount = 6;
-constexpr int kAdvancedButtonCount = 10;
+constexpr int kAdvancedButtonCount = 11;
 constexpr int kCompactNameColumnMinWidth = 220;
 constexpr int kCompactStatusColumnMinWidth = 150;
 constexpr int kPackageColumnMinWidth = 40;
@@ -151,7 +161,16 @@ HWND g_addPackageButton = nullptr;
 HWND g_adoptGitButton = nullptr;
 HWND g_advancedButton = nullptr;
 HWND g_tocPilotButton = nullptr;
+HWND g_accountSyncButton = nullptr;
 HWND g_tocPilotWindow = nullptr;
+HWND g_accountSyncWindow = nullptr;
+HWND g_accountSyncAccountsList = nullptr;
+HWND g_accountSyncMacrosCheck = nullptr;
+HWND g_accountSyncKeybindingsCheck = nullptr;
+HWND g_accountSyncPfUiCheck = nullptr;
+HWND g_accountSyncBeforeLaunchCheck = nullptr;
+HWND g_accountSyncNowButton = nullptr;
+HWND g_accountSyncStatusList = nullptr;
 HWND g_tocPilotUpdateStatus = nullptr;
 HWND g_launchWowButton = nullptr;
 HWND g_launchVanillaFixesButton = nullptr;
@@ -171,6 +190,7 @@ tp::ToolbarIcons g_toolbarIcons;
 HWND g_toolbarTooltip = nullptr;
 HWND g_toolbarIconsRadio = nullptr;
 HWND g_toolbarWordsRadio = nullptr;
+bool g_accountSyncWindowInitializing = false;
 
 tp::ReleaseInfo g_release;
 tp::AppState g_state;
@@ -695,7 +715,7 @@ int ToolbarStripWidthDesign(
 
     const int wordButtonCount =
         advanced
-            ? 9
+            ? 10
             : 3;
     const int totalButtonCount =
         wordButtonCount + 1;
@@ -1271,7 +1291,7 @@ void LayoutControls(HWND hwnd) {
             hwnd,
             kToolbarButtonSize);
 
-    const std::array<HWND, 10>
+    const std::array<HWND, 11>
         toolbarControls{
             g_updateAllButton,
             g_refreshPackagesButton,
@@ -1281,6 +1301,7 @@ void LayoutControls(HWND hwnd) {
             g_removePackageButton,
             g_inspectPackageButton,
             g_adoptGitButton,
+            g_accountSyncButton,
             g_tocPilotButton,
             g_advancedButton
         };
@@ -1460,7 +1481,7 @@ void LayoutControls(HWND hwnd) {
                 gaps);
         }
     } else {
-        const std::array<HWND, 10>
+        const std::array<HWND, 11>
             controls{
                 g_updateAllButton,
                 g_refreshPackagesButton,
@@ -1469,12 +1490,13 @@ void LayoutControls(HWND hwnd) {
                 g_removePackageButton,
                 g_inspectPackageButton,
                 g_adoptGitButton,
+                g_accountSyncButton,
                 g_tocPilotButton,
                 g_advancedButton,
                 g_launchWowButton
             };
 
-        constexpr std::array<int, 9>
+        constexpr std::array<int, 10>
             gaps{
                 kToolbarButtonGap,
                 kToolbarButtonGap +
@@ -1486,6 +1508,7 @@ void LayoutControls(HWND hwnd) {
                 kToolbarButtonGap,
                 kToolbarButtonGap +
                     kToolbarGroupExtraGap,
+                kToolbarButtonGap,
                 kToolbarButtonGap +
                     kToolbarGroupExtraGap,
                 kToolbarButtonGap +
@@ -1505,12 +1528,40 @@ void LayoutControls(HWND hwnd) {
     const int listBottomPadding =
         ScaleUi(hwnd, 20);
 
+    const bool showAccountSyncPanel =
+        g_stateReady &&
+        g_state.settings
+                .accountSyncAccounts.size() >=
+            2 &&
+        (g_state.settings
+             .accountSyncMacros ||
+         g_state.settings
+             .accountSyncKeybindings ||
+         g_state.settings
+             .accountSyncPfUi);
+
+    const int accountSyncPanelHeight =
+        ScaleUi(hwnd, 104);
+    const int accountSyncPanelGap =
+        ScaleUi(hwnd, 10);
+
+    const int reservedForAccountSync =
+        showAccountSyncPanel
+            ? accountSyncPanelHeight +
+                accountSyncPanelGap
+            : 0;
+
     const int listHeight =
         std::max(
-            ScaleUi(hwnd, 220),
+            ScaleUi(
+                hwnd,
+                showAccountSyncPanel
+                    ? 160
+                    : 220),
             height -
                 listTop -
-                listBottomPadding);
+                listBottomPadding -
+                reservedForAccountSync);
 
     if (g_packageList) {
         MoveWindow(
@@ -1522,6 +1573,53 @@ void LayoutControls(HWND hwnd) {
             TRUE);
 
         ResizeListColumns();
+    }
+
+    if (g_accountSyncStatusList) {
+        if (showAccountSyncPanel) {
+            ShowWindow(
+                g_accountSyncStatusList,
+                SW_SHOW);
+
+            MoveWindow(
+                g_accountSyncStatusList,
+                margin,
+                listTop +
+                    listHeight +
+                    accountSyncPanelGap,
+                contentWidth,
+                accountSyncPanelHeight,
+                TRUE);
+
+            const int itemWidth =
+                ScaleUi(hwnd, 110);
+            const int statusWidth =
+                ScaleUi(hwnd, 170);
+            const int actionWidth =
+                std::max(
+                    ScaleUi(hwnd, 170),
+                    contentWidth -
+                        itemWidth -
+                        statusWidth -
+                        ScaleUi(hwnd, 6));
+
+            ListView_SetColumnWidth(
+                g_accountSyncStatusList,
+                0,
+                itemWidth);
+            ListView_SetColumnWidth(
+                g_accountSyncStatusList,
+                1,
+                statusWidth);
+            ListView_SetColumnWidth(
+                g_accountSyncStatusList,
+                2,
+                actionWidth);
+        } else {
+            ShowWindow(
+                g_accountSyncStatusList,
+                SW_HIDE);
+        }
     }
 
     PositionBranchSelector();
@@ -6529,8 +6627,11 @@ const wchar_t* ToolbarButtonName(
     if (control == g_adoptGitButton) {
         return L"Scan";
     }
+    if (control == g_accountSyncButton) {
+        return L"Account Sync";
+    }
     if (control == g_tocPilotButton) {
-        return L"TocPilot";
+        return L"Info";
     }
     if (control == g_advancedButton) {
         return L"Advanced";
@@ -6565,8 +6666,11 @@ ToolbarFontAwesomeIcon(
     if (control == g_adoptGitButton) {
         return &g_toolbarIcons.scan;
     }
+    if (control == g_accountSyncButton) {
+        return &g_toolbarIcons.accountSync;
+    }
     if (control == g_tocPilotButton) {
-        return &g_toolbarIcons.tocPilot;
+        return &g_toolbarIcons.info;
     }
     if (control == g_advancedButton) {
         return &g_toolbarIcons.advanced;
@@ -6637,7 +6741,7 @@ void ReloadToolbarImages(
 
 void ApplyToolbarPresentation(
     HWND hwnd) {
-    const std::array<HWND, 10>
+    const std::array<HWND, 11>
         controls{
             g_updateAllButton,
             g_refreshPackagesButton,
@@ -6647,6 +6751,7 @@ void ApplyToolbarPresentation(
             g_removePackageButton,
             g_inspectPackageButton,
             g_adoptGitButton,
+            g_accountSyncButton,
             g_tocPilotButton,
             g_advancedButton
         };
@@ -6936,9 +7041,281 @@ void SetToolbarPresentation(
     }
 }
 
+
+tp::AccountSyncConfig CurrentAccountSyncConfig() {
+    tp::AccountSyncConfig config;
+
+    if (!g_stateReady) {
+        return config;
+    }
+
+    config.accounts =
+        g_state.settings
+            .accountSyncAccounts;
+    config.macros =
+        g_state.settings
+            .accountSyncMacros;
+    config.keybindings =
+        g_state.settings
+            .accountSyncKeybindings;
+    config.pfUi =
+        g_state.settings
+            .accountSyncPfUi;
+
+    return config;
+}
+
+void SetAccountSyncStatusRows(
+    const std::array<
+        tp::AccountSyncItemResult,
+        tp::kAccountSyncItemCount>& rows) {
+    if (!g_accountSyncStatusList) {
+        return;
+    }
+
+    const std::array<
+        tp::AccountSyncItem,
+        tp::kAccountSyncItemCount>
+        order{
+            tp::AccountSyncItem::Macros,
+            tp::AccountSyncItem::Keybindings,
+            tp::AccountSyncItem::PfUi
+        };
+
+    for (std::size_t i = 0;
+         i < order.size();
+         ++i) {
+        const auto item =
+            order[i];
+        const auto& row =
+            rows[
+                static_cast<std::size_t>(
+                    item)];
+        const int index =
+            static_cast<int>(i);
+
+        ListView_SetItemText(
+            g_accountSyncStatusList,
+            index,
+            0,
+            const_cast<LPWSTR>(
+                tp::AccountSyncItemLabel(
+                    item)));
+        ListView_SetItemText(
+            g_accountSyncStatusList,
+            index,
+            1,
+            const_cast<LPWSTR>(
+                row.status.c_str()));
+        ListView_SetItemText(
+            g_accountSyncStatusList,
+            index,
+            2,
+            const_cast<LPWSTR>(
+                row.action.c_str()));
+    }
+}
+
+void RefreshAccountSyncPreview() {
+    std::array<
+        tp::AccountSyncItemResult,
+        tp::kAccountSyncItemCount>
+        rows{};
+
+    std::wstring error;
+
+    if (!g_stateReady ||
+        !tp::InspectAccountSync(
+            g_root,
+            CurrentAccountSyncConfig(),
+            rows,
+            error)) {
+        const std::array<
+            tp::AccountSyncItem,
+            tp::kAccountSyncItemCount>
+            order{
+                tp::AccountSyncItem::Macros,
+                tp::AccountSyncItem::Keybindings,
+                tp::AccountSyncItem::PfUi
+            };
+
+        for (const auto item :
+             order) {
+            auto& row =
+                rows[
+                    static_cast<std::size_t>(
+                        item)];
+            row.item = item;
+            row.status =
+                g_stateReady
+                    ? L"Error"
+                    : L"Unavailable";
+            row.action =
+                g_stateReady
+                    ? L"Inspection failed"
+                    : L"State unavailable";
+        }
+    }
+
+    SetAccountSyncStatusRows(
+        rows);
+}
+
+bool ConfirmAccountSyncTargets(
+    HWND owner,
+    tp::AccountSyncItem item,
+    std::wstring_view sourceAccount,
+    const std::vector<std::wstring>& targets,
+    bool comparerFallback) {
+    std::wstring prompt =
+        L"Copy " +
+        std::wstring(
+            tp::AccountSyncItemLabel(
+                item)) +
+        L" from " +
+        std::wstring(sourceAccount) +
+        L" to " +
+        std::to_wstring(
+            targets.size()) +
+        L" confirmation-required target";
+
+    if (targets.size() != 1) {
+        prompt += L"s";
+    }
+
+    prompt += L"?\r\n\r\n";
+
+    for (const auto& target :
+         targets) {
+        prompt +=
+            L"• " +
+            target +
+            L"\r\n";
+    }
+
+    if (comparerFallback) {
+        prompt +=
+            L"\r\npfUI semantic comparison could not safely classify at least one older copy. TocPilot is using the BAT's ordinary modified-time confirmation path; nothing will be overwritten unless you confirm.";
+    }
+
+    prompt +=
+        L"\r\nExisting destination files are backed up under WTF\\tocpilot\\ before overwrite. Missing destination files do not need a backup.";
+
+    return
+        MessageBoxW(
+            owner,
+            prompt.c_str(),
+            L"TocPilot - Account Sync",
+            MB_YESNO |
+                MB_ICONQUESTION |
+                MB_DEFBUTTON2) ==
+        IDYES;
+}
+
+std::wstring AccountSyncFailureSummary(
+    const tp::AccountSyncRunResult& result) {
+    std::wstring summary;
+
+    for (const auto& item :
+         result.items) {
+        if (!item.fatal ||
+            item.error.empty()) {
+            continue;
+        }
+
+        if (!summary.empty()) {
+            summary += L"\r\n";
+        }
+
+        summary +=
+            tp::AccountSyncItemLabel(
+                item.item);
+        summary += L": ";
+        summary += item.error;
+    }
+
+    return summary;
+}
+
+bool RunAccountSyncFromUi(
+    HWND owner,
+    bool beforeLaunch) {
+    if (!g_stateReady) {
+        return true;
+    }
+
+    const auto config =
+        CurrentAccountSyncConfig();
+
+    if (!tp::AccountSyncConfigured(
+            config)) {
+        RefreshAccountSyncPreview();
+        return true;
+    }
+
+    tp::AccountSyncRunResult result;
+    std::wstring error;
+
+    const bool ran =
+        tp::RunAccountSync(
+            g_root,
+            config,
+            [&](tp::AccountSyncItem item,
+                std::wstring_view source,
+                const std::vector<std::wstring>& targets,
+                bool comparerFallback) {
+                return
+                    ConfirmAccountSyncTargets(
+                        owner,
+                        item,
+                        source,
+                        targets,
+                        comparerFallback);
+            },
+            result,
+            error);
+
+    if (ran) {
+        SetAccountSyncStatusRows(
+            result.items);
+    }
+
+    if (!ran ||
+        result.fatal) {
+        std::wstring details =
+            !ran
+                ? error
+                : AccountSyncFailureSummary(
+                    result);
+
+        if (details.empty()) {
+            details =
+                L"Account Sync failed.";
+        }
+
+        std::wstring message =
+            beforeLaunch
+                ? L"Account Sync failed. WoW was not launched.\r\n\r\n"
+                : L"Account Sync failed.\r\n\r\n";
+
+        message += details;
+
+        MessageBoxW(
+            owner,
+            message.c_str(),
+            L"TocPilot - Account Sync",
+            MB_OK | MB_ICONERROR);
+
+        return false;
+    }
+
+    return true;
+}
+
 void LaunchSiblingExecutable(
     HWND hwnd,
-    std::wstring_view filename) {
+    std::wstring_view filename,
+    bool console) {
     const std::filesystem::path path =
         g_root /
         std::wstring(filename);
@@ -6960,7 +7337,9 @@ void LaunchSiblingExecutable(
             hwnd,
             L"open",
             path.c_str(),
-            nullptr,
+            console
+                ? L"-console"
+                : nullptr,
             g_root.c_str(),
             SW_SHOWNORMAL);
 
@@ -7092,7 +7471,7 @@ LRESULT CALLBACK TocPilotWindowProc(
         CreateWindowExW(
             0,
             L"BUTTON",
-            L"TocPilot Update",
+            L"Application update",
             WS_CHILD |
                 WS_VISIBLE |
                 BS_GROUPBOX,
@@ -7145,7 +7524,7 @@ LRESULT CALLBACK TocPilotWindowProc(
         CreateWindowExW(
             0,
             L"BUTTON",
-            L"Toolbar buttons",
+            L"Interface preferences",
             WS_CHILD |
                 WS_VISIBLE |
                 BS_GROUPBOX,
@@ -7399,7 +7778,7 @@ void ShowTocPilotWindow(
         CreateWindowExW(
             WS_EX_TOOLWINDOW,
             kTocPilotWindowClass,
-            L"TocPilot",
+            L"TocPilot - Info",
             WS_OVERLAPPED |
                 WS_CAPTION |
                 WS_SYSMENU,
@@ -7415,7 +7794,7 @@ void ShowTocPilotWindow(
     if (!g_tocPilotWindow) {
         MessageBoxW(
             owner,
-            L"Could not open the TocPilot window.",
+            L"Could not open the Info window.",
             L"TocPilot",
             MB_OK | MB_ICONERROR);
         return;
@@ -7427,6 +7806,623 @@ void ShowTocPilotWindow(
     UpdateWindow(
         g_tocPilotWindow);
     StartUpdateCheck(owner);
+}
+
+
+bool AccountNameSelected(
+    std::wstring_view account) {
+    return
+        std::any_of(
+            g_state.settings
+                .accountSyncAccounts
+                .begin(),
+            g_state.settings
+                .accountSyncAccounts
+                .end(),
+            [&](const std::wstring& value) {
+                if (value.size() !=
+                    account.size()) {
+                    return false;
+                }
+
+                for (std::size_t i = 0;
+                     i < value.size();
+                     ++i) {
+                    if (std::towlower(
+                            value[i]) !=
+                        std::towlower(
+                            account[i])) {
+                        return false;
+                    }
+                }
+
+                return true;
+            });
+}
+
+void PopulateAccountSyncAccounts(
+    HWND owner) {
+    if (!g_accountSyncAccountsList) {
+        return;
+    }
+
+    g_accountSyncWindowInitializing =
+        true;
+
+    ListView_DeleteAllItems(
+        g_accountSyncAccountsList);
+
+    std::vector<std::wstring> accounts;
+    std::wstring error;
+
+    if (tp::DiscoverAccountNames(
+            g_root,
+            accounts,
+            error)) {
+        for (std::size_t i = 0;
+             i < accounts.size();
+             ++i) {
+            LVITEMW item{};
+            item.mask = LVIF_TEXT;
+            item.iItem =
+                static_cast<int>(i);
+            item.pszText =
+                const_cast<LPWSTR>(
+                    accounts[i].c_str());
+
+            const int row =
+                ListView_InsertItem(
+                    g_accountSyncAccountsList,
+                    &item);
+
+            if (row >= 0) {
+                ListView_SetCheckState(
+                    g_accountSyncAccountsList,
+                    row,
+                    AccountNameSelected(
+                        accounts[i])
+                        ? TRUE
+                        : FALSE);
+            }
+        }
+    }
+
+    g_accountSyncWindowInitializing =
+        false;
+
+    if (!error.empty()) {
+        MessageBoxW(
+            owner,
+            error.c_str(),
+            L"TocPilot - Account Sync",
+            MB_OK | MB_ICONWARNING);
+    }
+}
+
+void LoadAccountSyncControls() {
+    if (!g_accountSyncMacrosCheck ||
+        !g_accountSyncKeybindingsCheck ||
+        !g_accountSyncPfUiCheck ||
+        !g_accountSyncBeforeLaunchCheck) {
+        return;
+    }
+
+    g_accountSyncWindowInitializing =
+        true;
+
+    SendMessageW(
+        g_accountSyncMacrosCheck,
+        BM_SETCHECK,
+        g_state.settings
+                .accountSyncMacros
+            ? BST_CHECKED
+            : BST_UNCHECKED,
+        0);
+    SendMessageW(
+        g_accountSyncKeybindingsCheck,
+        BM_SETCHECK,
+        g_state.settings
+                .accountSyncKeybindings
+            ? BST_CHECKED
+            : BST_UNCHECKED,
+        0);
+    SendMessageW(
+        g_accountSyncPfUiCheck,
+        BM_SETCHECK,
+        g_state.settings
+                .accountSyncPfUi
+            ? BST_CHECKED
+            : BST_UNCHECKED,
+        0);
+    SendMessageW(
+        g_accountSyncBeforeLaunchCheck,
+        BM_SETCHECK,
+        g_state.settings
+                .accountSyncBeforeLaunch
+            ? BST_CHECKED
+            : BST_UNCHECKED,
+        0);
+
+    g_accountSyncWindowInitializing =
+        false;
+}
+
+bool SaveAccountSyncConfiguration(
+    HWND owner) {
+    if (!g_stateReady ||
+        !g_accountSyncAccountsList) {
+        return false;
+    }
+
+    tp::AppState updated =
+        g_state;
+
+    updated.settings
+        .accountSyncAccounts
+        .clear();
+
+    const int count =
+        ListView_GetItemCount(
+            g_accountSyncAccountsList);
+
+    for (int row = 0;
+         row < count;
+         ++row) {
+        if (!ListView_GetCheckState(
+                g_accountSyncAccountsList,
+                row)) {
+            continue;
+        }
+
+        wchar_t name[512]{};
+
+        ListView_GetItemText(
+            g_accountSyncAccountsList,
+            row,
+            0,
+            name,
+            static_cast<int>(
+                std::size(name)));
+
+        if (name[0] != L'\0') {
+            updated.settings
+                .accountSyncAccounts
+                .emplace_back(name);
+        }
+    }
+
+    updated.settings
+        .accountSyncMacros =
+        SendMessageW(
+            g_accountSyncMacrosCheck,
+            BM_GETCHECK,
+            0,
+            0) ==
+        BST_CHECKED;
+    updated.settings
+        .accountSyncKeybindings =
+        SendMessageW(
+            g_accountSyncKeybindingsCheck,
+            BM_GETCHECK,
+            0,
+            0) ==
+        BST_CHECKED;
+    updated.settings
+        .accountSyncPfUi =
+        SendMessageW(
+            g_accountSyncPfUiCheck,
+            BM_GETCHECK,
+            0,
+            0) ==
+        BST_CHECKED;
+    updated.settings
+        .accountSyncBeforeLaunch =
+        SendMessageW(
+            g_accountSyncBeforeLaunchCheck,
+            BM_GETCHECK,
+            0,
+            0) ==
+        BST_CHECKED;
+
+    std::wstring error;
+
+    if (!tp::SaveState(
+            g_root,
+            updated,
+            error)) {
+        MessageBoxW(
+            owner,
+            error.c_str(),
+            L"TocPilot - Account Sync",
+            MB_OK | MB_ICONERROR);
+
+        PopulateAccountSyncAccounts(
+            owner);
+        LoadAccountSyncControls();
+        return false;
+    }
+
+    g_state =
+        std::move(updated);
+    g_stateCreated = false;
+    g_stateError.clear();
+
+    RefreshAccountSyncPreview();
+
+    HWND mainWindow =
+        GetWindow(
+            owner,
+            GW_OWNER);
+
+    if (!mainWindow) {
+        mainWindow = owner;
+    }
+
+    LayoutControls(
+        mainWindow);
+    return true;
+}
+
+LRESULT CALLBACK AccountSyncWindowProc(
+    HWND hwnd,
+    UINT message,
+    WPARAM wParam,
+    LPARAM lParam) {
+    switch (message) {
+    case WM_CREATE: {
+        const auto px =
+            [&](int value) {
+                return
+                    ScaleUi(
+                        hwnd,
+                        value);
+            };
+
+        CreateWindowExW(
+            0,
+            L"BUTTON",
+            L"Accounts",
+            WS_CHILD |
+                WS_VISIBLE |
+                BS_GROUPBOX,
+            px(14),
+            px(14),
+            px(258),
+            px(226),
+            hwnd,
+            nullptr,
+            GetModuleHandleW(nullptr),
+            nullptr);
+
+        g_accountSyncAccountsList =
+            CreateWindowExW(
+                WS_EX_CLIENTEDGE,
+                WC_LISTVIEWW,
+                L"",
+                WS_CHILD |
+                    WS_VISIBLE |
+                    WS_TABSTOP |
+                    LVS_REPORT |
+                    LVS_SINGLESEL |
+                    LVS_NOCOLUMNHEADER,
+                px(28),
+                px(42),
+                px(230),
+                px(182),
+                hwnd,
+                reinterpret_cast<HMENU>(
+                    static_cast<INT_PTR>(
+                        IDC_ACCOUNT_SYNC_ACCOUNTS)),
+                GetModuleHandleW(nullptr),
+                nullptr);
+
+        ListView_SetExtendedListViewStyle(
+            g_accountSyncAccountsList,
+            LVS_EX_CHECKBOXES |
+                LVS_EX_FULLROWSELECT |
+                LVS_EX_DOUBLEBUFFER);
+
+        LVCOLUMNW accountColumn{};
+        accountColumn.mask =
+            LVCF_TEXT |
+            LVCF_WIDTH;
+        accountColumn.pszText =
+            const_cast<LPWSTR>(
+                L"Account");
+        accountColumn.cx =
+            px(210);
+
+        ListView_InsertColumn(
+            g_accountSyncAccountsList,
+            0,
+            &accountColumn);
+
+        CreateWindowExW(
+            0,
+            L"BUTTON",
+            L"Sync",
+            WS_CHILD |
+                WS_VISIBLE |
+                BS_GROUPBOX,
+            px(286),
+            px(14),
+            px(270),
+            px(226),
+            hwnd,
+            nullptr,
+            GetModuleHandleW(nullptr),
+            nullptr);
+
+        const auto createCheck =
+            [&](const wchar_t* text,
+                int id,
+                int y) {
+                return
+                    CreateWindowExW(
+                        0,
+                        L"BUTTON",
+                        text,
+                        WS_CHILD |
+                            WS_VISIBLE |
+                            WS_TABSTOP |
+                            BS_AUTOCHECKBOX,
+                        px(304),
+                        px(y),
+                        px(220),
+                        px(26),
+                        hwnd,
+                        reinterpret_cast<HMENU>(
+                            static_cast<INT_PTR>(
+                                id)),
+                        GetModuleHandleW(nullptr),
+                        nullptr);
+            };
+
+        g_accountSyncMacrosCheck =
+            createCheck(
+                L"Macros",
+                IDC_ACCOUNT_SYNC_MACROS,
+                44);
+        g_accountSyncKeybindingsCheck =
+            createCheck(
+                L"Keybindings",
+                IDC_ACCOUNT_SYNC_KEYBINDINGS,
+                76);
+        g_accountSyncPfUiCheck =
+            createCheck(
+                L"pfUI",
+                IDC_ACCOUNT_SYNC_PFUI,
+                108);
+        g_accountSyncBeforeLaunchCheck =
+            createCheck(
+                L"Sync before Launch",
+                IDC_ACCOUNT_SYNC_BEFORE_LAUNCH,
+                146);
+
+        g_accountSyncNowButton =
+            CreateWindowExW(
+                0,
+                L"BUTTON",
+                L"Sync Now",
+                WS_CHILD |
+                    WS_VISIBLE |
+                    WS_TABSTOP |
+                    BS_PUSHBUTTON,
+                px(304),
+                px(190),
+                px(220),
+                px(30),
+                hwnd,
+                reinterpret_cast<HMENU>(
+                    static_cast<INT_PTR>(
+                        IDC_ACCOUNT_SYNC_NOW)),
+                GetModuleHandleW(nullptr),
+                nullptr);
+
+        PopulateAccountSyncAccounts(
+            hwnd);
+        LoadAccountSyncControls();
+
+        if (g_uiFont) {
+            EnumChildWindows(
+                hwnd,
+                ApplyFontToChild,
+                reinterpret_cast<LPARAM>(
+                    g_uiFont));
+        }
+
+        return 0;
+    }
+
+    case WM_DPICHANGED: {
+        const auto* suggested =
+            reinterpret_cast<RECT*>(
+                lParam);
+
+        if (suggested) {
+            SetWindowPos(
+                hwnd,
+                nullptr,
+                suggested->left,
+                suggested->top,
+                suggested->right -
+                    suggested->left,
+                suggested->bottom -
+                    suggested->top,
+                SWP_NOZORDER |
+                    SWP_NOACTIVATE);
+        }
+
+        ApplyUiFont(hwnd);
+        return 0;
+    }
+
+    case WM_NOTIFY: {
+        const auto* header =
+            reinterpret_cast<NMHDR*>(
+                lParam);
+
+        if (!g_accountSyncWindowInitializing &&
+            header &&
+            header->idFrom ==
+                IDC_ACCOUNT_SYNC_ACCOUNTS &&
+            header->code ==
+                LVN_ITEMCHANGED) {
+            const auto* changed =
+                reinterpret_cast<NMLISTVIEW*>(
+                    lParam);
+
+            if (changed &&
+                (changed->uChanged &
+                 LVIF_STATE) != 0 &&
+                ((changed->uOldState ^
+                  changed->uNewState) &
+                 LVIS_STATEIMAGEMASK) != 0) {
+                SaveAccountSyncConfiguration(
+                    hwnd);
+            }
+        }
+
+        break;
+    }
+
+    case WM_COMMAND: {
+        const int id =
+            LOWORD(wParam);
+        const int code =
+            HIWORD(wParam);
+
+        if (code ==
+                BN_CLICKED &&
+            (id ==
+                 IDC_ACCOUNT_SYNC_MACROS ||
+             id ==
+                 IDC_ACCOUNT_SYNC_KEYBINDINGS ||
+             id ==
+                 IDC_ACCOUNT_SYNC_PFUI ||
+             id ==
+                 IDC_ACCOUNT_SYNC_BEFORE_LAUNCH)) {
+            if (!g_accountSyncWindowInitializing) {
+                SaveAccountSyncConfiguration(
+                    hwnd);
+            }
+            return 0;
+        }
+
+        if (id ==
+                IDC_ACCOUNT_SYNC_NOW &&
+            code ==
+                BN_CLICKED) {
+            if (SaveAccountSyncConfiguration(
+                    hwnd)) {
+                RunAccountSyncFromUi(
+                    hwnd,
+                    false);
+            }
+            return 0;
+        }
+
+        break;
+    }
+
+    case WM_CLOSE:
+        DestroyWindow(hwnd);
+        return 0;
+
+    case WM_DESTROY:
+        g_accountSyncWindow = nullptr;
+        g_accountSyncAccountsList = nullptr;
+        g_accountSyncMacrosCheck = nullptr;
+        g_accountSyncKeybindingsCheck = nullptr;
+        g_accountSyncPfUiCheck = nullptr;
+        g_accountSyncBeforeLaunchCheck = nullptr;
+        g_accountSyncNowButton = nullptr;
+        g_accountSyncWindowInitializing =
+            false;
+        return 0;
+    }
+
+    return DefWindowProcW(
+        hwnd,
+        message,
+        wParam,
+        lParam);
+}
+
+void ShowAccountSyncWindow(
+    HWND owner) {
+    if (g_accountSyncWindow &&
+        IsWindow(
+            g_accountSyncWindow)) {
+        PopulateAccountSyncAccounts(
+            g_accountSyncWindow);
+        LoadAccountSyncControls();
+        ShowWindow(
+            g_accountSyncWindow,
+            SW_RESTORE);
+        SetForegroundWindow(
+            g_accountSyncWindow);
+        return;
+    }
+
+    RECT ownerRect{};
+    GetWindowRect(
+        owner,
+        &ownerRect);
+
+    const int windowWidth =
+        ScaleUi(owner, 585);
+    const int windowHeight =
+        ScaleUi(owner, 295);
+
+    const int x =
+        ownerRect.left +
+        std::max(
+            0,
+            (ownerRect.right -
+             ownerRect.left -
+             windowWidth) /
+                2);
+    const int y =
+        ownerRect.top +
+        std::max(
+            0,
+            (ownerRect.bottom -
+             ownerRect.top -
+             windowHeight) /
+                2);
+
+    g_accountSyncWindow =
+        CreateWindowExW(
+            WS_EX_TOOLWINDOW,
+            kAccountSyncWindowClass,
+            L"TocPilot - Account Sync",
+            WS_OVERLAPPED |
+                WS_CAPTION |
+                WS_SYSMENU,
+            x,
+            y,
+            windowWidth,
+            windowHeight,
+            owner,
+            nullptr,
+            GetModuleHandleW(nullptr),
+            nullptr);
+
+    if (!g_accountSyncWindow) {
+        MessageBoxW(
+            owner,
+            L"Could not open Account Sync configuration.",
+            L"TocPilot",
+            MB_OK | MB_ICONERROR);
+        return;
+    }
+
+    ShowWindow(
+        g_accountSyncWindow,
+        SW_SHOW);
+    UpdateWindow(
+        g_accountSyncWindow);
 }
 
 void RememberAdvancedWindowWidth(
@@ -7874,9 +8870,13 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             createToolbarButton(
                 L"Scan",
                 IDC_ADOPT_GIT);
+        g_accountSyncButton =
+            createToolbarButton(
+                L"Account Sync",
+                IDC_ACCOUNT_SYNC);
         g_tocPilotButton =
             createToolbarButton(
-                L"TocPilot",
+                L"Info",
                 IDC_TOCPILOT);
         g_advancedButton =
             createToolbarButton(
@@ -7912,7 +8912,8 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
         tp::AddToolbarTooltip(g_toolbarTooltip, hwnd, g_removePackageButton, L"Remove Repository");
         tp::AddToolbarTooltip(g_toolbarTooltip, hwnd, g_inspectPackageButton, L"Inspect");
         tp::AddToolbarTooltip(g_toolbarTooltip, hwnd, g_adoptGitButton, L"Scan");
-        tp::AddToolbarTooltip(g_toolbarTooltip, hwnd, g_tocPilotButton, L"TocPilot");
+        tp::AddToolbarTooltip(g_toolbarTooltip, hwnd, g_accountSyncButton, L"Account Sync");
+        tp::AddToolbarTooltip(g_toolbarTooltip, hwnd, g_tocPilotButton, L"Info");
         tp::AddToolbarTooltip(g_toolbarTooltip, hwnd, g_advancedButton, L"Advanced");
 
         EnableWindow(g_updateAllButton, FALSE);
@@ -7926,6 +8927,9 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             g_stateReady ? TRUE : FALSE);
         EnableWindow(
             g_adoptGitButton,
+            g_stateReady ? TRUE : FALSE);
+        EnableWindow(
+            g_accountSyncButton,
             g_stateReady ? TRUE : FALSE);
 
         g_textScaleLabel = CreateWindowExW(
@@ -7998,6 +9002,101 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                 LVS_EX_DOUBLEBUFFER |
                 LVS_EX_LABELTIP);
 
+        g_accountSyncStatusList =
+            CreateWindowExW(
+                WS_EX_CLIENTEDGE,
+                WC_LISTVIEWW,
+                L"",
+                WS_CHILD |
+                    LVS_REPORT |
+                    LVS_SINGLESEL |
+                    LVS_NOSORTHEADER,
+                20,
+                0,
+                820,
+                104,
+                hwnd,
+                reinterpret_cast<HMENU>(
+                    static_cast<INT_PTR>(
+                        IDC_ACCOUNT_SYNC_STATUS)),
+                GetModuleHandleW(nullptr),
+                nullptr);
+
+        ListView_SetExtendedListViewStyle(
+            g_accountSyncStatusList,
+            LVS_EX_FULLROWSELECT |
+                LVS_EX_DOUBLEBUFFER);
+
+        struct AccountSyncColumn {
+            const wchar_t* label;
+            int width;
+        };
+
+        constexpr std::array<
+            AccountSyncColumn,
+            3>
+            accountSyncColumns{{
+                {L"Item", 110},
+                {L"Status", 170},
+                {L"Action / confirmation", 300}
+            }};
+
+        for (int column = 0;
+             column <
+                static_cast<int>(
+                    accountSyncColumns.size());
+             ++column) {
+            LVCOLUMNW value{};
+            value.mask =
+                LVCF_TEXT |
+                LVCF_WIDTH |
+                LVCF_SUBITEM;
+            value.pszText =
+                const_cast<LPWSTR>(
+                    accountSyncColumns[
+                        static_cast<std::size_t>(
+                            column)].label);
+            value.cx =
+                ScaleUi(
+                    hwnd,
+                    accountSyncColumns[
+                        static_cast<std::size_t>(
+                            column)].width);
+            value.iSubItem =
+                column;
+
+            ListView_InsertColumn(
+                g_accountSyncStatusList,
+                column,
+                &value);
+        }
+
+        const std::array<
+            tp::AccountSyncItem,
+            tp::kAccountSyncItemCount>
+            accountSyncRows{
+                tp::AccountSyncItem::Macros,
+                tp::AccountSyncItem::Keybindings,
+                tp::AccountSyncItem::PfUi
+            };
+
+        for (std::size_t i = 0;
+             i < accountSyncRows.size();
+             ++i) {
+            LVITEMW item{};
+            item.mask = LVIF_TEXT;
+            item.iItem =
+                static_cast<int>(i);
+            item.pszText =
+                const_cast<LPWSTR>(
+                    tp::AccountSyncItemLabel(
+                        accountSyncRows[i]));
+
+            ListView_InsertItem(
+                g_accountSyncStatusList,
+                &item);
+        }
+
         UpdatePackageColumnEditingUi();
 
         SetWindowSubclass(
@@ -8042,6 +9141,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
         AddPackageListColumns();
         PopulatePackageList();
         UpdatePackageButtons();
+        RefreshAccountSyncPreview();
         ApplyUiFont(hwnd);
         EnsureToolbarMinimumWidth(hwnd);
         LayoutControls(hwnd);
@@ -8392,13 +9492,34 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             return 0;
         }
 
+        if (LOWORD(wParam) == IDC_ACCOUNT_SYNC &&
+            HIWORD(wParam) == BN_CLICKED) {
+            ShowAccountSyncWindow(hwnd);
+            return 0;
+        }
+
         if (LOWORD(wParam) == IDC_LAUNCH_WOW &&
             HIWORD(wParam) == BN_CLICKED) {
+            if (g_stateReady &&
+                g_state.settings
+                    .accountSyncBeforeLaunch &&
+                !RunAccountSyncFromUi(
+                    hwnd,
+                    true)) {
+                return 0;
+            }
+
+            const bool console =
+                (GetKeyState(
+                     VK_CONTROL) &
+                 0x8000) != 0;
+
             LaunchSiblingExecutable(
                 hwnd,
                 g_hasVanillaFixes
                     ? L"VanillaFixes.exe"
-                    : L"WoW.exe");
+                    : L"WoW.exe",
+                console);
             return 0;
         }
 
@@ -10762,6 +11883,27 @@ int RunMainWindow(HINSTANCE instance) {
         MessageBoxW(
             nullptr,
             L"Could not register the TocPilot tool window.",
+            L"TocPilot",
+            MB_OK | MB_ICONERROR);
+        return 3;
+    }
+
+    WNDCLASSEXW accountSyncClass =
+        wc;
+    accountSyncClass.lpfnWndProc =
+        AccountSyncWindowProc;
+    accountSyncClass.lpszClassName =
+        kAccountSyncWindowClass;
+
+    if (!RegisterClassExW(
+            &accountSyncClass) &&
+        GetLastError() !=
+            ERROR_CLASS_ALREADY_EXISTS) {
+        CloseHandle(
+            instanceMutex);
+        MessageBoxW(
+            nullptr,
+            L"Could not register the Account Sync window.",
             L"TocPilot",
             MB_OK | MB_ICONERROR);
         return 3;
