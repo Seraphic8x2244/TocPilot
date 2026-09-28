@@ -1083,6 +1083,25 @@ bool AccountSyncConfigured(
          config.pfUi);
 }
 
+bool RunAccountSyncLaunchFlow(
+    bool syncBeforeLaunch,
+    bool console,
+    const AccountSyncPreLaunchFn& sync,
+    const AccountSyncLaunchFn& launch) {
+    if (syncBeforeLaunch &&
+        (!sync ||
+         !sync())) {
+        return false;
+    }
+
+    if (!launch) {
+        return false;
+    }
+
+    launch(console);
+    return true;
+}
+
 bool DiscoverAccountNames(
     const std::filesystem::path& wowRoot,
     std::vector<std::wstring>& accounts,

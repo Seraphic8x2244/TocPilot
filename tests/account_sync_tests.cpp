@@ -92,6 +92,107 @@ std::string ReadText(
         std::istreambuf_iterator<char>());
 }
 
+std::vector<std::filesystem::path>
+BackupRunFolders(
+    const std::filesystem::path& root) {
+    std::vector<std::filesystem::path>
+        folders;
+    const auto backupRoot =
+        root /
+        L"WTF" /
+        L"tocpilot";
+
+    std::error_code ec;
+    std::filesystem::directory_iterator it(
+        backupRoot,
+        ec);
+    const std::filesystem::directory_iterator end;
+
+    if (ec) {
+        return folders;
+    }
+
+    for (;
+         it != end;
+         it.increment(ec)) {
+        if (ec) {
+            break;
+        }
+
+        std::error_code entryError;
+        if (it->is_directory(entryError) &&
+            !entryError) {
+            folders.push_back(
+                it->path());
+        }
+    }
+
+    return folders;
+}
+
+std::wstring BackupStampAtMinuteOffset(
+    int minuteOffset) {
+    SYSTEMTIME local{};
+    GetLocalTime(&local);
+
+    FILETIME fileTime{};
+    if (!SystemTimeToFileTime(
+            &local,
+            &fileTime)) {
+        return {};
+    }
+
+    ULARGE_INTEGER value{};
+    value.LowPart =
+        fileTime.dwLowDateTime;
+    value.HighPart =
+        fileTime.dwHighDateTime;
+
+    const LONGLONG adjusted =
+        static_cast<LONGLONG>(
+            value.QuadPart) +
+        static_cast<LONGLONG>(
+            minuteOffset) *
+            60LL *
+            10000000LL;
+
+    if (adjusted < 0) {
+        return {};
+    }
+
+    value.QuadPart =
+        static_cast<ULONGLONG>(
+            adjusted);
+    fileTime.dwLowDateTime =
+        value.LowPart;
+    fileTime.dwHighDateTime =
+        value.HighPart;
+
+    SYSTEMTIME shifted{};
+    if (!FileTimeToSystemTime(
+            &fileTime,
+            &shifted)) {
+        return {};
+    }
+
+    wchar_t timestamp[32]{};
+    swprintf_s(
+        timestamp,
+        L"%02u-%02u-%04u-%02u%02u",
+        static_cast<unsigned>(
+            shifted.wDay),
+        static_cast<unsigned>(
+            shifted.wMonth),
+        static_cast<unsigned>(
+            shifted.wYear),
+        static_cast<unsigned>(
+            shifted.wHour),
+        static_cast<unsigned>(
+            shifted.wMinute));
+
+    return timestamp;
+}
+
 std::filesystem::path AccountFile(
     const std::filesystem::path& root,
     const wchar_t* account,
@@ -552,6 +653,48 @@ void TestPfUiAutomaticAndFallback() {
         pfui.comparerFallback,
         "pfUI parser failure should be reported as safe fallback");
 
+    confirmations = 0;
+    bool fallbackPrompt = false;
+    result = {};
+
+    Check(
+        tp::RunAccountSync(
+            root,
+            config,
+            [&](tp::AccountSyncItem item,
+                std::wstring_view sourceAccount,
+                const std::vector<std::wstring>& targets,
+                bool fallback) {
+                ++confirmations;
+                fallbackPrompt = fallback;
+                Check(
+                    item ==
+                        tp::AccountSyncItem::PfUi,
+                    "pfUI parser fallback should prompt as pfUI");
+                Check(
+                    sourceAccount == L"ALPHA",
+                    "pfUI parser fallback should keep newest source");
+                Check(
+                    targets.size() == 1 &&
+                        targets.front() == L"BETA",
+                    "pfUI parser fallback should prompt for the older target");
+                return true;
+            },
+            result,
+            error),
+        "pfUI parser fallback execution should run");
+    Check(
+        confirmations == 1 &&
+            fallbackPrompt,
+        "pfUI parser fallback execution should require one safe confirmation");
+    Check(
+        !result.fatal,
+        "confirmed pfUI parser fallback should not be fatal");
+    Check(
+        ReadText(target) ==
+            ReadText(source),
+        "confirmed pfUI parser fallback should copy only after confirmation");
+
     std::error_code ec;
     std::filesystem::remove_all(
         root,
@@ -722,6 +865,578 @@ void TestBackupFailureBlocksOverwrite() {
         ec);
 }
 
+void TestCopyFailureKeepsBackup() {
+    const auto root =
+        TestRoot(L"copy-failure");
+    ResetRoot(root);
+
+    const auto source =
+        AccountFile(
+            root,
+            L"ALPHA",
+            L"macros-cache.txt");
+    const auto target =
+        AccountFile(
+            root,
+            L"BETA",
+            L"macros-cache.txt");
+
+    WriteText(source, "new");
+    WriteText(target, "old");
+    MakeNewer(source, target);
+
+    tp::AccountSyncConfig config;
+    config.accounts = {
+        L"ALPHA",
+        L"BETA"
+    };
+    config.macros = true;
+
+    tp::AccountSyncRunResult result;
+    std::wstring error;
+    bool sourceRemoved = false;
+
+    Check(
+        tp::RunAccountSync(
+            root,
+            config,
+            [&](tp::AccountSyncItem,
+                std::wstring_view,
+                const std::vector<std::wstring>&,
+                bool) {
+                std::error_code removeError;
+                sourceRemoved =
+                    std::filesystem::remove(
+                        source,
+                        removeError);
+                Check(
+                    !removeError &&
+                        sourceRemoved,
+                    "copy-failure test should remove source after analysis");
+                return true;
+            },
+            result,
+            error),
+        "copy failure should be reported through run result");
+    Check(
+        result.fatal,
+        "copy failure after backup must be fatal");
+    Check(
+        ReadText(target) == "old",
+        "failed source copy must leave destination content unchanged");
+
+    bool foundBackup = false;
+    for (const auto& folder :
+         BackupRunFolders(root)) {
+        const auto backup =
+            folder /
+            L"BETA" /
+            L"macros-cache.txt";
+
+        if (std::filesystem::is_regular_file(
+                backup)) {
+            foundBackup = true;
+            Check(
+                ReadText(backup) == "old",
+                "copy failure must leave the successful backup intact");
+        }
+    }
+
+    Check(
+        foundBackup,
+        "copy failure after successful backup should retain a backup file");
+
+    std::error_code ec;
+    std::filesystem::remove_all(
+        root,
+        ec);
+}
+
+void TestBackupRunFolderCollision() {
+    const auto root =
+        TestRoot(L"backup-collision");
+    ResetRoot(root);
+
+    const auto source =
+        AccountFile(
+            root,
+            L"ALPHA",
+            L"macros-cache.txt");
+    const auto target =
+        AccountFile(
+            root,
+            L"BETA",
+            L"macros-cache.txt");
+
+    WriteText(source, "new");
+    WriteText(target, "old");
+    MakeNewer(source, target);
+
+    const auto backupRoot =
+        root /
+        L"WTF" /
+        L"tocpilot";
+
+    std::error_code ec;
+    for (int offset = -1;
+         offset <= 1;
+         ++offset) {
+        const auto stamp =
+            BackupStampAtMinuteOffset(
+                offset);
+        Check(
+            !stamp.empty(),
+            "backup collision timestamp should be available");
+
+        if (!stamp.empty()) {
+            std::filesystem::create_directories(
+                backupRoot /
+                    stamp,
+                ec);
+            Check(
+                !ec,
+                "backup collision base folder should be creatable");
+            ec.clear();
+        }
+    }
+
+    tp::AccountSyncConfig config;
+    config.accounts = {
+        L"ALPHA",
+        L"BETA"
+    };
+    config.macros = true;
+
+    tp::AccountSyncRunResult result;
+    std::wstring error;
+
+    Check(
+        tp::RunAccountSync(
+            root,
+            config,
+            [](tp::AccountSyncItem,
+               std::wstring_view,
+               const std::vector<std::wstring>&,
+               bool) {
+                return true;
+            },
+            result,
+            error),
+        "backup collision sync should run");
+    Check(
+        !result.fatal,
+        "backup collision should resolve without a fatal error");
+
+    bool foundSuffix = false;
+    for (const auto& folder :
+         BackupRunFolders(root)) {
+        const std::wstring name =
+            folder.filename().wstring();
+
+        if (name.size() < 3 ||
+            name.substr(
+                name.size() - 3) !=
+                L"-02") {
+            continue;
+        }
+
+        const auto backup =
+            folder /
+            L"BETA" /
+            L"macros-cache.txt";
+
+        if (std::filesystem::is_regular_file(
+                backup)) {
+            foundSuffix = true;
+            Check(
+                ReadText(backup) == "old",
+                "collision-suffixed backup should contain the old destination");
+        }
+    }
+
+    Check(
+        foundSuffix,
+        "existing backup run folder should force a -02 collision suffix");
+
+    std::filesystem::remove_all(
+        root,
+        ec);
+}
+
+void TestNoSourceItem() {
+    const auto root =
+        TestRoot(L"no-source");
+    ResetRoot(root);
+
+    std::error_code ec;
+    std::filesystem::create_directories(
+        root /
+            L"WTF" /
+            L"Account" /
+            L"ALPHA",
+        ec);
+    Check(
+        !ec,
+        "first no-source account folder should be creatable");
+    ec.clear();
+    std::filesystem::create_directories(
+        root /
+            L"WTF" /
+            L"Account" /
+            L"BETA",
+        ec);
+    Check(
+        !ec,
+        "second no-source account folder should be creatable");
+
+    tp::AccountSyncConfig config;
+    config.accounts = {
+        L"ALPHA",
+        L"BETA"
+    };
+    config.macros = true;
+
+    tp::AccountSyncRunResult result;
+    std::wstring error;
+    int confirmations = 0;
+
+    Check(
+        tp::RunAccountSync(
+            root,
+            config,
+            [&](tp::AccountSyncItem,
+                std::wstring_view,
+                const std::vector<std::wstring>&,
+                bool) {
+                ++confirmations;
+                return true;
+            },
+            result,
+            error),
+        "no-source sync should run");
+
+    const auto& macros =
+        result.items[
+            static_cast<std::size_t>(
+                tp::AccountSyncItem::Macros)];
+
+    Check(
+        !result.fatal,
+        "no-source item should not be fatal");
+    Check(
+        confirmations == 0,
+        "no-source item should not request confirmation");
+    Check(
+        macros.status == L"No source" &&
+            macros.action == L"Skipped",
+        "no-source item should be reported as skipped");
+
+    std::filesystem::remove_all(
+        root,
+        ec);
+}
+
+void TestMixedPfUiTargets() {
+    const auto root =
+        TestRoot(L"mixed-pfui");
+    ResetRoot(root);
+
+    const auto alpha =
+        AccountFile(
+            root,
+            L"ALPHA",
+            L"SavedVariables\\pfUI.lua");
+    const auto beta =
+        AccountFile(
+            root,
+            L"BETA",
+            L"SavedVariables\\pfUI.lua");
+    const auto gamma =
+        AccountFile(
+            root,
+            L"GAMMA",
+            L"SavedVariables\\pfUI.lua");
+    const auto delta =
+        AccountFile(
+            root,
+            L"DELTA",
+            L"SavedVariables\\pfUI.lua");
+    const auto epsilon =
+        AccountFile(
+            root,
+            L"EPSILON",
+            L"SavedVariables\\pfUI.lua");
+
+    const std::string sourceText =
+        PfUiText(
+            "160",
+            "500",
+            "source",
+            false,
+            false);
+    const std::string equivalentText =
+        PfUiText(
+            "160",
+            "500",
+            "ignored history",
+            false,
+            true);
+    const std::string cacheText =
+        PfUiText(
+            "160",
+            "100",
+            "cache",
+            false,
+            false);
+    const std::string settingsText =
+        PfUiText(
+            "161",
+            "500",
+            "settings",
+            false,
+            false);
+    const std::string equalTimeText =
+        PfUiText(
+            "999",
+            "0",
+            "equal",
+            true,
+            false);
+
+    WriteText(alpha, sourceText);
+    WriteText(beta, equivalentText);
+    WriteText(gamma, cacheText);
+    WriteText(delta, settingsText);
+    WriteText(epsilon, equalTimeText);
+
+    const auto base =
+        std::filesystem::file_time_type::
+            clock::now();
+    const auto older =
+        base -
+        std::chrono::seconds(30);
+
+    std::error_code ec;
+    std::filesystem::last_write_time(
+        alpha,
+        base,
+        ec);
+    Check(
+        !ec,
+        "mixed source timestamp should be set");
+    ec.clear();
+    std::filesystem::last_write_time(
+        epsilon,
+        base,
+        ec);
+    Check(
+        !ec,
+        "mixed equal timestamp should be set");
+
+    for (const auto& path :
+         {beta, gamma, delta}) {
+        ec.clear();
+        std::filesystem::last_write_time(
+            path,
+            older,
+            ec);
+        Check(
+            !ec,
+            "mixed older timestamp should be set");
+    }
+
+    tp::AccountSyncConfig config;
+    config.accounts = {
+        L"ALPHA",
+        L"BETA",
+        L"GAMMA",
+        L"DELTA",
+        L"EPSILON"
+    };
+    config.pfUi = true;
+
+    tp::AccountSyncRunResult result;
+    std::wstring error;
+    int confirmations = 0;
+
+    Check(
+        tp::RunAccountSync(
+            root,
+            config,
+            [&](tp::AccountSyncItem item,
+                std::wstring_view sourceAccount,
+                const std::vector<std::wstring>& targets,
+                bool fallback) {
+                ++confirmations;
+                Check(
+                    item ==
+                        tp::AccountSyncItem::PfUi,
+                    "mixed pfUI prompt should be for pfUI");
+                Check(
+                    sourceAccount == L"ALPHA",
+                    "first equal-newest account should be selected as source");
+                Check(
+                    targets.size() == 1 &&
+                        targets.front() == L"DELTA",
+                    "only settings-different older target should require confirmation");
+                Check(
+                    !fallback,
+                    "mixed parseable pfUI set should not use fallback");
+                return true;
+            },
+            result,
+            error),
+        "mixed pfUI sync should run");
+
+    const auto& pfui =
+        result.items[
+            static_cast<std::size_t>(
+                tp::AccountSyncItem::PfUi)];
+
+    Check(
+        !result.fatal,
+        "mixed pfUI sync should not be fatal");
+    Check(
+        confirmations == 1,
+        "mixed pfUI sync should use one confirmation");
+    Check(
+        pfui.sourceAccount == L"ALPHA",
+        "mixed pfUI result should preserve source account");
+    Check(
+        pfui.automaticTargets.size() == 1 &&
+            pfui.automaticTargets.front() == L"GAMMA",
+        "mixed pfUI result should identify the cache-only automatic target");
+    Check(
+        pfui.confirmationTargets.size() == 1 &&
+            pfui.confirmationTargets.front() == L"DELTA",
+        "mixed pfUI result should identify the settings confirmation target");
+    Check(
+        pfui.copiedTargets == 2,
+        "mixed pfUI sync should copy cache-only and confirmed targets");
+    Check(
+        ReadText(beta) ==
+            equivalentText,
+        "equivalent older pfUI target should remain untouched");
+    Check(
+        ReadText(gamma) ==
+            sourceText,
+        "cache-only older pfUI target should auto-sync");
+    Check(
+        ReadText(delta) ==
+            sourceText,
+        "confirmed settings-different pfUI target should sync");
+    Check(
+        ReadText(epsilon) ==
+            equalTimeText,
+        "equal-timestamp pfUI target should remain untouched");
+
+    std::filesystem::remove_all(
+        root,
+        ec);
+}
+
+void TestPreAccountSyncStateLoad() {
+    const auto root =
+        TestRoot(L"pre-account-sync-state");
+    ResetRoot(root);
+
+    WriteText(
+        root /
+            L"TocPilot.json",
+        "{\n"
+        "  \"schema\": 1,\n"
+        "  \"settings\": {\n"
+        "    \"text_scale\": 1.0,\n"
+        "    \"check_app_updates\": true,\n"
+        "    \"toolbar_icons\": true,\n"
+        "    \"package_sort_column\": -1,\n"
+        "    \"package_sort_ascending\": true,\n"
+        "    \"package_columns_locked\": false\n"
+        "  },\n"
+        "  \"packages\": []\n"
+        "}\n");
+
+    tp::AppState state;
+    bool created = false;
+    std::wstring error;
+
+    Check(
+        tp::LoadOrCreateState(
+            root,
+            state,
+            created,
+            error),
+        "pre-Account-Sync state should load");
+    Check(
+        !created,
+        "pre-Account-Sync state should not be replaced");
+    Check(
+        state.settings
+            .accountSyncAccounts.empty(),
+        "pre-Account-Sync state should default selected accounts to empty");
+    Check(
+        !state.settings.accountSyncMacros &&
+            !state.settings.accountSyncKeybindings &&
+            !state.settings.accountSyncPfUi &&
+            !state.settings.accountSyncBeforeLaunch,
+        "pre-Account-Sync state should default sync booleans off");
+
+    std::error_code ec;
+    std::filesystem::remove_all(
+        root,
+        ec);
+}
+
+void TestLaunchFlowPreservesConsoleIntent() {
+    bool ctrlStillDown = true;
+    bool launched = false;
+    bool consoleAtLaunch = false;
+    int syncCalls = 0;
+
+    const bool launchedAfterSync =
+        tp::RunAccountSyncLaunchFlow(
+            true,
+            ctrlStillDown,
+            [&]() {
+                ++syncCalls;
+                ctrlStillDown = false;
+                return true;
+            },
+            [&](bool console) {
+                launched = true;
+                consoleAtLaunch = console;
+            });
+
+    Check(
+        launchedAfterSync &&
+            launched,
+        "successful Sync-before-Launch should continue to launch");
+    Check(
+        syncCalls == 1,
+        "Sync-before-Launch should run sync exactly once");
+    Check(
+        consoleAtLaunch,
+        "Ctrl-click console intent should survive sync confirmation flow");
+
+    launched = false;
+
+    const bool blocked =
+        tp::RunAccountSyncLaunchFlow(
+            true,
+            true,
+            []() {
+                return false;
+            },
+            [&](bool) {
+                launched = true;
+            });
+
+    Check(
+        !blocked &&
+            !launched,
+        "fatal Sync-before-Launch result should block launch");
+}
+
 void TestStatePersistence() {
     const auto root =
         TestRoot(L"state");
@@ -782,6 +1497,12 @@ int main() {
     TestPfUiAutomaticAndFallback();
     TestEqualTimestampAndDecline();
     TestBackupFailureBlocksOverwrite();
+    TestCopyFailureKeepsBackup();
+    TestBackupRunFolderCollision();
+    TestNoSourceItem();
+    TestMixedPfUiTargets();
+    TestPreAccountSyncStateLoad();
+    TestLaunchFlowPreservesConsoleIntent();
     TestStatePersistence();
 
     if (g_failures != 0) {

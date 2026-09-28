@@ -57,6 +57,12 @@ using AccountSyncConfirmFn = std::function<bool(
     const std::vector<std::wstring>& targetAccounts,
     bool comparerFallback)>;
 
+using AccountSyncPreLaunchFn =
+    std::function<bool()>;
+
+using AccountSyncLaunchFn =
+    std::function<void(bool console)>;
+
 const wchar_t* AccountSyncItemLabel(
     AccountSyncItem item);
 
@@ -66,6 +72,12 @@ bool AccountSyncItemEnabled(
 
 bool AccountSyncConfigured(
     const AccountSyncConfig& config);
+
+bool RunAccountSyncLaunchFlow(
+    bool syncBeforeLaunch,
+    bool console,
+    const AccountSyncPreLaunchFn& sync,
+    const AccountSyncLaunchFn& launch);
 
 bool DiscoverAccountNames(
     const std::filesystem::path& wowRoot,
