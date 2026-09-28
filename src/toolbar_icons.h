@@ -4,23 +4,40 @@
 
 namespace tp {
 
-struct ToolbarIcons {
-    HICON update = nullptr;
-    HICON refresh = nullptr;
-    HICON addRepository = nullptr;
-    HICON reinstallRepository = nullptr;
-    HICON removeRepository = nullptr;
-    HICON inspect = nullptr;
-    HICON scan = nullptr;
-    HICON tocPilot = nullptr;
-    HICON advanced = nullptr;
-    HANDLE fontResource = nullptr;
+struct ToolbarIcon {
+    HICON normal = nullptr;
+    HICON disabled = nullptr;
 };
 
-bool InitializeToolbarIcons(HINSTANCE instance, ToolbarIcons& icons);
-void DestroyToolbarIcons(ToolbarIcons& icons);
-void ApplyToolbarIcon(HWND button, HICON icon, const wchar_t* accessibleName);
-HWND CreateToolbarTooltip(HWND owner);
-void AddToolbarTooltip(HWND tooltip, HWND owner, HWND control, const wchar_t* text);
+struct ToolbarIcons {
+    ToolbarIcon update;
+    ToolbarIcon refresh;
+    ToolbarIcon addRepository;
+    ToolbarIcon reinstallRepository;
+    ToolbarIcon removeRepository;
+    ToolbarIcon inspect;
+    ToolbarIcon scan;
+    ToolbarIcon tocPilot;
+    ToolbarIcon advanced;
+    HANDLE fontResource = nullptr;
+    int pixelSize = 0;
+};
+
+bool InitializeToolbarIcons(
+    HINSTANCE instance,
+    int pixelSize,
+    ToolbarIcons& icons);
+
+void DestroyToolbarIcons(
+    ToolbarIcons& icons);
+
+HWND CreateToolbarTooltip(
+    HWND owner);
+
+void AddToolbarTooltip(
+    HWND tooltip,
+    HWND owner,
+    HWND control,
+    const wchar_t* text);
 
 }  // namespace tp
