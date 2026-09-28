@@ -11,7 +11,7 @@
 namespace tp {
 namespace {
 
-constexpr int kIconSize = 16;
+constexpr int kIconSize = 36;
 
 struct FontCandidate {
     const wchar_t* face;
@@ -221,7 +221,7 @@ bool InitializeToolbarIcons(HINSTANCE instance, ToolbarIcons& icons) {
     }
 
     HFONT iconFont = CreateFontAwesomeFont(kIconSize);
-    HFONT smallIconFont = CreateFontAwesomeFont(8);
+    HFONT smallIconFont = CreateFontAwesomeFont(18);
     if (!iconFont || !smallIconFont) {
         if (iconFont) {
             DeleteObject(iconFont);

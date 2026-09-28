@@ -85,8 +85,8 @@ constexpr int IDC_BRANCH_SELECTOR = 1024;
 
 constexpr int kCompactWindowWidth = 590;
 constexpr int kDefaultWindowHeight = 480;
-constexpr int kToolbarButtonSize = 32;
-constexpr int kToolbarIconSize = 16;
+constexpr int kToolbarButtonSize = 48;
+constexpr int kToolbarIconSize = 36;
 constexpr int kToolbarButtonGap = 6;
 constexpr int kToolbarGroupExtraGap = 16;
 constexpr int kCompactPrimaryButtonCount = 6;
@@ -515,11 +515,14 @@ void SetTextScaleSelection() {
 
 int ToolbarStripWidth(bool advanced) {
     if (advanced) {
+        constexpr int advancedGroupBreaks = 5;
         return
             kAdvancedButtonCount *
                 kToolbarButtonSize +
             (kAdvancedButtonCount - 1) *
-                kToolbarButtonGap;
+                kToolbarButtonGap +
+            advancedGroupBreaks *
+                kToolbarGroupExtraGap;
     }
 
     constexpr int compactGroupBreaks = 3;
@@ -1153,19 +1156,27 @@ void LayoutControls(HWND hwnd) {
         };
         constexpr std::array<int, 9> gaps{
             kToolbarButtonGap,
+            kToolbarButtonGap +
+                kToolbarGroupExtraGap,
+            kToolbarButtonGap +
+                kToolbarGroupExtraGap,
             kToolbarButtonGap,
             kToolbarButtonGap,
+            kToolbarButtonGap +
+                kToolbarGroupExtraGap,
             kToolbarButtonGap,
-            kToolbarButtonGap,
-            kToolbarButtonGap,
-            kToolbarButtonGap,
-            kToolbarButtonGap,
-            kToolbarButtonGap
+            kToolbarButtonGap +
+                kToolbarGroupExtraGap,
+            kToolbarButtonGap +
+                kToolbarGroupExtraGap
         };
         placeStrip(controls, gaps);
     }
 
-    const int listTop = 62;
+    const int listTop =
+        buttonY +
+        kToolbarButtonSize +
+        14;
     const int listBottomPadding = 20;
     const int listHeight =
         std::max(
