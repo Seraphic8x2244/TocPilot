@@ -9500,6 +9500,11 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
 
         if (LOWORD(wParam) == IDC_LAUNCH_WOW &&
             HIWORD(wParam) == BN_CLICKED) {
+            const bool console =
+                (GetKeyState(
+                     VK_CONTROL) &
+                 0x8000) != 0;
+
             if (g_stateReady &&
                 g_state.settings
                     .accountSyncBeforeLaunch &&
@@ -9508,11 +9513,6 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                     true)) {
                 return 0;
             }
-
-            const bool console =
-                (GetKeyState(
-                     VK_CONTROL) &
-                 0x8000) != 0;
 
             LaunchSiblingExecutable(
                 hwnd,
