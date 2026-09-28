@@ -9,7 +9,8 @@
 - Latest published release: `v0.3.22`.
 - Release/source commit and tag target: `8678334c0a0015eba14aecf58f7c416c045f6581` (`v0.3.22`).
 - Latest fully runtime-accepted release is `v0.3.22` at `8678334c0a0015eba14aecf58f7c416c045f6581`. Runtime acceptance on 2026-09-28 covers the 48 x 48 / 36 x 36 toolbar presentation, Per-Monitor V2 DPI behaviour, Compact/Advanced Words/Icon presentation, persistent Advanced width, and Launch remaining the executable icon at the far right. Slight softness at Windows 125% scaling is accepted as normal fractional-DPI rendering; do not reopen DPI work without new evidence.
-- Latest verified `main` source-changing head: `5dd02e0c87f87c226f433e6edb50bc5e7a5879dc` (P6B icon toolbar). Release/version commit `928b26797d8d1b14bdbb07c2e2baf49ea896b2dc` sits above it.
+- Last known-good Account-Sync-free code baseline is published/runtime-accepted `v0.3.22` at `8678334c0a0015eba14aecf58f7c416c045f6581`. The final pre-Account-Sync repository commit is documentation-only `6fcf117cf4f639612827acf88b10c6933f4b7802`, so its executable source is equivalent to that accepted v0.3.22 baseline.
+- Current `main` head is `fbd8cef2ceb2626ad3e4e7f296f9b8de2b9e0fd6` (`fix: preserve ctrl launch intent through sync`) above Account Sync implementation commit `232e2fb5f8ff843f10e164658efa728926988da6`. **Current main is not buildable/validated**: Build workflow run `36426680219`, Windows x64 job `108942244145`, fails during Release compilation before CTest.
 - A1 runtime gate: **accepted for forward development** on 2026-09-26. Fresh install, reinstall, Update New and Remove Addon passed. Managed same-root replacement runtime validation is explicitly deferred rather than blocking later work. The deterministic crash-window tests remain the primary validation for restart-recovery semantics.
 - A2 durable state semantic validation: **implemented / CI-checked / merged / published in v0.3.10 / runtime-accepted** as part of the combined v0.3.10 gate.
 - A3 + queued `www` presentation delta: **implemented / CI-checked / merged / published / runtime-accepted in v0.3.10**. ZIP members stream through miniz's extraction callback directly into staged files instead of allocating one full-member buffer; the existing 256 MiB per-entry and 1 GiB total policy limits remain. Deterministic archive coverage forges an oversized central-directory member size in a tiny fixture and verifies policy rejection before extraction staging. Advanced repository URLs are custom-drawn always blue + underlined and the header is lowercase `www`; Compact remained `Name | Status` in the accepted gate.
@@ -20,7 +21,7 @@
 - v0.3.15 Compact divider transaction fix: **implemented / CI-checked / merged / published; partial runtime pass**. Expanding the left Compact column no longer creates a horizontal scrollbar immediately, but the divider transaction still clamps both primary columns only to the generic 40 px floor. This lets the right visible column shrink below its intended Compact minimum; after entering that invalid state, dragging back left can expose a horizontal scrollbar. Fix by enforcing the real per-column Compact minima throughout fitting and divider transactions.
 - v0.3.16 Compact minimum-width fix: **implemented / CI-checked / merged / published; partial runtime pass**. Self-update passed; the companion column now stops at its intended minimum in both column orders; whole-window resize and Advanced regression checks passed. Remaining failure: when dragging the middle divider back left after pushing it right, a horizontal scrollbar still appears. This is now isolated to reverse-direction transaction ordering rather than width limits.
 - v0.3.17 reverse-direction divider fix: **implemented / CI-checked / merged / published / runtime-accepted**. Compact divider dragging is a fully owned two-column transaction: the shrinking column is applied first, the growing column second, and the native one-column commit is cancelled under a re-entrancy guard. User runtime confirmed the rightward clamp, leftward reversal, both Name/Status orders, window resizing and Advanced regression checks all pass with no horizontal scrollbar.
-- Current goal: implement the agreed **Account Sync** feature that replaces the user's existing `wtf_sync.bat` workflow while preserving its safety/backup semantics. No Account Sync code has been started yet.
+- Current goal: **recover the existing Account Sync implementation to a clean compilable/testable state**, then produce a dev/test build for runtime validation. Do not reimplement from scratch unless recovery exposes a deeper design defect.
 - Current scope boundary: Account Sync is the next feature. Preserve the runtime-accepted v0.3.22 toolbar/DPI behaviour. Keep the Refresh All viewport-jump fix queued after Account Sync and do not mix async latest-stable DLL discovery, Add-Git stale-request work, warning cleanup, rate-limit propagation, staging-name cleanup or P6C art/skin work into this feature.
 - Audit continuity: `audit_dump.md` is a temporary scratch checkpoint for the interrupted broad audit only; this file remains the sole authoritative live development source of truth.
 - Documentation-only commits after the release do not change the published runtime baseline.
@@ -252,7 +253,7 @@ Branch-selector target behaviour after the v0.3.6 runtime follow-up:
 - Add Git already fetches the full Git smart-HTTP branch advertisement in the branch chooser; reuse that result to seed runtime metadata rather than immediately fetching it again;
 - normal branch-head refresh also fetches the full advertisement internally, so retain/reuse that information to discover newly added/removed remote branches during ordinary startup/Refresh All checks without an extra branch-list request.
 
-### Account Sync — agreed design / not implemented
+### Account Sync — agreed design / implementation recovery
 
 Goal: retire the user's current `wtf_sync.bat` by moving its account-data synchronization and launch convenience into TocPilot without adding a menu-heavy launch flow.
 
@@ -295,6 +296,52 @@ Backup safety is mandatory:
 - Preserve timestamped backup-run directories and account-relative structure beneath each run; retain collision suffix handling such as `-02`, `-03`.
 - Backup failure means do not overwrite and block Launch.
 - Copy failure after a successful backup leaves the backup intact and blocks Launch.
+
+### Account Sync implementation audit / recovery checkpoint — 2026-09-28
+
+Repository state:
+
+- Account Sync implementation commit: `232e2fb5f8ff843f10e164658efa728926988da6` (`feat: add safe account sync`).
+- Ctrl-launch follow-up: `fbd8cef2ceb2626ad3e4e7f296f9b8de2b9e0fd6` (`fix: preserve ctrl launch intent through sync`), current `main` head at this checkpoint.
+- Last known-good published/runtime-accepted code baseline: `8678334c0a0015eba14aecf58f7c416c045f6581` (`v0.3.22`).
+- Final pre-Account-Sync repository commit: `6fcf117cf4f639612827acf88b10c6933f4b7802` (`docs: hand off account sync design`). It changes documentation only, so the code beneath it is the accepted v0.3.22 baseline.
+- Both Account Sync commits reached GitHub Actions, but current main fails **Build Release** before tests. Run `36426680219`, Windows x64 job `108942244145`, is the authoritative failed-CI reference.
+
+Confirmed compile blockers:
+
+1. `src/account_sync.cpp` around lines 390/392 uses default-delimiter C++ raw-string regex literals whose contents contain the terminating `)"` sequence. MSVC therefore terminates the string early and reports the first real errors as C2017/C2065/C2001, followed by extensive parser cascades. Fix with a custom raw-string delimiter or correctly escaped ordinary strings without changing the BAT-equivalent regex semantics.
+2. `ShowAccountSyncWindow()` in `src/main.cpp` around lines 8378-8390 calls `std::max(0, <RECT LONG arithmetic>)`, mixing `int` and Win32 `LONG`. Match the already-correct `ShowTocPilotWindow()` pattern by casting the RECT arithmetic to `int` before `std::max`.
+
+Audit result beyond compilation:
+
+- The sync engine follows the locked/source BAT semantics: per-item newest-source selection by timestamp, equal timestamps untouched, older/missing macros/keybindings requiring confirmation, pfUI semantic comparison, cache-only pfUI auto-sync, parser/comparer failure falling back to confirmation, and unknown pfUI sections treated as settings.
+- Backup ordering is correct: existing destination -> successful backup under `WTF\tocpilot\<run>\<account>\...` -> overwrite. Missing destinations need no backup. Backup failure prevents overwrite; copy failure after backup leaves the backup intact; fatal backup/copy failures block Launch.
+- Backup run naming preserves `dd-MM-yyyy-HHmm` plus `-02`, `-03`, etc. collision handling.
+- UI/integration pieces are present: Info rename, Advanced-only Account Sync action/config popup, three-row runtime panel, Sync Now, Sync before Launch, confirmation-decline allowing Launch to continue, fatal sync blocking Launch, and Ctrl state captured before sync prompts so Ctrl-click Launch can still add `-console`.
+- State loading remains backward-compatible with pre-Account-Sync `TocPilot.json`; missing new Account Sync fields default safely rather than invalidating old state.
+- A suspected main-window-height problem was rechecked and is **not** a finding: the existing 400 design-px minimum is sufficient for the current panel layout.
+
+Current test coverage exists in `tests/account_sync_tests.cpp`, but it has **not run in CI yet because compilation fails first**. Existing intended coverage includes pfUI comparison, confirmed copy+backup, cache-only/fallback behavior, equal timestamps/decline, backup failure, and state persistence.
+
+Add/verify before a test release:
+
+- copy failure after successful backup -> backup remains + fatal result;
+- backup run-folder collision -> `-02`;
+- no-source item;
+- a mixed 3+ account case covering equivalent + cache-only + confirmation + equal-timestamp targets together;
+- parser-fallback execution path, not only preview/inspection;
+- loading a pre-Account-Sync state file explicitly;
+- focused integration validation that Ctrl-click intent survives confirmation dialogs and Sync-before-Launch.
+
+Recovery sequence:
+
+1. **Do not reset or revert main to v0.3.22 as the first move.** Preserve `232e2fb5...` + `fbd8cef2...` and fix the two known compile blockers in place; the audit found useful implementation worth recovering.
+2. Rebuild Release and run the complete deterministic CTest suite. Account Sync is not considered recovered until `account-sync-safety` actually executes and passes.
+3. Fix any real compiler/test failures exposed after the initial parser cascades disappear. Keep changes narrow to Account Sync/recovery; do not mix the queued Refresh All viewport work or unrelated audit debt.
+4. Add the focused missing safety/regression tests above, then rerun CI cleanly.
+5. Only after clean CI, produce a **dev/test build** (do not publish a normal release yet) for runtime Account Sync validation against real WTF account data.
+6. Runtime gate should first verify configuration persistence/discovery and preview rows, then manual sync with confirmation/decline and backup inspection, then pfUI cache-only behavior, then Sync-before-Launch and Ctrl-click `-console`, and finally an induced safe failure proving Launch is blocked.
+7. If recovery proves unexpectedly invasive or semantics diverge from the BAT, compare against `6fcf117c...` / `8678334c...` as the clean baseline and reassess before proceeding; do not silently discard the accepted v0.3.22 behavior.
 
 ### Removal UX
 
@@ -547,7 +594,7 @@ Published `v0.3.17` runtime gate passed on 2026-09-27:
 
 The combined v0.3.14-v0.3.17 Compact two-column fill/split work is runtime-accepted.
 
-Next runtime gate will first cover the focused **P6B icon-toolbar pass**. The separately queued **Refresh All viewport jump** remains the next narrow UI follow-up after that pass.
+There is **no Account Sync runtime gate yet**. Current main does not compile, so runtime testing would be invalid. First recover the implementation through a clean Release build + CTest pass; then produce a dev/test build and execute the Account Sync runtime matrix documented above. **Refresh All viewport jump** remains queued after Account Sync.
 
 A1's managed same-root replacement check remains deferred. The current product workflow has **Remove Addon**, not the old Uninstall flow.
 
@@ -675,8 +722,12 @@ Do not add support for user-uploaded ZIP/7z/RAR/installer/bundle release assets 
 
 ## Exact Next Step
 
-Begin the **Account Sync** implementation from the locked design above. Preserve the accepted v0.3.22 toolbar/DPI behaviour and the supplied BAT's safety semantics exactly. The first implementation must include the configuration/state model, safe sync engine + backups under `WTF\tocpilot\`, main-window three-row Account Sync status/action panel, Advanced-only Account Sync popup/action, **TocPilot -> Info** rename/cleanup, automatic sync-before-Launch, and **Ctrl-click Launch -> `-console`**.
+Recover Account Sync from current `main` rather than reimplementing it:
 
-Account Sync is design-only at this checkpoint; no feature code has been started.
+1. Fix the malformed raw regex literals in `src/account_sync.cpp` and the `std::max` `int`/`LONG` mismatch in `ShowAccountSyncWindow()`.
+2. Build Release and run the full CTest suite; investigate any non-cascade failures that appear.
+3. Add the focused missing Account Sync safety/regression tests listed in the audit checkpoint and obtain clean CI.
+4. Produce a **dev/test build only** and runtime-test Account Sync against real WTF data using the ordered gate in the audit checkpoint.
+5. Keep `8678334c0a0015eba14aecf58f7c416c045f6581` (`v0.3.22`) as the last published/runtime-accepted code baseline and `6fcf117cf4f639612827acf88b10c6933f4b7802` as the final pre-Account-Sync repository checkpoint.
 
-Keep **Refresh All viewport jump** queued after Account Sync. Also retain deferred **Clear WDB folder** and **DXVK advanced logging checkbox** work. Do not mix unrelated robustness/audit/P6C work into the Account Sync implementation.
+Do not publish Account Sync or move on to **Refresh All viewport jump** until recovery CI and the focused Account Sync runtime gate pass. Retain deferred **Clear WDB folder** and **DXVK advanced logging checkbox** work; do not mix unrelated robustness/audit/P6C changes into recovery.
