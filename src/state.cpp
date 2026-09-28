@@ -1025,6 +1025,9 @@ std::string DefaultJson(const AppState& state) {
         << "    \"check_app_updates\": "
         << (state.settings.checkAppUpdates ? "true" : "false")
         << ",\n"
+        << "    \"toolbar_icons\": "
+        << (state.settings.toolbarIcons ? "true" : "false")
+        << ",\n"
         << "    \"package_sort_column\": "
         << state.settings.packageSortColumn
         << ",\n"
@@ -2613,6 +2616,27 @@ bool LoadOrCreateState(
         return false;
     }
 
+    bool toolbarIcons = true;
+    std::size_t toolbarIconsStart = 0;
+    std::size_t toolbarIconsEnd = 0;
+    if (FindObjectMember(
+            json,
+            settingsStart,
+            settingsEnd,
+            "toolbar_icons",
+            toolbarIconsStart,
+            toolbarIconsEnd) &&
+        !ParseBoolToken(
+            std::string_view(json).substr(
+                toolbarIconsStart,
+                toolbarIconsEnd - toolbarIconsStart),
+            toolbarIcons)) {
+        error =
+            L"TocPilot.json has an invalid "
+            L"settings.toolbar_icons value.";
+        return false;
+    }
+
     int packageSortColumn = -1;
     bool packageSortAscending = true;
 
@@ -2925,6 +2949,7 @@ bool LoadOrCreateState(
     state.settings.textScale =
         std::clamp(textScale, 0.75, 2.0);
     state.settings.checkAppUpdates = checkUpdates;
+    state.settings.toolbarIcons = toolbarIcons;
     state.settings.packageSortColumn = packageSortColumn;
     state.settings.packageSortAscending = packageSortAscending;
     state.settings.packageColumnWidths = packageColumnWidths;
@@ -2957,6 +2982,12 @@ bool SaveState(
             json,
             "check_app_updates",
             state.settings.checkAppUpdates
+                ? "true"
+                : "false") ||
+        !SetSettingsMemberJson(
+            json,
+            "toolbar_icons",
+            state.settings.toolbarIcons
                 ? "true"
                 : "false") ||
         !SetSettingsMemberJson(
