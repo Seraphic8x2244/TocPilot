@@ -12,14 +12,93 @@ namespace tp {
 namespace {
 
 constexpr int kIconSize = 16;
-constexpr wchar_t kFontAwesomeFace[] = L"Font Awesome 6 Free";
+
+struct FontCandidate {
+    const wchar_t* face;
+    int weight;
+};
+
+constexpr std::array<FontCandidate, 2> kFontAwesomeFaces{{
+    {L"Font Awesome 6 Free Solid", FW_DONTCARE},
+    {L"Font Awesome 6 Free", FW_BLACK}
+}};
+
+bool HasToolbarGlyphs(HFONT font) {
+    if (!font) {
+        return false;
+    }
+
+    HDC dc = CreateCompatibleDC(nullptr);
+    if (!dc) {
+        return false;
+    }
+
+    const HGDIOBJ oldFont = SelectObject(dc, font);
+
+    constexpr std::array<wchar_t, 10> glyphs{{
+        L'\uf0ed',
+        L'\uf021',
+        L'\uf65e',
+        L'\uf07b',
+        L'\uf363',
+        L'\uf65d',
+        L'\uf002',
+        L'\uf07c',
+        L'\uf05a',
+        L'\uf7d9'
+    }};
+    std::array<WORD, glyphs.size()> indices{};
+
+    const DWORD result = GetGlyphIndicesW(
+        dc,
+        glyphs.data(),
+        static_cast<int>(glyphs.size()),
+        indices.data(),
+        GGI_MARK_NONEXISTING_GLYPHS);
+
+    SelectObject(dc, oldFont);
+    DeleteDC(dc);
+
+    if (result == GDI_ERROR) {
+        return false;
+    }
+
+    return std::all_of(
+        indices.begin(),
+        indices.end(),
+        [](WORD index) {
+            return index != 0xFFFF;
+        });
+}
 
 HFONT CreateFontAwesomeFont(int pixelHeight) {
-    return CreateFontW(
-        -pixelHeight, 0, 0, 0, FW_BLACK, FALSE, FALSE, FALSE,
-        DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-        ANTIALIASED_QUALITY, DEFAULT_PITCH | FF_DONTCARE,
-        kFontAwesomeFace);
+    for (const auto& candidate : kFontAwesomeFaces) {
+        HFONT font = CreateFontW(
+            -pixelHeight,
+            0,
+            0,
+            0,
+            candidate.weight,
+            FALSE,
+            FALSE,
+            FALSE,
+            DEFAULT_CHARSET,
+            OUT_TT_ONLY_PRECIS,
+            CLIP_DEFAULT_PRECIS,
+            ANTIALIASED_QUALITY,
+            DEFAULT_PITCH | FF_DONTCARE,
+            candidate.face);
+
+        if (HasToolbarGlyphs(font)) {
+            return font;
+        }
+
+        if (font) {
+            DeleteObject(font);
+        }
+    }
+
+    return nullptr;
 }
 
 void DrawGlyph(HDC dc, HFONT font, wchar_t glyph, COLORREF colour) {

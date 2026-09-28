@@ -5,8 +5,8 @@
 ## Current
 
 - Active branch: `main`.
-- Source/application version: `v0.3.18`.
-- Latest published release: `v0.3.18`.
+- Source/application version: `v0.3.19`.
+- Latest published release: `v0.3.18` (v0.3.19 corrective release pending).
 - Release/source commit and tag target: `928b26797d8d1b14bdbb07c2e2baf49ea896b2dc` (`v0.3.18`).
 - Latest fully runtime-accepted release is now `v0.3.17` at `a636d1eb0d1a3c213bb96c84ecbce2b22ca09d82`. The combined v0.3.14-v0.3.17 Compact fill/split gate passed on 2026-09-27: no Compact horizontal scrollbar under divider reversal, real Name/Status minimums hold in both orders, the far-right edge stays locked, whole-window resizing distributes width correctly, and Advanced resize/reorder behavior remains intact.
 - Latest verified `main` source-changing head: `5dd02e0c87f87c226f433e6edb50bc5e7a5879dc` (P6B icon toolbar). Release/version commit `928b26797d8d1b14bdbb07c2e2baf49ea896b2dc` sits above it.
@@ -20,8 +20,8 @@
 - v0.3.15 Compact divider transaction fix: **implemented / CI-checked / merged / published; partial runtime pass**. Expanding the left Compact column no longer creates a horizontal scrollbar immediately, but the divider transaction still clamps both primary columns only to the generic 40 px floor. This lets the right visible column shrink below its intended Compact minimum; after entering that invalid state, dragging back left can expose a horizontal scrollbar. Fix by enforcing the real per-column Compact minima throughout fitting and divider transactions.
 - v0.3.16 Compact minimum-width fix: **implemented / CI-checked / merged / published; partial runtime pass**. Self-update passed; the companion column now stops at its intended minimum in both column orders; whole-window resize and Advanced regression checks passed. Remaining failure: when dragging the middle divider back left after pushing it right, a horizontal scrollbar still appears. This is now isolated to reverse-direction transaction ordering rather than width limits.
 - v0.3.17 reverse-direction divider fix: **implemented / CI-checked / merged / published / runtime-accepted**. Compact divider dragging is a fully owned two-column transaction: the shrinking column is applied first, the growing column second, and the native one-column commit is cancelled under a re-entrancy guard. User runtime confirmed the rightward clamp, leftward reversal, both Name/Status orders, window resizing and Advanced regression checks all pass with no horizontal scrollbar.
-- Current goal: investigate and fix the separately queued **Refresh All viewport jump** in the addon list. The focused **P6B icon-toolbar pass** is implemented and CI-checked.
-- Current scope boundary: only the **Refresh All viewport-jump** issue is in scope for the next source slice. Do not mix async latest-stable DLL discovery, Add-Git stale-request work, warning cleanup, rate-limit propagation, staging-name cleanup or P6C art/skin work into that fix.
+- Current goal: correct the **P6B Font Awesome runtime rendering regression** seen in v0.3.18, then return to the queued **Refresh All viewport jump**.
+- Current scope boundary: only the P6B icon-rendering correction is in scope until its runtime gate passes. Do not mix the queued Refresh All viewport-jump fix, async latest-stable DLL discovery, Add-Git stale-request work, warning cleanup, rate-limit propagation, staging-name cleanup or P6C art/skin work into this correction.
 - Audit continuity: `audit_dump.md` is a temporary scratch checkpoint for the interrupted broad audit only; this file remains the sole authoritative live development source of truth.
 - Documentation-only commits after the release do not change the published runtime baseline.
 
@@ -616,10 +616,11 @@ Do not add support for user-uploaded ZIP/7z/RAR/installer/bundle release assets 
 - v0.3.18 Release workflow run `36360720566`, Windows x64 Release job `108737243385`, validated the exact source version, passed the Release build and **18/18 CTest tests**, generated the SHA-256 sidecar, created tag `v0.3.18`, and published direct assets.
 - Published v0.3.18 `TocPilot.exe`: 2,927,616 bytes, SHA-256 `b082c6af0cbb05af6f172470cfb48cf312606a4d4dfb7c6681e35217486c70c8`.
 - Published v0.3.18 `TocPilot.exe.sha256`: 78 bytes; asset SHA-256 `cf3ef06099ea1b479e2669b1aea138d14b86d9946d7b4d8a6fc19e1d26052592`.
-- The Refresh All viewport jump is now the next narrow UI source slice.
+- v0.3.18 runtime exposed a P6B rendering regression: every Font Awesome toolbar glyph rendered as the same narrow fallback bar, while the executable-derived Launch icon rendered correctly. Root cause is Font Awesome face substitution at runtime; the corrective v0.3.19 source explicitly resolves the Solid face and verifies all required PUA glyphs with `GetGlyphIndicesW` before accepting a font.
+- The Refresh All viewport jump remains queued immediately after the corrected toolbar runtime gate.
 
 ## Exact Next Step
 
-Runtime-check the normal self-update from `v0.3.17` to published `v0.3.18` for the P6B icon toolbar. Once that delivery gate is confirmed, implement only the separately queued **Refresh All viewport jump**.
+Publish and runtime-check corrective `v0.3.19` for the P6B Font Awesome rendering regression. The correction must show the actual Solid icons rather than fallback bars while preserving the accepted 32 x 32 buttons, 16 x 16 icon sizing, Launch executable icon, order/grouping, tooltips and handlers.
 
-For the viewport fix, investigate and preserve the addon list's current top/selection identity across Refresh All re-sort/repopulate. Keep the fix narrow: do not mix async latest-stable DLL discovery, Add-Git stale-request work, warning cleanup, rate-limit propagation, staging-name cleanup or P6C art/skin work into it.
+Once the corrected toolbar is runtime-accepted, return to the separately queued **Refresh All viewport jump**. Do not mix that viewport fix or other deferred robustness/art work into the icon correction.
