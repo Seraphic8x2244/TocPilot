@@ -5,8 +5,8 @@
 ## Current
 
 - Active branch: `main`.
-- Source/application version: `v0.3.17`.
-- Latest published release: `v0.3.17`.
+- Source/application version: `v0.3.18`.
+- Latest published release: `v0.3.17` (v0.3.18 release workflow pending).
 - Release/source commit and tag target: `a636d1eb0d1a3c213bb96c84ecbce2b22ca09d82` (merge of release-prep PR #27).
 - Latest fully runtime-accepted release is now `v0.3.17` at `a636d1eb0d1a3c213bb96c84ecbce2b22ca09d82`. The combined v0.3.14-v0.3.17 Compact fill/split gate passed on 2026-09-27: no Compact horizontal scrollbar under divider reversal, real Name/Status minimums hold in both orders, the far-right edge stays locked, whole-window resizing distributes width correctly, and Advanced resize/reorder behavior remains intact.
 - Latest verified `main` source-changing head: `2c7dd510e04be7cd28263fa004b65d32033a9056` (merge of PR #26, direction-safe fully owned Compact divider transaction). Release-only version commit `a636d1eb0d1a3c213bb96c84ecbce2b22ca09d82` sits above it.
