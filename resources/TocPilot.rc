@@ -4,3 +4,5 @@ IDI_TOCPILOT ICON "TocPilot.ico"
 
 IDR_SPLASH_LOGO RCDATA "TocPilot_logo_cutout.png"
 IDR_FA_SOLID_FONT RCDATA "icons\\fa-solid\\fa-solid-900.ttf"
+
+1 RT_MANIFEST "TocPilot.manifest"
