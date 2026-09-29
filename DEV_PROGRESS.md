@@ -21,7 +21,7 @@
 - v0.3.15 Compact divider transaction fix: **implemented / CI-checked / merged / published; partial runtime pass**. Expanding the left Compact column no longer creates a horizontal scrollbar immediately, but the divider transaction still clamps both primary columns only to the generic 40 px floor. This lets the right visible column shrink below its intended Compact minimum; after entering that invalid state, dragging back left can expose a horizontal scrollbar. Fix by enforcing the real per-column Compact minima throughout fitting and divider transactions.
 - v0.3.16 Compact minimum-width fix: **implemented / CI-checked / merged / published; partial runtime pass**. Self-update passed; the companion column now stops at its intended minimum in both column orders; whole-window resize and Advanced regression checks passed. Remaining failure: when dragging the middle divider back left after pushing it right, a horizontal scrollbar still appears. This is now isolated to reverse-direction transaction ordering rather than width limits.
 - v0.3.17 reverse-direction divider fix: **implemented / CI-checked / merged / published / runtime-accepted**. Compact divider dragging is a fully owned two-column transaction: the shrinking column is applied first, the growing column second, and the native one-column commit is cancelled under a re-entrancy guard. User runtime confirmed the rightward clamp, leftward reversal, both Name/Status orders, window resizing and Advanced regression checks all pass with no horizontal scrollbar.
-- Current goal: **continue the development update channel work on `dev`, then runtime-validate recovered Account Sync through that path**. Slice 2 (persisted opt-in setting + Info -> Updates UI) is complete; Slice 3 (updater channel logic) is next. Account Sync is already cleanly compiled/tested at `2e80b1378a7a01bb311140828e4e54069b1576d6`; do not reimplement it from scratch.
+- Current goal: **continue the development update channel work on `dev`, then runtime-validate recovered Account Sync through that path**. Slice 3 (updater channel logic) is complete; Slice 4 (development release workflow) is next and is not started in this slice. Account Sync is already cleanly compiled/tested at `2e80b1378a7a01bb311140828e4e54069b1576d6`; do not reimplement it from scratch.
 - Current scope boundary: Account Sync is the next feature. Preserve the runtime-accepted v0.3.22 toolbar/DPI behaviour. Keep the Refresh All viewport-jump fix queued after Account Sync and do not mix async latest-stable DLL discovery, Add-Git stale-request work, warning cleanup, rate-limit propagation, staging-name cleanup or P6C art/skin work into this feature.
 - Audit continuity: `audit_dump.md` is a temporary scratch checkpoint for the interrupted broad audit only; this file remains the sole authoritative live development source of truth.
 - Documentation-only commits after the release do not change the published runtime baseline.
@@ -270,13 +270,14 @@ Because long/tool-heavy chats have repeatedly become unstable, implement the dev
 - Add focused persistence/old-state compatibility tests.
 - Implemented on `dev` as an additive schema-1 setting. Pre-feature state defaults off; enabled state round-trips; invalid values are rejected; existing unknown-field preservation remains intact. The Info window now has an **Updates** group with **Receive development builds** and the first-enable warning/confirmation. Updater release discovery/selection is unchanged in this slice.
 
-**Slice 3 — updater channel logic**
+**Slice 3 — updater channel logic — COMPLETE**
 - Preserve the existing stable-only release path unchanged for users who have not opted in.
 - Add prerelease discovery for opted-in users.
 - Implement deterministic prerelease-aware ordering, including `v0.3.23-dev.1 < v0.3.23-dev.2 < v0.3.23`.
 - Support turning development builds off while currently running a prerelease and returning to the appropriate stable release.
 - Keep existing HTTPS, exact-size, SHA-256 and rollback protections.
 - Add deterministic channel/version tests before moving on.
+- Implemented with non-opted users still using `FetchLatestStableGitHubRelease()` / GitHub `/releases/latest`. Opted-in users enumerate published releases, accept stable releases plus matching `-dev.N` prereleases, and select by prerelease-aware semantic ordering. Stable outranks a same-base prerelease. Turning development builds off while running a prerelease offers the current stable release even when returning to stable requires moving to a lower base version. Existing HTTPS, exact-size, SHA-256 and updater rollback/handoff protections are unchanged. Focused tests cover release-list parsing, stable filtering, draft/non-dev prerelease filtering, dev-to-dev ordering, stable-over-dev ordering and channel-off behavior.
 
 **Slice 4 — development release workflow**
 - Add/adjust the release workflow needed to publish GitHub prereleases for dev builds.
@@ -830,7 +831,7 @@ Do not add support for user-uploaded ZIP/7z/RAR/installer/bundle release assets 
 
 ## Exact Next Step
 
-Execute **Slice 3 — updater channel logic** from the four-slice development-channel plan above. Preserve the stable-only path for users who have not opted in; add prerelease discovery and prerelease-aware ordering for opted-in users, including channel-off behavior from a running dev build. Do not begin Slice 4 in the same chat unless the user explicitly asks to continue.
+Execute **Slice 4 — development release workflow** from the four-slice development-channel plan above in an explicit continuation. Slice 3 is complete. Do not begin Slice 4 in this chat.
 
 After all four slices are complete and the real prerelease self-update path is accepted, runtime-test recovered Account Sync against real WTF data, in this order:
 
