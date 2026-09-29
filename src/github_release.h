@@ -27,6 +27,11 @@ bool ParseGitHubReleaseJson(
     GitHubReleaseInfo& release,
     std::wstring& error);
 
+bool ParseGitHubReleaseListJson(
+    std::string_view json,
+    std::vector<GitHubReleaseInfo>& releases,
+    std::wstring& error);
+
 bool FindExactGitHubReleaseAsset(
     const GitHubReleaseInfo& release,
     std::wstring_view assetName,
@@ -36,6 +41,11 @@ bool FindExactGitHubReleaseAsset(
 bool FetchLatestStableGitHubRelease(
     std::wstring_view repository,
     GitHubReleaseInfo& release,
+    std::wstring& error);
+
+bool FetchGitHubReleases(
+    std::wstring_view repository,
+    std::vector<GitHubReleaseInfo>& releases,
     std::wstring& error);
 
 } // namespace tp

@@ -13,6 +13,7 @@
 #include <cwctype>
 #include <filesystem>
 #include <iterator>
+#include <limits>
 #include <string>
 #include <string_view>
 #include <thread>
@@ -419,68 +420,294 @@ bool DownloadFile(
     return ok;
 }
 
-struct SemVer {
-    int major = 0;
-    int minor = 0;
-    int patch = 0;
+struct SemVerIdentifier {
+    std::wstring text;
+    bool numeric = false;
+    std::uint64_t number = 0;
 };
 
-bool ParseSemVer(std::wstring_view text, SemVer& version) {
-    if (!text.empty() && (text.front() == L'v' || text.front() == L'V')) {
-        text.remove_prefix(1);
-    }
+struct SemVer {
+    std::uint64_t major = 0;
+    std::uint64_t minor = 0;
+    std::uint64_t patch = 0;
+    std::vector<SemVerIdentifier> prerelease;
+};
 
-    std::array<int, 3> values{};
-    size_t component = 0;
-    int current = 0;
-    bool haveDigit = false;
-
-    for (wchar_t ch : text) {
-        if (std::iswdigit(ch)) {
-            haveDigit = true;
-            current = current * 10 + (ch - L'0');
-            continue;
-        }
-
-        if (ch == L'.' && haveDigit && component < 2) {
-            values[component++] = current;
-            current = 0;
-            haveDigit = false;
-            continue;
-        }
-
-        if ((ch == L'-' || ch == L'+') && haveDigit) {
-            break;
-        }
-
+bool ParseUnsigned(
+    std::wstring_view text,
+    bool allowLeadingZero,
+    std::uint64_t& value) {
+    if (text.empty() ||
+        (!allowLeadingZero &&
+         text.size() > 1 &&
+         text.front() == L'0')) {
         return false;
     }
 
-    if (!haveDigit || component != 2) {
-        return false;
+    std::uint64_t parsed = 0;
+    for (const wchar_t ch : text) {
+        if (ch < L'0' || ch > L'9') {
+            return false;
+        }
+
+        const std::uint64_t digit =
+            static_cast<std::uint64_t>(
+                ch - L'0');
+
+        if (parsed >
+            (std::numeric_limits<std::uint64_t>::max() -
+             digit) /
+                10) {
+            return false;
+        }
+
+        parsed =
+            parsed * 10 +
+            digit;
     }
 
-    values[2] = current;
-    version.major = values[0];
-    version.minor = values[1];
-    version.patch = values[2];
+    value = parsed;
     return true;
 }
 
-bool IsNewer(std::wstring_view candidate, std::wstring_view current) {
-    SemVer a;
-    SemVer b;
-    if (!ParseSemVer(candidate, a) || !ParseSemVer(current, b)) {
+bool ParseIdentifiers(
+    std::wstring_view text,
+    bool prerelease,
+    std::vector<SemVerIdentifier>* identifiers) {
+    if (text.empty()) {
         return false;
     }
 
-    if (a.major != b.major) {
-        return a.major > b.major;
+    std::size_t start = 0;
+    while (start <= text.size()) {
+        const std::size_t dot =
+            text.find(L'.', start);
+        const std::size_t end =
+            dot == std::wstring_view::npos
+                ? text.size()
+                : dot;
+        const std::wstring_view part =
+            text.substr(
+                start,
+                end - start);
+
+        if (part.empty()) {
+            return false;
+        }
+
+        bool numeric = true;
+        for (const wchar_t ch : part) {
+            const bool valid =
+                (ch >= L'0' && ch <= L'9') ||
+                (ch >= L'a' && ch <= L'z') ||
+                (ch >= L'A' && ch <= L'Z') ||
+                ch == L'-';
+
+            if (!valid) {
+                return false;
+            }
+
+            if (ch < L'0' || ch > L'9') {
+                numeric = false;
+            }
+        }
+
+        SemVerIdentifier identifier;
+        identifier.text.assign(part);
+        identifier.numeric = numeric;
+
+        if (numeric) {
+            if (!ParseUnsigned(
+                    part,
+                    !prerelease,
+                    identifier.number)) {
+                return false;
+            }
+        }
+
+        if (identifiers) {
+            identifiers->push_back(
+                std::move(identifier));
+        }
+
+        if (dot == std::wstring_view::npos) {
+            break;
+        }
+        start = dot + 1;
     }
-    if (a.minor != b.minor) {
-        return a.minor > b.minor;
+
+    return true;
+}
+
+bool ParseSemVer(
+    std::wstring_view text,
+    SemVer& version) {
+    version = {};
+
+    if (!text.empty() &&
+        (text.front() == L'v' ||
+         text.front() == L'V')) {
+        text.remove_prefix(1);
     }
-    return a.patch > b.patch;
+
+    const std::size_t plus =
+        text.find(L'+');
+
+    std::wstring_view build;
+    if (plus != std::wstring_view::npos) {
+        build =
+            text.substr(plus + 1);
+        text =
+            text.substr(0, plus);
+
+        if (!ParseIdentifiers(
+                build,
+                false,
+                nullptr)) {
+            return false;
+        }
+    }
+
+    const std::size_t dash =
+        text.find(L'-');
+
+    std::wstring_view prerelease;
+    if (dash != std::wstring_view::npos) {
+        prerelease =
+            text.substr(dash + 1);
+        text =
+            text.substr(0, dash);
+    }
+
+    const std::size_t firstDot =
+        text.find(L'.');
+    if (firstDot == std::wstring_view::npos) {
+        return false;
+    }
+
+    const std::size_t secondDot =
+        text.find(
+            L'.',
+            firstDot + 1);
+    if (secondDot == std::wstring_view::npos ||
+        text.find(
+            L'.',
+            secondDot + 1) !=
+            std::wstring_view::npos) {
+        return false;
+    }
+
+    if (!ParseUnsigned(
+            text.substr(0, firstDot),
+            false,
+            version.major) ||
+        !ParseUnsigned(
+            text.substr(
+                firstDot + 1,
+                secondDot - firstDot - 1),
+            false,
+            version.minor) ||
+        !ParseUnsigned(
+            text.substr(secondDot + 1),
+            false,
+            version.patch)) {
+        return false;
+    }
+
+    if (!prerelease.empty() &&
+        !ParseIdentifiers(
+            prerelease,
+            true,
+            &version.prerelease)) {
+        return false;
+    }
+
+    if (dash != std::wstring_view::npos &&
+        version.prerelease.empty()) {
+        return false;
+    }
+
+    return true;
+}
+
+int CompareSemVer(
+    const SemVer& left,
+    const SemVer& right) {
+    if (left.major != right.major) {
+        return left.major < right.major ? -1 : 1;
+    }
+    if (left.minor != right.minor) {
+        return left.minor < right.minor ? -1 : 1;
+    }
+    if (left.patch != right.patch) {
+        return left.patch < right.patch ? -1 : 1;
+    }
+
+    if (left.prerelease.empty() &&
+        right.prerelease.empty()) {
+        return 0;
+    }
+    if (left.prerelease.empty()) {
+        return 1;
+    }
+    if (right.prerelease.empty()) {
+        return -1;
+    }
+
+    const std::size_t common =
+        std::min(
+            left.prerelease.size(),
+            right.prerelease.size());
+
+    for (std::size_t i = 0;
+         i < common;
+         ++i) {
+        const auto& a =
+            left.prerelease[i];
+        const auto& b =
+            right.prerelease[i];
+
+        if (a.numeric &&
+            b.numeric) {
+            if (a.number != b.number) {
+                return a.number < b.number
+                    ? -1
+                    : 1;
+            }
+            continue;
+        }
+
+        if (a.numeric != b.numeric) {
+            return a.numeric
+                ? -1
+                : 1;
+        }
+
+        if (a.text != b.text) {
+            return a.text < b.text
+                ? -1
+                : 1;
+        }
+    }
+
+    if (left.prerelease.size() ==
+        right.prerelease.size()) {
+        return 0;
+    }
+
+    return left.prerelease.size() <
+            right.prerelease.size()
+        ? -1
+        : 1;
+}
+
+bool IsDevelopmentBuildVersion(
+    const SemVer& version) {
+    return
+        version.prerelease.size() == 2 &&
+        !version.prerelease[0].numeric &&
+        version.prerelease[0].text == L"dev" &&
+        version.prerelease[1].numeric;
 }
 
 bool Sha256File(
@@ -821,6 +1048,128 @@ void TryDeleteFile(const std::filesystem::path& path) {
 
 } // namespace
 
+bool CompareSelfUpdateVersionTags(
+    std::wstring_view left,
+    std::wstring_view right,
+    int& comparison) {
+    comparison = 0;
+
+    SemVer leftVersion;
+    SemVer rightVersion;
+
+    if (!ParseSemVer(
+            left,
+            leftVersion) ||
+        !ParseSemVer(
+            right,
+            rightVersion)) {
+        return false;
+    }
+
+    comparison =
+        CompareSemVer(
+            leftVersion,
+            rightVersion);
+    return true;
+}
+
+bool SelectSelfUpdateReleaseForChannel(
+    const std::vector<GitHubReleaseInfo>& releases,
+    bool receiveDevelopmentBuilds,
+    GitHubReleaseInfo& release,
+    std::wstring& error) {
+    release = {};
+    error.clear();
+
+    bool found = false;
+    SemVer selectedVersion;
+
+    for (const auto& candidate :
+         releases) {
+        if (candidate.draft) {
+            continue;
+        }
+
+        SemVer version;
+        if (!ParseSemVer(
+                candidate.tag,
+                version)) {
+            continue;
+        }
+
+        if (candidate.prerelease) {
+            if (!receiveDevelopmentBuilds ||
+                !IsDevelopmentBuildVersion(
+                    version)) {
+                continue;
+            }
+        } else if (
+            !version.prerelease.empty()) {
+            continue;
+        }
+
+        if (!found ||
+            CompareSemVer(
+                version,
+                selectedVersion) > 0) {
+            release = candidate;
+            selectedVersion =
+                std::move(version);
+            found = true;
+        }
+    }
+
+    if (!found) {
+        error =
+            receiveDevelopmentBuilds
+                ? L"No valid stable or development TocPilot release was found."
+                : L"No valid stable TocPilot release was found.";
+        return false;
+    }
+
+    return true;
+}
+
+bool ShouldInstallSelfUpdateVersion(
+    std::wstring_view candidateTag,
+    std::wstring_view currentTag,
+    bool receiveDevelopmentBuilds,
+    bool& shouldInstall,
+    std::wstring& error) {
+    shouldInstall = false;
+    error.clear();
+
+    SemVer candidate;
+    SemVer current;
+
+    if (!ParseSemVer(
+            candidateTag,
+            candidate) ||
+        !ParseSemVer(
+            currentTag,
+            current)) {
+        error =
+            L"Self-update version tag is not valid semantic version metadata.";
+        return false;
+    }
+
+    if (!receiveDevelopmentBuilds &&
+        !current.prerelease.empty()) {
+        shouldInstall =
+            candidate.prerelease.empty() &&
+            CompareSemVer(
+                candidate,
+                current) != 0;
+        return true;
+    }
+
+    shouldInstall =
+        CompareSemVer(
+            candidate,
+            current) > 0;
+    return true;
+}
+
 bool ParseLatestReleaseTagFromUrl(
     std::wstring_view url,
     std::wstring& tag,
@@ -1011,11 +1360,40 @@ bool CheckLatestRelease(
     ReleaseInfo& release,
     ReleaseCheckState& state,
     std::wstring& error) {
+    return CheckLatestRelease(
+        false,
+        release,
+        state,
+        error);
+}
+
+bool CheckLatestRelease(
+    bool receiveDevelopmentBuilds,
+    ReleaseInfo& release,
+    ReleaseCheckState& state,
+    std::wstring& error) {
     release = {};
     state = ReleaseCheckState::NoRelease;
 
     GitHubReleaseInfo metadata;
-    if (!FetchLatestStableGitHubRelease(
+
+    if (receiveDevelopmentBuilds) {
+        std::vector<GitHubReleaseInfo>
+            releases;
+
+        if (!FetchGitHubReleases(
+                L"Seraphic8x2244/TocPilot",
+                releases,
+                error) ||
+            !SelectSelfUpdateReleaseForChannel(
+                releases,
+                true,
+                metadata,
+                error)) {
+            return false;
+        }
+    } else if (
+        !FetchLatestStableGitHubRelease(
             L"Seraphic8x2244/TocPilot",
             metadata,
             error)) {
@@ -1023,9 +1401,11 @@ bool CheckLatestRelease(
     }
 
     SemVer candidate;
-    if (!ParseSemVer(metadata.tag, candidate)) {
+    if (!ParseSemVer(
+            metadata.tag,
+            candidate)) {
         error =
-            L"Latest GitHub release does not have a valid semantic version tag.";
+            L"Selected GitHub release does not have a valid semantic version tag.";
         return false;
     }
 
@@ -1039,9 +1419,12 @@ bool CheckLatestRelease(
     }
 
     release.tag = metadata.tag;
-    release.assetUrl = executable.downloadUrl;
-    release.assetDigest = executable.digest;
-    release.assetSize = executable.size;
+    release.assetUrl =
+        executable.downloadUrl;
+    release.assetDigest =
+        executable.digest;
+    release.assetSize =
+        executable.size;
 
     GitHubReleaseAsset checksum;
     std::wstring checksumError;
@@ -1062,9 +1445,20 @@ bool CheckLatestRelease(
         return false;
     }
 
-    state = IsNewer(release.tag, TOCPILOT_VERSION_TAG_W)
-        ? ReleaseCheckState::UpdateAvailable
-        : ReleaseCheckState::UpToDate;
+    bool shouldInstall = false;
+    if (!ShouldInstallSelfUpdateVersion(
+            release.tag,
+            TOCPILOT_VERSION_TAG_W,
+            receiveDevelopmentBuilds,
+            shouldInstall,
+            error)) {
+        return false;
+    }
+
+    state =
+        shouldInstall
+            ? ReleaseCheckState::UpdateAvailable
+            : ReleaseCheckState::UpToDate;
     return true;
 }
 

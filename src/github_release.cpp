@@ -887,6 +887,36 @@ bool BuildLatestReleasePath(
     return true;
 }
 
+bool BuildReleasesPath(
+    std::wstring_view repository,
+    std::wstring& path,
+    std::wstring& error) {
+    if (!BuildLatestReleasePath(
+            repository,
+            path,
+            error)) {
+        return false;
+    }
+
+    constexpr std::wstring_view latestSuffix =
+        L"/latest";
+
+    if (path.size() < latestSuffix.size() ||
+        path.compare(
+            path.size() - latestSuffix.size(),
+            latestSuffix.size(),
+            latestSuffix) != 0) {
+        error =
+            L"GitHub release path construction failed.";
+        return false;
+    }
+
+    path.resize(
+        path.size() - latestSuffix.size());
+    path += L"?per_page=100";
+    return true;
+}
+
 bool HttpGetRelease(
     const std::wstring& path,
     std::string& body,
@@ -1199,6 +1229,108 @@ bool ParseGitHubReleaseJson(
     return true;
 }
 
+bool ParseGitHubReleaseListJson(
+    std::string_view json,
+    std::vector<GitHubReleaseInfo>& releases,
+    std::wstring& error) {
+    releases.clear();
+    error.clear();
+
+    std::size_t pos = 0;
+    SkipWhitespace(json, pos);
+
+    if (pos >= json.size() ||
+        json[pos] != '[') {
+        error =
+            L"GitHub releases response is not a valid JSON array.";
+        return false;
+    }
+
+    ++pos;
+    SkipWhitespace(json, pos);
+
+    while (pos < json.size() &&
+           json[pos] != ']') {
+        const std::size_t objectStart =
+            pos;
+        std::size_t objectEnd = 0;
+
+        if (!SkipJsonValue(
+                json,
+                objectStart,
+                objectEnd) ||
+            objectStart >= json.size() ||
+            json[objectStart] != '{') {
+            error =
+                L"GitHub releases response contains an invalid release record.";
+            releases.clear();
+            return false;
+        }
+
+        GitHubReleaseInfo release;
+        std::wstring releaseError;
+        if (!ParseGitHubReleaseJson(
+                json.substr(
+                    objectStart,
+                    objectEnd - objectStart),
+                release,
+                releaseError)) {
+            error =
+                L"GitHub releases response contains invalid release metadata: " +
+                releaseError;
+            releases.clear();
+            return false;
+        }
+
+        releases.push_back(
+            std::move(release));
+
+        pos = objectEnd;
+        SkipWhitespace(json, pos);
+
+        if (pos >= json.size()) {
+            error =
+                L"GitHub releases response is truncated.";
+            releases.clear();
+            return false;
+        }
+
+        if (json[pos] == ']') {
+            break;
+        }
+
+        if (json[pos] != ',') {
+            error =
+                L"GitHub releases response array is malformed.";
+            releases.clear();
+            return false;
+        }
+
+        ++pos;
+        SkipWhitespace(json, pos);
+    }
+
+    if (pos >= json.size() ||
+        json[pos] != ']') {
+        error =
+            L"GitHub releases response array is malformed.";
+        releases.clear();
+        return false;
+    }
+
+    ++pos;
+    SkipWhitespace(json, pos);
+
+    if (pos != json.size()) {
+        error =
+            L"GitHub releases response contains trailing data.";
+        releases.clear();
+        return false;
+    }
+
+    return true;
+}
+
 bool FindExactGitHubReleaseAsset(
     const GitHubReleaseInfo& release,
     std::wstring_view assetName,
@@ -1302,6 +1434,67 @@ bool FetchLatestStableGitHubRelease(
         error =
             L"GitHub latest stable release response unexpectedly identified a draft or prerelease.";
         release = {};
+        return false;
+    }
+
+    return true;
+}
+
+bool FetchGitHubReleases(
+    std::wstring_view repository,
+    std::vector<GitHubReleaseInfo>& releases,
+    std::wstring& error) {
+    releases.clear();
+    error.clear();
+
+    std::wstring path;
+    if (!BuildReleasesPath(
+            repository,
+            path,
+            error)) {
+        return false;
+    }
+
+    std::string body;
+    DWORD status = 0;
+
+    if (!HttpGetRelease(
+            path,
+            body,
+            status,
+            error)) {
+        return false;
+    }
+
+    if (status < 200 ||
+        status >= 300) {
+        if (status == 404) {
+            error =
+                L"GitHub repository has no published releases.";
+        } else if (
+            status == 403 ||
+            status == 429) {
+            error =
+                L"GitHub release metadata request was refused or rate limited.";
+        } else {
+            error =
+                L"GitHub release API returned status " +
+                std::to_wstring(status) +
+                L".";
+        }
+        return false;
+    }
+
+    if (!ParseGitHubReleaseListJson(
+            body,
+            releases,
+            error)) {
+        return false;
+    }
+
+    if (releases.empty()) {
+        error =
+            L"GitHub repository has no published releases.";
         return false;
     }
 

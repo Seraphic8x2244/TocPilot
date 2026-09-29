@@ -165,6 +165,53 @@ void TestMalformedReleaseFails() {
     }
 }
 
+
+void TestReleaseListParsing() {
+    const std::string json =
+        "[" +
+        kStableReleaseJson +
+        ",{"
+        "\"tag_name\":\"v1.3.0-dev.2\","
+        "\"name\":\"Development 1.3.0 dev 2\","
+        "\"draft\":false,"
+        "\"prerelease\":true,"
+        "\"assets\":[]"
+        "},"
+        "{"
+        "\"tag_name\":\"v1.3.0-dev.3\","
+        "\"name\":\"Draft development build\","
+        "\"draft\":true,"
+        "\"prerelease\":true,"
+        "\"assets\":[]"
+        "}"
+        "]";
+
+    std::vector<tp::GitHubReleaseInfo> releases;
+    std::wstring error;
+
+    if (!tp::ParseGitHubReleaseListJson(
+            json,
+            releases,
+            error) ||
+        releases.size() != 3 ||
+        releases[0].tag != L"v1.2.3" ||
+        releases[0].prerelease ||
+        releases[1].tag != L"v1.3.0-dev.2" ||
+        !releases[1].prerelease ||
+        !releases[2].draft) {
+        Fail(
+            "release list metadata did not parse correctly");
+    }
+
+    if (tp::ParseGitHubReleaseListJson(
+            "{\"not\":\"an array\"}",
+            releases,
+            error)) {
+        Fail(
+            "non-array release list metadata was accepted");
+    }
+}
+
 } // namespace
 
 int main() {
@@ -172,6 +219,7 @@ int main() {
     TestMissingAssetFailsClosed();
     TestDuplicateAssetFailsClosed();
     TestMalformedReleaseFails();
+    TestReleaseListParsing();
 
     if (failures != 0) {
         std::cerr
