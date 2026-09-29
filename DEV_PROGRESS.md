@@ -251,6 +251,39 @@ dev
 
 Other stable users remain on the stable-only channel throughout unless they explicitly enable development builds themselves.
 
+#### Four-slice implementation plan
+
+Because long/tool-heavy chats have repeatedly become unstable, implement the development-channel work as four deliberately bounded slices. **Do not start the next slice in the same chat unless the user explicitly asks to continue.** Each completed slice should end with its own commit, relevant CI/check result, a `DEV_PROGRESS.md` checkpoint, and an exact next step for a fresh chat.
+
+**Slice 1 — branch transition only**
+- Create `dev` from the current `main` head.
+- Verify both `main` and `dev` refs.
+- Update this document on `dev` so `dev` is recorded as the active development branch and the transition is complete.
+- No source, UI, updater or workflow changes in this slice.
+
+**Slice 2 — setting + Info UI**
+- Add additive persisted `receive_development_builds = false` state.
+- Preserve backward compatibility with existing/pre-feature `TocPilot.json`.
+- Add **Info -> Updates -> Receive development builds**.
+- Default off; show the agreed first-enable warning/confirmation.
+- Do not change updater release-selection behaviour yet.
+- Add focused persistence/old-state compatibility tests.
+
+**Slice 3 — updater channel logic**
+- Preserve the existing stable-only release path unchanged for users who have not opted in.
+- Add prerelease discovery for opted-in users.
+- Implement deterministic prerelease-aware ordering, including `v0.3.23-dev.1 < v0.3.23-dev.2 < v0.3.23`.
+- Support turning development builds off while currently running a prerelease and returning to the appropriate stable release.
+- Keep existing HTTPS, exact-size, SHA-256 and rollback protections.
+- Add deterministic channel/version tests before moving on.
+
+**Slice 4 — development release workflow**
+- Add/adjust the release workflow needed to publish GitHub prereleases for dev builds.
+- Produce the first channel-capable prerelease, expected form `v0.3.23-dev.1`.
+- A one-time manual/Actions-artifact bootstrap install is acceptable because stable `v0.3.22` cannot yet opt into prereleases.
+- After bootstrap, validate TocPilot updating itself through the real development channel.
+- Only after this infrastructure is accepted should the Account Sync runtime matrix resume.
+
 ### Concurrency
 
 - UI network/download work must not freeze the window.
@@ -796,15 +829,9 @@ Do not add support for user-uploaded ZIP/7z/RAR/installer/bundle release assets 
 
 ## Exact Next Step
 
-Establish the dev-channel infrastructure before publishing Account Sync:
+Execute **Slice 1 — branch transition only** from the four-slice development-channel plan above. Do not begin Slice 2 in the same chat unless the user explicitly asks to continue.
 
-1. Create `dev` from the current repository head without rewriting `main` history.
-2. Implement **Info -> Updates -> Receive development builds** with default off and additive state persistence.
-3. Add prerelease-aware release discovery/version ordering while preserving the existing stable-only path for users who have not opted in.
-4. Add deterministic tests proving stable ignores prereleases, `dev.1 -> dev.2` advances, same-base stable supersedes a dev build when appropriate, channel-off returns to stable, and update integrity protections remain unchanged.
-5. Produce the first channel-capable tester build. Because stable `v0.3.22` lacks this checkbox, a one-time manual/Actions-artifact bootstrap install is acceptable; thereafter test dev delivery through TocPilot's own prerelease self-update path.
-
-Then runtime-test recovered Account Sync against real WTF data, in this order:
+After all four slices are complete and the real prerelease self-update path is accepted, runtime-test recovered Account Sync against real WTF data, in this order:
 
 1. Open Account Sync; verify account discovery, selection/config persistence, enabled items, and the three main-window preview/status rows.
 2. Run **Sync Now** with an older/missing macros or keybindings target; test both confirmation and decline. Inspect `WTF\\tocpilot\\<run>\\<account>\\...` and verify existing destinations are backed up before overwrite while missing destinations do not create fake backups.
