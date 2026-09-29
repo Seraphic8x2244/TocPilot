@@ -21,7 +21,7 @@
 - v0.3.15 Compact divider transaction fix: **implemented / CI-checked / merged / published; partial runtime pass**. Expanding the left Compact column no longer creates a horizontal scrollbar immediately, but the divider transaction still clamps both primary columns only to the generic 40 px floor. This lets the right visible column shrink below its intended Compact minimum; after entering that invalid state, dragging back left can expose a horizontal scrollbar. Fix by enforcing the real per-column Compact minima throughout fitting and divider transactions.
 - v0.3.16 Compact minimum-width fix: **implemented / CI-checked / merged / published; partial runtime pass**. Self-update passed; the companion column now stops at its intended minimum in both column orders; whole-window resize and Advanced regression checks passed. Remaining failure: when dragging the middle divider back left after pushing it right, a horizontal scrollbar still appears. This is now isolated to reverse-direction transaction ordering rather than width limits.
 - v0.3.17 reverse-direction divider fix: **implemented / CI-checked / merged / published / runtime-accepted**. Compact divider dragging is a fully owned two-column transaction: the shrinking column is applied first, the growing column second, and the native one-column commit is cancelled under a re-entrancy guard. User runtime confirmed the rightward clamp, leftward reversal, both Name/Status orders, window resizing and Advanced regression checks all pass with no horizontal scrollbar.
-- Current goal: **recover the existing Account Sync implementation to a clean compilable/testable state**, then produce a dev/test build for runtime validation. Do not reimplement from scratch unless recovery exposes a deeper design defect.
+- Current goal: **establish the development update channel / `dev` branch workflow, then runtime-validate recovered Account Sync through that path**. Account Sync is already cleanly compiled/tested at `2e80b1378a7a01bb311140828e4e54069b1576d6`; do not reimplement it from scratch.
 - Current scope boundary: Account Sync is the next feature. Preserve the runtime-accepted v0.3.22 toolbar/DPI behaviour. Keep the Refresh All viewport-jump fix queued after Account Sync and do not mix async latest-stable DLL discovery, Add-Git stale-request work, warning cleanup, rate-limit propagation, staging-name cleanup or P6C art/skin work into this feature.
 - Audit continuity: `audit_dump.md` is a temporary scratch checkpoint for the interrupted broad audit only; this file remains the sole authoritative live development source of truth.
 - Documentation-only commits after the release do not change the published runtime baseline.
@@ -182,6 +182,74 @@ Replacement uses the existing two-process updater handoff:
 A failed update must leave the old TocPilot runnable and clearly report failure.
 
 Starting with v0.3.11, self-update additionally requires the initial executable/checksum URLs to be HTTPS, carries GitHub's exact executable asset size into the download, rejects a streamed executable that is shorter or longer than that size before replacement, and caps checksum text at 64 KiB. SHA-256 verification remains mandatory.
+
+### Development channel / branch model — agreed, not yet implemented
+
+TocPilot now has enough external/stable use that experimental builds must be isolated from normal users.
+
+Branch contract after the transition is complete:
+
+- `main` = runtime-accepted / release-ready code;
+- `dev` = active development and runtime-test candidates;
+- ordinary feature/fix work lands on `dev`, passes CI, is runtime-tested there, then is merged/promoted to `main` for a stable release;
+- do not force-rewrite existing public history merely to establish this model.
+
+One-time transition:
+
+- Account Sync recovery already landed on `main` before this policy was introduced. Do **not** reset or rewrite `main` to hide it.
+- Create `dev` from the current repository head and continue new development there.
+- `v0.3.22` at `8678334c0a0015eba14aecf58f7c416c045f6581` remains the published/runtime-accepted stable baseline until the next accepted stable release.
+- Once the current dev work is runtime-accepted and promoted, enforce `main` = accepted/release-ready going forward.
+
+Update-channel UI:
+
+- Add an opt-in checkbox in **Info -> Updates** named **Receive development builds**.
+- Default is **off**, including for existing installations.
+- The setting changes only TocPilot's own update channel; it must not weaken addon/state/transaction validation or enable unrelated developer/debug behavior.
+- Persist it locally in `TocPilot.json` as an additive backward-compatible setting.
+- First enable should show a concise warning/confirmation that development builds may contain unfinished changes.
+- A development build must identify itself clearly in the displayed version, e.g. `v0.3.23-dev.1`.
+
+Release/channel policy:
+
+- Stable releases keep normal tags such as `v0.3.23`.
+- Development builds use GitHub **prereleases** with ordered tags such as `v0.3.23-dev.1`, `v0.3.23-dev.2`, etc.
+- Stable TocPilot must continue using the stable-only release path. Current code already calls GitHub's `/releases/latest` through `FetchLatestStableGitHubRelease()` and explicitly rejects `draft` or `prerelease` metadata, so stable users must never receive a dev build unless they deliberately opt in.
+- With **Receive development builds** enabled, TocPilot should consider both stable releases and matching TocPilot prereleases, selecting the newest valid version according to proper semantic/prerelease ordering.
+- Turning the option back off returns the installation to the stable channel. If the running build is a prerelease, the updater must be able to move to the appropriate current stable release even where the stable tag has the same base major/minor/patch.
+- Development releases must retain the same executable-size, HTTPS, SHA-256 and rollback protections as stable self-update.
+
+Version-ordering requirement:
+
+- The current `ParseSemVer` / `IsNewer` logic stops at `-` / `+` and compares only major/minor/patch. It therefore cannot distinguish `v0.3.23-dev.1` from `v0.3.23-dev.2`, and would also treat `v0.3.23-dev.N` and stable `v0.3.23` as the same base version.
+- Do **not** bolt the dev channel onto that comparison unchanged. Add deterministic prerelease-aware ordering and tests for dev-to-dev advancement, stable-over-dev promotion at the same base version, stable users ignoring prereleases, and channel-off behavior from a currently running dev build.
+
+Binary/state contract:
+
+- Use the normal `TocPilot.exe` for both channels; do not create a permanently separate `TocPilot-dev.exe` product path. The goal is to test the same executable/update mechanics that stable users eventually receive.
+- Continue sharing the real `TocPilot.json`; do not silently fork normal dev testing into a separate state file.
+- A dev build must not write state that the current stable build cannot safely reopen. Add/retain compatibility coverage for stable/pre-feature state -> dev and dev-written additive state -> stable-safe reopen/unknown-field preservation where applicable.
+- Because `v0.3.22` does not yet contain the channel selector, the first channel-capable tester build may require one manual/Actions-artifact bootstrap install. After that bootstrap, normal dev testing should use TocPilot's real prerelease self-update path.
+
+Promotion flow:
+
+```text
+dev
+ |
+ +-- CI
+ +-- v0.3.23-dev.1 (GitHub prerelease)
+ +-- runtime test
+ +-- fixes / v0.3.23-dev.2 ...
+ |
+ +-- accepted
+      |
+      v
+    main
+      |
+      +-- v0.3.23 stable
+```
+
+Other stable users remain on the stable-only channel throughout unless they explicitly enable development builds themselves.
 
 ### Concurrency
 
@@ -591,7 +659,7 @@ Published `v0.3.17` runtime gate passed on 2026-09-27:
 
 The combined v0.3.14-v0.3.17 Compact two-column fill/split work is runtime-accepted.
 
-There is **no Account Sync runtime gate yet**. Current main does not compile, so runtime testing would be invalid. First recover the implementation through a clean Release build + CTest pass; then produce a dev/test build and execute the Account Sync runtime matrix documented above. **Refresh All viewport jump** remains queued after Account Sync.
+There is **no Account Sync runtime gate yet**. Account Sync recovery now compiles cleanly and final recovery CI passed Release build + **19/19 CTest tests** at `2e80b1378a7a01bb311140828e4e54069b1576d6`; an untagged dev/test artifact exists. Establish the agreed development-channel workflow, then execute the Account Sync runtime matrix through the dev path. **Refresh All viewport jump** remains queued after Account Sync.
 
 A1's managed same-root replacement check remains deferred. The current product workflow has **Remove Addon**, not the old Uninstall flow.
 
@@ -728,7 +796,15 @@ Do not add support for user-uploaded ZIP/7z/RAR/installer/bundle release assets 
 
 ## Exact Next Step
 
-Runtime-test the untagged Account Sync dev build against real WTF data, in this order:
+Establish the dev-channel infrastructure before publishing Account Sync:
+
+1. Create `dev` from the current repository head without rewriting `main` history.
+2. Implement **Info -> Updates -> Receive development builds** with default off and additive state persistence.
+3. Add prerelease-aware release discovery/version ordering while preserving the existing stable-only path for users who have not opted in.
+4. Add deterministic tests proving stable ignores prereleases, `dev.1 -> dev.2` advances, same-base stable supersedes a dev build when appropriate, channel-off returns to stable, and update integrity protections remain unchanged.
+5. Produce the first channel-capable tester build. Because stable `v0.3.22` lacks this checkbox, a one-time manual/Actions-artifact bootstrap install is acceptable; thereafter test dev delivery through TocPilot's own prerelease self-update path.
+
+Then runtime-test recovered Account Sync against real WTF data, in this order:
 
 1. Open Account Sync; verify account discovery, selection/config persistence, enabled items, and the three main-window preview/status rows.
 2. Run **Sync Now** with an older/missing macros or keybindings target; test both confirmation and decline. Inspect `WTF\\tocpilot\\<run>\\<account>\\...` and verify existing destinations are backed up before overwrite while missing destinations do not create fake backups.
