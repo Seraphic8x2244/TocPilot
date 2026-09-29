@@ -245,6 +245,7 @@ std::wstring g_windowClassName;
 
 struct CheckResult {
     bool ok = false;
+    bool receiveDevelopmentBuilds = false;
     tp::ReleaseCheckState state = tp::ReleaseCheckState::NoRelease;
     tp::ReleaseInfo release;
     std::wstring error;
@@ -6423,6 +6424,8 @@ void StartUpdateCheck(
 
     std::thread([hwnd, receiveDevelopmentBuilds]() {
         auto result = std::make_unique<CheckResult>();
+        result->receiveDevelopmentBuilds =
+            receiveDevelopmentBuilds;
         result->ok = tp::CheckLatestRelease(
             receiveDevelopmentBuilds,
             result->release,
@@ -7113,6 +7116,21 @@ void SetReceiveDevelopmentBuilds(
     g_state = std::move(updated);
     g_stateCreated = false;
     g_stateError.clear();
+
+    // Never leave a release discovered on the previous update channel
+    // actionable after the preference changes.
+    g_release = {};
+
+    HWND mainWindow =
+        GetWindow(
+            owner,
+            GW_OWNER);
+    if (!mainWindow) {
+        mainWindow = owner;
+    }
+
+    StartUpdateCheck(
+        mainWindow);
 }
 
 
@@ -10237,6 +10255,27 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
     case WM_TP_CHECK_COMPLETE: {
         std::unique_ptr<CheckResult> result(
             reinterpret_cast<CheckResult*>(lParam));
+
+        const bool activeDevelopmentChannel =
+            g_stateReady &&
+            g_state.settings.receiveDevelopmentBuilds;
+
+        if (result->receiveDevelopmentBuilds !=
+            activeDevelopmentChannel) {
+            g_appUpdateCheckInProgress = false;
+            const bool refreshAddonsAfter =
+                g_refreshAddonsAfterAppCheck;
+            g_refreshAddonsAfterAppCheck =
+                false;
+
+            // The preference changed while this request was in flight.
+            // Discard its result and re-check the newly selected channel.
+            g_release = {};
+            StartUpdateCheck(
+                hwnd,
+                refreshAddonsAfter);
+            return 0;
+        }
 
         g_appUpdateCheckInProgress = false;
         const bool refreshAddonsAfter =
