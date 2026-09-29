@@ -6417,9 +6417,14 @@ void StartUpdateCheck(
     SetIndicator(g_githubStatus, L"GitHub Comms: Checking...");
     SetIndicator(g_releaseStatus, L"Release: Checking...");
 
-    std::thread([hwnd]() {
+    const bool receiveDevelopmentBuilds =
+        g_stateReady &&
+        g_state.settings.receiveDevelopmentBuilds;
+
+    std::thread([hwnd, receiveDevelopmentBuilds]() {
         auto result = std::make_unique<CheckResult>();
         result->ok = tp::CheckLatestRelease(
+            receiveDevelopmentBuilds,
             result->release,
             result->state,
             result->error);
