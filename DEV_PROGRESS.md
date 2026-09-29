@@ -5,9 +5,10 @@
 ## Current
 
 - Active branch: `dev`.
-- Source/application version: `v0.3.22`.
-- Latest published release: `v0.3.22`.
-- Release/source commit and tag target: `8678334c0a0015eba14aecf58f7c416c045f6581` (`v0.3.22`).
+- Source/application version: `v0.3.23-dev.1`.
+- Latest published stable release: `v0.3.22`.
+- Latest published development prerelease: `v0.3.23-dev.1` at `518a9a1f1407b4a62ca4b09c11522f8859425b61`. GitHub stable `/releases/latest` still resolves to non-prerelease `v0.3.22`.
+- Stable release/source commit and tag target: `8678334c0a0015eba14aecf58f7c416c045f6581` (`v0.3.22`).
 - Latest fully runtime-accepted release is `v0.3.22` at `8678334c0a0015eba14aecf58f7c416c045f6581`. Runtime acceptance on 2026-09-28 covers the 48 x 48 / 36 x 36 toolbar presentation, Per-Monitor V2 DPI behaviour, Compact/Advanced Words/Icon presentation, persistent Advanced width, and Launch remaining the executable icon at the far right. Slight softness at Windows 125% scaling is accepted as normal fractional-DPI rendering; do not reopen DPI work without new evidence.
 - Last known-good Account-Sync-free code baseline is published/runtime-accepted `v0.3.22` at `8678334c0a0015eba14aecf58f7c416c045f6581`. The final pre-Account-Sync repository commit is documentation-only `6fcf117cf4f639612827acf88b10c6933f4b7802`, so its executable source is equivalent to that accepted v0.3.22 baseline.
 - Recovered Account Sync code head is `2e80b1378a7a01bb311140828e4e54069b1576d6` (`test: complete account sync recovery coverage`). Build workflow run `36440593954`, Windows x64 job `108989739617`, passed Release build and **19/19 CTest tests**, including `account-sync-safety`. Account Sync is now CI-recovered and has an untagged dev/test build; **runtime validation is still pending**, so `v0.3.22` remains the last published/runtime-accepted release.
@@ -21,7 +22,7 @@
 - v0.3.15 Compact divider transaction fix: **implemented / CI-checked / merged / published; partial runtime pass**. Expanding the left Compact column no longer creates a horizontal scrollbar immediately, but the divider transaction still clamps both primary columns only to the generic 40 px floor. This lets the right visible column shrink below its intended Compact minimum; after entering that invalid state, dragging back left can expose a horizontal scrollbar. Fix by enforcing the real per-column Compact minima throughout fitting and divider transactions.
 - v0.3.16 Compact minimum-width fix: **implemented / CI-checked / merged / published; partial runtime pass**. Self-update passed; the companion column now stops at its intended minimum in both column orders; whole-window resize and Advanced regression checks passed. Remaining failure: when dragging the middle divider back left after pushing it right, a horizontal scrollbar still appears. This is now isolated to reverse-direction transaction ordering rather than width limits.
 - v0.3.17 reverse-direction divider fix: **implemented / CI-checked / merged / published / runtime-accepted**. Compact divider dragging is a fully owned two-column transaction: the shrinking column is applied first, the growing column second, and the native one-column commit is cancelled under a re-entrancy guard. User runtime confirmed the rightward clamp, leftward reversal, both Name/Status orders, window resizing and Advanced regression checks all pass with no horizontal scrollbar.
-- Current goal: **continue the development update channel work on `dev`, then runtime-validate recovered Account Sync through that path**. Slice 3 (updater channel logic) is complete; Slice 4 (development release workflow) is next and is not started in this slice. Account Sync is already cleanly compiled/tested at `2e80b1378a7a01bb311140828e4e54069b1576d6`; do not reimplement it from scratch.
+- Current goal: **development update-channel infrastructure is complete and accepted; recovered Account Sync runtime validation is next but has not started**. Slice 4 published and exercised `v0.3.23-dev.1` through the real development self-update path. Account Sync is already cleanly compiled/tested at `2e80b1378a7a01bb311140828e4e54069b1576d6`; do not reimplement it from scratch.
 - Current scope boundary: Account Sync is the next feature. Preserve the runtime-accepted v0.3.22 toolbar/DPI behaviour. Keep the Refresh All viewport-jump fix queued after Account Sync and do not mix async latest-stable DLL discovery, Add-Git stale-request work, warning cleanup, rate-limit propagation, staging-name cleanup or P6C art/skin work into this feature.
 - Audit continuity: `audit_dump.md` is a temporary scratch checkpoint for the interrupted broad audit only; this file remains the sole authoritative live development source of truth.
 - Documentation-only commits after the release do not change the published runtime baseline.
@@ -279,12 +280,15 @@ Because long/tool-heavy chats have repeatedly become unstable, implement the dev
 - Add deterministic channel/version tests before moving on.
 - Implemented with non-opted users still using `FetchLatestStableGitHubRelease()` / GitHub `/releases/latest`. Opted-in users enumerate published releases, accept stable releases plus matching `-dev.N` prereleases, and select by prerelease-aware semantic ordering. Stable outranks a same-base prerelease. Turning development builds off while running a prerelease offers the current stable release even when returning to stable requires moving to a lower base version. Existing HTTPS, exact-size, SHA-256 and updater rollback/handoff protections are unchanged. Focused tests cover release-list parsing, stable filtering, draft/non-dev prerelease filtering, dev-to-dev ordering, stable-over-dev ordering and channel-off behavior.
 
-**Slice 4 — development release workflow**
+**Slice 4 — development release workflow — COMPLETE**
 - Add/adjust the release workflow needed to publish GitHub prereleases for dev builds.
 - Produce the first channel-capable prerelease, expected form `v0.3.23-dev.1`.
 - A one-time manual/Actions-artifact bootstrap install is acceptable because stable `v0.3.22` cannot yet opt into prereleases.
 - After bootstrap, validate TocPilot updating itself through the real development channel.
 - Only after this infrastructure is accepted should the Account Sync runtime matrix resume.
+- Implemented as a separate dev-only `.github/workflows/development-release.yml`; the existing stable `.github/workflows/release.yml` is unchanged. `.github/development-release-version` drives dev-branch prerelease publication and source/tag validation requires `vX.Y.Z-dev.N`.
+- First prerelease `v0.3.23-dev.1` was published from `518a9a1f1407b4a62ca4b09c11522f8859425b61` by Development Release run `36588659393`, Windows job `109475655788`. Release build and **19/19 CTest tests** passed; required EXE/checksum assets were published as a non-draft prerelease; the workflow verified stable `/releases/latest` still returned `v0.3.22`.
+- The same workflow then built parent `cce53f8f2b2fd4d97289f497744a4c7949510adf` as the one-time channel-capable bootstrap, seeded `receive_development_builds=true` in a disposable WoW-root fixture, launched TocPilot normally, and verified the installed `TocPilot.exe` was replaced byte-for-byte with the published `v0.3.23-dev.1` asset while preserving the opted-in state. This is the accepted real development-channel self-update gate for Slice 4.
 
 ### Concurrency
 
@@ -694,7 +698,7 @@ Published `v0.3.17` runtime gate passed on 2026-09-27:
 
 The combined v0.3.14-v0.3.17 Compact two-column fill/split work is runtime-accepted.
 
-There is **no Account Sync runtime gate yet**. Account Sync recovery now compiles cleanly and final recovery CI passed Release build + **19/19 CTest tests** at `2e80b1378a7a01bb311140828e4e54069b1576d6`; an untagged dev/test artifact exists. Establish the agreed development-channel workflow, then execute the Account Sync runtime matrix through the dev path. **Refresh All viewport jump** remains queued after Account Sync.
+There is **no Account Sync runtime gate yet**. Account Sync recovery now compiles cleanly and final recovery CI passed Release build + **19/19 CTest tests** at `2e80b1378a7a01bb311140828e4e54069b1576d6`. The development channel is now established and its real self-update path passed in Development Release run `36588659393`; `v0.3.23-dev.1` is the current dev runtime-test candidate. The next explicit task is the Account Sync runtime matrix through this dev path. **Refresh All viewport jump** remains queued after Account Sync.
 
 A1's managed same-root replacement check remains deferred. The current product workflow has **Remove Addon**, not the old Uninstall flow.
 
@@ -797,7 +801,12 @@ Do not add support for user-uploaded ZIP/7z/RAR/installer/bundle release assets 
 
 ## Release / Documentation Notes
 
-- Current published and fully runtime-accepted release is `v0.3.22` at `8678334c0a0015eba14aecf58f7c416c045f6581`.
+- Current published and fully runtime-accepted stable release is `v0.3.22` at `8678334c0a0015eba14aecf58f7c416c045f6581`.
+- Development-channel Slice 4 implementation commit `518a9a1f1407b4a62ca4b09c11522f8859425b61` introduced the separate dev prerelease workflow and source version `v0.3.23-dev.1`; the stable release workflow was not modified.
+- Development Release run `36588659393`, Windows x64 job `109475655788`, passed source-version validation, Release build, **19/19 CTest tests**, checksum generation, tag creation, prerelease publication, stable-latest isolation, and the real parent-build -> prerelease self-update gate.
+- Published `v0.3.23-dev.1` `TocPilot.exe`: 3,095,040 bytes, SHA-256 `39c2bc49b189b1c1021f1023ef9c9df98bdb93a3c5dbde3dc90bc498d613e50b`.
+- Published `v0.3.23-dev.1` `TocPilot.exe.sha256`: 78 bytes; asset SHA-256 `bb0388b4bb943df3a5f4e2b5bbfb5d3fd384b54cbc31f6726af525f6a1035970`.
+- GitHub `/releases/latest` remained stable-only at `v0.3.22` after publishing `v0.3.23-dev.1`.
 - PR #26 head `bf9ee839f6d7ab722c6841648a642a4c4b5073aa` passed Build workflow run `36325300444`, Windows x64 job `108636801237`, including **18/18 CTest tests** with explicit shrink-first direction coverage.
 - PR #26 merged the fully owned direction-safe divider transaction as `2c7dd510e04be7cd28263fa004b65d32033a9056`.
 - PR #27 head `7d4256d7bb5a0a715ab52e8de89655f018221f5b` changed only release/version metadata and passed Build workflow run `36325571382`, Windows x64 job `108637574892`, including **18/18 CTest tests**.
@@ -831,9 +840,7 @@ Do not add support for user-uploaded ZIP/7z/RAR/installer/bundle release assets 
 
 ## Exact Next Step
 
-Execute **Slice 4 — development release workflow** from the four-slice development-channel plan above in an explicit continuation. Slice 3 is complete. Do not begin Slice 4 in this chat.
-
-After all four slices are complete and the real prerelease self-update path is accepted, runtime-test recovered Account Sync against real WTF data, in this order:
+All four development-channel slices are complete. **Do not start Account Sync runtime validation in this Slice 4 task.** In the next explicit continuation, runtime-test recovered Account Sync using `v0.3.23-dev.1` / the real development channel against real WTF data, in this order:
 
 1. Open Account Sync; verify account discovery, selection/config persistence, enabled items, and the three main-window preview/status rows.
 2. Run **Sync Now** with an older/missing macros or keybindings target; test both confirmation and decline. Inspect `WTF\\tocpilot\\<run>\\<account>\\...` and verify existing destinations are backed up before overwrite while missing destinations do not create fake backups.
