@@ -1520,6 +1520,114 @@ void TestReleaseTrackingMutators(
     }
 }
 
+
+void TestDevelopmentBuildSettingCompatibility(
+    const std::filesystem::path& root) {
+    const std::string legacyJson =
+        "{\n"
+        "  \"schema\": 1,\n"
+        "  \"settings\": {"
+        "\"text_scale\":1.0,"
+        "\"check_app_updates\":true"
+        "},\n"
+        "  \"packages\": []\n"
+        "}\n";
+
+    if (!WriteAll(
+            tp::StatePath(root),
+            legacyJson)) {
+        Fail("development-build legacy fixture could not be written");
+        return;
+    }
+
+    tp::AppState state;
+    bool created = true;
+    std::wstring error;
+
+    if (!tp::LoadOrCreateState(
+            root,
+            state,
+            created,
+            error)) {
+        Fail("pre-feature state did not load");
+        return;
+    }
+
+    if (created ||
+        state.settings.receiveDevelopmentBuilds) {
+        Fail("pre-feature state did not default development builds off");
+        return;
+    }
+
+    state.settings.receiveDevelopmentBuilds =
+        true;
+
+    if (!tp::SaveState(
+            root,
+            state,
+            error)) {
+        Fail("development-build setting did not save");
+        return;
+    }
+
+    const std::string saved =
+        ReadAll(tp::StatePath(root));
+
+    if (saved.find(
+            "\"receive_development_builds\":true") ==
+            std::string::npos ||
+        saved.find("\"schema\": 1") ==
+            std::string::npos) {
+        Fail("development-build setting was not additive schema-1 state");
+        return;
+    }
+
+    tp::AppState reloaded;
+    created = true;
+    if (!tp::LoadOrCreateState(
+            root,
+            reloaded,
+            created,
+            error) ||
+        created ||
+        !reloaded.settings.receiveDevelopmentBuilds) {
+        Fail("development-build setting did not round-trip");
+        return;
+    }
+
+    const std::string invalidJson =
+        "{\n"
+        "  \"schema\": 1,\n"
+        "  \"settings\": {"
+        "\"text_scale\":1.0,"
+        "\"check_app_updates\":true,"
+        "\"receive_development_builds\":\"yes\""
+        "},\n"
+        "  \"packages\": []\n"
+        "}\n";
+
+    if (!WriteAll(
+            tp::StatePath(root),
+            invalidJson)) {
+        Fail("invalid development-build fixture could not be written");
+        return;
+    }
+
+    tp::AppState invalidState;
+    created = true;
+    error.clear();
+    if (tp::LoadOrCreateState(
+            root,
+            invalidState,
+            created,
+            error) ||
+        error.find(
+            L"settings.receive_development_builds") ==
+            std::wstring::npos) {
+        Fail("invalid development-build setting was not rejected");
+    }
+}
+
 void TestUnknownFieldPreservation(
     const std::filesystem::path& root) {
     const std::string json =
@@ -1598,6 +1706,7 @@ int main() {
         TestRepositoryRootSourcePath(root);
         TestReleasePackageRoundTrip(root);
         TestReleaseTrackingMutators(root);
+        TestDevelopmentBuildSettingCompatibility(root);
         TestUnknownFieldPreservation(root);
 
         std::error_code ec;
