@@ -1,0 +1,240 @@
+name: Development Release
+
+on:
+  push:
+    branches:
+      - "dev"
+    paths:
+      - ".github/development-release-version"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Development prerelease tag to publish, for example v0.3.23-dev.2"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  windows-x64-development-release:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve development tag
+        id: release
+        shell: pwsh
+        run: |
+          if ("${{ github.ref }}" -ne "refs/heads/dev") {
+            throw "Development releases must run from the dev branch."
+          }
+
+          if ("${{ github.event_name }}" -eq "workflow_dispatch") {
+            $tag = "${{ inputs.tag }}"
+          } else {
+            $tag = (Get-Content ".github/development-release-version" -Raw).Trim()
+          }
+
+          if ($tag -notmatch '^v(\d+)\.(\d+)\.(\d+)-dev\.(\d+)$') {
+            throw "Invalid development release tag: $tag"
+          }
+
+          $baseVersion = "$($Matches[1]).$($Matches[2]).$($Matches[3])"
+          $displayVersion = $tag.Substring(1)
+
+          "tag=$tag" >> $env:GITHUB_OUTPUT
+          "base_version=$baseVersion" >> $env:GITHUB_OUTPUT
+          "display_version=$displayVersion" >> $env:GITHUB_OUTPUT
+
+      - name: Validate source version
+        shell: pwsh
+        run: |
+          $tag = "${{ steps.release.outputs.tag }}"
+          $baseVersion = "${{ steps.release.outputs.base_version }}"
+          $displayVersion = "${{ steps.release.outputs.display_version }}"
+          $cmake = Get-Content "CMakeLists.txt" -Raw
+          $header = Get-Content "src/version.h" -Raw
+
+          $versionPattern = 'project\s*\(\s*TocPilot\s+VERSION\s+' + [regex]::Escape($baseVersion) + '(?:\s|\))'
+          $expectedVersion = '#define TOCPILOT_VERSION_W L"' + $displayVersion + '"'
+          $expectedTag = '#define TOCPILOT_VERSION_TAG_W L"' + $tag + '"'
+
+          if ($cmake -notmatch $versionPattern) {
+            throw "CMake base version does not match requested development release $tag"
+          }
+
+          if (-not $header.Contains($expectedVersion)) {
+            throw "version.h display version does not match requested development release $tag"
+          }
+
+          if (-not $header.Contains($expectedTag)) {
+            throw "version.h tag does not match requested development release $tag"
+          }
+
+      - name: Configure
+        run: cmake -S . -B build -A x64
+
+      - name: Build Release
+        run: cmake --build build --config Release
+
+      - name: Test Release
+        run: ctest --test-dir build -C Release --output-on-failure
+
+      - name: Write SHA-256 sidecar
+        shell: pwsh
+        run: |
+          $exe = "build/Release/TocPilot.exe"
+          $hash = (Get-FileHash -Algorithm SHA256 $exe).Hash.ToLowerInvariant()
+          "$hash  TocPilot.exe" | Set-Content -NoNewline -Encoding ascii "build/Release/TocPilot.exe.sha256"
+
+      - name: Create or verify tag
+        shell: pwsh
+        run: |
+          $tag = "${{ steps.release.outputs.tag }}"
+          git fetch --tags --force
+          $existing = git rev-list -n 1 $tag 2>$null
+
+          if ($LASTEXITCODE -eq 0 -and $existing) {
+            if ($existing.Trim() -ne $env:GITHUB_SHA) {
+              throw "Tag $tag already points to $existing instead of $env:GITHUB_SHA"
+            }
+          } else {
+            git tag $tag $env:GITHUB_SHA
+            git push origin "refs/tags/$tag"
+            if ($LASTEXITCODE -ne 0) {
+              exit $LASTEXITCODE
+            }
+          }
+
+      - name: Publish prerelease assets
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = "${{ steps.release.outputs.tag }}"
+          gh release view "$tag" *> $null
+
+          if ($LASTEXITCODE -eq 0) {
+            gh release edit "$tag" --prerelease --title "$tag"
+            if ($LASTEXITCODE -ne 0) {
+              exit $LASTEXITCODE
+            }
+
+            gh release upload "$tag" "build/Release/TocPilot.exe" "build/Release/TocPilot.exe.sha256" --clobber
+          } else {
+            gh release create "$tag" "build/Release/TocPilot.exe" "build/Release/TocPilot.exe.sha256" --target "$env:GITHUB_SHA" --title "$tag" --generate-notes --prerelease
+          }
+
+          if ($LASTEXITCODE -ne 0) {
+            exit $LASTEXITCODE
+          }
+
+      - name: Verify published channel metadata
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = "${{ steps.release.outputs.tag }}"
+
+          $release = gh release view "$tag" --json tagName,isPrerelease,isDraft,assets | ConvertFrom-Json
+          if ($release.tagName -ne $tag -or -not $release.isPrerelease -or $release.isDraft) {
+            throw "Published development release metadata is not a non-draft prerelease."
+          }
+
+          $assetNames = @($release.assets | ForEach-Object { $_.name })
+          if ($assetNames -notcontains "TocPilot.exe" -or $assetNames -notcontains "TocPilot.exe.sha256") {
+            throw "Published development release is missing required self-update assets."
+          }
+
+          $stable = gh api "/repos/${{ github.repository }}/releases/latest" | ConvertFrom-Json
+          if ($stable.prerelease -or $stable.draft -or $stable.tag_name -eq $tag) {
+            throw "Stable latest-release discovery was altered by the development prerelease."
+          }
+
+      - name: Validate real development-channel self-update
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = "${{ steps.release.outputs.tag }}"
+          $parent = (git rev-parse "$env:GITHUB_SHA^").Trim()
+
+          git worktree add --detach bootstrap-src $parent
+          if ($LASTEXITCODE -ne 0) {
+            exit $LASTEXITCODE
+          }
+
+          $bootstrapHeader = Get-Content "bootstrap-src/src/version.h" -Raw
+          if ($bootstrapHeader.Contains('#define TOCPILOT_VERSION_TAG_W L"' + $tag + '"')) {
+            throw "Bootstrap parent already identifies as $tag; self-update would not exercise a version transition."
+          }
+
+          cmake -S bootstrap-src -B bootstrap-build -A x64
+          if ($LASTEXITCODE -ne 0) {
+            exit $LASTEXITCODE
+          }
+
+          cmake --build bootstrap-build --config Release
+          if ($LASTEXITCODE -ne 0) {
+            exit $LASTEXITCODE
+          }
+
+          $runtime = Join-Path $env:RUNNER_TEMP "TocPilot-development-channel-e2e"
+          Remove-Item $runtime -Recurse -Force -ErrorAction SilentlyContinue
+          New-Item (Join-Path $runtime "Interface/AddOns") -ItemType Directory -Force | Out-Null
+          [IO.File]::WriteAllBytes((Join-Path $runtime "WoW.exe"), [byte[]]@())
+          Copy-Item "bootstrap-build/Release/TocPilot.exe" (Join-Path $runtime "TocPilot.exe")
+
+          @'
+          {
+            "schema": 1,
+            "settings": {
+              "text_scale": 1.0,
+              "check_app_updates": true,
+              "receive_development_builds": true
+            },
+            "packages": []
+          }
+          '@ | Set-Content -Encoding utf8 (Join-Path $runtime "TocPilot.json")
+
+          $expectedHash = (Get-FileHash -Algorithm SHA256 "build/Release/TocPilot.exe").Hash
+          $initialHash = (Get-FileHash -Algorithm SHA256 (Join-Path $runtime "TocPilot.exe")).Hash
+
+          if ($initialHash -eq $expectedHash) {
+            throw "Bootstrap executable unexpectedly matches the target prerelease."
+          }
+
+          $process = Start-Process -FilePath (Join-Path $runtime "TocPilot.exe") -WorkingDirectory $runtime -PassThru
+
+          $updated = $false
+          for ($attempt = 0; $attempt -lt 90; $attempt++) {
+            Start-Sleep -Seconds 2
+            try {
+              $actualHash = (Get-FileHash -Algorithm SHA256 (Join-Path $runtime "TocPilot.exe") -ErrorAction Stop).Hash
+              if ($actualHash -eq $expectedHash) {
+                $updated = $true
+                break
+              }
+            } catch {
+              # The updater may briefly hold or replace the target between checks.
+            }
+          }
+
+          Get-Process TocPilot -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+
+          if (-not $updated) {
+            $actualHash = (Get-FileHash -Algorithm SHA256 (Join-Path $runtime "TocPilot.exe")).Hash
+            throw "Bootstrap TocPilot did not self-update through the development channel. Expected $expectedHash, got $actualHash."
+          }
+
+          $savedState = Get-Content (Join-Path $runtime "TocPilot.json") -Raw
+          if ($savedState -notmatch '"receive_development_builds"\s*:\s*true') {
+            throw "Development-channel self-update did not preserve the opted-in state."
+          }
+
+          Write-Host "Development-channel self-update passed: parent $parent -> $tag"
