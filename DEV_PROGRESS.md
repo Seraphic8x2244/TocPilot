@@ -4,7 +4,7 @@
 
 ## Current
 
-- Active branch: `main`.
+- Active branch: `dev`.
 - Source/application version: `v0.3.22`.
 - Latest published release: `v0.3.22`.
 - Release/source commit and tag target: `8678334c0a0015eba14aecf58f7c416c045f6581` (`v0.3.22`).
@@ -21,7 +21,7 @@
 - v0.3.15 Compact divider transaction fix: **implemented / CI-checked / merged / published; partial runtime pass**. Expanding the left Compact column no longer creates a horizontal scrollbar immediately, but the divider transaction still clamps both primary columns only to the generic 40 px floor. This lets the right visible column shrink below its intended Compact minimum; after entering that invalid state, dragging back left can expose a horizontal scrollbar. Fix by enforcing the real per-column Compact minima throughout fitting and divider transactions.
 - v0.3.16 Compact minimum-width fix: **implemented / CI-checked / merged / published; partial runtime pass**. Self-update passed; the companion column now stops at its intended minimum in both column orders; whole-window resize and Advanced regression checks passed. Remaining failure: when dragging the middle divider back left after pushing it right, a horizontal scrollbar still appears. This is now isolated to reverse-direction transaction ordering rather than width limits.
 - v0.3.17 reverse-direction divider fix: **implemented / CI-checked / merged / published / runtime-accepted**. Compact divider dragging is a fully owned two-column transaction: the shrinking column is applied first, the growing column second, and the native one-column commit is cancelled under a re-entrancy guard. User runtime confirmed the rightward clamp, leftward reversal, both Name/Status orders, window resizing and Advanced regression checks all pass with no horizontal scrollbar.
-- Current goal: **establish the development update channel / `dev` branch workflow, then runtime-validate recovered Account Sync through that path**. Account Sync is already cleanly compiled/tested at `2e80b1378a7a01bb311140828e4e54069b1576d6`; do not reimplement it from scratch.
+- Current goal: **continue the development update channel work on `dev`, then runtime-validate recovered Account Sync through that path**. Slice 1 (branch transition) is complete. Account Sync is already cleanly compiled/tested at `2e80b1378a7a01bb311140828e4e54069b1576d6`; do not reimplement it from scratch.
 - Current scope boundary: Account Sync is the next feature. Preserve the runtime-accepted v0.3.22 toolbar/DPI behaviour. Keep the Refresh All viewport-jump fix queued after Account Sync and do not mix async latest-stable DLL discovery, Add-Git stale-request work, warning cleanup, rate-limit propagation, staging-name cleanup or P6C art/skin work into this feature.
 - Audit continuity: `audit_dump.md` is a temporary scratch checkpoint for the interrupted broad audit only; this file remains the sole authoritative live development source of truth.
 - Documentation-only commits after the release do not change the published runtime baseline.
@@ -183,7 +183,7 @@ A failed update must leave the old TocPilot runnable and clearly report failure.
 
 Starting with v0.3.11, self-update additionally requires the initial executable/checksum URLs to be HTTPS, carries GitHub's exact executable asset size into the download, rejects a streamed executable that is shorter or longer than that size before replacement, and caps checksum text at 64 KiB. SHA-256 verification remains mandatory.
 
-### Development channel / branch model — agreed, not yet implemented
+### Development channel / branch model — Slice 1 branch transition complete
 
 TocPilot now has enough external/stable use that experimental builds must be isolated from normal users.
 
@@ -197,7 +197,7 @@ Branch contract after the transition is complete:
 One-time transition:
 
 - Account Sync recovery already landed on `main` before this policy was introduced. Do **not** reset or rewrite `main` to hide it.
-- Create `dev` from the current repository head and continue new development there.
+- `dev` was created from `main` at `5e5fa28e3047d14ec2f7fb73b7de1246fbe995a9`; continue new development there.
 - `v0.3.22` at `8678334c0a0015eba14aecf58f7c416c045f6581` remains the published/runtime-accepted stable baseline until the next accepted stable release.
 - Once the current dev work is runtime-accepted and promoted, enforce `main` = accepted/release-ready going forward.
 
@@ -255,7 +255,7 @@ Other stable users remain on the stable-only channel throughout unless they expl
 
 Because long/tool-heavy chats have repeatedly become unstable, implement the development-channel work as four deliberately bounded slices. **Do not start the next slice in the same chat unless the user explicitly asks to continue.** Each completed slice should end with its own commit, relevant CI/check result, a `DEV_PROGRESS.md` checkpoint, and an exact next step for a fresh chat.
 
-**Slice 1 — branch transition only**
+**Slice 1 — branch transition only — COMPLETE**
 - Create `dev` from the current `main` head.
 - Verify both `main` and `dev` refs.
 - Update this document on `dev` so `dev` is recorded as the active development branch and the transition is complete.
@@ -829,7 +829,7 @@ Do not add support for user-uploaded ZIP/7z/RAR/installer/bundle release assets 
 
 ## Exact Next Step
 
-Execute **Slice 1 — branch transition only** from the four-slice development-channel plan above. Do not begin Slice 2 in the same chat unless the user explicitly asks to continue.
+Execute **Slice 2 — setting + Info UI** from the four-slice development-channel plan above. Do not begin Slice 3 in the same chat unless the user explicitly asks to continue.
 
 After all four slices are complete and the real prerelease self-update path is accepted, runtime-test recovered Account Sync against real WTF data, in this order:
 
