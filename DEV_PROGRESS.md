@@ -22,8 +22,9 @@
 - v0.3.15 Compact divider transaction fix: **implemented / CI-checked / merged / published; partial runtime pass**. Expanding the left Compact column no longer creates a horizontal scrollbar immediately, but the divider transaction still clamps both primary columns only to the generic 40 px floor. This lets the right visible column shrink below its intended Compact minimum; after entering that invalid state, dragging back left can expose a horizontal scrollbar. Fix by enforcing the real per-column Compact minima throughout fitting and divider transactions.
 - v0.3.16 Compact minimum-width fix: **implemented / CI-checked / merged / published; partial runtime pass**. Self-update passed; the companion column now stops at its intended minimum in both column orders; whole-window resize and Advanced regression checks passed. Remaining failure: when dragging the middle divider back left after pushing it right, a horizontal scrollbar still appears. This is now isolated to reverse-direction transaction ordering rather than width limits.
 - v0.3.17 reverse-direction divider fix: **implemented / CI-checked / merged / published / runtime-accepted**. Compact divider dragging is a fully owned two-column transaction: the shrinking column is applied first, the growing column second, and the native one-column commit is cancelled under a re-entrancy guard. User runtime confirmed the rightward clamp, leftward reversal, both Name/Status orders, window resizing and Advanced regression checks all pass with no horizontal scrollbar.
-- Current goal: **make package-list viewport resets deliberate and consistent for bulk/whole-list work.** Replace the old Refresh All viewport-preservation behaviour with the locked start/finish reset contract below. Preserve the accepted Account Sync behaviour and its explicit validation-debt record; do not silently reopen or rewrite those results.
-- Current scope boundary: change only **package-list viewport behaviour around single-addon versus bulk/whole-list operations**. Remove the old top-row/selection-driven viewport restoration path rather than trying to repair it. Preserve the accepted v0.4.0 Account Sync and inherited toolbar/DPI behaviour. Do not mix async latest-stable DLL discovery, Add-Git stale-request work, warning cleanup, rate-limit propagation, staging-name cleanup, Clear WDB, DXVK logging or P6C art/skin work into this slice.
+- Package-list viewport reset slice: **implemented / CI-checked on `dev` / not yet published / runtime-untested** at implementation commit `eace26841fdd41073413605bfb4f5f3c578b3da0`. The package list now rebuilds rows in place instead of clearing the control, `RefreshPackageStateUi()` no longer restores a semantic top row or calls `ListView_EnsureVisible`, and retained logical selection is restored without scrolling. One explicit scope policy leaves Presentation/SinglePackage work alone and resets MultiPackage/WholeList work to the top at both start and finish; finish resets occur after the final rebuild/sort. Multi-package Add Git, Refresh All and Update New use that policy.
+- Viewport CI: draft validation PR #34 targeted the exact implementation commit and was closed without merge after Build run `36775185023`, Windows x64 job `110091188659`, passed the Release build and **20/20 CTest tests**, including `package-list-viewport-policy`.
+- Current scope boundary: the viewport implementation slice is complete; only its normal development-release/runtime validation remains. Preserve the accepted v0.4.0 Account Sync and inherited toolbar/DPI behaviour. Do not mix async latest-stable DLL discovery, Add-Git stale-request work, warning cleanup, rate-limit propagation, staging-name cleanup, Clear WDB, DXVK logging or P6C art/skin work into this gate.
 - Audit continuity: `audit_dump.md` is a temporary scratch checkpoint for the interrupted broad audit only; this file remains the sole authoritative live development source of truth.
 - Documentation-only commits after the release do not change the published runtime baseline.
 
@@ -846,7 +847,6 @@ After P6 is accepted, reprioritize the deferred feature backlog rather than auto
 
 Current deferred work includes:
 
-- **Package-list viewport reset** — active next slice: single-addon actions do not move the list; bulk/multi-addon and whole-list operations reset to the top at both start and finish; remove the old viewport-preservation/restoration behaviour;
 - **Clear WDB folder** — future Advanced feature;
 - **DXVK advanced logging checkbox** — future Advanced option; the BAT's current `DXVK_LOG_LEVEL=debug` behaviour should become optional rather than forced. `WoW_d3d9.log` archival can be reconsidered with this work and is not part of the locked Account Sync scope;
 - P5 import/export;
@@ -918,18 +918,18 @@ Do not add support for user-uploaded ZIP/7z/RAR/installer/bundle release assets 
 - Stable Release workflow run `36767072167`, Windows x64 Release job `110063804704`, passed source-version validation, Release build, **19/19 CTest**, SHA-256 sidecar generation, tag creation/verification and asset publication from exact main commit `eee95cf319351adbef1a3b549f5fe9531f33567f`.
 - Published `v0.4.0` is non-draft/non-prerelease and GitHub `/releases/latest` resolves to it. `TocPilot.exe`: 3,145,728 bytes, SHA-256 `43dcd24c99373d79f4ad949467856389660c35e653d8b1401d1b873274d04119`. `TocPilot.exe.sha256`: 78 bytes; asset SHA-256 `45000dd1a049b91f8a38f0eac0d24620a69c6fa467a3aec19fb574c3400e109f`.
 - `v0.3.22` at `8678334c0a0015eba14aecf58f7c416c045f6581` remains the last Account-Sync-free rollback baseline; current stable is `v0.4.0` at `eee95cf319351adbef1a3b549f5fe9531f33567f`.
-- Keep **Refresh All viewport jump** queued immediately after the stable promotion. Keep **Clear WDB folder** and **DXVK advanced logging checkbox** deferred.
+- Package-list viewport reset implementation commit `eace26841fdd41073413605bfb4f5f3c578b3da0` is CI-checked by Build run `36775185023`, Windows x64 job `110091188659`: Release build + **20/20 CTest passed**, including `package-list-viewport-policy`. It is not yet published or runtime-tested. Keep **Clear WDB folder** and **DXVK advanced logging checkbox** deferred.
 
 ## Exact Next Step
 
-Implement the locked **package-list viewport reset** design from the post-release `v0.4.0` baseline:
+The locked **package-list viewport reset** slice is implemented and CI-checked at `eace26841fdd41073413605bfb4f5f3c578b3da0`. Do not change its behaviour before runtime validation unless a defect is found.
 
-1. Inspect the current single-addon, queued multi-addon, Refresh All and Update All start/completion paths plus `RefreshPackageStateUi()` viewport restoration.
-2. Remove the old prior-scroll/top-package/selection-driven viewport restoration behaviour instead of adapting it.
-3. Add one narrow authoritative reset mechanism:
-   - one-package effective scope -> no viewport movement;
-   - multi-package / bulk / whole-list scope -> top at start and top again after final completion/rebuild.
-4. Ensure a retained logical selection cannot pull the viewport away from the top after a bulk/whole-list finish reset.
-5. Add focused automated coverage for the scope and start/finish rules, then publish through the normal dev runtime-test path.
+When the user is ready to test it, publish it through the normal development prerelease path and validate:
+
+1. Single-package refresh/install/update while scrolled: the package-list viewport does not move.
+2. Multi-package Add Git: list resets to the top when the queue starts and again after the final rebuild/sort; retained selection does not pull it away from the top.
+3. Refresh All: list resets to the top at start and again after the final rebuild/sort.
+4. Update New: list resets to the top at start and again after the final rebuild/sort, including the no-candidate completion path.
+5. Presentational-only actions such as selection, column sorting and Compact/Advanced presentation changes do not invoke a viewport reset.
 
 Account Sync is stable in `v0.4.0`. Preserve the explicit validation debt for Sync-before-Launch/Ctrl-click and induced backup/write-failure; those paths were accepted as non-blocking, not runtime-proven.
