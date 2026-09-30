@@ -14,8 +14,32 @@ namespace tp {
 namespace {
 
 struct PfUiNormalizedData {
-    std::vector<std::string> settings;
-    std::vector<std::string> cache;
+    std::string profiles;
+    std::string cache;
+};
+
+struct PfUiNode {
+    std::string key;
+    bool table = false;
+    std::string value;
+    std::vector<PfUiNode> children;
+    std::size_t startLine = 0;
+    std::size_t endLine = 0;
+};
+
+struct PfUiRoot {
+    std::string name;
+    std::vector<PfUiNode> children;
+    std::size_t startLine = 0;
+    std::size_t endLine = 0;
+};
+
+struct PfUiDocument {
+    std::vector<std::string> lines;
+    std::vector<PfUiRoot> roots;
+    std::string newline = "\n";
+    bool hadBom = false;
+    bool endsWithNewline = true;
 };
 
 struct AccountCopy {
@@ -24,6 +48,22 @@ struct AccountCopy {
     std::filesystem::path path;
     bool exists = false;
     std::filesystem::file_time_type modified{};
+};
+
+struct PfUiFilePlan {
+    AccountCopy copy;
+    PfUiDocument document;
+    bool profileSync = false;
+    bool cacheMerge = false;
+};
+
+struct PfUiSyncPlan {
+    bool noSource = false;
+    std::size_t sourceFile = 0;
+    AccountCopy source;
+    std::vector<PfUiFilePlan> files;
+    std::array<PfUiNode, 3> mergedCache{};
+    std::array<bool, 3> mergedCachePresent{};
 };
 
 struct ItemAnalysis {
@@ -286,43 +326,209 @@ std::string JoinStack(
     return result;
 }
 
-enum class PfUiDataClass {
-    Settings,
-    Cache,
-    Junk
+const std::array<const char*, 3> kPfUiMergeCacheKeys{
+    "libhealth",
+    "gold",
+    "prediction"
 };
 
-PfUiDataClass GetPfUiDataClass(
-    const std::vector<std::string>& stack) {
-    if (stack.size() >= 2 &&
-        stack[0] ==
-            "root:pfUI_cache") {
-        const std::string key =
-            LowerAscii(stack[1]);
-
-        if (key ==
-            "string:chathistory") {
-            return PfUiDataClass::Junk;
-        }
-
-        if (key ==
-                "string:libhealth" ||
-            key ==
-                "string:prediction" ||
-            key ==
-                "string:gold") {
-            return PfUiDataClass::Cache;
-        }
-    }
-
-    return PfUiDataClass::Settings;
+std::string PfUiKeyToken(
+    const std::smatch& match) {
+    return
+        match[1].matched
+            ? "string:" +
+                match[1].str()
+            : "number:" +
+                match[2].str();
 }
 
-bool ReadTextFileLines(
-    const std::filesystem::path& path,
-    std::vector<std::string>& lines,
+bool PfUiNodeKeyExists(
+    const std::vector<PfUiNode>& nodes,
+    const std::string& key) {
+    return
+        std::any_of(
+            nodes.begin(),
+            nodes.end(),
+            [&](const PfUiNode& node) {
+                return node.key == key;
+            });
+}
+
+bool ParsePfUiChildren(
+    const std::vector<std::string>& lines,
+    std::size_t& index,
+    std::vector<PfUiNode>& children,
     std::wstring& error) {
-    lines.clear();
+    static const std::regex tablePattern(
+        R"tp(^\[(?:"((?:[^"\\]|\\.)*)"|(\d+))\]\s*=\s*\{$)tp");
+    static const std::regex valuePattern(
+        R"tp(^\[(?:"((?:[^"\\]|\\.)*)"|(\d+))\]\s*=\s*(.+),$)tp");
+
+    while (index < lines.size()) {
+        const std::string line =
+            Trim(lines[index]);
+
+        if (line.empty()) {
+            ++index;
+            continue;
+        }
+
+        if (line == "}," ||
+            line == "}") {
+            ++index;
+            return true;
+        }
+
+        std::smatch match;
+
+        if (std::regex_match(
+                line,
+                match,
+                tablePattern)) {
+            PfUiNode node;
+            node.key =
+                PfUiKeyToken(match);
+            node.table = true;
+            node.startLine = index;
+
+            if (PfUiNodeKeyExists(
+                    children,
+                    node.key)) {
+                error =
+                    L"pfUI contains a duplicate table key in one scope.";
+                return false;
+            }
+
+            ++index;
+
+            if (!ParsePfUiChildren(
+                    lines,
+                    index,
+                    node.children,
+                    error)) {
+                return false;
+            }
+
+            node.endLine =
+                index - 1;
+            children.push_back(
+                std::move(node));
+            continue;
+        }
+
+        if (std::regex_match(
+                line,
+                match,
+                valuePattern)) {
+            PfUiNode node;
+            node.key =
+                PfUiKeyToken(match);
+            node.table = false;
+            node.value =
+                Trim(match[3].str());
+            node.startLine = index;
+            node.endLine = index;
+
+            if (PfUiNodeKeyExists(
+                    children,
+                    node.key)) {
+                error =
+                    L"pfUI contains a duplicate value key in one scope.";
+                return false;
+            }
+
+            children.push_back(
+                std::move(node));
+            ++index;
+            continue;
+        }
+
+        error =
+            L"pfUI parser encountered an unexpected line format.";
+        return false;
+    }
+
+    error =
+        L"pfUI parser reached the end of the file before a table closed.";
+    return false;
+}
+
+bool ParsePfUiDocument(
+    PfUiDocument& document,
+    std::wstring& error) {
+    document.roots.clear();
+
+    static const std::regex rootPattern(
+        R"(^([A-Za-z_][A-Za-z0-9_]*)\s*=\s*\{$)");
+
+    std::size_t index = 0;
+
+    while (index <
+           document.lines.size()) {
+        const std::string line =
+            Trim(document.lines[index]);
+
+        if (line.empty()) {
+            ++index;
+            continue;
+        }
+
+        std::smatch match;
+
+        if (!std::regex_match(
+                line,
+                match,
+                rootPattern)) {
+            error =
+                L"pfUI parser encountered an unexpected top-level line.";
+            return false;
+        }
+
+        PfUiRoot root;
+        root.name =
+            match[1].str();
+        root.startLine = index;
+
+        const bool duplicateRoot =
+            std::any_of(
+                document.roots.begin(),
+                document.roots.end(),
+                [&](const PfUiRoot& value) {
+                    return
+                        value.name ==
+                        root.name;
+                });
+
+        if (duplicateRoot) {
+            error =
+                L"pfUI contains a duplicate top-level table.";
+            return false;
+        }
+
+        ++index;
+
+        if (!ParsePfUiChildren(
+                document.lines,
+                index,
+                root.children,
+                error)) {
+            return false;
+        }
+
+        root.endLine =
+            index - 1;
+        document.roots.push_back(
+            std::move(root));
+    }
+
+    return true;
+}
+
+bool ReadPfUiDocument(
+    const std::filesystem::path& path,
+    PfUiDocument& document,
+    std::wstring& error) {
+    document = {};
 
     std::ifstream stream(
         path,
@@ -330,40 +536,296 @@ bool ReadTextFileLines(
 
     if (!stream) {
         error =
-            L"Could not open pfUI file for semantic comparison: " +
+            L"Could not open pfUI file: " +
             path.wstring();
         return false;
     }
 
-    std::string line;
-    while (std::getline(
-               stream,
-               line)) {
+    stream.seekg(
+        0,
+        std::ios::end);
+    const std::streamoff size =
+        stream.tellg();
+
+    if (size < 0) {
+        error =
+            L"Could not determine pfUI file size: " +
+            path.wstring();
+        return false;
+    }
+
+    stream.seekg(
+        0,
+        std::ios::beg);
+
+    std::string bytes(
+        static_cast<std::size_t>(size),
+        '\0');
+
+    if (!bytes.empty()) {
+        stream.read(
+            bytes.data(),
+            static_cast<std::streamsize>(
+                bytes.size()));
+    }
+
+    if (!stream) {
+        error =
+            L"Could not read pfUI file: " +
+            path.wstring();
+        return false;
+    }
+
+    if (bytes.size() >= 3 &&
+        static_cast<unsigned char>(
+            bytes[0]) == 0xEF &&
+        static_cast<unsigned char>(
+            bytes[1]) == 0xBB &&
+        static_cast<unsigned char>(
+            bytes[2]) == 0xBF) {
+        document.hadBom = true;
+        bytes.erase(0, 3);
+    }
+
+    document.newline =
+        bytes.find("\r\n") !=
+                std::string::npos
+            ? "\r\n"
+            : "\n";
+    document.endsWithNewline =
+        !bytes.empty() &&
+        bytes.back() == '\n';
+
+    std::size_t start = 0;
+    while (start < bytes.size()) {
+        const std::size_t end =
+            bytes.find(
+                '\n',
+                start);
+
+        std::string line =
+            end == std::string::npos
+                ? bytes.substr(start)
+                : bytes.substr(
+                    start,
+                    end - start);
+
         if (!line.empty() &&
             line.back() == '\r') {
             line.pop_back();
         }
 
-        lines.push_back(
+        document.lines.push_back(
             std::move(line));
+
+        if (end ==
+            std::string::npos) {
+            break;
+        }
+
+        start = end + 1;
     }
 
-    if (!stream.eof()) {
+    return
+        ParsePfUiDocument(
+            document,
+            error);
+}
+
+const PfUiRoot* FindPfUiRoot(
+    const PfUiDocument& document,
+    std::string_view name) {
+    const auto it =
+        std::find_if(
+            document.roots.begin(),
+            document.roots.end(),
+            [&](const PfUiRoot& root) {
+                return
+                    root.name ==
+                    name;
+            });
+
+    return
+        it == document.roots.end()
+            ? nullptr
+            : &*it;
+}
+
+const PfUiNode* FindPfUiChild(
+    const std::vector<PfUiNode>& children,
+    std::string_view key) {
+    const auto it =
+        std::find_if(
+            children.begin(),
+            children.end(),
+            [&](const PfUiNode& child) {
+                return
+                    child.key ==
+                    key;
+            });
+
+    return
+        it == children.end()
+            ? nullptr
+            : &*it;
+}
+
+int SupportedPfUiCacheIndex(
+    std::string_view key) {
+    for (std::size_t i = 0;
+         i < kPfUiMergeCacheKeys.size();
+         ++i) {
+        if (key ==
+            std::string("string:") +
+                kPfUiMergeCacheKeys[i]) {
+            return
+                static_cast<int>(i);
+        }
+    }
+
+    return -1;
+}
+
+const PfUiNode* SupportedPfUiCacheNode(
+    const PfUiDocument& document,
+    std::size_t cacheIndex,
+    std::wstring& error) {
+    const PfUiRoot* cache =
+        FindPfUiRoot(
+            document,
+            "pfUI_cache");
+
+    if (!cache) {
+        return nullptr;
+    }
+
+    const std::string key =
+        std::string("string:") +
+        kPfUiMergeCacheKeys[
+            cacheIndex];
+
+    const PfUiNode* node =
+        FindPfUiChild(
+            cache->children,
+            key);
+
+    if (node &&
+        !node->table) {
         error =
-            L"Could not read pfUI file for semantic comparison: " +
-            path.wstring();
-        return false;
+            L"pfUI cache section '" +
+            std::wstring(
+                kPfUiMergeCacheKeys[
+                    cacheIndex],
+                kPfUiMergeCacheKeys[
+                    cacheIndex] +
+                    std::char_traits<char>::
+                        length(
+                            kPfUiMergeCacheKeys[
+                                cacheIndex])) +
+            L"' is not a table.";
+        return nullptr;
     }
 
-    if (!lines.empty() &&
-        lines[0].size() >= 3 &&
-        static_cast<unsigned char>(
-            lines[0][0]) == 0xEF &&
-        static_cast<unsigned char>(
-            lines[0][1]) == 0xBB &&
-        static_cast<unsigned char>(
-            lines[0][2]) == 0xBF) {
-        lines[0].erase(0, 3);
+    return node;
+}
+
+void AppendPfUiNodeSignature(
+    const PfUiNode& node,
+    std::string& output) {
+    output += node.key;
+
+    if (!node.table) {
+        output += "=";
+        output += node.value;
+        output += ";";
+        return;
+    }
+
+    output += "{";
+
+    std::vector<const PfUiNode*> sorted;
+    sorted.reserve(
+        node.children.size());
+
+    for (const auto& child :
+         node.children) {
+        sorted.push_back(
+            &child);
+    }
+
+    std::sort(
+        sorted.begin(),
+        sorted.end(),
+        [](const PfUiNode* left,
+           const PfUiNode* right) {
+            return
+                left->key <
+                right->key;
+        });
+
+    for (const auto* child :
+         sorted) {
+        AppendPfUiNodeSignature(
+            *child,
+            output);
+    }
+
+    output += "}";
+}
+
+std::string PfUiRootSignature(
+    const PfUiRoot* root) {
+    if (!root) {
+        return "<absent>";
+    }
+
+    PfUiNode wrapper;
+    wrapper.key =
+        "root:" +
+        root->name;
+    wrapper.table = true;
+    wrapper.children =
+        root->children;
+
+    std::string output;
+    AppendPfUiNodeSignature(
+        wrapper,
+        output);
+    return output;
+}
+
+bool PfUiCacheSignature(
+    const PfUiDocument& document,
+    std::string& output,
+    std::wstring& error) {
+    output.clear();
+
+    for (std::size_t i = 0;
+         i < kPfUiMergeCacheKeys.size();
+         ++i) {
+        const PfUiNode* node =
+            SupportedPfUiCacheNode(
+                document,
+                i,
+                error);
+
+        if (!error.empty()) {
+            return false;
+        }
+
+        output +=
+            kPfUiMergeCacheKeys[i];
+        output += ":";
+
+        if (!node) {
+            output += "<absent>;";
+            continue;
+        }
+
+        AppendPfUiNodeSignature(
+            *node,
+            output);
+        output += ";";
     }
 
     return true;
@@ -374,140 +836,453 @@ bool NormalizePfUi(
     PfUiNormalizedData& data,
     std::wstring& error) {
     data = {};
+    error.clear();
 
-    std::vector<std::string> lines;
+    PfUiDocument document;
 
-    if (!ReadTextFileLines(
+    if (!ReadPfUiDocument(
             path,
-            lines,
+            document,
             error)) {
         return false;
     }
 
-    static const std::regex rootPattern(
-        R"(^([A-Za-z_][A-Za-z0-9_]*)\s*=\s*\{$)");
-    static const std::regex tablePattern(
-        R"tp(^\[(?:"((?:[^"\\]|\\.)*)"|(\d+))\]\s*=\s*\{$)tp");
-    static const std::regex valuePattern(
-        R"tp(^\[(?:"((?:[^"\\]|\\.)*)"|(\d+))\]\s*=\s*(.+),$)tp");
+    data.profiles =
+        PfUiRootSignature(
+            FindPfUiRoot(
+                document,
+                "pfUI_profiles"));
 
-    std::vector<std::string> stack;
+    return
+        PfUiCacheSignature(
+            document,
+            data.cache,
+            error);
+}
 
-    for (const auto& rawLine :
-         lines) {
-        const std::string line =
-            Trim(rawLine);
+void MergePfUiTable(
+    PfUiNode& destination,
+    const PfUiNode& incoming) {
+    for (const auto& child :
+         incoming.children) {
+        auto it =
+            std::find_if(
+                destination.children.begin(),
+                destination.children.end(),
+                [&](const PfUiNode& existing) {
+                    return
+                        existing.key ==
+                        child.key;
+                });
 
-        if (line.empty()) {
+        if (it ==
+            destination.children.end()) {
+            destination.children.push_back(
+                child);
             continue;
         }
 
-        std::smatch match;
-
-        if (std::regex_match(
-                line,
-                match,
-                rootPattern)) {
-            stack.push_back(
-                "root:" +
-                match[1].str());
+        if (it->table &&
+            child.table) {
+            MergePfUiTable(
+                *it,
+                child);
             continue;
         }
 
-        if (std::regex_match(
-                line,
-                match,
-                tablePattern)) {
-            const std::string key =
-                match[1].matched
-                    ? "string:" +
-                        match[1].str()
-                    : "number:" +
-                        match[2].str();
+        *it = child;
+    }
+}
 
-            stack.push_back(key);
+std::string PfUiKeyExpression(
+    const std::string& key) {
+    static constexpr
+        std::string_view stringPrefix =
+            "string:";
+    static constexpr
+        std::string_view numberPrefix =
+            "number:";
 
-            const PfUiDataClass dataClass =
-                GetPfUiDataClass(stack);
+    if (key.rfind(
+            stringPrefix,
+            0) == 0) {
+        return
+            "[\"" +
+            key.substr(
+                stringPrefix.size()) +
+            "\"]";
+    }
 
-            if (dataClass !=
-                PfUiDataClass::Junk) {
-                const std::string token =
-                    "table:" +
-                    JoinStack(stack);
+    if (key.rfind(
+            numberPrefix,
+            0) == 0) {
+        return
+            "[" +
+            key.substr(
+                numberPrefix.size()) +
+            "]";
+    }
 
-                if (dataClass ==
-                    PfUiDataClass::Cache) {
-                    data.cache.push_back(
-                        token);
-                } else {
-                    data.settings.push_back(
-                        token);
-                }
-            }
+    return "[]";
+}
 
-            continue;
-        }
+std::string LeadingWhitespace(
+    const std::string& line) {
+    std::size_t count = 0;
 
-        if (std::regex_match(
-                line,
-                match,
-                valuePattern)) {
-            const std::string key =
-                match[1].matched
-                    ? "string:" +
-                        match[1].str()
-                    : "number:" +
-                        match[2].str();
+    while (count < line.size() &&
+           (line[count] == ' ' ||
+            line[count] == '\t')) {
+        ++count;
+    }
 
-            const PfUiDataClass dataClass =
-                GetPfUiDataClass(stack);
+    return
+        line.substr(
+            0,
+            count);
+}
 
-            if (dataClass !=
-                PfUiDataClass::Junk) {
-                auto pathStack =
-                    stack;
-                pathStack.push_back(key);
+void RenderPfUiNode(
+    const PfUiNode& node,
+    const std::string& indent,
+    std::vector<std::string>& output) {
+    const std::string key =
+        PfUiKeyExpression(
+            node.key);
 
-                const std::string token =
-                    "value:" +
-                    JoinStack(pathStack) +
-                    "=" +
-                    Trim(match[3].str());
+    if (!node.table) {
+        output.push_back(
+            indent +
+            key +
+            " = " +
+            node.value +
+            ",");
+        return;
+    }
 
-                if (dataClass ==
-                    PfUiDataClass::Cache) {
-                    data.cache.push_back(
-                        token);
-                } else {
-                    data.settings.push_back(
-                        token);
-                }
-            }
+    output.push_back(
+        indent +
+        key +
+        " = {");
 
-            continue;
-        }
+    std::vector<const PfUiNode*> sorted;
+    sorted.reserve(
+        node.children.size());
 
-        if (line == "}," ||
-            line == "}") {
-            if (!stack.empty()) {
-                stack.pop_back();
-            }
-            continue;
-        }
-
-        error =
-            L"pfUI comparison encountered an unexpected line format.";
-        return false;
+    for (const auto& child :
+         node.children) {
+        sorted.push_back(
+            &child);
     }
 
     std::sort(
-        data.settings.begin(),
-        data.settings.end());
-    std::sort(
-        data.cache.begin(),
-        data.cache.end());
+        sorted.begin(),
+        sorted.end(),
+        [](const PfUiNode* left,
+           const PfUiNode* right) {
+            return
+                left->key <
+                right->key;
+        });
 
+    for (const auto* child :
+         sorted) {
+        RenderPfUiNode(
+            *child,
+            indent + "\t",
+            output);
+    }
+
+    output.push_back(
+        indent + "},");
+}
+
+std::vector<std::string> PfUiRootRawLines(
+    const PfUiDocument& document,
+    const PfUiRoot* root) {
+    if (!root) {
+        return {};
+    }
+
+    return
+        std::vector<std::string>(
+            document.lines.begin() +
+                static_cast<std::ptrdiff_t>(
+                    root->startLine),
+            document.lines.begin() +
+                static_cast<std::ptrdiff_t>(
+                    root->endLine + 1));
+}
+
+std::vector<std::string> RenderMergedPfUiCache(
+    const PfUiDocument& target,
+    const PfUiSyncPlan& plan) {
+    const PfUiRoot* cache =
+        FindPfUiRoot(
+            target,
+            "pfUI_cache");
+
+    std::vector<std::string> output;
+
+    if (!cache) {
+        bool any = false;
+        for (bool present :
+             plan.mergedCachePresent) {
+            any =
+                any ||
+                present;
+        }
+
+        if (!any) {
+            return output;
+        }
+
+        output.push_back(
+            "pfUI_cache = {");
+
+        for (std::size_t i = 0;
+             i < plan.mergedCache.size();
+             ++i) {
+            if (!plan.mergedCachePresent[i]) {
+                continue;
+            }
+
+            RenderPfUiNode(
+                plan.mergedCache[i],
+                "\t",
+                output);
+        }
+
+        output.push_back("}");
+        return output;
+    }
+
+    output.push_back(
+        target.lines[
+            cache->startLine]);
+
+    std::array<bool, 3> rendered{};
+    std::size_t cursor =
+        cache->startLine + 1;
+
+    std::string defaultIndent = "\t";
+    if (!cache->children.empty()) {
+        defaultIndent =
+            LeadingWhitespace(
+                target.lines[
+                    cache->children
+                        .front()
+                        .startLine]);
+    }
+
+    for (const auto& child :
+         cache->children) {
+        while (cursor <
+               child.startLine) {
+            output.push_back(
+                target.lines[
+                    cursor++]);
+        }
+
+        const int supported =
+            SupportedPfUiCacheIndex(
+                child.key);
+
+        if (supported >= 0) {
+            const std::size_t index =
+                static_cast<std::size_t>(
+                    supported);
+            rendered[index] = true;
+
+            if (plan.mergedCachePresent[
+                    index]) {
+                RenderPfUiNode(
+                    plan.mergedCache[
+                        index],
+                    LeadingWhitespace(
+                        target.lines[
+                            child.startLine]),
+                    output);
+            }
+        } else {
+            for (std::size_t line =
+                     child.startLine;
+                 line <=
+                     child.endLine;
+                 ++line) {
+                output.push_back(
+                    target.lines[
+                        line]);
+            }
+        }
+
+        cursor =
+            child.endLine + 1;
+    }
+
+    for (std::size_t i = 0;
+         i < plan.mergedCache.size();
+         ++i) {
+        if (plan.mergedCachePresent[i] &&
+            !rendered[i]) {
+            RenderPfUiNode(
+                plan.mergedCache[i],
+                defaultIndent,
+                output);
+        }
+    }
+
+    while (cursor <=
+           cache->endLine) {
+        output.push_back(
+            target.lines[
+                cursor++]);
+    }
+
+    return output;
+}
+
+std::string SerializePfUiLines(
+    const PfUiDocument& style,
+    const std::vector<std::string>& lines) {
+    std::string output;
+
+    if (style.hadBom) {
+        output +=
+            "\xEF\xBB\xBF";
+    }
+
+    for (std::size_t i = 0;
+         i < lines.size();
+         ++i) {
+        output += lines[i];
+
+        if (i + 1 <
+                lines.size() ||
+            style.endsWithNewline) {
+            output +=
+                style.newline;
+        }
+    }
+
+    return output;
+}
+
+bool BuildPfUiOutput(
+    const PfUiSyncPlan& plan,
+    const PfUiFilePlan& targetFile,
+    bool replaceProfiles,
+    bool mergeCache,
+    std::string& output,
+    std::wstring& error) {
+    error.clear();
+
+    const PfUiDocument& source =
+        plan.files[
+            plan.sourceFile]
+            .document;
+
+    PfUiDocument target =
+        targetFile.document;
+
+    if (!targetFile.copy.exists) {
+        target.newline =
+            source.newline;
+        target.hadBom =
+            source.hadBom;
+        target.endsWithNewline =
+            source.endsWithNewline;
+    }
+
+    const PfUiRoot* targetProfiles =
+        FindPfUiRoot(
+            target,
+            "pfUI_profiles");
+    const PfUiRoot* targetCache =
+        FindPfUiRoot(
+            target,
+            "pfUI_cache");
+
+    const PfUiRoot* sourceProfiles =
+        FindPfUiRoot(
+            source,
+            "pfUI_profiles");
+
+    const auto profileReplacement =
+        replaceProfiles
+            ? PfUiRootRawLines(
+                source,
+                sourceProfiles)
+            : std::vector<std::string>{};
+    const auto cacheReplacement =
+        mergeCache
+            ? RenderMergedPfUiCache(
+                target,
+                plan)
+            : std::vector<std::string>{};
+
+    std::vector<std::string> lines;
+    std::size_t index = 0;
+    bool profilesHandled = false;
+    bool cacheHandled = false;
+
+    while (index <
+           target.lines.size()) {
+        if (replaceProfiles &&
+            targetProfiles &&
+            index ==
+                targetProfiles->startLine) {
+            lines.insert(
+                lines.end(),
+                profileReplacement.begin(),
+                profileReplacement.end());
+            index =
+                targetProfiles->endLine + 1;
+            profilesHandled = true;
+            continue;
+        }
+
+        if (mergeCache &&
+            targetCache &&
+            index ==
+                targetCache->startLine) {
+            lines.insert(
+                lines.end(),
+                cacheReplacement.begin(),
+                cacheReplacement.end());
+            index =
+                targetCache->endLine + 1;
+            cacheHandled = true;
+            continue;
+        }
+
+        lines.push_back(
+            target.lines[
+                index++]);
+    }
+
+    if (replaceProfiles &&
+        !profilesHandled &&
+        !profileReplacement.empty()) {
+        lines.insert(
+            lines.end(),
+            profileReplacement.begin(),
+            profileReplacement.end());
+    }
+
+    if (mergeCache &&
+        !cacheHandled &&
+        !cacheReplacement.empty()) {
+        lines.insert(
+            lines.end(),
+            cacheReplacement.begin(),
+            cacheReplacement.end());
+    }
+
+    output =
+        SerializePfUiLines(
+            target,
+            lines);
     return true;
 }
 
@@ -560,6 +1335,296 @@ bool InspectCopy(
     return true;
 }
 
+
+bool BuildPfUiSyncPlan(
+    const std::filesystem::path& wowRoot,
+    const std::vector<std::wstring>& accounts,
+    PfUiSyncPlan& plan,
+    std::wstring& error) {
+    plan = {};
+    error.clear();
+    plan.files.reserve(
+        accounts.size());
+
+    std::vector<std::size_t> existing;
+
+    for (std::size_t i = 0;
+         i < accounts.size();
+         ++i) {
+        PfUiFilePlan file;
+        file.copy.account =
+            accounts[i];
+        file.copy.index = i;
+        file.copy.path =
+            AccountItemPath(
+                wowRoot,
+                file.copy.account,
+                AccountSyncItem::PfUi);
+
+        if (!InspectCopy(
+                file.copy.path,
+                file.copy.exists,
+                file.copy.modified,
+                error)) {
+            return false;
+        }
+
+        if (file.copy.exists) {
+            std::wstring parseError;
+
+            if (!ReadPfUiDocument(
+                    file.copy.path,
+                    file.document,
+                    parseError)) {
+                error =
+                    L"Could not safely parse pfUI for account '" +
+                    file.copy.account +
+                    L"': " +
+                    parseError;
+                return false;
+            }
+
+            existing.push_back(i);
+        }
+
+        plan.files.push_back(
+            std::move(file));
+    }
+
+    if (existing.empty()) {
+        plan.noSource = true;
+        return true;
+    }
+
+    std::sort(
+        existing.begin(),
+        existing.end(),
+        [&](std::size_t left,
+            std::size_t right) {
+            const auto& a =
+                plan.files[left].copy;
+            const auto& b =
+                plan.files[right].copy;
+
+            if (a.modified !=
+                b.modified) {
+                return
+                    a.modified >
+                    b.modified;
+            }
+
+            return
+                a.index <
+                b.index;
+        });
+
+    plan.sourceFile =
+        existing.front();
+    plan.source =
+        plan.files[
+            plan.sourceFile]
+            .copy;
+
+    // Merge from lowest to highest precedence. Newer files therefore win
+    // same-key conflicts. For equal timestamps, later selected accounts are
+    // merged first so the earlier selected account wins, matching source
+    // selection elsewhere in Account Sync.
+    std::vector<std::size_t> precedence =
+        existing;
+
+    std::sort(
+        precedence.begin(),
+        precedence.end(),
+        [&](std::size_t left,
+            std::size_t right) {
+            const auto& a =
+                plan.files[left].copy;
+            const auto& b =
+                plan.files[right].copy;
+
+            if (a.modified !=
+                b.modified) {
+                return
+                    a.modified <
+                    b.modified;
+            }
+
+            return
+                a.index >
+                b.index;
+        });
+
+    for (const std::size_t fileIndex :
+         precedence) {
+        auto& document =
+            plan.files[
+                fileIndex]
+                .document;
+
+        for (std::size_t cacheIndex = 0;
+             cacheIndex <
+                 kPfUiMergeCacheKeys.size();
+             ++cacheIndex) {
+            std::wstring cacheError;
+            const PfUiNode* node =
+                SupportedPfUiCacheNode(
+                    document,
+                    cacheIndex,
+                    cacheError);
+
+            if (!cacheError.empty()) {
+                error =
+                    L"Could not safely merge pfUI for account '" +
+                    plan.files[
+                        fileIndex]
+                        .copy.account +
+                    L"': " +
+                    cacheError;
+                return false;
+            }
+
+            if (!node) {
+                continue;
+            }
+
+            if (!plan.mergedCachePresent[
+                    cacheIndex]) {
+                plan.mergedCache[
+                    cacheIndex] =
+                    *node;
+                plan.mergedCachePresent[
+                    cacheIndex] = true;
+            } else {
+                MergePfUiTable(
+                    plan.mergedCache[
+                        cacheIndex],
+                    *node);
+            }
+        }
+    }
+
+    const PfUiDocument& sourceDocument =
+        plan.files[
+            plan.sourceFile]
+            .document;
+    const std::string sourceProfiles =
+        PfUiRootSignature(
+            FindPfUiRoot(
+                sourceDocument,
+                "pfUI_profiles"));
+
+    std::string mergedCacheSignature;
+    for (std::size_t cacheIndex = 0;
+         cacheIndex <
+             kPfUiMergeCacheKeys.size();
+         ++cacheIndex) {
+        mergedCacheSignature +=
+            kPfUiMergeCacheKeys[
+                cacheIndex];
+        mergedCacheSignature += ":";
+
+        if (!plan.mergedCachePresent[
+                cacheIndex]) {
+            mergedCacheSignature +=
+                "<absent>;";
+            continue;
+        }
+
+        AppendPfUiNodeSignature(
+            plan.mergedCache[
+                cacheIndex],
+            mergedCacheSignature);
+        mergedCacheSignature += ";";
+    }
+
+    for (std::size_t i = 0;
+         i < plan.files.size();
+         ++i) {
+        auto& file =
+            plan.files[i];
+
+        if (!file.copy.exists) {
+            file.profileSync = true;
+            continue;
+        }
+
+        std::string cacheSignature;
+        std::wstring cacheError;
+
+        if (!PfUiCacheSignature(
+                file.document,
+                cacheSignature,
+                cacheError)) {
+            error =
+                L"Could not safely compare pfUI for account '" +
+                file.copy.account +
+                L"': " +
+                cacheError;
+            return false;
+        }
+
+        file.cacheMerge =
+            cacheSignature !=
+            mergedCacheSignature;
+
+        if (i ==
+            plan.sourceFile) {
+            continue;
+        }
+
+        if (!(file.copy.modified <
+              plan.source.modified)) {
+            continue;
+        }
+
+        const std::string profiles =
+            PfUiRootSignature(
+                FindPfUiRoot(
+                    file.document,
+                    "pfUI_profiles"));
+
+        file.profileSync =
+            profiles !=
+            sourceProfiles;
+    }
+
+    return true;
+}
+
+void FillPfUiAnalysis(
+    const PfUiSyncPlan& plan,
+    ItemAnalysis& analysis) {
+    analysis = {};
+    analysis.item =
+        AccountSyncItem::PfUi;
+    analysis.noSource =
+        plan.noSource;
+
+    if (plan.noSource) {
+        return;
+    }
+
+    analysis.source =
+        plan.source;
+
+    for (const auto& file :
+         plan.files) {
+        if (file.copy.exists &&
+            file.cacheMerge) {
+            analysis.automaticTargets
+                .push_back(
+                    file.copy);
+        }
+
+        if (!file.copy.exists ||
+            file.profileSync) {
+            analysis.confirmationTargets
+                .push_back(
+                    file.copy);
+        }
+    }
+}
+
 void SetDisabledResult(
     AccountSyncItem item,
     AccountSyncItemResult& result) {
@@ -587,6 +1652,24 @@ bool AnalyzeItem(
     std::wstring& error) {
     analysis = {};
     analysis.item = item;
+
+    if (item ==
+        AccountSyncItem::PfUi) {
+        PfUiSyncPlan plan;
+
+        if (!BuildPfUiSyncPlan(
+                wowRoot,
+                accounts,
+                plan,
+                error)) {
+            return false;
+        }
+
+        FillPfUiAnalysis(
+            plan,
+            analysis);
+        return true;
+    }
 
     std::vector<AccountCopy> copies;
     copies.reserve(accounts.size());
@@ -658,31 +1741,6 @@ bool AnalyzeItem(
         if (!(candidate.modified <
               analysis.source.modified)) {
             continue;
-        }
-
-        if (item ==
-            AccountSyncItem::PfUi) {
-            PfUiComparison comparison;
-            std::wstring compareError;
-
-            if (ComparePfUiFiles(
-                    analysis.source.path,
-                    candidate.path,
-                    comparison,
-                    compareError)) {
-                if (comparison.equivalent) {
-                    continue;
-                }
-
-                if (comparison.cacheOnly) {
-                    analysis.automaticTargets
-                        .push_back(candidate);
-                    continue;
-                }
-            } else {
-                analysis.comparerFallback =
-                    true;
-            }
         }
 
         analysis.confirmationTargets
@@ -990,6 +2048,7 @@ void FinalizeRunItem(
     const ItemAnalysis& analysis,
     std::size_t automaticCopied,
     std::size_t confirmedCopied,
+    std::size_t modifiedTargets,
     bool confirmationDeclined,
     AccountSyncItemResult& result) {
     if (result.fatal) {
@@ -1000,11 +2059,10 @@ void FinalizeRunItem(
     }
 
     const std::size_t totalCopied =
-        automaticCopied +
-        confirmedCopied;
+        modifiedTargets;
 
     result.copiedTargets =
-        totalCopied;
+        modifiedTargets;
     result.confirmationDeclined =
         confirmationDeclined;
 
@@ -1041,6 +2099,423 @@ void FinalizeRunItem(
     FillPreviewResult(
         analysis,
         result);
+}
+
+
+bool BackupPfUiTarget(
+    const std::filesystem::path& wowRoot,
+    const AccountCopy& target,
+    std::filesystem::path& backupRunFolder,
+    std::wstring& error) {
+    if (!target.exists) {
+        return true;
+    }
+
+    if (!EnsureBackupRunFolder(
+            wowRoot,
+            backupRunFolder,
+            error)) {
+        return false;
+    }
+
+    const auto backupPath =
+        backupRunFolder /
+        target.account /
+        ItemRelativePath(
+            AccountSyncItem::PfUi);
+
+    std::error_code ec;
+    std::filesystem::create_directories(
+        backupPath.parent_path(),
+        ec);
+
+    if (ec) {
+        error =
+            L"Could not create pfUI backup folder for account '" +
+            target.account +
+            L"': " +
+            FilesystemError(ec);
+        return false;
+    }
+
+    const bool copied =
+        std::filesystem::copy_file(
+            target.path,
+            backupPath,
+            std::filesystem::copy_options::
+                overwrite_existing,
+            ec);
+
+    if (ec ||
+        !copied) {
+        error =
+            L"Backup failed for account '" +
+            target.account +
+            L"'. The destination was not modified.";
+
+        if (ec) {
+            error +=
+                L" " +
+                FilesystemError(ec);
+        }
+
+        return false;
+    }
+
+    return true;
+}
+
+bool AtomicWritePfUi(
+    const AccountCopy& target,
+    const std::string& content,
+    std::wstring& error) {
+    std::error_code ec;
+    std::filesystem::create_directories(
+        target.path.parent_path(),
+        ec);
+
+    if (ec) {
+        error =
+            L"Could not create pfUI destination folder for account '" +
+            target.account +
+            L"': " +
+            FilesystemError(ec);
+        return false;
+    }
+
+    std::filesystem::path temporary;
+    unsigned long long suffix = 0;
+
+    for (;;) {
+        temporary =
+            target.path.wstring() +
+            L".tocpilot.tmp-" +
+            std::to_wstring(
+                GetCurrentProcessId()) +
+            L"-" +
+            std::to_wstring(
+                suffix++);
+
+        HANDLE file =
+            CreateFileW(
+                temporary.c_str(),
+                GENERIC_WRITE,
+                0,
+                nullptr,
+                CREATE_NEW,
+                FILE_ATTRIBUTE_NORMAL,
+                nullptr);
+
+        if (file ==
+            INVALID_HANDLE_VALUE) {
+            const DWORD code =
+                GetLastError();
+
+            if (code ==
+                    ERROR_FILE_EXISTS ||
+                code ==
+                    ERROR_ALREADY_EXISTS) {
+                continue;
+            }
+
+            error =
+                L"Could not create temporary pfUI file for account '" +
+                target.account +
+                L"'.";
+            return false;
+        }
+
+        bool ok = true;
+        std::size_t offset = 0;
+
+        while (offset <
+               content.size()) {
+            const std::size_t remaining =
+                content.size() -
+                offset;
+            const DWORD chunk =
+                static_cast<DWORD>(
+                    std::min<std::size_t>(
+                        remaining,
+                        1024u * 1024u * 1024u));
+            DWORD written = 0;
+
+            if (!WriteFile(
+                    file,
+                    content.data() +
+                        offset,
+                    chunk,
+                    &written,
+                    nullptr) ||
+                written != chunk) {
+                ok = false;
+                break;
+            }
+
+            offset += written;
+        }
+
+        if (ok &&
+            !FlushFileBuffers(file)) {
+            ok = false;
+        }
+
+        CloseHandle(file);
+
+        if (!ok) {
+            DeleteFileW(
+                temporary.c_str());
+            error =
+                L"Could not write temporary pfUI file for account '" +
+                target.account +
+                L"'. The destination was not modified.";
+            return false;
+        }
+
+        if (!MoveFileExW(
+                temporary.c_str(),
+                target.path.c_str(),
+                MOVEFILE_REPLACE_EXISTING |
+                    MOVEFILE_WRITE_THROUGH)) {
+            DeleteFileW(
+                temporary.c_str());
+            error =
+                L"Could not atomically replace pfUI for account '" +
+                target.account +
+                L"'. The destination was not modified.";
+            return false;
+        }
+
+        return true;
+    }
+}
+
+bool WritePfUiTarget(
+    const std::filesystem::path& wowRoot,
+    const PfUiFilePlan& target,
+    const std::string& content,
+    std::filesystem::path& backupRunFolder,
+    std::wstring& error) {
+    if (!BackupPfUiTarget(
+            wowRoot,
+            target.copy,
+            backupRunFolder,
+            error)) {
+        return false;
+    }
+
+    if (!AtomicWritePfUi(
+            target.copy,
+            content,
+            error)) {
+        if (target.copy.exists) {
+            error +=
+                L" The backup remains intact.";
+        }
+
+        return false;
+    }
+
+    return true;
+}
+
+struct PendingPfUiWrite {
+    std::size_t fileIndex = 0;
+    bool profiles = false;
+    bool cache = false;
+    std::string content;
+};
+
+void RunPfUiSyncItem(
+    const std::filesystem::path& wowRoot,
+    const std::vector<std::wstring>& accounts,
+    const AccountSyncConfirmFn& confirm,
+    AccountSyncRunResult& runResult,
+    AccountSyncItemResult& itemResult,
+    std::filesystem::path& backupRunFolder,
+    std::wstring& error) {
+    PfUiSyncPlan plan;
+    std::wstring planError;
+
+    if (!BuildPfUiSyncPlan(
+            wowRoot,
+            accounts,
+            plan,
+            planError)) {
+        itemResult = {};
+        itemResult.item =
+            AccountSyncItem::PfUi;
+        itemResult.fatal = true;
+        itemResult.status = L"Error";
+        itemResult.action =
+            L"Sync failed";
+        itemResult.error =
+            planError;
+        runResult.fatal = true;
+
+        if (error.empty()) {
+            error = planError;
+        }
+
+        return;
+    }
+
+    ItemAnalysis analysis;
+    FillPfUiAnalysis(
+        plan,
+        analysis);
+    FillPreviewResult(
+        analysis,
+        itemResult);
+
+    if (plan.noSource) {
+        return;
+    }
+
+    std::vector<std::wstring>
+        confirmationAccounts;
+
+    for (const auto& file :
+         plan.files) {
+        if (!file.copy.exists ||
+            file.profileSync) {
+            confirmationAccounts.push_back(
+                file.copy.account);
+        }
+    }
+
+    bool confirmationDeclined = false;
+    bool accepted = true;
+
+    if (!confirmationAccounts.empty()) {
+        accepted =
+            confirm &&
+            confirm(
+                AccountSyncItem::PfUi,
+                plan.source.account,
+                confirmationAccounts,
+                false);
+        confirmationDeclined =
+            !accepted;
+    }
+
+    bool anyMergedCache = false;
+    for (bool present :
+         plan.mergedCachePresent) {
+        anyMergedCache =
+            anyMergedCache ||
+            present;
+    }
+
+    std::vector<PendingPfUiWrite>
+        pending;
+
+    for (std::size_t i = 0;
+         i < plan.files.size();
+         ++i) {
+        const auto& file =
+            plan.files[i];
+
+        const bool needsConfirmation =
+            !file.copy.exists ||
+            file.profileSync;
+        const bool profiles =
+            needsConfirmation &&
+            accepted;
+        const bool cache =
+            file.copy.exists
+                ? file.cacheMerge
+                : accepted &&
+                    anyMergedCache;
+
+        if (!profiles &&
+            !cache) {
+            continue;
+        }
+
+        PendingPfUiWrite write;
+        write.fileIndex = i;
+        write.profiles = profiles;
+        write.cache = cache;
+
+        std::wstring buildError;
+
+        if (!BuildPfUiOutput(
+                plan,
+                file,
+                profiles,
+                cache,
+                write.content,
+                buildError)) {
+            itemResult.fatal = true;
+            itemResult.status = L"Error";
+            itemResult.action =
+                L"Sync failed";
+            itemResult.error =
+                buildError;
+            runResult.fatal = true;
+
+            if (error.empty()) {
+                error = buildError;
+            }
+
+            return;
+        }
+
+        pending.push_back(
+            std::move(write));
+    }
+
+    std::size_t automaticCopied = 0;
+    std::size_t confirmedCopied = 0;
+    std::size_t modifiedTargets = 0;
+
+    for (const auto& write :
+         pending) {
+        const auto& file =
+            plan.files[
+                write.fileIndex];
+        std::wstring writeError;
+
+        if (!WritePfUiTarget(
+                wowRoot,
+                file,
+                write.content,
+                backupRunFolder,
+                writeError)) {
+            itemResult.fatal = true;
+            runResult.fatal = true;
+
+            if (itemResult.error.empty()) {
+                itemResult.error =
+                    writeError;
+            }
+
+            if (error.empty()) {
+                error = writeError;
+            }
+
+            continue;
+        }
+
+        ++modifiedTargets;
+
+        if (write.cache) {
+            ++automaticCopied;
+        }
+
+        if (write.profiles) {
+            ++confirmedCopied;
+        }
+    }
+
+    FinalizeRunItem(
+        analysis,
+        automaticCopied,
+        confirmedCopied,
+        modifiedTargets,
+        confirmationDeclined,
+        itemResult);
 }
 
 } // namespace
@@ -1214,21 +2689,21 @@ bool ComparePfUiFiles(
         return false;
     }
 
-    const bool settingsEqual =
-        dataA.settings ==
-        dataB.settings;
+    const bool profilesEqual =
+        dataA.profiles ==
+        dataB.profiles;
     const bool cacheEqual =
         dataA.cache ==
         dataB.cache;
 
     comparison.equivalent =
-        settingsEqual &&
+        profilesEqual &&
         cacheEqual;
     comparison.cacheOnly =
-        settingsEqual &&
+        profilesEqual &&
         !cacheEqual;
     comparison.settingsChanged =
-        !settingsEqual;
+        !profilesEqual;
     comparison.cacheChanged =
         !cacheEqual;
 
@@ -1348,6 +2823,19 @@ bool RunAccountSync(
             SetNotConfiguredResult(
                 item,
                 itemResult);
+            continue;
+        }
+
+        if (item ==
+            AccountSyncItem::PfUi) {
+            RunPfUiSyncItem(
+                wowRoot,
+                accounts,
+                confirm,
+                result,
+                itemResult,
+                backupRunFolder,
+                error);
             continue;
         }
 
@@ -1472,6 +2960,8 @@ bool RunAccountSync(
             analysis,
             automaticCopied,
             confirmedCopied,
+            automaticCopied +
+                confirmedCopied,
             confirmationDeclined,
             itemResult);
     }
