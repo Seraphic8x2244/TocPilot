@@ -5,9 +5,9 @@
 ## Current
 
 - Active branch: `dev`.
-- Source/application version: `v0.3.23-dev.2` release candidate.
+- Source/application version: `v0.3.23-dev.2`.
 - Latest published stable release: `v0.3.22`.
-- Latest published development prerelease: `v0.3.23-dev.1` at `518a9a1f1407b4a62ca4b09c11522f8859425b61`. GitHub stable `/releases/latest` still resolves to non-prerelease `v0.3.22`.
+- Latest published development prerelease: `v0.3.23-dev.2` at `5b1575ac72e8db1edc2aac6962bec0a528e732e1`. GitHub stable `/releases/latest` still resolves to non-prerelease `v0.3.22`.
 - Stable release/source commit and tag target: `8678334c0a0015eba14aecf58f7c416c045f6581` (`v0.3.22`).
 - Latest fully runtime-accepted release is `v0.3.22` at `8678334c0a0015eba14aecf58f7c416c045f6581`. Runtime acceptance on 2026-09-28 covers the 48 x 48 / 36 x 36 toolbar presentation, Per-Monitor V2 DPI behaviour, Compact/Advanced Words/Icon presentation, persistent Advanced width, and Launch remaining the executable icon at the far right. Slight softness at Windows 125% scaling is accepted as normal fractional-DPI rendering; do not reopen DPI work without new evidence.
 - Last known-good Account-Sync-free code baseline is published/runtime-accepted `v0.3.22` at `8678334c0a0015eba14aecf58f7c416c045f6581`. The final pre-Account-Sync repository commit is documentation-only `6fcf117cf4f639612827acf88b10c6933f4b7802`, so its executable source is equivalent to that accepted v0.3.22 baseline.
@@ -22,7 +22,7 @@
 - v0.3.15 Compact divider transaction fix: **implemented / CI-checked / merged / published; partial runtime pass**. Expanding the left Compact column no longer creates a horizontal scrollbar immediately, but the divider transaction still clamps both primary columns only to the generic 40 px floor. This lets the right visible column shrink below its intended Compact minimum; after entering that invalid state, dragging back left can expose a horizontal scrollbar. Fix by enforcing the real per-column Compact minima throughout fitting and divider transactions.
 - v0.3.16 Compact minimum-width fix: **implemented / CI-checked / merged / published; partial runtime pass**. Self-update passed; the companion column now stops at its intended minimum in both column orders; whole-window resize and Advanced regression checks passed. Remaining failure: when dragging the middle divider back left after pushing it right, a horizontal scrollbar still appears. This is now isolated to reverse-direction transaction ordering rather than width limits.
 - v0.3.17 reverse-direction divider fix: **implemented / CI-checked / merged / published / runtime-accepted**. Compact divider dragging is a fully owned two-column transaction: the shrinking column is applied first, the growing column second, and the native one-column commit is cancelled under a re-entrancy guard. User runtime confirmed the rightward clamp, leftward reversal, both Name/Status orders, window resizing and Advanced regression checks all pass with no horizontal scrollbar.
-- Current goal: **Account Sync remains the active feature; the targeted pfUI redesign is implemented, merged to `dev`, and CI-checked, while runtime validation remains paused until the separate development-channel bootstrap downgrade defect is fixed and a new dev candidate is published**. Account discovery/selection persistence and the Macros decline/backup/copy/missing-destination paths have already passed. Account Sync remains unreleased; **its accepted stable release target is `v0.4.0`; the current `v0.3.23-dev.N` line is the transition/runtime-test line, not the intended final stable version.**
+- Current goal: **Account Sync remains the active feature; the targeted pfUI redesign is implemented, merged, CI-checked, and published in development prerelease `v0.3.23-dev.2`; runtime validation can now resume on that build.** Account discovery/selection persistence and the Macros decline/backup/copy/missing-destination paths have already passed. The immediate runtime gate is the installed `v0.3.23-dev.1 -> v0.3.23-dev.2` updater transition, followed by targeted pfUI, keybindings, Sync-before-Launch/Ctrl-launch, and induced-failure checks. Account Sync remains unreleased to stable; **its accepted stable release target is `v0.4.0`; the current `v0.3.23-dev.N` line is the transition/runtime-test line, not the intended final stable version.**
 - Current scope boundary: Account Sync is the next feature. Preserve the runtime-accepted v0.3.22 toolbar/DPI behaviour. Keep the Refresh All viewport-jump fix queued after Account Sync and do not mix async latest-stable DLL discovery, Add-Git stale-request work, warning cleanup, rate-limit propagation, staging-name cleanup or P6C art/skin work into this feature.
 - Audit continuity: `audit_dump.md` is a temporary scratch checkpoint for the interrupted broad audit only; this file remains the sole authoritative live development source of truth.
 - Documentation-only commits after the release do not change the published runtime baseline.
@@ -475,7 +475,7 @@ Runtime results through `v0.3.23-dev.1`:
 - pfUI preview correctly reached a confirmation dialog, but inspection of the two real `pfUI.lua` files showed the apparent meaningful difference was only `pfUI_addon_profiles["Current"]` numeric ordering/index movement (for example `pfQuest_Group` occupying a different list position), not a user UI-profile settings difference.
 - That finding exposed the larger defect: current `Junk` handling only excludes a subtree from semantic comparison. The actual pfUI sync path still performs a whole-file copy, so ignored data such as chat history would still be overwritten whenever any other pfUI difference triggered a sync.
 - The two real sample files show `pfUI_cache` top-level subtables `abuttons`, `libhealth`, `gold`, `chathistory`, and `prediction`. This evidence informed the targeted policy above.
-- The old whole-file implementation must not be runtime-tested further. The targeted redesign is now implemented and CI-checked; runtime testing remains paused until the development-channel first-bootstrap downgrade defect below is fixed and the next dev candidate is published.
+- The old whole-file implementation must not be runtime-tested further. The targeted redesign is now implemented, CI-checked, and published in `v0.3.23-dev.2`; runtime testing should resume only against that targeted build.
 
 ### Targeted pfUI implementation result — 2026-09-30
 
@@ -495,7 +495,7 @@ Development-channel bootstrap defect found during this runtime session:
 - Manually installing `v0.3.23-dev.1` over a stable-era state with no `receive_development_builds` key immediately downgraded back to `v0.3.22` on startup.
 - Cause: absent setting defaults to `false`, and startup update selection runs before the user can open Info -> Updates and opt in; a running prerelease therefore sees the stable channel and returns to stable.
 - Temporary test bootstrap succeeded after setting `receive_development_builds=true` in `TocPilot.json`.
-- This is a real bootstrap-path defect and should be fixed for the next dev candidate so a manually bootstrapped prerelease can reach the UI without immediately falling back. Preserve the default-off/explicit-opt-in policy; distinguish first-bootstrap/absent-setting behavior from an explicit user choice to disable development builds.
+- The behavior is a real legacy bootstrap edge case, but on 2026-09-30 the user explicitly made it non-blocking for this prerelease: after the Account Sync stable path, normal installations will have an explicit stored `receive_development_builds=false`; reaching this ambiguity later requires manually sideloading a prerelease from a pre-migration state. Preserve default-off/explicit-opt-in behavior and keep this edge documented rather than blocking `v0.3.23-dev.2` runtime validation.
 
 ### Removal UX
 
@@ -748,7 +748,7 @@ Published `v0.3.17` runtime gate passed on 2026-09-27:
 
 The combined v0.3.14-v0.3.17 Compact two-column fill/split work is runtime-accepted.
 
-Account Sync runtime validation is **partially complete and intentionally paused until `v0.3.23-dev.2` is published**. Account selection persistence and the Macros decline/accepted-backup-copy/missing-destination paths passed against real WTF data. The targeted pfUI redesign is merged and CI-checked at `13a801696e2be585ab46d7941f96cc07ba832a18`; once `v0.3.23-dev.2` is published, resume pfUI, keybindings, Sync-before-Launch, Ctrl-launch and induced-failure runtime checks against that prerelease. **Refresh All viewport jump** remains queued after Account Sync.
+Account Sync runtime validation is **partially complete and ready to resume on published prerelease `v0.3.23-dev.2`**. Account selection persistence and the Macros decline/accepted-backup-copy/missing-destination paths passed against real WTF data. The targeted pfUI redesign is merged and CI-checked at `13a801696e2be585ab46d7941f96cc07ba832a18`. First validate the installed `v0.3.23-dev.1 -> v0.3.23-dev.2` self-update, then resume pfUI, keybindings, Sync-before-Launch, Ctrl-launch and induced-failure runtime checks against `dev.2`. **Refresh All viewport jump** remains queued after Account Sync.
 
 A1's managed same-root replacement check remains deferred. The current product workflow has **Remove Addon**, not the old Uninstall flow.
 
@@ -884,18 +884,20 @@ Do not add support for user-uploaded ZIP/7z/RAR/installer/bundle release assets 
 - Targeted pfUI Account Sync is implemented / merged / CI-checked at `13a801696e2be585ab46d7941f96cc07ba832a18`.
 - PR #30 head `6e27c6d390c9c874e866a8fd5b78b4d6de70c0dc`; Build run `36712586795`, Windows x64 job `109877671575`: Release build + **19/19 CTest passed**, including `account-sync-safety`.
 - Conflict rule is locked: group-wide supported-cache union; newer `LastWriteTimeUtc` wins same-key conflicts; equal timestamps use selected-account order, earlier selected wins; nested tables recurse and structural conflicts use the same precedence.
-- User intentionally changed the release gate on 2026-09-30: the legacy missing-`receive_development_builds` bootstrap ambiguity is non-blocking for this prerelease. Normal stable users will have an explicit stored `false` after the Account Sync stable release path; the remaining edge case requires manually sideloading a future prerelease from a pre-migration state. Publish `v0.3.23-dev.2` now and use the real `dev.1 -> dev.2` updater path for validation.
+- User intentionally changed the release gate on 2026-09-30: the legacy missing-`receive_development_builds` bootstrap ambiguity is non-blocking for this prerelease. Normal stable users will have an explicit stored `false` after the Account Sync stable release path; the remaining edge case requires manually sideloading a future prerelease from a pre-migration state.
+- PR #31 (`Release v0.3.23-dev.2`) head `0c36b1a655fc480df447990117c35ff1cf973981` passed Build workflow run `36722764428`, Windows x64 job `109911820308`: Release build + **19/19 CTest passed**, including `account-sync-safety`; it squash-merged to `dev` as `5b1575ac72e8db1edc2aac6962bec0a528e732e1`.
+- Development Release workflow run `36723197591`, Windows x64 job `109913301965`, completed successfully from exact merged `dev` `5b1575ac72e8db1edc2aac6962bec0a528e732e1`: Release build + **19/19 CTest passed**, required assets published, stable `/releases/latest` remained `v0.3.22`, and the real development-channel self-update gate passed from parent `9cf47266cf46cafedeb9714f6a3d8bcb5d38464b` to `v0.3.23-dev.2` while preserving opt-in.
+- Published `v0.3.23-dev.2` is a GitHub prerelease targeting `5b1575ac72e8db1edc2aac6962bec0a528e732e1`. `TocPilot.exe`: 3,145,728 bytes, SHA-256 `a7994eb62363ad6a039200ab78c6e75adf74100b525e678dae801a24b63c2bba`. `TocPilot.exe.sha256`: 78 bytes; asset SHA-256 `23bb1289e508a607b79e42500f0c13c0891e922fc6de5032a24b6291863d589d`.
 - Do **not** publish Account Sync stable yet. `v0.3.22` at `8678334c0a0015eba14aecf58f7c416c045f6581` remains the last published/runtime-accepted stable rollback baseline.
 - Keep **Refresh All viewport jump** queued after Account Sync. Keep **Clear WDB folder** and **DXVK advanced logging checkbox** deferred.
 
 ## Exact Next Step
 
-Continue on `dev` from the current release-candidate checkpoint.
+Continue on `dev` from the published `v0.3.23-dev.2` checkpoint.
 
-1. Merge the `v0.3.23-dev.2` release-candidate change only after the focused Windows Release build + complete CTest suite is green.
-2. Let the Development Release workflow publish exact merged `dev` as prerelease `v0.3.23-dev.2`, verify direct EXE + SHA-256 assets, stable-latest isolation, and the workflow's real development-channel self-update gate.
-3. Runtime-test the installed `v0.3.23-dev.1 -> v0.3.23-dev.2` self-update with **Receive development builds** enabled.
-4. Then resume the remaining Account Sync runtime matrix on `v0.3.23-dev.2`: targeted pfUI sync/merge, keybindings, Sync before Launch + Ctrl-click `-console`, and induced backup/write failure.
-5. After the full Account Sync runtime gate passes, the accepted stable release target remains **`v0.4.0`**; only then move to **Refresh All viewport jump**.
+1. On the real installed `v0.3.23-dev.1`, leave **Receive development builds** enabled and launch TocPilot; verify it discovers and self-updates to `v0.3.23-dev.2`.
+2. Confirm the installed app reports `v0.3.23-dev.2`, the opt-in remains enabled, and normal state/account-sync settings are intact.
+3. Resume the remaining Account Sync runtime matrix on `v0.3.23-dev.2`: targeted pfUI sync/merge, keybindings, Sync before Launch + Ctrl-click `-console`, and induced backup/write failure.
+4. After the full Account Sync runtime gate passes, the accepted stable release target remains **`v0.4.0`**; only then move to **Refresh All viewport jump**.
 
-The legacy absent-setting bootstrap ambiguity is documented but no longer blocks this prerelease or Account Sync runtime testing. Do not start Refresh All, Clear WDB, or DXVK logging work yet.
+The legacy absent-setting bootstrap ambiguity is documented but does not block this runtime gate. Do not start Refresh All, Clear WDB, or DXVK logging work yet.
