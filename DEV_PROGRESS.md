@@ -22,7 +22,7 @@
 - v0.3.15 Compact divider transaction fix: **implemented / CI-checked / merged / published; partial runtime pass**. Expanding the left Compact column no longer creates a horizontal scrollbar immediately, but the divider transaction still clamps both primary columns only to the generic 40 px floor. This lets the right visible column shrink below its intended Compact minimum; after entering that invalid state, dragging back left can expose a horizontal scrollbar. Fix by enforcing the real per-column Compact minima throughout fitting and divider transactions.
 - v0.3.16 Compact minimum-width fix: **implemented / CI-checked / merged / published; partial runtime pass**. Self-update passed; the companion column now stops at its intended minimum in both column orders; whole-window resize and Advanced regression checks passed. Remaining failure: when dragging the middle divider back left after pushing it right, a horizontal scrollbar still appears. This is now isolated to reverse-direction transaction ordering rather than width limits.
 - v0.3.17 reverse-direction divider fix: **implemented / CI-checked / merged / published / runtime-accepted**. Compact divider dragging is a fully owned two-column transaction: the shrinking column is applied first, the growing column second, and the native one-column commit is cancelled under a re-entrancy guard. User runtime confirmed the rightward clamp, leftward reversal, both Name/Status orders, window resizing and Advanced regression checks all pass with no horizontal scrollbar.
-- Current goal: **development update-channel infrastructure is complete and accepted; recovered Account Sync runtime validation is next but has not started**. Slice 4 published and exercised `v0.3.23-dev.1` through the real development self-update path. Account Sync is already cleanly compiled/tested at `2e80b1378a7a01bb311140828e4e54069b1576d6`; do not reimplement it from scratch. **Account Sync's accepted stable release target is `v0.4.0`; the current `v0.3.23-dev.N` line is the transition/runtime-test line, not the intended final stable version.**
+- Current goal: **Account Sync runtime validation is underway and has exposed a pfUI design defect that must be corrected before the runtime gate can continue**. Account discovery/selection persistence and the Macros decline/backup/copy/missing-destination paths have passed. The current pfUI implementation must be redesigned from whole-file copy semantics to targeted section sync/merge as locked below. Account Sync remains unreleased; **its accepted stable release target is `v0.4.0`; the current `v0.3.23-dev.N` line is the transition/runtime-test line, not the intended final stable version.**
 - Current scope boundary: Account Sync is the next feature. Preserve the runtime-accepted v0.3.22 toolbar/DPI behaviour. Keep the Refresh All viewport-jump fix queued after Account Sync and do not mix async latest-stable DLL discovery, Add-Git stale-request work, warning cleanup, rate-limit propagation, staging-name cleanup or P6C art/skin work into this feature.
 - Audit continuity: `audit_dump.md` is a temporary scratch checkpoint for the interrupted broad audit only; this file remains the sole authoritative live development source of truth.
 - Documentation-only commits after the release do not change the published runtime baseline.
@@ -385,15 +385,27 @@ Files / source selection:
 - If no selected account has the source item, skip/warn; never synthesize data.
 - Macros/keybindings: an older or missing target requires confirmation before copying.
 
-pfUI comparison must preserve the supplied BAT's conservative semantic rules rather than becoming timestamp-only:
+pfUI is now a **targeted sync/merge surface**, not a whole-file copy. Runtime testing proved that comparison-only `Settings / Cache / Junk` classification is insufficient because the current copy path still overwrites the entire destination `pfUI.lua` after any accepted/automatic pfUI sync.
 
-- ignore `pfUI_cache.chathistory` as junk;
-- treat `pfUI_cache.libhealth`, `pfUI_cache.prediction`, and `pfUI_cache.gold` as cache data;
-- normalize Lua table/write ordering so ordering alone is not a settings change;
-- cache-only differences may auto-sync from the newest copy;
-- meaningful settings differences require confirmation;
-- unknown/new pfUI sections are meaningful settings by default;
-- comparer/parser failure must fail safe into ordinary modification-time handling/confirmation, never silent overwrite.
+Locked pfUI policy:
+
+- `pfUI_profiles` is the only user-configuration section TocPilot should synchronize directly.
+  - Compare profiles semantically so Lua table/write ordering alone is not a difference.
+  - A real `pfUI_profiles` difference requires confirmation.
+  - On acceptance, source `pfUI_profiles` replaces target `pfUI_profiles`; do not replace the entire `pfUI.lua`.
+- `pfUI_addon_profiles` is account/character-local and must be left untouched. Addon enablement can legitimately be character-specific; Account Sync must not propagate one account's addon-profile choices into another.
+- `pfUI_throttle` is left untouched/local.
+- `pfUI_cache` is handled explicitly by subtable rather than copied wholesale:
+  - `libhealth` — additive merge; preserve/accumulate learned mob-health data across selected accounts.
+  - `gold` — additive merge across realm/character keys so tracked character gold can be known across accounts.
+  - `prediction` — additive merge; preserve/accumulate learned per-character heal/spell prediction data.
+  - `chathistory` — leave untouched/local.
+  - `abuttons` — leave untouched/local for now; current samples contain empty `add`/`del` tables and there is no locked reason to merge them.
+  - unknown/new cache subtables are left untouched by default until explicitly classified.
+- Unknown/new top-level pfUI sections outside the explicitly supported surfaces above are left untouched by default. This is deliberately safer than guessing future module semantics.
+- Additive merge conflict semantics for the same exact key with different values must be explicitly defined and tested before implementation is considered complete; do not silently invent a winner.
+- Parser/merge failure must fail safe: do not modify the destination, report the error, and block Launch when Sync before Launch depends on that operation.
+- Existing destination backup ordering remains mandatory before any successful targeted pfUI write.
 
 Backup safety is mandatory:
 
@@ -446,6 +458,27 @@ Recovery result:
 - Final recovery CI: Build workflow run `36440593954`, Windows x64 job `108989739617`, passed Release build and **19/19 CTest tests**; `account-sync-safety` passed.
 - Untagged dev/test artifact from that exact run: GitHub artifact `TocPilot-windows-x64` / ID `10977293329`. Extracted `TocPilot.exe`: **3,076,608 bytes**, SHA-256 `930dc5d90c9e285d88e4a28187818d88d99b09c1b1bec24163d5abd55db6e68a`. This is for runtime validation only; do not publish it as a normal release.
 - The accepted rollback/reference baseline remains `8678334c0a0015eba14aecf58f7c416c045f6581` (`v0.3.22`) / pre-feature documentation checkpoint `6fcf117cf4f639612827acf88b10c6933f4b7802`.
+
+### Account Sync runtime checkpoint / pfUI redesign — 2026-09-30
+
+Runtime results through `v0.3.23-dev.1`:
+
+- Account discovery works for the two real accounts used in testing; selected-account persistence passed. With only one account selected, the main sync preview has no comparison work, which is expected.
+- Macros confirmation decline passed: declining left the target `macros-cache.txt` unchanged.
+- Macros accepted-sync passed: the older target was backed up under `WTF\\tocpilot\\<run>\\<account>\\macros-cache.txt` before overwrite, then the target matched the source.
+- Missing-destination macros passed: deleting the target macro file then accepting the correctly directed sync recreated it without creating a fake backup for a file that did not exist.
+- Keybindings runtime validation has not yet been completed.
+- pfUI preview correctly reached a confirmation dialog, but inspection of the two real `pfUI.lua` files showed the apparent meaningful difference was only `pfUI_addon_profiles["Current"]` numeric ordering/index movement (for example `pfQuest_Group` occupying a different list position), not a user UI-profile settings difference.
+- That finding exposed the larger defect: current `Junk` handling only excludes a subtree from semantic comparison. The actual pfUI sync path still performs a whole-file copy, so ignored data such as chat history would still be overwritten whenever any other pfUI difference triggered a sync.
+- The two real sample files show `pfUI_cache` top-level subtables `abuttons`, `libhealth`, `gold`, `chathistory`, and `prediction`. This evidence informed the targeted policy above.
+- **Do not continue destructive pfUI runtime testing on the current whole-file implementation.** Redesign and deterministic tests come first; then resume the runtime matrix.
+
+Development-channel bootstrap defect found during this runtime session:
+
+- Manually installing `v0.3.23-dev.1` over a stable-era state with no `receive_development_builds` key immediately downgraded back to `v0.3.22` on startup.
+- Cause: absent setting defaults to `false`, and startup update selection runs before the user can open Info -> Updates and opt in; a running prerelease therefore sees the stable channel and returns to stable.
+- Temporary test bootstrap succeeded after setting `receive_development_builds=true` in `TocPilot.json`.
+- This is a real bootstrap-path defect and should be fixed for the next dev candidate so a manually bootstrapped prerelease can reach the UI without immediately falling back. Preserve the default-off/explicit-opt-in policy; distinguish first-bootstrap/absent-setting behavior from an explicit user choice to disable development builds.
 
 ### Removal UX
 
@@ -698,7 +731,7 @@ Published `v0.3.17` runtime gate passed on 2026-09-27:
 
 The combined v0.3.14-v0.3.17 Compact two-column fill/split work is runtime-accepted.
 
-There is **no Account Sync runtime gate yet**. Account Sync recovery now compiles cleanly and final recovery CI passed Release build + **19/19 CTest tests** at `2e80b1378a7a01bb311140828e4e54069b1576d6`. The development channel is now established and its real self-update path passed in Development Release run `36588659393`; `v0.3.23-dev.1` is the current dev runtime-test candidate. The next explicit task is the Account Sync runtime matrix through this dev path. **Refresh All viewport jump** remains queued after Account Sync.
+Account Sync runtime validation is **partially complete and currently blocked on the pfUI redesign above**. Account selection persistence and the Macros decline/accepted-backup-copy/missing-destination paths passed against real WTF data. The current whole-file pfUI copy model is not accepted: runtime inspection exposed false meaningful differences from `pfUI_addon_profiles` ordering and proved that comparison-only junk handling can still overwrite local chat/addon-profile data. Complete the targeted `pfUI_profiles` + additive selected-cache merge design and deterministic coverage before resuming pfUI, Sync-before-Launch, Ctrl-launch and induced-failure runtime checks. **Refresh All viewport jump** remains queued after Account Sync.
 
 A1's managed same-root replacement check remains deferred. The current product workflow has **Remove Addon**, not the old Uninstall flow.
 
@@ -840,12 +873,17 @@ Do not add support for user-uploaded ZIP/7z/RAR/installer/bundle release assets 
 
 ## Exact Next Step
 
-All four development-channel slices are complete. **Do not start Account Sync runtime validation in this Slice 4 task.** In the next explicit continuation, runtime-test recovered Account Sync using `v0.3.23-dev.1` / the real development channel against real WTF data, in this order:
+Continue on `dev` from the current documentation checkpoint. Account Sync runtime testing is paused at the pfUI boundary; do **not** resume destructive pfUI sync with the existing whole-file copy path.
 
-1. Open Account Sync; verify account discovery, selection/config persistence, enabled items, and the three main-window preview/status rows.
-2. Run **Sync Now** with an older/missing macros or keybindings target; test both confirmation and decline. Inspect `WTF\\tocpilot\\<run>\\<account>\\...` and verify existing destinations are backed up before overwrite while missing destinations do not create fake backups.
-3. Exercise pfUI cache-only difference and confirm it auto-syncs without a settings-overwrite prompt; then exercise a meaningful settings difference and confirm it does prompt.
-4. Enable **Sync before Launch**; verify ordinary Launch works, then Ctrl-click Launch and confirm WoW receives `-console` even when Account Sync displays a confirmation dialog.
-5. Induce a safe backup/copy failure and verify sync reports the error and **Launch is blocked** without overwriting the destination.
+1. Read `dev_rulebook.md` and this file, verify `dev` HEAD, then inspect the current pfUI parser/comparison/write path and existing `account-sync-safety` tests.
+2. Design/implement the narrow targeted pfUI writer:
+   - confirmed source -> target synchronization of `pfUI_profiles` only;
+   - additive merges for `pfUI_cache.libhealth`, `pfUI_cache.gold`, and `pfUI_cache.prediction`;
+   - preserve target/local `pfUI_addon_profiles`, `pfUI_cache.chathistory`, `pfUI_cache.abuttons`, `pfUI_throttle`, and unknown top-level/cache sections;
+   - define deterministic same-key conflict semantics before coding the additive merge;
+   - retain backup-before-write, atomic/fail-safe behavior and Launch blocking on fatal failure.
+3. Add deterministic fixtures proving addon-profile ordering does not trigger/propagate, chat history remains target-local, profiles sync only after confirmation, additive caches accumulate without deleting target-only entries, and parser/merge failure leaves the target untouched.
+4. Separately fix the dev-channel first-bootstrap downgrade defect while preserving default-off explicit opt-in semantics; this should be included before publishing the next dev candidate.
+5. Publish/test the next development prerelease only after CI passes, then resume the remaining runtime matrix: pfUI targeted sync/merge, keybindings, Sync before Launch + Ctrl-click `-console`, and induced backup/copy failure.
 
-Only after that runtime gate passes should Account Sync be considered release-ready. **When accepted, Account Sync's stable release target is `v0.4.0` (not `v0.3.23`).** After that stable gate, work may move on to **Refresh All viewport jump**. Retain deferred **Clear WDB folder** and **DXVK advanced logging checkbox** work; do not mix them into this runtime gate.
+Account Sync's accepted stable release target remains **`v0.4.0`**. After the full Account Sync runtime gate passes, move to **Refresh All viewport jump**. Keep **Clear WDB folder** and **DXVK advanced logging checkbox** deferred.
