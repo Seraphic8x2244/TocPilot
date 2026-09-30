@@ -10,6 +10,7 @@
 #include "gitlab_api.h"
 #include "install.h"
 #include "library_dialog.h"
+#include "package_list_viewport.h"
 #include "refresh_freshness.h"
 #include "removal_prompt.h"
 #include "state.h"
@@ -2928,8 +2929,10 @@ void PopulatePackageList() {
     }
 
     RebuildPackageViewOrder();
-    ListView_DeleteAllItems(
-        g_packageList);
+
+    const int existingRows =
+        ListView_GetItemCount(
+            g_packageList);
 
     for (std::size_t displayIndex = 0;
          displayIndex <
@@ -2943,26 +2946,38 @@ void PopulatePackageList() {
             g_state.packages[
                 packageIndex];
 
-        LVITEMW item{};
-        item.mask =
-            LVIF_TEXT;
-        item.iItem =
-            static_cast<int>(
-                displayIndex);
-        item.iSubItem = 0;
         const std::wstring displayName =
             PackageDisplayName(package);
-        item.pszText =
-            const_cast<LPWSTR>(
-                displayName.c_str());
 
-        const int row =
-            ListView_InsertItem(
+        int row =
+            static_cast<int>(
+                displayIndex);
+
+        if (row < existingRows) {
+            ListView_SetItemText(
                 g_packageList,
-                &item);
+                row,
+                kPackageColumnName,
+                const_cast<LPWSTR>(
+                    displayName.c_str()));
+        } else {
+            LVITEMW item{};
+            item.mask =
+                LVIF_TEXT;
+            item.iItem = row;
+            item.iSubItem = 0;
+            item.pszText =
+                const_cast<LPWSTR>(
+                    displayName.c_str());
 
-        if (row < 0) {
-            continue;
+            row =
+                ListView_InsertItem(
+                    g_packageList,
+                    &item);
+
+            if (row < 0) {
+                continue;
+            }
         }
 
         const std::wstring website =
@@ -3023,6 +3038,18 @@ void PopulatePackageList() {
             kPackageColumnStatus,
             const_cast<LPWSTR>(
                 status.c_str()));
+    }
+
+    while (ListView_GetItemCount(
+               g_packageList) >
+           static_cast<int>(
+               g_packageViewOrder.size())) {
+        const int lastRow =
+            ListView_GetItemCount(
+                g_packageList) - 1;
+        ListView_DeleteItem(
+            g_packageList,
+            lastRow);
     }
 
     UpdatePackageSortIndicator();
@@ -3110,6 +3137,16 @@ void ScrollPackageListToTop() {
             g_packageList,
             0,
             first.top - currentTop.top);
+    }
+}
+
+void ApplyPackageListViewportReset(
+    tp::PackageListWorkScope scope,
+    tp::PackageListViewportPhase phase) {
+    if (tp::ShouldResetPackageListViewport(
+            scope,
+            phase)) {
+        ScrollPackageListToTop();
     }
 }
 
@@ -4054,24 +4091,14 @@ void RefreshPackageStateUi() {
                     selected)].id;
     }
 
-    std::wstring topPackageId;
-    if (g_packageList) {
-        const int topRow =
-            ListView_GetTopIndex(g_packageList);
-
-        if (topRow >= 0 &&
-            topRow < static_cast<int>(
-                g_packageViewOrder.size())) {
-            const std::size_t topIndex =
-                g_packageViewOrder[
-                    static_cast<std::size_t>(
-                        topRow)];
-
-            if (topIndex < g_state.packages.size()) {
-                topPackageId =
-                    g_state.packages[topIndex].id;
-            }
-        }
+    if (!selectedPackageId.empty() &&
+        g_packageList) {
+        ListView_SetItemState(
+            g_packageList,
+            -1,
+            0,
+            LVIS_SELECTED |
+                LVIS_FOCUSED);
     }
 
     SetIndicator(
@@ -4086,71 +4113,15 @@ void RefreshPackageStateUi() {
 
     PopulatePackageList();
 
-    if (!topPackageId.empty() &&
-        g_packageList) {
-        std::size_t topIndex =
-            g_state.packages.size();
-
-        for (std::size_t i = 0;
-             i < g_state.packages.size();
-             ++i) {
-            if (g_state.packages[i].id ==
-                topPackageId) {
-                topIndex = i;
-                break;
-            }
-        }
-
-        if (topIndex <
-            g_state.packages.size()) {
-            const int topRow =
-                PackageDisplayRow(topIndex);
-
-            if (topRow > 0) {
-                RECT first{};
-                RECT target{};
-
-                if (ListView_GetItemRect(
-                        g_packageList,
-                        0,
-                        &first,
-                        LVIR_BOUNDS) &&
-                    ListView_GetItemRect(
-                        g_packageList,
-                        topRow,
-                        &target,
-                        LVIR_BOUNDS)) {
-                    ListView_Scroll(
-                        g_packageList,
-                        0,
-                        target.top - first.top);
-                }
-            }
-        }
-    }
-
     if (!selectedPackageId.empty()) {
         for (std::size_t i = 0;
              i < g_state.packages.size();
              ++i) {
-            if (g_state.packages[i].id !=
+            if (g_state.packages[i].id ==
                 selectedPackageId) {
-                continue;
+                SelectPackageRow(i);
+                break;
             }
-
-            SelectPackageRow(i);
-
-            const int displayRow =
-                PackageDisplayRow(i);
-
-            if (displayRow >= 0 &&
-                g_packageList) {
-                ListView_EnsureVisible(
-                    g_packageList,
-                    displayRow,
-                    FALSE);
-            }
-            break;
         }
     }
 
@@ -4912,6 +4883,14 @@ void ClearAddGitInstallQueue() {
     g_addGitInstallQueuePosition = 0;
 }
 
+void FinishAddGitInstallQueue() {
+    ClearAddGitInstallQueue();
+    RefreshPackageStateUi();
+    ApplyPackageListViewportReset(
+        tp::PackageListWorkScope::MultiPackage,
+        tp::PackageListViewportPhase::Finish);
+}
+
 void StartAddGitInstallQueue(
     HWND hwnd,
     std::vector<std::size_t> indices) {
@@ -4932,6 +4911,10 @@ void StartAddGitInstallQueue(
         ClearAddGitInstallQueue();
         return;
     }
+
+    ApplyPackageListViewportReset(
+        tp::PackageListWorkScope::MultiPackage,
+        tp::PackageListViewportPhase::Start);
 
     StartPackageInstall(
         hwnd,
@@ -5054,7 +5037,9 @@ void FinishAutoStatusRefresh(HWND hwnd) {
     }
 
     RefreshPackageStateUi();
-    ScrollPackageListToTop();
+    ApplyPackageListViewportReset(
+        tp::PackageListWorkScope::WholeList,
+        tp::PackageListViewportPhase::Finish);
 
     std::wstring message =
         L"Status check complete: " +
@@ -5165,6 +5150,10 @@ void StartAutoStatusRefresh(HWND hwnd) {
         return;
     }
 
+    ApplyPackageListViewportReset(
+        tp::PackageListWorkScope::WholeList,
+        tp::PackageListViewportPhase::Start);
+
     g_autoStatusPackageIds.clear();
     ClearSessionUpdatedPackages();
     RefreshPackageStateUi();
@@ -5186,7 +5175,9 @@ void StartAutoStatusRefresh(HWND hwnd) {
     }
 
     if (g_autoStatusPackageIds.empty()) {
-        ScrollPackageListToTop();
+        ApplyPackageListViewportReset(
+            tp::PackageListWorkScope::WholeList,
+            tp::PackageListViewportPhase::Finish);
         SetStartupSplashCompletionPhase();
         return;
     }
@@ -5229,7 +5220,9 @@ void FinishUpdateAll() {
         L"Update");
 
     RefreshPackageStateUi();
-    ScrollPackageListToTop();
+    ApplyPackageListViewportReset(
+        tp::PackageListWorkScope::WholeList,
+        tp::PackageListViewportPhase::Finish);
 
     std::wstring summary =
         L"Update New finished: " +
@@ -5316,6 +5309,10 @@ void CompleteUpdateAllStep(
         SetWindowTextW(
         g_updateAllButton,
         L"Update");
+        RefreshPackageStateUi();
+        ApplyPackageListViewportReset(
+            tp::PackageListWorkScope::WholeList,
+            tp::PackageListViewportPhase::Finish);
         UpdatePackageButtons();
 
         MessageBoxW(
@@ -5343,6 +5340,10 @@ void StartUpdateAll(HWND hwnd) {
         g_appUpdateInProgress) {
         return;
     }
+
+    ApplyPackageListViewportReset(
+        tp::PackageListWorkScope::WholeList,
+        tp::PackageListViewportPhase::Start);
 
     auto progress =
         tp::MakeUpdateAllProgress(g_state);
@@ -5396,6 +5397,9 @@ void StartUpdateAll(HWND hwnd) {
     if (progress.packageIds.empty()) {
         SetRoutinePackageFeedback(
             L"There are no installed addons currently marked Update available. Run Refresh All to check for new revisions.");
+        ApplyPackageListViewportReset(
+            tp::PackageListWorkScope::WholeList,
+            tp::PackageListViewportPhase::Finish);
         return;
     }
 
@@ -11179,7 +11183,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             }
 
             if (addGitQueueStep) {
-                ClearAddGitInstallQueue();
+                FinishAddGitInstallQueue();
             }
 
             if (updateAllStep) {
@@ -11225,7 +11229,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             }
 
             if (addGitQueueStep) {
-                ClearAddGitInstallQueue();
+                FinishAddGitInstallQueue();
             }
 
             if (updateAllStep) {
@@ -11322,7 +11326,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             }
 
             if (addGitQueueStep) {
-                ClearAddGitInstallQueue();
+                FinishAddGitInstallQueue();
             }
 
             if (updateAllStep) {
@@ -11386,7 +11390,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             }
 
             if (addGitQueueStep) {
-                ClearAddGitInstallQueue();
+                FinishAddGitInstallQueue();
             }
 
             if (updateAllStep) {
@@ -11432,7 +11436,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             }
 
             if (addGitQueueStep) {
-                ClearAddGitInstallQueue();
+                FinishAddGitInstallQueue();
             }
 
             if (updateAllStep) {
@@ -11500,7 +11504,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             }
 
             if (addGitQueueStep) {
-                ClearAddGitInstallQueue();
+                FinishAddGitInstallQueue();
             }
 
             if (updateAllStep) {
@@ -11591,6 +11595,13 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
         RefreshPackageStateUi();
         SelectPackageRow(index);
         UpdatePackageButtons();
+
+        if (addGitQueueStep) {
+            ApplyPackageListViewportReset(
+                tp::PackageListWorkScope::MultiPackage,
+                tp::PackageListViewportPhase::Finish);
+        }
+
         const std::wstring shortSha =
             installedPackage.installedRevision.substr(
                 0,

@@ -368,6 +368,18 @@ if(BUILD_TESTING)
 
     add_test(NAME window-layout-roundtrip COMMAND TocPilotWindowLayoutTests)
 
+    add_executable(TocPilotPackageListViewportTests
+        tests/package_list_viewport_tests.cpp
+    )
+    target_compile_features(TocPilotPackageListViewportTests PRIVATE cxx_std_20)
+    target_include_directories(TocPilotPackageListViewportTests PRIVATE src)
+
+    if(MSVC)
+        target_compile_options(TocPilotPackageListViewportTests PRIVATE /W4 /permissive- /utf-8)
+    endif()
+
+    add_test(NAME package-list-viewport-policy COMMAND TocPilotPackageListViewportTests)
+
 
     add_executable(TocPilotAccountSyncTests
         tests/account_sync_tests.cpp
