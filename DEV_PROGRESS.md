@@ -22,8 +22,8 @@
 - v0.3.15 Compact divider transaction fix: **implemented / CI-checked / merged / published; partial runtime pass**. Expanding the left Compact column no longer creates a horizontal scrollbar immediately, but the divider transaction still clamps both primary columns only to the generic 40 px floor. This lets the right visible column shrink below its intended Compact minimum; after entering that invalid state, dragging back left can expose a horizontal scrollbar. Fix by enforcing the real per-column Compact minima throughout fitting and divider transactions.
 - v0.3.16 Compact minimum-width fix: **implemented / CI-checked / merged / published; partial runtime pass**. Self-update passed; the companion column now stops at its intended minimum in both column orders; whole-window resize and Advanced regression checks passed. Remaining failure: when dragging the middle divider back left after pushing it right, a horizontal scrollbar still appears. This is now isolated to reverse-direction transaction ordering rather than width limits.
 - v0.3.17 reverse-direction divider fix: **implemented / CI-checked / merged / published / runtime-accepted**. Compact divider dragging is a fully owned two-column transaction: the shrinking column is applied first, the growing column second, and the native one-column commit is cancelled under a re-entrancy guard. User runtime confirmed the rightward clamp, leftward reversal, both Name/Status orders, window resizing and Advanced regression checks all pass with no horizontal scrollbar.
-- Current goal: **Refresh All viewport jump** is the next active development item now that Account Sync is published stable in `v0.4.0`. Preserve the accepted Account Sync behaviour and its explicit validation-debt record; do not silently reopen or rewrite those results.
-- Current scope boundary: investigate/fix only the **Refresh All viewport jump**, preserving top/selection identity across re-sort/repopulate. Preserve the accepted v0.4.0 Account Sync and inherited toolbar/DPI behaviour. Do not mix async latest-stable DLL discovery, Add-Git stale-request work, warning cleanup, rate-limit propagation, staging-name cleanup, Clear WDB, DXVK logging or P6C art/skin work into this slice.
+- Current goal: **make package-list viewport resets deliberate and consistent for bulk/whole-list work.** Replace the old Refresh All viewport-preservation behaviour with the locked start/finish reset contract below. Preserve the accepted Account Sync behaviour and its explicit validation-debt record; do not silently reopen or rewrite those results.
+- Current scope boundary: change only **package-list viewport behaviour around single-addon versus bulk/whole-list operations**. Remove the old top-row/selection-driven viewport restoration path rather than trying to repair it. Preserve the accepted v0.4.0 Account Sync and inherited toolbar/DPI behaviour. Do not mix async latest-stable DLL discovery, Add-Git stale-request work, warning cleanup, rate-limit propagation, staging-name cleanup, Clear WDB, DXVK logging or P6C art/skin work into this slice.
 - Audit continuity: `audit_dump.md` is a temporary scratch checkpoint for the interrupted broad audit only; this file remains the sole authoritative live development source of truth.
 - Documentation-only commits after the release do not change the published runtime baseline.
 
@@ -346,7 +346,7 @@ Row semantics retained from v0.3.4:
 - selected rows keep the normal Windows selection background, but semantic row text colour should remain visible while selected;
 - green session state clears on Refresh All or exit;
 - Refresh All and Update New process packages in current visible list order;
-- Update New returns the package list to the top when complete.
+- Update New follows the general bulk/whole-list viewport-reset contract below.
 
 Advanced column widths/order are persisted. The dedicated Lock Columns UI/behaviour is removed in v0.3.6. Starting with v0.3.11, persistence enforces the two-column invariant: `Name` and `Status` are always the first two columns and may only swap with each other; Advanced-only columns stay to their right. `Name`/`Status` widths are one shared pair of values across Compact and Advanced, so resizing in either mode updates what the other mode inherits. Advanced-only widths/order remain Advanced-specific. The legacy JSON `package_columns_locked` field is retained for state compatibility but no longer controls the UI.
 
@@ -360,6 +360,29 @@ Branch-selector target behaviour after the v0.3.6 runtime follow-up:
 - Add Git already fetches the full Git smart-HTTP branch advertisement in the branch chooser; reuse that result to seed runtime metadata rather than immediately fetching it again;
 - normal branch-head refresh also fetches the full advertisement internally, so retain/reuse that information to discover newly added/removed remote branches during ordinary startup/Refresh All checks without an extra branch-list request.
 
+### Package-list viewport reset — locked design
+
+Goal: make list movement predictable and intentionally simple. The previous attempt to preserve the visible top package / selected-package viewport across repopulate and re-sort is removed rather than repaired.
+
+Authoritative behaviour:
+
+- **Single-addon action:** do **not** move the package-list viewport at start or finish. This remains true even if the implementation internally routes the action through queue machinery; effective work scope of one package means no viewport reset.
+- **Bulk / multi-addon action:** scroll the package list to the top when the operation **starts**, then scroll it to the top again when the operation **finishes**.
+- **Whole-list operations** such as Refresh All / Update All follow the same start + finish reset rule, whether or not the implementation uses the same queue object as package updates.
+- The finish reset occurs after the final list rebuild/re-sort so the user sees the completed result from the top.
+- The start reset occurs before bulk/whole-list work begins so progress begins from a consistent visible position.
+- Remove the old preservation/restoration behaviour for prior scroll position, previous top-row package identity, and selection-driven viewport restoration during bulk/whole-list rebuilds.
+- Do not layer the new reset rule on top of the old preservation path; there must be one authoritative viewport behaviour.
+- Existing logical package selection may remain where needed by surrounding UI behaviour, but bulk/whole-list completion must **not** scroll that selection back into view after the explicit top reset.
+- Purely presentational controls that do not start package work or rebuild/re-sort the package list are outside this rule and must not reset the viewport.
+
+Implementation direction:
+
+- identify the narrow shared boundaries for operation start and operation completion rather than scattering scroll-to-top calls through individual package handlers;
+- make scope explicit enough to distinguish one-package work from multi-package/whole-list work even when both share queue infrastructure;
+- strip the old `RefreshPackageStateUi()` top/selection viewport anchoring logic that causes the arbitrary mid-list jump;
+- preserve single-addon locality: targeted install/update/reinstall/remove work should leave the user's current list position untouched;
+- add focused automated coverage for: single-package no movement, multi-package start reset, multi-package finish reset, whole-list start reset, whole-list finish reset, and no selection-driven re-scroll after a bulk finish reset.
 ### Account Sync — agreed design / implementation recovery
 
 Goal: retire the user's current `wtf_sync.bat` by moving its account-data synchronization and launch convenience into TocPilot without adding a menu-heavy launch flow.
@@ -686,7 +709,7 @@ Remaining audited implementation priority after the v0.3.11 runtime gate starts 
 
 Lower-priority/test/build findings and contract-driven direct-DLL risks are retained in `audit_dump.md`.
 
-New deferred UI observation from 2026-09-27: after **Refresh All**, the addon package list appears to jump to an arbitrary mid-list position. Code review points to `RefreshPackageStateUi()` preserving the identity of the previous top/selected package across repopulate/re-sort; when `ClearSessionUpdatedPackages()` changes ordering, that same package can move to a different display row and the viewport follows it. This is likely not 'first addon in JSON'. Keep this queued separately; do not mix it into the Compact two-column fill/split slice. The async/UI pass found no high/medium GDI/icon ownership leak. It did confirm low-priority cleanup/debt: the old hidden branch COMBOBOX is now dead infrastructure after the list-cell popup redesign; main close can abandon non-install async work/staging; several rare Win32 control/subclass/timer/GetMessage failures are not surfaced.
+UI observation from 2026-09-27: after **Refresh All**, the addon package list could jump to an arbitrary mid-list position because `RefreshPackageStateUi()` preserved the identity of the previous top/selected package across repopulate/re-sort; when ordering changed, the viewport followed that package. **Superseded design decision on 2026-09-30:** do not repair or retain that preservation behaviour. Remove it and use the explicit single-addon versus bulk/whole-list reset contract instead. The async/UI pass otherwise found no high/medium GDI/icon ownership leak. It did confirm low-priority cleanup/debt: the old hidden branch COMBOBOX is now dead infrastructure after the list-cell popup redesign; main close can abandon non-install async work/staging; several rare Win32 control/subclass/timer/GetMessage failures are not surfaced.
 
 Final severity/order:
 
@@ -696,7 +719,7 @@ Final severity/order:
 4. **SELF-UPDATE TRANSPORT + COLUMN LAYOUT:** **IMPLEMENTED / CI-CHECKED / MERGED / PUBLISHED in v0.3.11; REQUESTED RUNTIME MATRIX PASSED** — installed update/startup-state and the constrained/shared column behavior passed on 2026-09-27.
 5. **COMPACT MAIN-WINDOW WIDTH FOLLOW-UP:** v0.3.12 implemented capture/restore; v0.3.13 fixed the startup-default-vs-real-minimum edge. **v0.3.13 PUBLISHED / CI-CHECKED / RUNTIME-ACCEPTED**.
 6. **CURRENT NARROW UI FOLLOW-UP — icon-toolbar pass:** replace the wide text toolbar presentation with compact icon buttons while preserving existing command behavior; details are locked under P6B below.
-7. **NEXT NARROW UI FOLLOW-UP AFTER TOOLBAR PASS — Refresh All viewport jump:** investigate preserved top/selection identity across re-sort/repopulate.
+7. **CURRENT NARROW UI FOLLOW-UP — package-list viewport reset:** remove the old viewport-preservation path and implement the locked single-addon versus bulk/whole-list start/finish reset contract.
 8. **NEXT ROBUSTNESS SOURCE WORK AFTER UI FOLLOW-UPS — async latest-stable DLL discovery:** remove provider I/O from the dialog thread.
 6. **MEDIUM/LOW — Add-Git branch-dialog request identity:** reject stale close/reopen completions.
 7. **MEDIUM/LOW — Update All archive rate-limit propagation:** confirmed provider 429 should stop later provider-heavy queue work.
@@ -823,7 +846,7 @@ After P6 is accepted, reprioritize the deferred feature backlog rather than auto
 
 Current deferred work includes:
 
-- **Refresh All viewport jump** — still queued after Account Sync; investigate preserved top/selection identity across re-sort/repopulate;
+- **Package-list viewport reset** — active next slice: single-addon actions do not move the list; bulk/multi-addon and whole-list operations reset to the top at both start and finish; remove the old viewport-preservation/restoration behaviour;
 - **Clear WDB folder** — future Advanced feature;
 - **DXVK advanced logging checkbox** — future Advanced option; the BAT's current `DXVK_LOG_LEVEL=debug` behaviour should become optional rather than forced. `WoW_d3d9.log` archival can be reconsidered with this work and is not part of the locked Account Sync scope;
 - P5 import/export;
@@ -899,11 +922,14 @@ Do not add support for user-uploaded ZIP/7z/RAR/installer/bundle release assets 
 
 ## Exact Next Step
 
-Start the queued **Refresh All viewport jump** slice from the post-release `v0.4.0` baseline:
+Implement the locked **package-list viewport reset** design from the post-release `v0.4.0` baseline:
 
-1. Verify `dev` is aligned with the post-release main documentation checkpoint before editing.
-2. Inspect the current Refresh All re-sort/repopulate path and identify why viewport/top-row and/or selection identity moves.
-3. Design the narrowest preservation mechanism for visible top/selection identity before changing runtime code.
-4. Implement and test only that behaviour on a focused branch; do not mix unrelated refresh/provider/UI work.
+1. Inspect the current single-addon, queued multi-addon, Refresh All and Update All start/completion paths plus `RefreshPackageStateUi()` viewport restoration.
+2. Remove the old prior-scroll/top-package/selection-driven viewport restoration behaviour instead of adapting it.
+3. Add one narrow authoritative reset mechanism:
+   - one-package effective scope -> no viewport movement;
+   - multi-package / bulk / whole-list scope -> top at start and top again after final completion/rebuild.
+4. Ensure a retained logical selection cannot pull the viewport away from the top after a bulk/whole-list finish reset.
+5. Add focused automated coverage for the scope and start/finish rules, then publish through the normal dev runtime-test path.
 
-Account Sync is now stable in `v0.4.0`. Preserve the explicit validation debt for Sync-before-Launch/Ctrl-click and induced backup/write-failure; those paths were accepted as non-blocking, not runtime-proven.
+Account Sync is stable in `v0.4.0`. Preserve the explicit validation debt for Sync-before-Launch/Ctrl-click and induced backup/write-failure; those paths were accepted as non-blocking, not runtime-proven.
