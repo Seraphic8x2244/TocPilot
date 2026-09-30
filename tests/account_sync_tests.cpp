@@ -92,6 +92,14 @@ std::string ReadText(
         std::istreambuf_iterator<char>());
 }
 
+bool Contains(
+    const std::string& text,
+    std::string_view needle) {
+    return
+        text.find(needle) !=
+        std::string::npos;
+}
+
 std::vector<std::filesystem::path>
 BackupRunFolders(
     const std::filesystem::path& root) {
@@ -286,6 +294,34 @@ void TestPfUiComparison() {
     const auto b =
         root / L"b.lua";
 
+    const std::string localA =
+        "pfUI_addon_profiles = {\n"
+        "[\"Current\"] = {\n"
+        "[1] = \"pfQuest_Group\",\n"
+        "[2] = \"pfSomethingElse\",\n"
+        "},\n"
+        "}\n"
+        "pfUI_throttle = {\n"
+        "[\"local\"] = \"alpha\",\n"
+        "}\n"
+        "pfUI_future_top = {\n"
+        "[\"local\"] = \"alpha\",\n"
+        "}\n";
+
+    const std::string localB =
+        "pfUI_addon_profiles = {\n"
+        "[\"Current\"] = {\n"
+        "[1] = \"pfSomethingElse\",\n"
+        "[2] = \"pfQuest_Group\",\n"
+        "},\n"
+        "}\n"
+        "pfUI_throttle = {\n"
+        "[\"local\"] = \"beta\",\n"
+        "}\n"
+        "pfUI_future_top = {\n"
+        "[\"local\"] = \"beta\",\n"
+        "}\n";
+
     WriteText(
         a,
         PfUiText(
@@ -293,15 +329,17 @@ void TestPfUiComparison() {
             "100",
             "alpha",
             false,
-            false));
+            false) +
+            localA);
     WriteText(
         b,
         PfUiText(
             "160",
             "100",
             "different history",
-            false,
-            true));
+            true,
+            true) +
+            localB);
 
     tp::PfUiComparison comparison;
     std::wstring error;
@@ -315,7 +353,7 @@ void TestPfUiComparison() {
         "pfUI equivalent comparison should parse");
     Check(
         comparison.equivalent,
-        "table order and chathistory should be ignored");
+        "addon-profile ordering, chat history, unknown sections and root order should be ignored");
 
     WriteText(
         b,
@@ -324,7 +362,8 @@ void TestPfUiComparison() {
             "250",
             "different history",
             false,
-            true));
+            true) +
+            localB);
 
     Check(
         tp::ComparePfUiFiles(
@@ -332,7 +371,7 @@ void TestPfUiComparison() {
             b,
             comparison,
             error),
-        "pfUI cache comparison should parse");
+        "pfUI selected-cache comparison should parse");
     Check(
         comparison.cacheOnly,
         "gold-only difference should be cache-only");
@@ -344,7 +383,8 @@ void TestPfUiComparison() {
             "100",
             "alpha",
             false,
-            false));
+            false) +
+            localB);
 
     Check(
         tp::ComparePfUiFiles(
@@ -352,30 +392,10 @@ void TestPfUiComparison() {
             b,
             comparison,
             error),
-        "pfUI settings comparison should parse");
+        "pfUI profile comparison should parse");
     Check(
         comparison.settingsChanged,
-        "profile setting difference should be meaningful");
-
-    WriteText(
-        b,
-        PfUiText(
-            "160",
-            "100",
-            "alpha",
-            true,
-            false));
-
-    Check(
-        tp::ComparePfUiFiles(
-            a,
-            b,
-            comparison,
-            error),
-        "unknown pfUI section should still parse");
-    Check(
-        comparison.settingsChanged,
-        "unknown pfUI section should default to settings");
+        "pfUI_profiles difference should require confirmation");
 
     WriteText(
         b,
@@ -546,9 +566,9 @@ void TestConfirmedCopyAndBackup() {
         ec);
 }
 
-void TestPfUiAutomaticAndFallback() {
+void TestPfUiTargetedMergeAndPreservation() {
     const auto root =
-        TestRoot(L"pfui-run");
+        TestRoot(L"pfui-targeted");
     ResetRoot(root);
 
     const auto source =
@@ -562,25 +582,442 @@ void TestPfUiAutomaticAndFallback() {
             L"BETA",
             L"SavedVariables\\pfUI.lua");
 
+    const std::string sourceText =
+        "pfUI_cache = {\n"
+        "[\"libhealth\"] = {\n"
+        "[\"sourceMob\"] = \"1000\",\n"
+        "[\"sharedMob\"] = \"source-newer\",\n"
+        "},\n"
+        "[\"gold\"] = {\n"
+        "[\"Realm\"] = {\n"
+        "[\"Alpha\"] = \"500\",\n"
+        "[\"Shared\"] = \"10\",\n"
+        "},\n"
+        "},\n"
+        "[\"prediction\"] = {\n"
+        "[\"ALPHA\"] = {\n"
+        "[\"Flash\"] = \"12\",\n"
+        "},\n"
+        "},\n"
+        "[\"chathistory\"] = {\n"
+        "[1] = \"source chat\",\n"
+        "},\n"
+        "[\"abuttons\"] = {\n"
+        "[\"add\"] = {\n"
+        "[\"source\"] = \"source action\",\n"
+        "},\n"
+        "},\n"
+        "[\"future_section\"] = {\n"
+        "[\"value\"] = \"source future cache\",\n"
+        "},\n"
+        "}\n"
+        "pfUI_profiles = {\n"
+        "[\"default\"] = {\n"
+        "[\"width\"] = \"160\",\n"
+        "},\n"
+        "}\n"
+        "pfUI_addon_profiles = {\n"
+        "[\"Current\"] = {\n"
+        "[1] = \"SourceAddon\",\n"
+        "},\n"
+        "}\n"
+        "pfUI_throttle = {\n"
+        "[\"value\"] = \"source throttle\",\n"
+        "}\n"
+        "pfUI_future_top = {\n"
+        "[\"value\"] = \"source future top\",\n"
+        "}\n";
+
+    const std::string targetText =
+        "pfUI_cache = {\n"
+        "[\"libhealth\"] = {\n"
+        "[\"targetMob\"] = \"700\",\n"
+        "[\"sharedMob\"] = \"target-older\",\n"
+        "},\n"
+        "[\"gold\"] = {\n"
+        "[\"Realm\"] = {\n"
+        "[\"Beta\"] = \"250\",\n"
+        "[\"Shared\"] = \"5\",\n"
+        "},\n"
+        "},\n"
+        "[\"prediction\"] = {\n"
+        "[\"BETA\"] = {\n"
+        "[\"Heal\"] = \"7\",\n"
+        "},\n"
+        "},\n"
+        "[\"chathistory\"] = {\n"
+        "[1] = \"target chat\",\n"
+        "},\n"
+        "[\"abuttons\"] = {\n"
+        "[\"add\"] = {\n"
+        "[\"target\"] = \"target action\",\n"
+        "},\n"
+        "},\n"
+        "[\"future_section\"] = {\n"
+        "[\"value\"] = \"target future cache\",\n"
+        "},\n"
+        "}\n"
+        "pfUI_profiles = {\n"
+        "[\"default\"] = {\n"
+        "[\"width\"] = \"999\",\n"
+        "},\n"
+        "}\n"
+        "pfUI_addon_profiles = {\n"
+        "[\"Current\"] = {\n"
+        "[1] = \"TargetAddon\",\n"
+        "},\n"
+        "}\n"
+        "pfUI_throttle = {\n"
+        "[\"value\"] = \"target throttle\",\n"
+        "}\n"
+        "pfUI_future_top = {\n"
+        "[\"value\"] = \"target future top\",\n"
+        "}\n";
+
     WriteText(
         source,
-        PfUiText(
-            "160",
-            "500",
-            "source",
-            false,
-            false));
+        sourceText);
     WriteText(
         target,
-        PfUiText(
-            "160",
-            "100",
-            "target",
-            false,
-            true));
+        targetText);
     MakeNewer(
         source,
         target);
+
+    tp::AccountSyncConfig config;
+    config.accounts = {
+        L"ALPHA",
+        L"BETA"
+    };
+    config.pfUi = true;
+
+    tp::AccountSyncRunResult result;
+    std::wstring error;
+    int confirmations = 0;
+
+    Check(
+        tp::RunAccountSync(
+            root,
+            config,
+            [&](tp::AccountSyncItem item,
+                std::wstring_view sourceAccount,
+                const std::vector<std::wstring>& targets,
+                bool fallback) {
+                ++confirmations;
+                Check(
+                    item ==
+                        tp::AccountSyncItem::PfUi,
+                    "targeted pfUI confirmation should be for pfUI");
+                Check(
+                    sourceAccount == L"ALPHA",
+                    "newest pfUI should remain profile source");
+                Check(
+                    targets.size() == 1 &&
+                        targets.front() == L"BETA",
+                    "only the older profile-different target should require confirmation");
+                Check(
+                    !fallback,
+                    "targeted pfUI parser should not use whole-file fallback copying");
+                return true;
+            },
+            result,
+            error),
+        "targeted pfUI sync should run");
+
+    Check(
+        !result.fatal,
+        "targeted pfUI sync should not be fatal");
+    Check(
+        confirmations == 1,
+        "profile difference should require exactly one confirmation");
+
+    const auto& pfui =
+        result.items[
+            static_cast<std::size_t>(
+                tp::AccountSyncItem::PfUi)];
+
+    Check(
+        pfui.copiedTargets == 2,
+        "group cache merge should modify source and target exactly once each");
+
+    const std::string mergedSource =
+        ReadText(source);
+    const std::string mergedTarget =
+        ReadText(target);
+
+    Check(
+        Contains(
+            mergedTarget,
+            "[\"width\"] = \"160\",") &&
+            !Contains(
+                mergedTarget,
+                "[\"width\"] = \"999\","),
+        "confirmed target should receive source pfUI_profiles");
+
+    Check(
+        Contains(
+            mergedTarget,
+            "TargetAddon") &&
+            !Contains(
+                mergedTarget,
+                "SourceAddon"),
+        "target addon profiles must remain target-local");
+    Check(
+        Contains(
+            mergedTarget,
+            "target chat") &&
+            !Contains(
+                mergedTarget,
+                "source chat"),
+        "target chat history must remain target-local");
+    Check(
+        Contains(
+            mergedTarget,
+            "target action") &&
+            !Contains(
+                mergedTarget,
+                "source action"),
+        "target abuttons must remain target-local");
+    Check(
+        Contains(
+            mergedTarget,
+            "target future cache") &&
+            !Contains(
+                mergedTarget,
+                "source future cache"),
+        "unknown cache sections must remain target-local");
+    Check(
+        Contains(
+            mergedTarget,
+            "target throttle") &&
+            !Contains(
+                mergedTarget,
+                "source throttle"),
+        "pfUI_throttle must remain target-local");
+    Check(
+        Contains(
+            mergedTarget,
+            "target future top") &&
+            !Contains(
+                mergedTarget,
+                "source future top"),
+        "unknown top-level pfUI sections must remain target-local");
+
+    for (const std::string_view expected : {
+             std::string_view("[\"sourceMob\"] = \"1000\","),
+             std::string_view("[\"targetMob\"] = \"700\","),
+             std::string_view("[\"Alpha\"] = \"500\","),
+             std::string_view("[\"Beta\"] = \"250\","),
+             std::string_view("[\"Flash\"] = \"12\","),
+             std::string_view("[\"Heal\"] = \"7\",")}) {
+        Check(
+            Contains(
+                mergedTarget,
+                expected),
+            "target should accumulate source and target-only selected cache entries");
+        Check(
+            Contains(
+                mergedSource,
+                expected),
+            "source should also accumulate target-only selected cache entries");
+    }
+
+    Check(
+        Contains(
+            mergedTarget,
+            "[\"sharedMob\"] = \"source-newer\",") &&
+            !Contains(
+                mergedTarget,
+                "[\"sharedMob\"] = \"target-older\","),
+        "newest file should win same-key cache conflicts");
+    Check(
+        Contains(
+            mergedTarget,
+            "[\"Shared\"] = \"10\",") &&
+            !Contains(
+                mergedTarget,
+                "[\"Shared\"] = \"5\","),
+        "newest nested cache value should win same-key conflicts");
+
+    bool sourceBackup = false;
+    bool targetBackup = false;
+
+    for (const auto& folder :
+         BackupRunFolders(root)) {
+        const auto alphaBackup =
+            folder /
+            L"ALPHA" /
+            L"SavedVariables" /
+            L"pfUI.lua";
+        const auto betaBackup =
+            folder /
+            L"BETA" /
+            L"SavedVariables" /
+            L"pfUI.lua";
+
+        if (std::filesystem::is_regular_file(
+                alphaBackup)) {
+            sourceBackup = true;
+            Check(
+                ReadText(alphaBackup) ==
+                    sourceText,
+                "source should be backed up before receiving target-only cache entries");
+        }
+
+        if (std::filesystem::is_regular_file(
+                betaBackup)) {
+            targetBackup = true;
+            Check(
+                ReadText(betaBackup) ==
+                    targetText,
+                "target should be backed up before targeted profile/cache write");
+        }
+    }
+
+    Check(
+        sourceBackup &&
+            targetBackup,
+        "every existing pfUI file modified by the group merge should be backed up");
+
+    std::error_code ec;
+    std::filesystem::remove_all(
+        root,
+        ec);
+}
+
+void TestPfUiLocalOrderingIgnored() {
+    const auto root =
+        TestRoot(L"pfui-local-order");
+    ResetRoot(root);
+
+    const auto source =
+        AccountFile(
+            root,
+            L"ALPHA",
+            L"SavedVariables\\pfUI.lua");
+    const auto target =
+        AccountFile(
+            root,
+            L"BETA",
+            L"SavedVariables\\pfUI.lua");
+
+    const std::string sourceText =
+        PfUiText(
+            "160",
+            "100",
+            "source chat",
+            false,
+            false) +
+        "pfUI_addon_profiles = {\n"
+        "[\"Current\"] = {\n"
+        "[1] = \"One\",\n"
+        "[2] = \"Two\",\n"
+        "},\n"
+        "}\n";
+
+    const std::string targetText =
+        PfUiText(
+            "160",
+            "100",
+            "target chat",
+            true,
+            true) +
+        "pfUI_addon_profiles = {\n"
+        "[\"Current\"] = {\n"
+        "[1] = \"Two\",\n"
+        "[2] = \"One\",\n"
+        "},\n"
+        "}\n";
+
+    WriteText(
+        source,
+        sourceText);
+    WriteText(
+        target,
+        targetText);
+    MakeNewer(
+        source,
+        target);
+
+    tp::AccountSyncConfig config;
+    config.accounts = {
+        L"ALPHA",
+        L"BETA"
+    };
+    config.pfUi = true;
+
+    tp::AccountSyncRunResult result;
+    std::wstring error;
+    int confirmations = 0;
+
+    Check(
+        tp::RunAccountSync(
+            root,
+            config,
+            [&](tp::AccountSyncItem,
+                std::wstring_view,
+                const std::vector<std::wstring>&,
+                bool) {
+                ++confirmations;
+                return true;
+            },
+            result,
+            error),
+        "local-only pfUI differences should inspect successfully");
+    Check(
+        !result.fatal,
+        "local-only pfUI differences should not be fatal");
+    Check(
+        confirmations == 0,
+        "addon-profile ordering/local-only differences must not trigger confirmation");
+    Check(
+        ReadText(target) ==
+            targetText,
+        "local-only pfUI differences must not propagate or rewrite the target");
+    Check(
+        BackupRunFolders(root).empty(),
+        "no backup should be created when targeted pfUI surfaces are unchanged");
+
+    std::error_code ec;
+    std::filesystem::remove_all(
+        root,
+        ec);
+}
+
+void TestPfUiProfileDecline() {
+    const auto root =
+        TestRoot(L"pfui-profile-decline");
+    ResetRoot(root);
+
+    const auto source =
+        AccountFile(
+            root,
+            L"ALPHA",
+            L"SavedVariables\\pfUI.lua");
+    const auto target =
+        AccountFile(
+            root,
+            L"BETA",
+            L"SavedVariables\\pfUI.lua");
+
+    const std::string sourceText =
+        PfUiText(
+            "160",
+            "100",
+            "source",
+            false,
+            false);
+    const std::string targetText =
+        PfUiText(
+            "999",
+            "100",
+            "target",
+            false,
+            false);
+
+    WriteText(source, sourceText);
+    WriteText(target, targetText);
+    MakeNewer(source, target);
 
     tp::AccountSyncConfig config;
     config.accounts = {
@@ -606,96 +1043,212 @@ void TestPfUiAutomaticAndFallback() {
             },
             result,
             error),
-        "pfUI cache-only sync should run");
-
+        "declined pfUI profile sync should run");
     Check(
-        confirmations == 0,
-        "pfUI cache-only difference should not prompt");
+        confirmations == 1,
+        "profile difference should request confirmation");
     Check(
         !result.fatal,
-        "pfUI cache-only auto sync should not be fatal");
+        "declining profile sync should not be fatal");
     Check(
         ReadText(target) ==
-            ReadText(source),
-        "pfUI cache-only target should receive complete newest file");
+            targetText,
+        "pfUI_profiles must not change when confirmation is declined");
+    Check(
+        BackupRunFolders(root).empty(),
+        "declined profile-only sync should not create a backup");
 
-    WriteText(
-        target,
+    std::error_code ec;
+    std::filesystem::remove_all(
+        root,
+        ec);
+}
+
+void TestPfUiParserFailureUntouched() {
+    const auto root =
+        TestRoot(L"pfui-parse-failure");
+    ResetRoot(root);
+
+    const auto source =
+        AccountFile(
+            root,
+            L"ALPHA",
+            L"SavedVariables\\pfUI.lua");
+    const auto target =
+        AccountFile(
+            root,
+            L"BETA",
+            L"SavedVariables\\pfUI.lua");
+
+    const std::string sourceText =
+        PfUiText(
+            "160",
+            "100",
+            "source",
+            false,
+            false);
+    const std::string targetText =
         "pfUI_profiles = {\n"
         "unsupported line\n"
-        "}\n");
-    MakeNewer(
-        source,
-        target);
+        "}\n";
 
-    std::array<
-        tp::AccountSyncItemResult,
-        tp::kAccountSyncItemCount>
-        preview{};
+    WriteText(source, sourceText);
+    WriteText(target, targetText);
+    MakeNewer(source, target);
 
-    Check(
-        tp::InspectAccountSync(
-            root,
-            config,
-            preview,
-            error),
-        "pfUI fallback preview should succeed");
+    tp::AccountSyncConfig config;
+    config.accounts = {
+        L"ALPHA",
+        L"BETA"
+    };
+    config.pfUi = true;
 
-    const auto& pfui =
-        preview[
-            static_cast<std::size_t>(
-                tp::AccountSyncItem::PfUi)];
-
-    Check(
-        pfui.confirmationRequired,
-        "pfUI parser failure should fall back to confirmation");
-    Check(
-        pfui.comparerFallback,
-        "pfUI parser failure should be reported as safe fallback");
-
-    confirmations = 0;
-    bool fallbackPrompt = false;
-    result = {};
+    tp::AccountSyncRunResult result;
+    std::wstring error;
+    int confirmations = 0;
 
     Check(
         tp::RunAccountSync(
             root,
             config,
-            [&](tp::AccountSyncItem item,
-                std::wstring_view sourceAccount,
-                const std::vector<std::wstring>& targets,
-                bool fallback) {
+            [&](tp::AccountSyncItem,
+                std::wstring_view,
+                const std::vector<std::wstring>&,
+                bool) {
                 ++confirmations;
-                fallbackPrompt = fallback;
-                Check(
-                    item ==
-                        tp::AccountSyncItem::PfUi,
-                    "pfUI parser fallback should prompt as pfUI");
-                Check(
-                    sourceAccount == L"ALPHA",
-                    "pfUI parser fallback should keep newest source");
-                Check(
-                    targets.size() == 1 &&
-                        targets.front() == L"BETA",
-                    "pfUI parser fallback should prompt for the older target");
                 return true;
             },
             result,
             error),
-        "pfUI parser fallback execution should run");
+        "pfUI parser failure should be reported through the run result");
     Check(
-        confirmations == 1 &&
-            fallbackPrompt,
-        "pfUI parser fallback execution should require one safe confirmation");
+        result.fatal,
+        "pfUI parser failure must be fatal to Sync-before-Launch");
     Check(
-        !result.fatal,
-        "confirmed pfUI parser fallback should not be fatal");
+        confirmations == 0,
+        "pfUI parser failure must not fall back to whole-file confirmation/copy");
     Check(
-        ReadText(target) ==
-            ReadText(source),
-        "confirmed pfUI parser fallback should copy only after confirmation");
+        ReadText(source) ==
+            sourceText &&
+            ReadText(target) ==
+                targetText,
+        "pfUI parser failure must leave every selected file untouched");
+    Check(
+        BackupRunFolders(root).empty(),
+        "pfUI parser failure should occur before any backup/write transaction");
 
     std::error_code ec;
+    std::filesystem::remove_all(
+        root,
+        ec);
+}
+
+void TestPfUiEqualTimestampConflictTieBreak() {
+    const auto root =
+        TestRoot(L"pfui-tie-break");
+    ResetRoot(root);
+
+    const auto alpha =
+        AccountFile(
+            root,
+            L"ALPHA",
+            L"SavedVariables\\pfUI.lua");
+    const auto beta =
+        AccountFile(
+            root,
+            L"BETA",
+            L"SavedVariables\\pfUI.lua");
+
+    const std::string alphaText =
+        "pfUI_cache = {\n"
+        "[\"libhealth\"] = {\n"
+        "[\"shared\"] = \"alpha\",\n"
+        "},\n"
+        "}\n"
+        "pfUI_profiles = {\n"
+        "[\"default\"] = {\n"
+        "[\"width\"] = \"160\",\n"
+        "},\n"
+        "}\n";
+    const std::string betaText =
+        "pfUI_cache = {\n"
+        "[\"libhealth\"] = {\n"
+        "[\"shared\"] = \"beta\",\n"
+        "},\n"
+        "}\n"
+        "pfUI_profiles = {\n"
+        "[\"default\"] = {\n"
+        "[\"width\"] = \"160\",\n"
+        "},\n"
+        "}\n";
+
+    WriteText(alpha, alphaText);
+    WriteText(beta, betaText);
+
+    const auto equalTime =
+        std::filesystem::file_time_type::
+            clock::now();
+    std::error_code ec;
+    std::filesystem::last_write_time(
+        alpha,
+        equalTime,
+        ec);
+    Check(
+        !ec,
+        "alpha equal timestamp should be set");
+    ec.clear();
+    std::filesystem::last_write_time(
+        beta,
+        equalTime,
+        ec);
+    Check(
+        !ec,
+        "beta equal timestamp should be set");
+
+    tp::AccountSyncConfig config;
+    config.accounts = {
+        L"ALPHA",
+        L"BETA"
+    };
+    config.pfUi = true;
+
+    tp::AccountSyncRunResult result;
+    std::wstring error;
+    int confirmations = 0;
+
+    Check(
+        tp::RunAccountSync(
+            root,
+            config,
+            [&](tp::AccountSyncItem,
+                std::wstring_view,
+                const std::vector<std::wstring>&,
+                bool) {
+                ++confirmations;
+                return true;
+            },
+            result,
+            error),
+        "equal-timestamp pfUI cache conflict should run");
+    Check(
+        !result.fatal,
+        "equal-timestamp cache conflict should resolve deterministically");
+    Check(
+        confirmations == 0,
+        "equal-timestamp profile-equivalent cache conflict should not prompt");
+    Check(
+        ReadText(alpha) ==
+            alphaText,
+        "earlier selected equal-timestamp account should be the cache conflict winner");
+    Check(
+        Contains(
+            ReadText(beta),
+            "[\"shared\"] = \"alpha\",") &&
+            !Contains(
+                ReadText(beta),
+                "[\"shared\"] = \"beta\","),
+        "equal-timestamp same-key cache conflict should use selected-account order tie-break");
+
     std::filesystem::remove_all(
         root,
         ec);
@@ -1136,199 +1689,136 @@ void TestNoSourceItem() {
         ec);
 }
 
-void TestMixedPfUiTargets() {
+void TestPfUiMissingTargetTargetedCreation() {
     const auto root =
-        TestRoot(L"mixed-pfui");
+        TestRoot(L"pfui-missing-target");
     ResetRoot(root);
 
-    const auto alpha =
+    const auto source =
         AccountFile(
             root,
             L"ALPHA",
             L"SavedVariables\\pfUI.lua");
-    const auto beta =
+    const auto missing =
         AccountFile(
             root,
             L"BETA",
             L"SavedVariables\\pfUI.lua");
-    const auto gamma =
-        AccountFile(
-            root,
-            L"GAMMA",
-            L"SavedVariables\\pfUI.lua");
-    const auto delta =
-        AccountFile(
-            root,
-            L"DELTA",
-            L"SavedVariables\\pfUI.lua");
-    const auto epsilon =
-        AccountFile(
-            root,
-            L"EPSILON",
-            L"SavedVariables\\pfUI.lua");
 
     const std::string sourceText =
-        PfUiText(
-            "160",
-            "500",
-            "source",
-            false,
-            false);
-    const std::string equivalentText =
-        PfUiText(
-            "160",
-            "500",
-            "ignored history",
-            false,
-            true);
-    const std::string cacheText =
-        PfUiText(
-            "160",
-            "100",
-            "cache",
-            false,
-            false);
-    const std::string settingsText =
-        PfUiText(
-            "161",
-            "500",
-            "settings",
-            false,
-            false);
-    const std::string equalTimeText =
-        PfUiText(
-            "999",
-            "0",
-            "equal",
-            true,
-            false);
+        "pfUI_cache = {\n"
+        "[\"gold\"] = {\n"
+        "[\"Realm\"] = {\n"
+        "[\"Alpha\"] = \"500\",\n"
+        "},\n"
+        "},\n"
+        "[\"chathistory\"] = {\n"
+        "[1] = \"source local chat\",\n"
+        "},\n"
+        "[\"future_section\"] = {\n"
+        "[\"value\"] = \"source local future\",\n"
+        "},\n"
+        "}\n"
+        "pfUI_profiles = {\n"
+        "[\"default\"] = {\n"
+        "[\"width\"] = \"160\",\n"
+        "},\n"
+        "}\n"
+        "pfUI_addon_profiles = {\n"
+        "[\"Current\"] = {\n"
+        "[1] = \"SourceAddon\",\n"
+        "},\n"
+        "}\n"
+        "pfUI_throttle = {\n"
+        "[\"value\"] = \"source local throttle\",\n"
+        "}\n";
 
-    WriteText(alpha, sourceText);
-    WriteText(beta, equivalentText);
-    WriteText(gamma, cacheText);
-    WriteText(delta, settingsText);
-    WriteText(epsilon, equalTimeText);
-
-    const auto base =
-        std::filesystem::file_time_type::
-            clock::now();
-    const auto older =
-        base -
-        std::chrono::seconds(30);
+    WriteText(
+        source,
+        sourceText);
 
     std::error_code ec;
-    std::filesystem::last_write_time(
-        alpha,
-        base,
+    std::filesystem::create_directories(
+        missing.parent_path(),
         ec);
     Check(
         !ec,
-        "mixed source timestamp should be set");
-    ec.clear();
-    std::filesystem::last_write_time(
-        epsilon,
-        base,
-        ec);
-    Check(
-        !ec,
-        "mixed equal timestamp should be set");
-
-    for (const auto& path :
-         {beta, gamma, delta}) {
-        ec.clear();
-        std::filesystem::last_write_time(
-            path,
-            older,
-            ec);
-        Check(
-            !ec,
-            "mixed older timestamp should be set");
-    }
+        "missing pfUI target folder should be creatable");
 
     tp::AccountSyncConfig config;
     config.accounts = {
         L"ALPHA",
-        L"BETA",
-        L"GAMMA",
-        L"DELTA",
-        L"EPSILON"
+        L"BETA"
     };
     config.pfUi = true;
 
     tp::AccountSyncRunResult result;
     std::wstring error;
-    int confirmations = 0;
 
     Check(
         tp::RunAccountSync(
             root,
             config,
-            [&](tp::AccountSyncItem item,
-                std::wstring_view sourceAccount,
-                const std::vector<std::wstring>& targets,
-                bool fallback) {
-                ++confirmations;
-                Check(
-                    item ==
-                        tp::AccountSyncItem::PfUi,
-                    "mixed pfUI prompt should be for pfUI");
-                Check(
-                    sourceAccount == L"ALPHA",
-                    "first equal-newest account should be selected as source");
+            [](tp::AccountSyncItem,
+               std::wstring_view,
+               const std::vector<std::wstring>& targets,
+               bool) {
                 Check(
                     targets.size() == 1 &&
-                        targets.front() == L"DELTA",
-                    "only settings-different older target should require confirmation");
-                Check(
-                    !fallback,
-                    "mixed parseable pfUI set should not use fallback");
+                        targets.front() == L"BETA",
+                    "missing pfUI destination should require confirmation");
                 return true;
             },
             result,
             error),
-        "mixed pfUI sync should run");
-
-    const auto& pfui =
-        result.items[
-            static_cast<std::size_t>(
-                tp::AccountSyncItem::PfUi)];
-
+        "missing pfUI destination should be creatable");
     Check(
         !result.fatal,
-        "mixed pfUI sync should not be fatal");
+        "targeted missing pfUI creation should not be fatal");
+
+    const std::string created =
+        ReadText(missing);
+
     Check(
-        confirmations == 1,
-        "mixed pfUI sync should use one confirmation");
+        Contains(
+            created,
+            "[\"width\"] = \"160\","),
+        "missing destination should receive confirmed pfUI_profiles");
     Check(
-        pfui.sourceAccount == L"ALPHA",
-        "mixed pfUI result should preserve source account");
+        Contains(
+            created,
+            "[\"Alpha\"] = \"500\","),
+        "missing destination should receive merged supported cache data");
     Check(
-        pfui.automaticTargets.size() == 1 &&
-            pfui.automaticTargets.front() == L"GAMMA",
-        "mixed pfUI result should identify the cache-only automatic target");
+        !Contains(
+            created,
+            "source local chat") &&
+            !Contains(
+                created,
+                "source local future") &&
+            !Contains(
+                created,
+                "SourceAddon") &&
+            !Contains(
+                created,
+                "source local throttle"),
+        "missing destination must not inherit source-local or unknown pfUI sections");
+
+    bool fakeBackup = false;
+    for (const auto& folder :
+         BackupRunFolders(root)) {
+        if (std::filesystem::exists(
+                folder /
+                L"BETA" /
+                L"SavedVariables" /
+                L"pfUI.lua")) {
+            fakeBackup = true;
+        }
+    }
+
     Check(
-        pfui.confirmationTargets.size() == 1 &&
-            pfui.confirmationTargets.front() == L"DELTA",
-        "mixed pfUI result should identify the settings confirmation target");
-    Check(
-        pfui.copiedTargets == 2,
-        "mixed pfUI sync should copy cache-only and confirmed targets");
-    Check(
-        ReadText(beta) ==
-            equivalentText,
-        "equivalent older pfUI target should remain untouched");
-    Check(
-        ReadText(gamma) ==
-            sourceText,
-        "cache-only older pfUI target should auto-sync");
-    Check(
-        ReadText(delta) ==
-            sourceText,
-        "confirmed settings-different pfUI target should sync");
-    Check(
-        ReadText(epsilon) ==
-            equalTimeText,
-        "equal-timestamp pfUI target should remain untouched");
+        !fakeBackup,
+        "missing pfUI destination must not create a fake backup");
 
     std::filesystem::remove_all(
         root,
@@ -1494,13 +1984,17 @@ void TestStatePersistence() {
 int main() {
     TestPfUiComparison();
     TestConfirmedCopyAndBackup();
-    TestPfUiAutomaticAndFallback();
+    TestPfUiTargetedMergeAndPreservation();
+    TestPfUiLocalOrderingIgnored();
+    TestPfUiProfileDecline();
+    TestPfUiParserFailureUntouched();
+    TestPfUiEqualTimestampConflictTieBreak();
     TestEqualTimestampAndDecline();
     TestBackupFailureBlocksOverwrite();
     TestCopyFailureKeepsBackup();
     TestBackupRunFolderCollision();
     TestNoSourceItem();
-    TestMixedPfUiTargets();
+    TestPfUiMissingTargetTargetedCreation();
     TestPreAccountSyncStateLoad();
     TestLaunchFlowPreservesConsoleIntent();
     TestStatePersistence();
