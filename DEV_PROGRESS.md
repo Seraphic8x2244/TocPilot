@@ -5,7 +5,7 @@
 ## Current
 
 - Active branch: `dev`.
-- Source/application version: `v0.4.0` stable candidate; not yet published at this checkpoint.
+- Source/application version: `v0.4.0` stable candidate merged to `dev` at `83d6e52f691ac5bc8f9f0694fb5fb96fa80ccfcc`; not yet published at this checkpoint.
 - Latest published stable release: `v0.3.22`.
 - Latest published development prerelease: `v0.3.23-dev.2` at `5b1575ac72e8db1edc2aac6962bec0a528e732e1`. GitHub stable `/releases/latest` still resolves to non-prerelease `v0.3.22`.
 - Stable release/source commit and tag target: `8678334c0a0015eba14aecf58f7c416c045f6581` (`v0.3.22`).
@@ -889,17 +889,19 @@ Do not add support for user-uploaded ZIP/7z/RAR/installer/bundle release assets 
 - Runtime Account Sync accepted paths: account discovery/selection persistence; Macros confirmation decline, accepted copy + backup, and missing-target recreation; targeted pfUI cache-only merge; protected/local pfUI preservation; real `pfUI_profiles` difference prompt + accepted profile copy while supported cache processing continued in the same run.
 - Keybindings are accepted by shared-path reasoning: they use the same whole-file backup/copy machinery already exercised by Macros; no separate manufactured runtime difference is required.
 - Release-gate decision changed intentionally on 2026-09-30: Sync-before-Launch/Ctrl-click and induced backup/write-failure remain untested runtime debt but are **non-blocking** for `v0.4.0`. The legacy missing-`receive_development_builds` sideload/bootstrap ambiguity also remains documented non-blocking.
+- PR #32 (`Release v0.4.0`) head `d69b96ed7f3f3ec89842c19be651c6ccc60f4ed0` passed Build workflow run `36766021743`, Windows x64 job `110060274520`: Release build + **19/19 CTest passed**, including `account-sync-safety`; it squash-merged to `dev` as stable-candidate commit `83d6e52f691ac5bc8f9f0694fb5fb96fa80ccfcc`.
 - `v0.3.22` at `8678334c0a0015eba14aecf58f7c416c045f6581` remains the stable rollback baseline until `v0.4.0` publishes successfully.
 - Keep **Refresh All viewport jump** queued immediately after the stable promotion. Keep **Clear WDB folder** and **DXVK advanced logging checkbox** deferred.
 
 ## Exact Next Step
 
-Promote Account Sync to stable `v0.4.0` without adding new runtime features:
+Promote the validated `v0.4.0` candidate from `dev` to `main`:
 
-1. Version the release candidate consistently as `0.4.0` in `CMakeLists.txt`, `src/version.h`, and `.github/release-version`.
-2. Run focused PR CI on the exact stable candidate and require the complete CTest suite to pass.
-3. Merge the validated candidate to `dev`, then promote `dev` to `main`.
-4. Verify the stable Release workflow builds/tests the exact `main` release commit, publishes direct `TocPilot.exe` + SHA-256 assets, and moves GitHub stable `/releases/latest` to `v0.4.0`.
-5. Record exact release provenance and then move the active development focus to **Refresh All viewport jump**.
+1. Open a focused `dev -> main` PR from current `dev`, with no additional runtime changes.
+2. Require the complete Windows Release/CTest PR gate to pass on the exact promotion head.
+3. Merge `dev` to `main` without squashing away the validated `dev` lineage.
+4. Verify the main-push Build workflow and stable Release workflow both succeed on the resulting exact `main` release commit.
+5. Verify GitHub stable `/releases/latest` resolves to `v0.4.0` with direct `TocPilot.exe` and `TocPilot.exe.sha256` assets.
+6. Record final release provenance, fast-forward `dev` to the post-release documentation checkpoint if possible, then move active development to **Refresh All viewport jump**.
 
 Do not start Refresh All, Clear WDB, DXVK logging, or unrelated feature work inside the `v0.4.0` release promotion.
