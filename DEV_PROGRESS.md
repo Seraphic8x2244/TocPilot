@@ -4,10 +4,11 @@
 
 ## Current
 
-- Active branch: `main`.
-- Source/application version: `v0.3.22`.
-- Latest published release: `v0.3.22`.
-- Release/source commit and tag target: `8678334c0a0015eba14aecf58f7c416c045f6581` (`v0.3.22`).
+- Active branch: `dev`.
+- Source/application version: `v0.4.0` stable candidate merged to `dev` at `83d6e52f691ac5bc8f9f0694fb5fb96fa80ccfcc`; not yet published at this checkpoint.
+- Latest published stable release: `v0.3.22`.
+- Latest published development prerelease: `v0.3.23-dev.2` at `5b1575ac72e8db1edc2aac6962bec0a528e732e1`. GitHub stable `/releases/latest` still resolves to non-prerelease `v0.3.22`.
+- Stable release/source commit and tag target: `8678334c0a0015eba14aecf58f7c416c045f6581` (`v0.3.22`).
 - Latest fully runtime-accepted release is `v0.3.22` at `8678334c0a0015eba14aecf58f7c416c045f6581`. Runtime acceptance on 2026-09-28 covers the 48 x 48 / 36 x 36 toolbar presentation, Per-Monitor V2 DPI behaviour, Compact/Advanced Words/Icon presentation, persistent Advanced width, and Launch remaining the executable icon at the far right. Slight softness at Windows 125% scaling is accepted as normal fractional-DPI rendering; do not reopen DPI work without new evidence.
 - Last known-good Account-Sync-free code baseline is published/runtime-accepted `v0.3.22` at `8678334c0a0015eba14aecf58f7c416c045f6581`. The final pre-Account-Sync repository commit is documentation-only `6fcf117cf4f639612827acf88b10c6933f4b7802`, so its executable source is equivalent to that accepted v0.3.22 baseline.
 - Recovered Account Sync code head is `2e80b1378a7a01bb311140828e4e54069b1576d6` (`test: complete account sync recovery coverage`). Build workflow run `36440593954`, Windows x64 job `108989739617`, passed Release build and **19/19 CTest tests**, including `account-sync-safety`. Account Sync is now CI-recovered and has an untagged dev/test build; **runtime validation is still pending**, so `v0.3.22` remains the last published/runtime-accepted release.
@@ -21,7 +22,7 @@
 - v0.3.15 Compact divider transaction fix: **implemented / CI-checked / merged / published; partial runtime pass**. Expanding the left Compact column no longer creates a horizontal scrollbar immediately, but the divider transaction still clamps both primary columns only to the generic 40 px floor. This lets the right visible column shrink below its intended Compact minimum; after entering that invalid state, dragging back left can expose a horizontal scrollbar. Fix by enforcing the real per-column Compact minima throughout fitting and divider transactions.
 - v0.3.16 Compact minimum-width fix: **implemented / CI-checked / merged / published; partial runtime pass**. Self-update passed; the companion column now stops at its intended minimum in both column orders; whole-window resize and Advanced regression checks passed. Remaining failure: when dragging the middle divider back left after pushing it right, a horizontal scrollbar still appears. This is now isolated to reverse-direction transaction ordering rather than width limits.
 - v0.3.17 reverse-direction divider fix: **implemented / CI-checked / merged / published / runtime-accepted**. Compact divider dragging is a fully owned two-column transaction: the shrinking column is applied first, the growing column second, and the native one-column commit is cancelled under a re-entrancy guard. User runtime confirmed the rightward clamp, leftward reversal, both Name/Status orders, window resizing and Advanced regression checks all pass with no horizontal scrollbar.
-- Current goal: **establish the development update channel / `dev` branch workflow, then runtime-validate recovered Account Sync through that path**. Account Sync is already cleanly compiled/tested at `2e80b1378a7a01bb311140828e4e54069b1576d6`; do not reimplement it from scratch.
+- Current goal: **promote the validated Account Sync work to stable `v0.4.0`.** Real installed `v0.3.23-dev.1 -> v0.3.23-dev.2` self-update passed. Account discovery/selection persistence and Macros decline/backup/copy/missing-destination paths passed. Targeted pfUI runtime validation passed both cache-only and real-profile-change paths: supported caches merged automatically, local/account-specific pfUI data remained distinct, a genuine `pfUI_profiles` difference prompted and copied successfully, and cache processing continued in the same run. Keybindings use the already-validated whole-file copy/backup path shared with Macros and are accepted without manufacturing a separate runtime difference. On 2026-09-30 the user explicitly chose the remaining Sync-before-Launch/Ctrl-click and induced backup/write-failure runtime checks as **non-blocking validation debt** for the stable promotion; do not rewrite those paths as runtime-tested.
 - Current scope boundary: Account Sync is the next feature. Preserve the runtime-accepted v0.3.22 toolbar/DPI behaviour. Keep the Refresh All viewport-jump fix queued after Account Sync and do not mix async latest-stable DLL discovery, Add-Git stale-request work, warning cleanup, rate-limit propagation, staging-name cleanup or P6C art/skin work into this feature.
 - Audit continuity: `audit_dump.md` is a temporary scratch checkpoint for the interrupted broad audit only; this file remains the sole authoritative live development source of truth.
 - Documentation-only commits after the release do not change the published runtime baseline.
@@ -183,7 +184,7 @@ A failed update must leave the old TocPilot runnable and clearly report failure.
 
 Starting with v0.3.11, self-update additionally requires the initial executable/checksum URLs to be HTTPS, carries GitHub's exact executable asset size into the download, rejects a streamed executable that is shorter or longer than that size before replacement, and caps checksum text at 64 KiB. SHA-256 verification remains mandatory.
 
-### Development channel / branch model — agreed, not yet implemented
+### Development channel / branch model — Slice 1 branch transition complete
 
 TocPilot now has enough external/stable use that experimental builds must be isolated from normal users.
 
@@ -197,7 +198,7 @@ Branch contract after the transition is complete:
 One-time transition:
 
 - Account Sync recovery already landed on `main` before this policy was introduced. Do **not** reset or rewrite `main` to hide it.
-- Create `dev` from the current repository head and continue new development there.
+- `dev` was created from `main` at `5e5fa28e3047d14ec2f7fb73b7de1246fbe995a9`; continue new development there.
 - `v0.3.22` at `8678334c0a0015eba14aecf58f7c416c045f6581` remains the published/runtime-accepted stable baseline until the next accepted stable release.
 - Once the current dev work is runtime-accepted and promoted, enforce `main` = accepted/release-ready going forward.
 
@@ -255,34 +256,39 @@ Other stable users remain on the stable-only channel throughout unless they expl
 
 Because long/tool-heavy chats have repeatedly become unstable, implement the development-channel work as four deliberately bounded slices. **Do not start the next slice in the same chat unless the user explicitly asks to continue.** Each completed slice should end with its own commit, relevant CI/check result, a `DEV_PROGRESS.md` checkpoint, and an exact next step for a fresh chat.
 
-**Slice 1 — branch transition only**
+**Slice 1 — branch transition only — COMPLETE**
 - Create `dev` from the current `main` head.
 - Verify both `main` and `dev` refs.
 - Update this document on `dev` so `dev` is recorded as the active development branch and the transition is complete.
 - No source, UI, updater or workflow changes in this slice.
 
-**Slice 2 — setting + Info UI**
+**Slice 2 — setting + Info UI — COMPLETE**
 - Add additive persisted `receive_development_builds = false` state.
 - Preserve backward compatibility with existing/pre-feature `TocPilot.json`.
 - Add **Info -> Updates -> Receive development builds**.
 - Default off; show the agreed first-enable warning/confirmation.
 - Do not change updater release-selection behaviour yet.
 - Add focused persistence/old-state compatibility tests.
+- Implemented on `dev` as an additive schema-1 setting. Pre-feature state defaults off; enabled state round-trips; invalid values are rejected; existing unknown-field preservation remains intact. The Info window now has an **Updates** group with **Receive development builds** and the first-enable warning/confirmation. Updater release discovery/selection is unchanged in this slice.
 
-**Slice 3 — updater channel logic**
+**Slice 3 — updater channel logic — COMPLETE**
 - Preserve the existing stable-only release path unchanged for users who have not opted in.
 - Add prerelease discovery for opted-in users.
 - Implement deterministic prerelease-aware ordering, including `v0.3.23-dev.1 < v0.3.23-dev.2 < v0.3.23`.
 - Support turning development builds off while currently running a prerelease and returning to the appropriate stable release.
 - Keep existing HTTPS, exact-size, SHA-256 and rollback protections.
 - Add deterministic channel/version tests before moving on.
+- Implemented with non-opted users still using `FetchLatestStableGitHubRelease()` / GitHub `/releases/latest`. Opted-in users enumerate published releases, accept stable releases plus matching `-dev.N` prereleases, and select by prerelease-aware semantic ordering. Stable outranks a same-base prerelease. Turning development builds off while running a prerelease offers the current stable release even when returning to stable requires moving to a lower base version. Existing HTTPS, exact-size, SHA-256 and updater rollback/handoff protections are unchanged. Focused tests cover release-list parsing, stable filtering, draft/non-dev prerelease filtering, dev-to-dev ordering, stable-over-dev ordering and channel-off behavior.
 
-**Slice 4 — development release workflow**
+**Slice 4 — development release workflow — COMPLETE**
 - Add/adjust the release workflow needed to publish GitHub prereleases for dev builds.
 - Produce the first channel-capable prerelease, expected form `v0.3.23-dev.1`.
 - A one-time manual/Actions-artifact bootstrap install is acceptable because stable `v0.3.22` cannot yet opt into prereleases.
 - After bootstrap, validate TocPilot updating itself through the real development channel.
 - Only after this infrastructure is accepted should the Account Sync runtime matrix resume.
+- Implemented as a separate dev-only `.github/workflows/development-release.yml`; the existing stable `.github/workflows/release.yml` is unchanged. `.github/development-release-version` drives dev-branch prerelease publication and source/tag validation requires `vX.Y.Z-dev.N`.
+- First prerelease `v0.3.23-dev.1` was published from `518a9a1f1407b4a62ca4b09c11522f8859425b61` by Development Release run `36588659393`, Windows job `109475655788`. Release build and **19/19 CTest tests** passed; required EXE/checksum assets were published as a non-draft prerelease; the workflow verified stable `/releases/latest` still returned `v0.3.22`.
+- The same workflow then built parent `cce53f8f2b2fd4d97289f497744a4c7949510adf` as the one-time channel-capable bootstrap, seeded `receive_development_builds=true` in a disposable WoW-root fixture, launched TocPilot normally, and verified the installed `TocPilot.exe` was replaced byte-for-byte with the published `v0.3.23-dev.1` asset while preserving the opted-in state. This is the accepted real development-channel self-update gate for Slice 4.
 
 ### Concurrency
 
@@ -379,15 +385,31 @@ Files / source selection:
 - If no selected account has the source item, skip/warn; never synthesize data.
 - Macros/keybindings: an older or missing target requires confirmation before copying.
 
-pfUI comparison must preserve the supplied BAT's conservative semantic rules rather than becoming timestamp-only:
+pfUI is a **targeted sync/merge surface**, not a whole-file copy. Runtime testing proved the previous comparison-only `Settings / Cache / Junk` model was insufficient because its write path still replaced the entire destination `pfUI.lua`. The targeted implementation is merged on `dev` at `13a801696e2be585ab46d7941f96cc07ba832a18`.
 
-- ignore `pfUI_cache.chathistory` as junk;
-- treat `pfUI_cache.libhealth`, `pfUI_cache.prediction`, and `pfUI_cache.gold` as cache data;
-- normalize Lua table/write ordering so ordering alone is not a settings change;
-- cache-only differences may auto-sync from the newest copy;
-- meaningful settings differences require confirmation;
-- unknown/new pfUI sections are meaningful settings by default;
-- comparer/parser failure must fail safe into ordinary modification-time handling/confirmation, never silent overwrite.
+Locked pfUI policy:
+
+- `pfUI_profiles` is the only user-configuration section TocPilot should synchronize directly.
+  - Compare profiles semantically so Lua table/write ordering alone is not a difference.
+  - A real `pfUI_profiles` difference requires confirmation.
+  - On acceptance, source `pfUI_profiles` replaces target `pfUI_profiles`; do not replace the entire `pfUI.lua`.
+- `pfUI_addon_profiles` is account/character-local and must be left untouched. Addon enablement can legitimately be character-specific; Account Sync must not propagate one account's addon-profile choices into another.
+- `pfUI_throttle` is left untouched/local.
+- `pfUI_cache` is handled explicitly by subtable rather than copied wholesale:
+  - `libhealth` — additive merge; preserve/accumulate learned mob-health data across selected accounts.
+  - `gold` — additive merge across realm/character keys so tracked character gold can be known across accounts.
+  - `prediction` — additive merge; preserve/accumulate learned per-character heal/spell prediction data.
+  - `chathistory` — leave untouched/local.
+  - `abuttons` — leave untouched/local for now; current samples contain empty `add`/`del` tables and there is no locked reason to merge them.
+  - unknown/new cache subtables are left untouched by default until explicitly classified.
+- Unknown/new top-level pfUI sections outside the explicitly supported surfaces above are left untouched by default. This is deliberately safer than guessing future module semantics.
+- Additive selected-cache merge semantics are deterministic and group-wide:
+  - union supported cache keys across all selected existing pfUI files;
+  - when the same exact key path has different values, the file with the newer `LastWriteTimeUtc` wins;
+  - equal timestamps use selected-account order as the tie-breaker, with the earlier selected account winning;
+  - nested tables merge recursively; a table/scalar structural conflict is resolved by the same precedence at that conflicting node.
+- Parser/merge failure must fail safe: do not modify the destination, report the error, and block Launch when Sync before Launch depends on that operation.
+- Existing destination backup ordering remains mandatory before any successful targeted pfUI write.
 
 Backup safety is mandatory:
 
@@ -440,6 +462,40 @@ Recovery result:
 - Final recovery CI: Build workflow run `36440593954`, Windows x64 job `108989739617`, passed Release build and **19/19 CTest tests**; `account-sync-safety` passed.
 - Untagged dev/test artifact from that exact run: GitHub artifact `TocPilot-windows-x64` / ID `10977293329`. Extracted `TocPilot.exe`: **3,076,608 bytes**, SHA-256 `930dc5d90c9e285d88e4a28187818d88d99b09c1b1bec24163d5abd55db6e68a`. This is for runtime validation only; do not publish it as a normal release.
 - The accepted rollback/reference baseline remains `8678334c0a0015eba14aecf58f7c416c045f6581` (`v0.3.22`) / pre-feature documentation checkpoint `6fcf117cf4f639612827acf88b10c6933f4b7802`.
+
+### Account Sync runtime checkpoint / pfUI redesign — 2026-09-30
+
+Runtime results through `v0.3.23-dev.1`:
+
+- Account discovery works for the two real accounts used in testing; selected-account persistence passed. With only one account selected, the main sync preview has no comparison work, which is expected.
+- Macros confirmation decline passed: declining left the target `macros-cache.txt` unchanged.
+- Macros accepted-sync passed: the older target was backed up under `WTF\\tocpilot\\<run>\\<account>\\macros-cache.txt` before overwrite, then the target matched the source.
+- Missing-destination macros passed: deleting the target macro file then accepting the correctly directed sync recreated it without creating a fake backup for a file that did not exist.
+- Keybindings runtime validation has not yet been completed.
+- pfUI preview correctly reached a confirmation dialog, but inspection of the two real `pfUI.lua` files showed the apparent meaningful difference was only `pfUI_addon_profiles["Current"]` numeric ordering/index movement (for example `pfQuest_Group` occupying a different list position), not a user UI-profile settings difference.
+- That finding exposed the larger defect: current `Junk` handling only excludes a subtree from semantic comparison. The actual pfUI sync path still performs a whole-file copy, so ignored data such as chat history would still be overwritten whenever any other pfUI difference triggered a sync.
+- The two real sample files show `pfUI_cache` top-level subtables `abuttons`, `libhealth`, `gold`, `chathistory`, and `prediction`. This evidence informed the targeted policy above.
+- The old whole-file implementation must not be runtime-tested further. The targeted redesign is now implemented, CI-checked, and published in `v0.3.23-dev.2`; runtime testing should resume only against that targeted build.
+
+### Targeted pfUI implementation result — 2026-09-30
+
+- PR #30 (`Target pfUI Account Sync`) merged to `dev` as `13a801696e2be585ab46d7941f96cc07ba832a18`.
+- PR head `6e27c6d390c9c874e866a8fd5b78b4d6de70c0dc` passed Build workflow run `36712586795`, Windows x64 job `109877671575`: Release build passed and **19/19 CTest tests passed**, including `account-sync-safety`.
+- The writer now replaces only confirmed `pfUI_profiles`; it never performs a whole-file pfUI copy.
+- `libhealth`, `gold`, and `prediction` are merged additively across the full selected account group. Target-only learned data can therefore flow back into the newest file as well as into other selected accounts.
+- `pfUI_addon_profiles`, `pfUI_cache.chathistory`, `pfUI_cache.abuttons`, `pfUI_throttle`, unknown cache subtables, and unknown top-level sections remain target-local.
+- Missing pfUI destinations, after confirmation, are created only from the confirmed source profiles plus the supported merged cache surfaces; source-local/unknown sections are not synthesized into the new target.
+- Existing files are backed up before any targeted write. Targeted pfUI output is staged to a same-directory temporary file, flushed, then atomically replaced with write-through semantics.
+- All selected existing pfUI files are parsed and the merge plan is built before the first write. Parser/merge failure is fatal to the sync run and leaves every selected pfUI file untouched; there is no whole-file confirmation fallback.
+- Deterministic coverage now includes addon-profile ordering/local-section preservation, accepted and declined profile sync, group-wide additive accumulation, newest-wins and equal-time conflict semantics, missing-target creation, backup preservation, and parser-failure no-write behavior.
+- **No pfUI runtime validation was resumed in this slice. No Refresh All work was started.**
+
+Development-channel bootstrap defect found during this runtime session:
+
+- Manually installing `v0.3.23-dev.1` over a stable-era state with no `receive_development_builds` key immediately downgraded back to `v0.3.22` on startup.
+- Cause: absent setting defaults to `false`, and startup update selection runs before the user can open Info -> Updates and opt in; a running prerelease therefore sees the stable channel and returns to stable.
+- Temporary test bootstrap succeeded after setting `receive_development_builds=true` in `TocPilot.json`.
+- The behavior is a real legacy bootstrap edge case, but on 2026-09-30 the user explicitly made it non-blocking for this prerelease: after the Account Sync stable path, normal installations will have an explicit stored `receive_development_builds=false`; reaching this ambiguity later requires manually sideloading a prerelease from a pre-migration state. Preserve default-off/explicit-opt-in behavior and keep this edge documented rather than blocking `v0.3.23-dev.2` runtime validation.
 
 ### Removal UX
 
@@ -692,7 +748,7 @@ Published `v0.3.17` runtime gate passed on 2026-09-27:
 
 The combined v0.3.14-v0.3.17 Compact two-column fill/split work is runtime-accepted.
 
-There is **no Account Sync runtime gate yet**. Account Sync recovery now compiles cleanly and final recovery CI passed Release build + **19/19 CTest tests** at `2e80b1378a7a01bb311140828e4e54069b1576d6`; an untagged dev/test artifact exists. Establish the agreed development-channel workflow, then execute the Account Sync runtime matrix through the dev path. **Refresh All viewport jump** remains queued after Account Sync.
+Account Sync runtime validation is **partially complete and ready to resume on published prerelease `v0.3.23-dev.2`**. Account selection persistence and the Macros decline/accepted-backup-copy/missing-destination paths passed against real WTF data. The targeted pfUI redesign is merged and CI-checked at `13a801696e2be585ab46d7941f96cc07ba832a18`. First validate the installed `v0.3.23-dev.1 -> v0.3.23-dev.2` self-update, then resume pfUI, keybindings, Sync-before-Launch, Ctrl-launch and induced-failure runtime checks against `dev.2`. **Refresh All viewport jump** remains queued after Account Sync.
 
 A1's managed same-root replacement check remains deferred. The current product workflow has **Remove Addon**, not the old Uninstall flow.
 
@@ -795,7 +851,12 @@ Do not add support for user-uploaded ZIP/7z/RAR/installer/bundle release assets 
 
 ## Release / Documentation Notes
 
-- Current published and fully runtime-accepted release is `v0.3.22` at `8678334c0a0015eba14aecf58f7c416c045f6581`.
+- Current published and fully runtime-accepted stable release is `v0.3.22` at `8678334c0a0015eba14aecf58f7c416c045f6581`.
+- Development-channel Slice 4 implementation commit `518a9a1f1407b4a62ca4b09c11522f8859425b61` introduced the separate dev prerelease workflow and source version `v0.3.23-dev.1`; the stable release workflow was not modified.
+- Development Release run `36588659393`, Windows x64 job `109475655788`, passed source-version validation, Release build, **19/19 CTest tests**, checksum generation, tag creation, prerelease publication, stable-latest isolation, and the real parent-build -> prerelease self-update gate.
+- Published `v0.3.23-dev.1` `TocPilot.exe`: 3,095,040 bytes, SHA-256 `39c2bc49b189b1c1021f1023ef9c9df98bdb93a3c5dbde3dc90bc498d613e50b`.
+- Published `v0.3.23-dev.1` `TocPilot.exe.sha256`: 78 bytes; asset SHA-256 `bb0388b4bb943df3a5f4e2b5bbfb5d3fd384b54cbc31f6726af525f6a1035970`.
+- GitHub `/releases/latest` remained stable-only at `v0.3.22` after publishing `v0.3.23-dev.1`.
 - PR #26 head `bf9ee839f6d7ab722c6841648a642a4c4b5073aa` passed Build workflow run `36325300444`, Windows x64 job `108636801237`, including **18/18 CTest tests** with explicit shrink-first direction coverage.
 - PR #26 merged the fully owned direction-safe divider transaction as `2c7dd510e04be7cd28263fa004b65d32033a9056`.
 - PR #27 head `7d4256d7bb5a0a715ab52e8de89655f018221f5b` changed only release/version metadata and passed Build workflow run `36325571382`, Windows x64 job `108637574892`, including **18/18 CTest tests**.
@@ -818,25 +879,29 @@ Do not add support for user-uploaded ZIP/7z/RAR/installer/bundle release assets 
 - Published v0.3.20 `TocPilot.exe`: 2,928,128 bytes, SHA-256 `1c38a0186fbc30245e4b6876833704e7d5fc3245a95388e166ae922258b72c6f`.
 - Published v0.3.20 `TocPilot.exe.sha256`: 78 bytes; asset SHA-256 `7509b88569f884e8c67d73406bbc75fa7e4b679593f8bdcc4b8651900ec15b1e`.
 
-## Handoff — 2026-09-28
+## Handoff — 2026-09-30
 
-- Account Sync recovery is complete through compile, deterministic tests, and dev/test build.
-- Recovered code head: `2e80b1378a7a01bb311140828e4e54069b1576d6`.
-- Final recovery CI: run `36440593954`, job `108989739617`: Release build + **19/19 CTest passed**.
-- Runtime-test EXE from artifact `10977293329`: 3,076,608 bytes; SHA-256 `930dc5d90c9e285d88e4a28187818d88d99b09c1b1bec24163d5abd55db6e68a`.
-- Do **not** publish Account Sync yet. `v0.3.22` at `8678334c0a0015eba14aecf58f7c416c045f6581` remains the last published/runtime-accepted release and rollback baseline.
-- Keep **Refresh All viewport jump** queued after Account Sync. Keep **Clear WDB folder** and **DXVK advanced logging checkbox** deferred.
+- Targeted pfUI Account Sync is implemented / merged / CI-checked at `13a801696e2be585ab46d7941f96cc07ba832a18`.
+- PR #30 head `6e27c6d390c9c874e866a8fd5b78b4d6de70c0dc`; Build run `36712586795`, Windows x64 job `109877671575`: Release build + **19/19 CTest passed**, including `account-sync-safety`.
+- PR #31 (`Release v0.3.23-dev.2`) head `0c36b1a655fc480df447990117c35ff1cf973981` passed Build workflow run `36722764428`, Windows x64 job `109911820308`: Release build + **19/19 CTest passed**; it squash-merged to `dev` as `5b1575ac72e8db1edc2aac6962bec0a528e732e1`.
+- Development Release workflow run `36723197591`, Windows x64 job `109913301965`, passed from exact merged `dev` `5b1575ac72e8db1edc2aac6962bec0a528e732e1`: Release build + **19/19 CTest passed**, prerelease assets published, stable latest remained `v0.3.22`, and the automated development-channel self-update gate passed.
+- Real installed `v0.3.23-dev.1 -> v0.3.23-dev.2` self-update passed on 2026-09-30 with development opt-in preserved.
+- Runtime Account Sync accepted paths: account discovery/selection persistence; Macros confirmation decline, accepted copy + backup, and missing-target recreation; targeted pfUI cache-only merge; protected/local pfUI preservation; real `pfUI_profiles` difference prompt + accepted profile copy while supported cache processing continued in the same run.
+- Keybindings are accepted by shared-path reasoning: they use the same whole-file backup/copy machinery already exercised by Macros; no separate manufactured runtime difference is required.
+- Release-gate decision changed intentionally on 2026-09-30: Sync-before-Launch/Ctrl-click and induced backup/write-failure remain untested runtime debt but are **non-blocking** for `v0.4.0`. The legacy missing-`receive_development_builds` sideload/bootstrap ambiguity also remains documented non-blocking.
+- PR #32 (`Release v0.4.0`) head `d69b96ed7f3f3ec89842c19be651c6ccc60f4ed0` passed Build workflow run `36766021743`, Windows x64 job `110060274520`: Release build + **19/19 CTest passed**, including `account-sync-safety`; it squash-merged to `dev` as stable-candidate commit `83d6e52f691ac5bc8f9f0694fb5fb96fa80ccfcc`.
+- `v0.3.22` at `8678334c0a0015eba14aecf58f7c416c045f6581` remains the stable rollback baseline until `v0.4.0` publishes successfully.
+- Keep **Refresh All viewport jump** queued immediately after the stable promotion. Keep **Clear WDB folder** and **DXVK advanced logging checkbox** deferred.
 
 ## Exact Next Step
 
-Execute **Slice 1 — branch transition only** from the four-slice development-channel plan above. Do not begin Slice 2 in the same chat unless the user explicitly asks to continue.
+Promote the validated `v0.4.0` candidate from `dev` to `main`:
 
-After all four slices are complete and the real prerelease self-update path is accepted, runtime-test recovered Account Sync against real WTF data, in this order:
+1. Open a focused `dev -> main` PR from current `dev`, with no additional runtime changes.
+2. Require the complete Windows Release/CTest PR gate to pass on the exact promotion head.
+3. Merge `dev` to `main` without squashing away the validated `dev` lineage.
+4. Verify the main-push Build workflow and stable Release workflow both succeed on the resulting exact `main` release commit.
+5. Verify GitHub stable `/releases/latest` resolves to `v0.4.0` with direct `TocPilot.exe` and `TocPilot.exe.sha256` assets.
+6. Record final release provenance, fast-forward `dev` to the post-release documentation checkpoint if possible, then move active development to **Refresh All viewport jump**.
 
-1. Open Account Sync; verify account discovery, selection/config persistence, enabled items, and the three main-window preview/status rows.
-2. Run **Sync Now** with an older/missing macros or keybindings target; test both confirmation and decline. Inspect `WTF\\tocpilot\\<run>\\<account>\\...` and verify existing destinations are backed up before overwrite while missing destinations do not create fake backups.
-3. Exercise pfUI cache-only difference and confirm it auto-syncs without a settings-overwrite prompt; then exercise a meaningful settings difference and confirm it does prompt.
-4. Enable **Sync before Launch**; verify ordinary Launch works, then Ctrl-click Launch and confirm WoW receives `-console` even when Account Sync displays a confirmation dialog.
-5. Induce a safe backup/copy failure and verify sync reports the error and **Launch is blocked** without overwriting the destination.
-
-Only after that runtime gate passes should Account Sync be considered release-ready or work move on to **Refresh All viewport jump**. Retain deferred **Clear WDB folder** and **DXVK advanced logging checkbox** work; do not mix them into this runtime gate.
+Do not start Refresh All, Clear WDB, DXVK logging, or unrelated feature work inside the `v0.4.0` release promotion.

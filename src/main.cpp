@@ -94,6 +94,7 @@ constexpr int IDC_ACCOUNT_SYNC_PFUI = 1031;
 constexpr int IDC_ACCOUNT_SYNC_BEFORE_LAUNCH = 1032;
 constexpr int IDC_ACCOUNT_SYNC_NOW = 1033;
 constexpr int IDC_ACCOUNT_SYNC_STATUS = 1034;
+constexpr int IDC_RECEIVE_DEVELOPMENT_BUILDS = 1035;
 
 constexpr int kCompactWindowWidth = 590;
 constexpr int kDefaultWindowHeight = 480;
@@ -190,6 +191,7 @@ tp::ToolbarIcons g_toolbarIcons;
 HWND g_toolbarTooltip = nullptr;
 HWND g_toolbarIconsRadio = nullptr;
 HWND g_toolbarWordsRadio = nullptr;
+HWND g_receiveDevelopmentBuildsCheck = nullptr;
 bool g_accountSyncWindowInitializing = false;
 
 tp::ReleaseInfo g_release;
@@ -243,6 +245,7 @@ std::wstring g_windowClassName;
 
 struct CheckResult {
     bool ok = false;
+    bool receiveDevelopmentBuilds = false;
     tp::ReleaseCheckState state = tp::ReleaseCheckState::NoRelease;
     tp::ReleaseInfo release;
     std::wstring error;
@@ -6415,9 +6418,16 @@ void StartUpdateCheck(
     SetIndicator(g_githubStatus, L"GitHub Comms: Checking...");
     SetIndicator(g_releaseStatus, L"Release: Checking...");
 
-    std::thread([hwnd]() {
+    const bool receiveDevelopmentBuilds =
+        g_stateReady &&
+        g_state.settings.receiveDevelopmentBuilds;
+
+    std::thread([hwnd, receiveDevelopmentBuilds]() {
         auto result = std::make_unique<CheckResult>();
+        result->receiveDevelopmentBuilds =
+            receiveDevelopmentBuilds;
         result->ok = tp::CheckLatestRelease(
+            receiveDevelopmentBuilds,
             result->release,
             result->state,
             result->error);
@@ -7041,6 +7051,88 @@ void SetToolbarPresentation(
     }
 }
 
+void SetReceiveDevelopmentBuilds(
+    HWND owner,
+    bool enabled) {
+    if (!g_stateReady) {
+        return;
+    }
+
+    const bool current =
+        g_state.settings.receiveDevelopmentBuilds;
+
+    if (enabled == current) {
+        return;
+    }
+
+    if (enabled &&
+        MessageBoxW(
+            owner,
+            L"Install pre-release TocPilot builds for testing.\r\n\r\nDevelopment builds may contain unfinished changes.\r\n\r\nReceive development builds?",
+            L"TocPilot - Development Builds",
+            MB_YESNO |
+                MB_ICONWARNING |
+                MB_DEFBUTTON2) != IDYES) {
+        if (g_receiveDevelopmentBuildsCheck) {
+            SendMessageW(
+                g_receiveDevelopmentBuildsCheck,
+                BM_SETCHECK,
+                current
+                    ? BST_CHECKED
+                    : BST_UNCHECKED,
+                0);
+        }
+        return;
+    }
+
+    tp::AppState updated =
+        g_state;
+    updated.settings.receiveDevelopmentBuilds =
+        enabled;
+
+    std::wstring error;
+    if (!tp::SaveState(
+            g_root,
+            updated,
+            error)) {
+        MessageBoxW(
+            owner,
+            error.c_str(),
+            L"TocPilot - Development Builds",
+            MB_OK | MB_ICONERROR);
+
+        if (g_receiveDevelopmentBuildsCheck) {
+            SendMessageW(
+                g_receiveDevelopmentBuildsCheck,
+                BM_SETCHECK,
+                current
+                    ? BST_CHECKED
+                    : BST_UNCHECKED,
+                0);
+        }
+        return;
+    }
+
+    g_state = std::move(updated);
+    g_stateCreated = false;
+    g_stateError.clear();
+
+    // Never leave a release discovered on the previous update channel
+    // actionable after the preference changes.
+    g_release = {};
+
+    HWND mainWindow =
+        GetWindow(
+            owner,
+            GW_OWNER);
+    if (!mainWindow) {
+        mainWindow = owner;
+    }
+
+    StartUpdateCheck(
+        mainWindow);
+}
+
 
 tp::AccountSyncConfig CurrentAccountSyncConfig() {
     tp::AccountSyncConfig config;
@@ -7471,14 +7563,14 @@ LRESULT CALLBACK TocPilotWindowProc(
         CreateWindowExW(
             0,
             L"BUTTON",
-            L"Application update",
+            L"Updates",
             WS_CHILD |
                 WS_VISIBLE |
                 BS_GROUPBOX,
             px(14),
             px(78),
             px(344),
-            px(112),
+            px(148),
             hwnd,
             nullptr,
             GetModuleHandleW(nullptr),
@@ -7521,6 +7613,41 @@ LRESULT CALLBACK TocPilotWindowProc(
                 GetModuleHandleW(nullptr),
                 nullptr);
 
+        g_receiveDevelopmentBuildsCheck =
+            CreateWindowExW(
+                0,
+                L"BUTTON",
+                L"Receive development builds",
+                WS_CHILD |
+                    WS_VISIBLE |
+                    WS_TABSTOP |
+                    BS_AUTOCHECKBOX,
+                px(28),
+                px(186),
+                px(300),
+                px(26),
+                hwnd,
+                reinterpret_cast<HMENU>(
+                    static_cast<INT_PTR>(
+                        IDC_RECEIVE_DEVELOPMENT_BUILDS)),
+                GetModuleHandleW(nullptr),
+                nullptr);
+
+        SendMessageW(
+            g_receiveDevelopmentBuildsCheck,
+            BM_SETCHECK,
+            g_stateReady &&
+                    g_state.settings.receiveDevelopmentBuilds
+                ? BST_CHECKED
+                : BST_UNCHECKED,
+            0);
+
+        EnableWindow(
+            g_receiveDevelopmentBuildsCheck,
+            g_stateReady
+                ? TRUE
+                : FALSE);
+
         CreateWindowExW(
             0,
             L"BUTTON",
@@ -7529,7 +7656,7 @@ LRESULT CALLBACK TocPilotWindowProc(
                 WS_VISIBLE |
                 BS_GROUPBOX,
             px(14),
-            px(198),
+            px(236),
             px(344),
             px(70),
             hwnd,
@@ -7548,7 +7675,7 @@ LRESULT CALLBACK TocPilotWindowProc(
                     WS_GROUP |
                     BS_AUTORADIOBUTTON,
                 px(28),
-                px(222),
+                px(260),
                 px(120),
                 px(28),
                 hwnd,
@@ -7568,7 +7695,7 @@ LRESULT CALLBACK TocPilotWindowProc(
                     WS_TABSTOP |
                     BS_AUTORADIOBUTTON,
                 px(170),
-                px(222),
+                px(260),
                 px(120),
                 px(28),
                 hwnd,
@@ -7693,6 +7820,20 @@ LRESULT CALLBACK TocPilotWindowProc(
             return 0;
         }
 
+        if (id ==
+                IDC_RECEIVE_DEVELOPMENT_BUILDS &&
+            code ==
+                BN_CLICKED) {
+            SetReceiveDevelopmentBuilds(
+                hwnd,
+                SendMessageW(
+                    g_receiveDevelopmentBuildsCheck,
+                    BM_GETCHECK,
+                    0,
+                    0) == BST_CHECKED);
+            return 0;
+        }
+
         if (code ==
                 BN_CLICKED &&
             (id ==
@@ -7721,6 +7862,7 @@ LRESULT CALLBACK TocPilotWindowProc(
         g_updateButton = nullptr;
         g_toolbarIconsRadio = nullptr;
         g_toolbarWordsRadio = nullptr;
+        g_receiveDevelopmentBuildsCheck = nullptr;
         return 0;
     }
 
@@ -7752,7 +7894,7 @@ void ShowTocPilotWindow(
     const int windowWidth =
         ScaleUi(owner, 390);
     const int windowHeight =
-        ScaleUi(owner, 315);
+        ScaleUi(owner, 353);
     const int x =
         static_cast<int>(
             ownerRect.left) +
@@ -10113,6 +10255,27 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
     case WM_TP_CHECK_COMPLETE: {
         std::unique_ptr<CheckResult> result(
             reinterpret_cast<CheckResult*>(lParam));
+
+        const bool activeDevelopmentChannel =
+            g_stateReady &&
+            g_state.settings.receiveDevelopmentBuilds;
+
+        if (result->receiveDevelopmentBuilds !=
+            activeDevelopmentChannel) {
+            g_appUpdateCheckInProgress = false;
+            const bool refreshAddonsAfter =
+                g_refreshAddonsAfterAppCheck;
+            g_refreshAddonsAfterAppCheck =
+                false;
+
+            // The preference changed while this request was in flight.
+            // Discard its result and re-check the newly selected channel.
+            g_release = {};
+            StartUpdateCheck(
+                hwnd,
+                refreshAddonsAfter);
+            return 0;
+        }
 
         g_appUpdateCheckInProgress = false;
         const bool refreshAddonsAfter =

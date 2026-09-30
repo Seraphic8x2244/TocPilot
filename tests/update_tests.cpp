@@ -109,6 +109,154 @@ void TestSelfUpdateTransportPolicy() {
     }
 }
 
+
+void TestPrereleaseVersionOrdering() {
+    int comparison = 0;
+
+    if (!tp::CompareSelfUpdateVersionTags(
+            L"v0.3.23-dev.1",
+            L"v0.3.23-dev.2",
+            comparison) ||
+        comparison >= 0) {
+        Fail("dev.1 did not sort before dev.2");
+    }
+
+    if (!tp::CompareSelfUpdateVersionTags(
+            L"v0.3.23-dev.2",
+            L"v0.3.23",
+            comparison) ||
+        comparison >= 0) {
+        Fail("development prerelease did not sort before matching stable");
+    }
+
+    if (!tp::CompareSelfUpdateVersionTags(
+            L"v0.3.23-dev.10",
+            L"v0.3.23-dev.2",
+            comparison) ||
+        comparison <= 0) {
+        Fail("numeric prerelease identifiers were not ordered numerically");
+    }
+
+    if (!tp::CompareSelfUpdateVersionTags(
+            L"v0.3.23+build.1",
+            L"v0.3.23+build.2",
+            comparison) ||
+        comparison != 0) {
+        Fail("build metadata changed semantic version ordering");
+    }
+}
+
+tp::GitHubReleaseInfo ReleaseCandidate(
+    const wchar_t* tag,
+    bool prerelease,
+    bool draft = false) {
+    tp::GitHubReleaseInfo release;
+    release.tag = tag;
+    release.prerelease = prerelease;
+    release.draft = draft;
+    return release;
+}
+
+void TestReleaseChannelSelection() {
+    std::vector<tp::GitHubReleaseInfo> releases{
+        ReleaseCandidate(L"v0.3.22", false),
+        ReleaseCandidate(L"v0.3.23-dev.1", true),
+        ReleaseCandidate(L"v0.3.23-dev.2", true),
+        ReleaseCandidate(L"v0.3.23-dev.3", true, true),
+        ReleaseCandidate(L"v0.4.0-rc.1", true)
+    };
+
+    tp::GitHubReleaseInfo selected;
+    std::wstring error;
+
+    if (!tp::SelectSelfUpdateReleaseForChannel(
+            releases,
+            false,
+            selected,
+            error) ||
+        selected.tag != L"v0.3.22") {
+        Fail("stable channel did not ignore prereleases");
+    }
+
+    if (!tp::SelectSelfUpdateReleaseForChannel(
+            releases,
+            true,
+            selected,
+            error) ||
+        selected.tag != L"v0.3.23-dev.2") {
+        Fail("development channel did not select the newest valid dev release");
+    }
+
+    releases.push_back(
+        ReleaseCandidate(
+            L"v0.3.23",
+            false));
+
+    if (!tp::SelectSelfUpdateReleaseForChannel(
+            releases,
+            true,
+            selected,
+            error) ||
+        selected.tag != L"v0.3.23") {
+        Fail("matching stable release did not outrank development prerelease");
+    }
+}
+
+void TestChannelOffFromPrerelease() {
+    bool shouldInstall = false;
+    std::wstring error;
+
+    if (!tp::ShouldInstallSelfUpdateVersion(
+            L"v0.3.22",
+            L"v0.3.23-dev.2",
+            false,
+            shouldInstall,
+            error) ||
+        !shouldInstall) {
+        Fail("channel-off prerelease did not return to the latest stable release");
+    }
+
+    if (!tp::ShouldInstallSelfUpdateVersion(
+            L"v0.3.23",
+            L"v0.3.23-dev.2",
+            false,
+            shouldInstall,
+            error) ||
+        !shouldInstall) {
+        Fail("same-base stable release was not offered over prerelease");
+    }
+
+    if (!tp::ShouldInstallSelfUpdateVersion(
+            L"v0.3.22",
+            L"v0.3.23-dev.2",
+            true,
+            shouldInstall,
+            error) ||
+        shouldInstall) {
+        Fail("development channel incorrectly downgraded to an older stable release");
+    }
+
+    if (!tp::ShouldInstallSelfUpdateVersion(
+            L"v0.3.23-dev.2",
+            L"v0.3.23-dev.1",
+            true,
+            shouldInstall,
+            error) ||
+        !shouldInstall) {
+        Fail("development channel did not advance dev.1 to dev.2");
+    }
+
+    if (!tp::ShouldInstallSelfUpdateVersion(
+            L"v0.3.22",
+            L"v0.3.23",
+            false,
+            shouldInstall,
+            error) ||
+        shouldInstall) {
+        Fail("stable channel incorrectly downgraded a stable build");
+    }
+}
+
 } // namespace
 
 int main(int argc, char** argv) {
@@ -136,6 +284,7 @@ int main(int argc, char** argv) {
             tp::ReleaseCheckState::NoRelease;
 
         if (!tp::CheckLatestRelease(
+                false,
                 release,
                 state,
                 error)) {
@@ -172,6 +321,9 @@ int main(int argc, char** argv) {
     }
 
     TestSelfUpdateTransportPolicy();
+    TestPrereleaseVersionOrdering();
+    TestReleaseChannelSelection();
+    TestChannelOffFromPrerelease();
 
     {
         std::wstring tag;

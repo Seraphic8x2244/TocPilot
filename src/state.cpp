@@ -1025,6 +1025,9 @@ std::string DefaultJson(const AppState& state) {
         << "    \"check_app_updates\": "
         << (state.settings.checkAppUpdates ? "true" : "false")
         << ",\n"
+        << "    \"receive_development_builds\": "
+        << (state.settings.receiveDevelopmentBuilds ? "true" : "false")
+        << ",\n"
         << "    \"toolbar_icons\": "
         << (state.settings.toolbarIcons ? "true" : "false")
         << ",\n"
@@ -2634,6 +2637,27 @@ bool LoadOrCreateState(
         return false;
     }
 
+    bool receiveDevelopmentBuilds = false;
+    std::size_t developmentBuildsStart = 0;
+    std::size_t developmentBuildsEnd = 0;
+    if (FindObjectMember(
+            json,
+            settingsStart,
+            settingsEnd,
+            "receive_development_builds",
+            developmentBuildsStart,
+            developmentBuildsEnd) &&
+        !ParseBoolToken(
+            std::string_view(json).substr(
+                developmentBuildsStart,
+                developmentBuildsEnd - developmentBuildsStart),
+            receiveDevelopmentBuilds)) {
+        error =
+            L"TocPilot.json has an invalid "
+            L"settings.receive_development_builds value.";
+        return false;
+    }
+
     bool toolbarIcons = true;
     std::size_t toolbarIconsStart = 0;
     std::size_t toolbarIconsEnd = 0;
@@ -3056,6 +3080,8 @@ bool LoadOrCreateState(
     state.settings.textScale =
         std::clamp(textScale, 0.75, 2.0);
     state.settings.checkAppUpdates = checkUpdates;
+    state.settings.receiveDevelopmentBuilds =
+        receiveDevelopmentBuilds;
     state.settings.toolbarIcons = toolbarIcons;
     state.settings.advancedWindowClientWidth =
         advancedWindowClientWidth;
@@ -3101,6 +3127,12 @@ bool SaveState(
             json,
             "check_app_updates",
             state.settings.checkAppUpdates
+                ? "true"
+                : "false") ||
+        !SetSettingsMemberJson(
+            json,
+            "receive_development_builds",
+            state.settings.receiveDevelopmentBuilds
                 ? "true"
                 : "false") ||
         !SetSettingsMemberJson(
