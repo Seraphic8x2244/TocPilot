@@ -5,7 +5,7 @@
 ## Current
 
 - Active branch: `dev`.
-- Source/application version: `v0.3.23-dev.2`.
+- Source/application version: `v0.4.0` stable candidate; not yet published at this checkpoint.
 - Latest published stable release: `v0.3.22`.
 - Latest published development prerelease: `v0.3.23-dev.2` at `5b1575ac72e8db1edc2aac6962bec0a528e732e1`. GitHub stable `/releases/latest` still resolves to non-prerelease `v0.3.22`.
 - Stable release/source commit and tag target: `8678334c0a0015eba14aecf58f7c416c045f6581` (`v0.3.22`).
@@ -22,7 +22,7 @@
 - v0.3.15 Compact divider transaction fix: **implemented / CI-checked / merged / published; partial runtime pass**. Expanding the left Compact column no longer creates a horizontal scrollbar immediately, but the divider transaction still clamps both primary columns only to the generic 40 px floor. This lets the right visible column shrink below its intended Compact minimum; after entering that invalid state, dragging back left can expose a horizontal scrollbar. Fix by enforcing the real per-column Compact minima throughout fitting and divider transactions.
 - v0.3.16 Compact minimum-width fix: **implemented / CI-checked / merged / published; partial runtime pass**. Self-update passed; the companion column now stops at its intended minimum in both column orders; whole-window resize and Advanced regression checks passed. Remaining failure: when dragging the middle divider back left after pushing it right, a horizontal scrollbar still appears. This is now isolated to reverse-direction transaction ordering rather than width limits.
 - v0.3.17 reverse-direction divider fix: **implemented / CI-checked / merged / published / runtime-accepted**. Compact divider dragging is a fully owned two-column transaction: the shrinking column is applied first, the growing column second, and the native one-column commit is cancelled under a re-entrancy guard. User runtime confirmed the rightward clamp, leftward reversal, both Name/Status orders, window resizing and Advanced regression checks all pass with no horizontal scrollbar.
-- Current goal: **Account Sync remains the active feature; the targeted pfUI redesign is implemented, merged, CI-checked, and published in development prerelease `v0.3.23-dev.2`; runtime validation can now resume on that build.** Account discovery/selection persistence and the Macros decline/backup/copy/missing-destination paths have already passed. The immediate runtime gate is the installed `v0.3.23-dev.1 -> v0.3.23-dev.2` updater transition, followed by targeted pfUI, keybindings, Sync-before-Launch/Ctrl-launch, and induced-failure checks. Account Sync remains unreleased to stable; **its accepted stable release target is `v0.4.0`; the current `v0.3.23-dev.N` line is the transition/runtime-test line, not the intended final stable version.**
+- Current goal: **promote the validated Account Sync work to stable `v0.4.0`.** Real installed `v0.3.23-dev.1 -> v0.3.23-dev.2` self-update passed. Account discovery/selection persistence and Macros decline/backup/copy/missing-destination paths passed. Targeted pfUI runtime validation passed both cache-only and real-profile-change paths: supported caches merged automatically, local/account-specific pfUI data remained distinct, a genuine `pfUI_profiles` difference prompted and copied successfully, and cache processing continued in the same run. Keybindings use the already-validated whole-file copy/backup path shared with Macros and are accepted without manufacturing a separate runtime difference. On 2026-09-30 the user explicitly chose the remaining Sync-before-Launch/Ctrl-click and induced backup/write-failure runtime checks as **non-blocking validation debt** for the stable promotion; do not rewrite those paths as runtime-tested.
 - Current scope boundary: Account Sync is the next feature. Preserve the runtime-accepted v0.3.22 toolbar/DPI behaviour. Keep the Refresh All viewport-jump fix queued after Account Sync and do not mix async latest-stable DLL discovery, Add-Git stale-request work, warning cleanup, rate-limit propagation, staging-name cleanup or P6C art/skin work into this feature.
 - Audit continuity: `audit_dump.md` is a temporary scratch checkpoint for the interrupted broad audit only; this file remains the sole authoritative live development source of truth.
 - Documentation-only commits after the release do not change the published runtime baseline.
@@ -883,21 +883,23 @@ Do not add support for user-uploaded ZIP/7z/RAR/installer/bundle release assets 
 
 - Targeted pfUI Account Sync is implemented / merged / CI-checked at `13a801696e2be585ab46d7941f96cc07ba832a18`.
 - PR #30 head `6e27c6d390c9c874e866a8fd5b78b4d6de70c0dc`; Build run `36712586795`, Windows x64 job `109877671575`: Release build + **19/19 CTest passed**, including `account-sync-safety`.
-- Conflict rule is locked: group-wide supported-cache union; newer `LastWriteTimeUtc` wins same-key conflicts; equal timestamps use selected-account order, earlier selected wins; nested tables recurse and structural conflicts use the same precedence.
-- User intentionally changed the release gate on 2026-09-30: the legacy missing-`receive_development_builds` bootstrap ambiguity is non-blocking for this prerelease. Normal stable users will have an explicit stored `false` after the Account Sync stable release path; the remaining edge case requires manually sideloading a future prerelease from a pre-migration state.
-- PR #31 (`Release v0.3.23-dev.2`) head `0c36b1a655fc480df447990117c35ff1cf973981` passed Build workflow run `36722764428`, Windows x64 job `109911820308`: Release build + **19/19 CTest passed**, including `account-sync-safety`; it squash-merged to `dev` as `5b1575ac72e8db1edc2aac6962bec0a528e732e1`.
-- Development Release workflow run `36723197591`, Windows x64 job `109913301965`, completed successfully from exact merged `dev` `5b1575ac72e8db1edc2aac6962bec0a528e732e1`: Release build + **19/19 CTest passed**, required assets published, stable `/releases/latest` remained `v0.3.22`, and the real development-channel self-update gate passed from parent `9cf47266cf46cafedeb9714f6a3d8bcb5d38464b` to `v0.3.23-dev.2` while preserving opt-in.
-- Published `v0.3.23-dev.2` is a GitHub prerelease targeting `5b1575ac72e8db1edc2aac6962bec0a528e732e1`. `TocPilot.exe`: 3,145,728 bytes, SHA-256 `a7994eb62363ad6a039200ab78c6e75adf74100b525e678dae801a24b63c2bba`. `TocPilot.exe.sha256`: 78 bytes; asset SHA-256 `23bb1289e508a607b79e42500f0c13c0891e922fc6de5032a24b6291863d589d`.
-- Do **not** publish Account Sync stable yet. `v0.3.22` at `8678334c0a0015eba14aecf58f7c416c045f6581` remains the last published/runtime-accepted stable rollback baseline.
-- Keep **Refresh All viewport jump** queued after Account Sync. Keep **Clear WDB folder** and **DXVK advanced logging checkbox** deferred.
+- PR #31 (`Release v0.3.23-dev.2`) head `0c36b1a655fc480df447990117c35ff1cf973981` passed Build workflow run `36722764428`, Windows x64 job `109911820308`: Release build + **19/19 CTest passed**; it squash-merged to `dev` as `5b1575ac72e8db1edc2aac6962bec0a528e732e1`.
+- Development Release workflow run `36723197591`, Windows x64 job `109913301965`, passed from exact merged `dev` `5b1575ac72e8db1edc2aac6962bec0a528e732e1`: Release build + **19/19 CTest passed**, prerelease assets published, stable latest remained `v0.3.22`, and the automated development-channel self-update gate passed.
+- Real installed `v0.3.23-dev.1 -> v0.3.23-dev.2` self-update passed on 2026-09-30 with development opt-in preserved.
+- Runtime Account Sync accepted paths: account discovery/selection persistence; Macros confirmation decline, accepted copy + backup, and missing-target recreation; targeted pfUI cache-only merge; protected/local pfUI preservation; real `pfUI_profiles` difference prompt + accepted profile copy while supported cache processing continued in the same run.
+- Keybindings are accepted by shared-path reasoning: they use the same whole-file backup/copy machinery already exercised by Macros; no separate manufactured runtime difference is required.
+- Release-gate decision changed intentionally on 2026-09-30: Sync-before-Launch/Ctrl-click and induced backup/write-failure remain untested runtime debt but are **non-blocking** for `v0.4.0`. The legacy missing-`receive_development_builds` sideload/bootstrap ambiguity also remains documented non-blocking.
+- `v0.3.22` at `8678334c0a0015eba14aecf58f7c416c045f6581` remains the stable rollback baseline until `v0.4.0` publishes successfully.
+- Keep **Refresh All viewport jump** queued immediately after the stable promotion. Keep **Clear WDB folder** and **DXVK advanced logging checkbox** deferred.
 
 ## Exact Next Step
 
-Continue on `dev` from the published `v0.3.23-dev.2` checkpoint.
+Promote Account Sync to stable `v0.4.0` without adding new runtime features:
 
-1. On the real installed `v0.3.23-dev.1`, leave **Receive development builds** enabled and launch TocPilot; verify it discovers and self-updates to `v0.3.23-dev.2`.
-2. Confirm the installed app reports `v0.3.23-dev.2`, the opt-in remains enabled, and normal state/account-sync settings are intact.
-3. Resume the remaining Account Sync runtime matrix on `v0.3.23-dev.2`: targeted pfUI sync/merge, keybindings, Sync before Launch + Ctrl-click `-console`, and induced backup/write failure.
-4. After the full Account Sync runtime gate passes, the accepted stable release target remains **`v0.4.0`**; only then move to **Refresh All viewport jump**.
+1. Version the release candidate consistently as `0.4.0` in `CMakeLists.txt`, `src/version.h`, and `.github/release-version`.
+2. Run focused PR CI on the exact stable candidate and require the complete CTest suite to pass.
+3. Merge the validated candidate to `dev`, then promote `dev` to `main`.
+4. Verify the stable Release workflow builds/tests the exact `main` release commit, publishes direct `TocPilot.exe` + SHA-256 assets, and moves GitHub stable `/releases/latest` to `v0.4.0`.
+5. Record exact release provenance and then move the active development focus to **Refresh All viewport jump**.
 
-The legacy absent-setting bootstrap ambiguity is documented but does not block this runtime gate. Do not start Refresh All, Clear WDB, or DXVK logging work yet.
+Do not start Refresh All, Clear WDB, DXVK logging, or unrelated feature work inside the `v0.4.0` release promotion.
