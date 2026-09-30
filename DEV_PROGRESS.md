@@ -5,7 +5,7 @@
 ## Current
 
 - Active branch: `dev`.
-- Source/application version: `v0.3.23-dev.1`.
+- Source/application version: `v0.3.23-dev.2` release candidate.
 - Latest published stable release: `v0.3.22`.
 - Latest published development prerelease: `v0.3.23-dev.1` at `518a9a1f1407b4a62ca4b09c11522f8859425b61`. GitHub stable `/releases/latest` still resolves to non-prerelease `v0.3.22`.
 - Stable release/source commit and tag target: `8678334c0a0015eba14aecf58f7c416c045f6581` (`v0.3.22`).
@@ -748,7 +748,7 @@ Published `v0.3.17` runtime gate passed on 2026-09-27:
 
 The combined v0.3.14-v0.3.17 Compact two-column fill/split work is runtime-accepted.
 
-Account Sync runtime validation is **partially complete and intentionally paused**. Account selection persistence and the Macros decline/accepted-backup-copy/missing-destination paths passed against real WTF data. The targeted pfUI redesign is merged and CI-checked at `13a801696e2be585ab46d7941f96cc07ba832a18`; do not resume pfUI, keybindings, Sync-before-Launch, Ctrl-launch or induced-failure runtime checks until the development-channel first-bootstrap downgrade defect is fixed and the next dev candidate is published. **Refresh All viewport jump** remains queued after Account Sync.
+Account Sync runtime validation is **partially complete and intentionally paused until `v0.3.23-dev.2` is published**. Account selection persistence and the Macros decline/accepted-backup-copy/missing-destination paths passed against real WTF data. The targeted pfUI redesign is merged and CI-checked at `13a801696e2be585ab46d7941f96cc07ba832a18`; once `v0.3.23-dev.2` is published, resume pfUI, keybindings, Sync-before-Launch, Ctrl-launch and induced-failure runtime checks against that prerelease. **Refresh All viewport jump** remains queued after Account Sync.
 
 A1's managed same-root replacement check remains deferred. The current product workflow has **Remove Addon**, not the old Uninstall flow.
 
@@ -884,18 +884,18 @@ Do not add support for user-uploaded ZIP/7z/RAR/installer/bundle release assets 
 - Targeted pfUI Account Sync is implemented / merged / CI-checked at `13a801696e2be585ab46d7941f96cc07ba832a18`.
 - PR #30 head `6e27c6d390c9c874e866a8fd5b78b4d6de70c0dc`; Build run `36712586795`, Windows x64 job `109877671575`: Release build + **19/19 CTest passed**, including `account-sync-safety`.
 - Conflict rule is locked: group-wide supported-cache union; newer `LastWriteTimeUtc` wins same-key conflicts; equal timestamps use selected-account order, earlier selected wins; nested tables recurse and structural conflicts use the same precedence.
-- Runtime testing remains paused. The next source task is the development-channel first-bootstrap downgrade defect; do not publish the next dev candidate until that is fixed and CI passes.
+- User intentionally changed the release gate on 2026-09-30: the legacy missing-`receive_development_builds` bootstrap ambiguity is non-blocking for this prerelease. Normal stable users will have an explicit stored `false` after the Account Sync stable release path; the remaining edge case requires manually sideloading a future prerelease from a pre-migration state. Publish `v0.3.23-dev.2` now and use the real `dev.1 -> dev.2` updater path for validation.
 - Do **not** publish Account Sync stable yet. `v0.3.22` at `8678334c0a0015eba14aecf58f7c416c045f6581` remains the last published/runtime-accepted stable rollback baseline.
 - Keep **Refresh All viewport jump** queued after Account Sync. Keep **Clear WDB folder** and **DXVK advanced logging checkbox** deferred.
 
 ## Exact Next Step
 
-Continue on `dev` from the current documentation checkpoint.
+Continue on `dev` from the current release-candidate checkpoint.
 
-1. Fix the development-channel first-bootstrap downgrade defect while preserving the locked default-off / explicit-opt-in policy: a manually bootstrapped prerelease running against a stable-era state with no `receive_development_builds` key must be able to reach the UI instead of immediately downgrading, while an explicit user choice to disable development builds must still return selection to stable.
-2. Add deterministic state/update-selection coverage that distinguishes an absent legacy setting from an explicit stored `false`.
-3. Run the focused PR Windows Release build + complete CTest suite. Do not publish a development prerelease until CI is green.
-4. Only after that fix is merged and the next dev candidate is published, resume the remaining Account Sync runtime matrix: targeted pfUI sync/merge, keybindings, Sync before Launch + Ctrl-click `-console`, and induced backup/write failure.
+1. Merge the `v0.3.23-dev.2` release-candidate change only after the focused Windows Release build + complete CTest suite is green.
+2. Let the Development Release workflow publish exact merged `dev` as prerelease `v0.3.23-dev.2`, verify direct EXE + SHA-256 assets, stable-latest isolation, and the workflow's real development-channel self-update gate.
+3. Runtime-test the installed `v0.3.23-dev.1 -> v0.3.23-dev.2` self-update with **Receive development builds** enabled.
+4. Then resume the remaining Account Sync runtime matrix on `v0.3.23-dev.2`: targeted pfUI sync/merge, keybindings, Sync before Launch + Ctrl-click `-console`, and induced backup/write failure.
 5. After the full Account Sync runtime gate passes, the accepted stable release target remains **`v0.4.0`**; only then move to **Refresh All viewport jump**.
 
-Do not resume destructive testing against the old whole-file pfUI build. Do not start Refresh All, Clear WDB, or DXVK logging work in the bootstrap-fix slice.
+The legacy absent-setting bootstrap ambiguity is documented but no longer blocks this prerelease or Account Sync runtime testing. Do not start Refresh All, Clear WDB, or DXVK logging work yet.
