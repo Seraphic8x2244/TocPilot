@@ -3,6 +3,7 @@
 #include "mpq_package.h"
 
 #include <algorithm>
+#include <cwctype>
 #include <utility>
 
 namespace tp {
