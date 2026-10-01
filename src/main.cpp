@@ -10119,13 +10119,16 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                 return 0;
             }
 
-            const auto execution =
-                tp::ClassifyRepositorySelection(
+            std::vector<tp::RepositoryInstallItem>
+                installItems;
+
+            if (!tp::BuildRepositoryInstallItems(
                     discovery,
                     selectedIndices,
-                    error);
-
-            if (!error.empty()) {
+                    g_root,
+                    g_state.packages,
+                    installItems,
+                    error)) {
                 MessageBoxW(
                     hwnd,
                     error.c_str(),
@@ -10135,204 +10138,29 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                 return 0;
             }
 
-            if (execution ==
-                tp::RepositorySelectionExecution::
-                    Deferred) {
-                MessageBoxW(
-                    hwnd,
-                    L"This selection includes MPQ or mixed component types whose combined package creation/install path is not enabled yet. No package state was changed.",
-                    L"TocPilot - Add Git",
-                    MB_OK |
-                        MB_ICONINFORMATION);
-                return 0;
-            }
-
-            if (execution ==
-                tp::RepositorySelectionExecution::
-                    SingleDll) {
-                const auto candidateIndex =
-                    selectedIndices.front();
-
-                if (candidateIndex >=
-                    discovery.candidates.size() ||
-                    discovery.candidates[
-                        candidateIndex].kind !=
-                        tp::RepositoryCandidateKind::
-                            Dll) {
-                    MessageBoxW(
-                        hwnd,
-                        L"The selected DLL changed unexpectedly.",
-                        L"TocPilot - Add Git",
-                        MB_OK |
-                            MB_ICONERROR);
-                    return 0;
-                }
-
-                const auto& candidate =
-                    discovery.candidates[
-                        candidateIndex];
-
-                tp::PackageRecord dllPackage =
-                    tp::MakeRepositoryPackage(
-                        L"github",
-                        discovery.repository);
-
-                dllPackage.id =
-                    L"github:" +
-                    discovery.repository +
-                    L":release:" +
-                    candidate.releaseAsset.name;
-                dllPackage.name =
-                    candidate.releaseAsset.name;
-                dllPackage.mode =
-                    L"release";
-                dllPackage.ref.clear();
-                dllPackage.releasePolicy =
-                    L"latest_stable";
-                dllPackage.asset =
-                    candidate.releaseAsset.name;
-                dllPackage.sourcePath.clear();
-                dllPackage.target =
-                    L"wow_root";
-                dllPackage.targetPath =
-                    candidate.releaseAsset.name;
-                dllPackage.installedRevision.clear();
-                dllPackage.latestRevision =
-                    candidate.releaseTag;
-                dllPackage.installedFiles.clear();
-
-                if (!tp::ValidateDirectDllPackage(
-                        dllPackage,
-                        error)) {
-                    MessageBoxW(
-                        hwnd,
-                        error.c_str(),
-                        L"TocPilot - Add DLL",
-                        MB_OK |
-                            MB_ICONERROR);
-                    return 0;
-                }
-
-                tp::AppState updatedState =
-                    g_state;
-
-                if (!tp::AppendPackage(
-                        updatedState,
-                        std::move(dllPackage),
-                        error) ||
-                    !tp::SaveState(
-                        g_root,
-                        updatedState,
-                        error)) {
-                    MessageBoxW(
-                        hwnd,
-                        error.c_str(),
-                        L"TocPilot - Add DLL",
-                        MB_OK |
-                            MB_ICONERROR);
-                    return 0;
-                }
-
-                const std::size_t index =
-                    updatedState.packages.size() -
-                    1;
-
-                g_state =
-                    std::move(updatedState);
-                g_stateCreated = false;
-                g_stateError.clear();
-
-                RefreshPackageStateUi();
-                SelectPackageRow(index);
-                UpdatePackageButtons();
-                StartPackageInstall(
-                    hwnd,
-                    index);
-                return 0;
-            }
-
-            std::vector<tp::PackageRecord>
-                packagesToAdd;
-
-            auto makeChildPackage =
-                [&](const tp::AddonCandidate& candidate,
-                    tp::PackageRecord& child) {
-                    child =
-                        tp::MakeRepositoryAddonPackage(
-                            repositoryPackage.provider,
-                            repositoryPackage.repository,
-                            candidate.repositoryRelativePath
-                                .generic_wstring(),
-                            candidate.installFolder);
-
-                    return tp::SetPackageBranch(
-                        child,
-                        repositoryPackage.ref,
-                        repositoryPackage.latestRevision,
-                        error);
-                };
-
-            for (const auto candidateIndex :
-                 selectedIndices) {
-                if (candidateIndex >=
-                    discovery.candidates.size() ||
-                    discovery.candidates[
-                        candidateIndex].kind !=
-                        tp::RepositoryCandidateKind::
-                            Addon) {
-                    MessageBoxW(
-                        hwnd,
-                        L"The addon selection changed unexpectedly.",
-                        L"TocPilot - Add Git",
-                        MB_OK |
-                            MB_ICONERROR);
-                    return 0;
-                }
-
-                const auto& addon =
-                    discovery.candidates[
-                        candidateIndex].addon;
-
-                if (addon.repositoryRelativePath ==
-                    std::filesystem::path(L".")) {
-                    // Preserve the established root-package identity while
-                    // making the root selection explicit for install
-                    // validation.
-                    tp::PackageRecord rootPackage =
-                        repositoryPackage;
-                    rootPackage.sourcePath =
-                        L".";
-                    packagesToAdd.push_back(
-                        std::move(rootPackage));
-                    continue;
-                }
-
-                tp::PackageRecord child;
-                if (!makeChildPackage(
-                        addon,
-                        child)) {
-                    MessageBoxW(
-                        hwnd,
-                        error.c_str(),
-                        L"TocPilot - Add Git",
-                        MB_OK |
-                            MB_ICONERROR);
-                    return 0;
-                }
-
-                packagesToAdd.push_back(
-                    std::move(child));
-            }
-
-            if (packagesToAdd.empty()) {
+            if (installItems.empty()) {
                 return 0;
             }
 
             std::size_t replacementOwnerIndex =
                 g_state.packages.size();
+            std::size_t replacementItemIndex =
+                installItems.size();
 
-            for (const auto& package :
-                 packagesToAdd) {
+            for (std::size_t itemIndex = 0;
+                 itemIndex < installItems.size();
+                 ++itemIndex) {
+                const auto& item =
+                    installItems[itemIndex];
+
+                if (item.kind !=
+                    tp::RepositoryCandidateKind::
+                        Addon) {
+                    continue;
+                }
+
+                const auto& package =
+                    item.package;
                 const std::size_t ownerIndex =
                     tp::FindPackageOwningAddonRoot(
                         g_state,
@@ -10356,13 +10184,13 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                         return 0;
                     }
 
-                    if (packagesToAdd.size() != 1) {
+                    if (installItems.size() != 1) {
                         const std::wstring message =
-                            L"The selected repository-library set includes addon root '" +
+                            L"The selected components include addon root '" +
                             package.name +
                             L"', which is already owned by '" +
                             owner.name +
-                            L"'.\r\n\r\nTocPilot will not create overlapping package records. Select that colliding addon by itself if you want to overwrite the existing managed addon.";
+                            L"'.\r\n\r\nTocPilot will not combine an ownership-transfer replacement with other new package records. Select that colliding addon by itself if you want to overwrite the existing managed addon.";
                         MessageBoxW(
                             hwnd,
                             message.c_str(),
@@ -10395,6 +10223,8 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
 
                     replacementOwnerIndex =
                         ownerIndex;
+                    replacementItemIndex =
+                        itemIndex;
                     continue;
                 }
 
@@ -10443,8 +10273,10 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                 const auto& owner =
                     g_state.packages[
                         replacementOwnerIndex];
-                const auto& replacement =
-                    packagesToAdd.front();
+                auto replacement =
+                    installItems[
+                        replacementItemIndex]
+                        .package;
 
                 const std::wstring prompt =
                     L"Addon root '" +
@@ -10471,8 +10303,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
 
                 StartPackageReplacementInstall(
                     hwnd,
-                    std::move(
-                        packagesToAdd.front()),
+                    std::move(replacement),
                     replacementOwnerIndex);
                 return 0;
             }
@@ -10482,19 +10313,21 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             std::vector<std::size_t>
                 installIndices;
             installIndices.reserve(
-                packagesToAdd.size());
+                installItems.size());
 
-            for (auto& package :
-                 packagesToAdd) {
+            for (auto& item :
+                 installItems) {
                 if (!tp::AppendPackage(
                         updatedState,
-                        std::move(package),
+                        std::move(
+                            item.package),
                         error)) {
                     MessageBoxW(
                         hwnd,
                         error.c_str(),
                         L"TocPilot - Add Git",
-                        MB_OK | MB_ICONWARNING);
+                        MB_OK |
+                            MB_ICONWARNING);
                     return 0;
                 }
 
@@ -10510,7 +10343,8 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                     hwnd,
                     error.c_str(),
                     L"TocPilot - Add Git",
-                    MB_OK | MB_ICONERROR);
+                    MB_OK |
+                        MB_ICONERROR);
                 return 0;
             }
 
@@ -10527,7 +10361,8 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             if (installIndices.size() > 1) {
                 StartAddGitInstallQueue(
                     hwnd,
-                    std::move(installIndices));
+                    std::move(
+                        installIndices));
             } else {
                 const std::size_t index =
                     installIndices.front();
