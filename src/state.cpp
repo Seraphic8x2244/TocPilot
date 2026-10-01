@@ -1823,12 +1823,24 @@ bool ValidatePackageRecordSemantics(
 
     if (package.mode == L"release") {
         std::wstring directError;
-        if (!ValidateDirectDllPackageRecord(
+        const bool directDll =
+            ValidateDirectDllPackageRecord(
                 package,
-                directError)) {
-            return fail(
-                L"is not a valid direct-DLL package: " +
                 directError);
+
+        std::wstring mpqError;
+        const bool mpq =
+            ValidateMpqPackageRecord(
+                package,
+                mpqError);
+
+        if (!directDll &&
+            !mpq) {
+            return fail(
+                L"is not a valid supported exact-release package: " +
+                (package.target == L"data"
+                    ? mpqError
+                    : directError));
         }
 
         if (!package.sourcePath.empty() ||
@@ -1839,10 +1851,11 @@ bool ValidatePackageRecordSemantics(
 
         if (hasInstalledFiles &&
             (package.installedFiles.size() != 1 ||
-             package.installedFiles.front() !=
-                 package.targetPath)) {
+             !EqualsInsensitive(
+                 package.installedFiles.front(),
+                 package.targetPath))) {
             return fail(
-                L"records direct-DLL ownership outside the exact configured target file.");
+                L"records exact-release ownership outside the configured target file.");
         }
         return true;
     }
@@ -1996,6 +2009,98 @@ bool ValidateDirectDllPackageRecord(
     return true;
 }
 
+bool ValidateMpqPackageRecord(
+    const PackageRecord& package,
+    std::wstring& error) {
+    error.clear();
+
+    if (package.provider != L"github" ||
+        package.mode != L"release" ||
+        package.target != L"data") {
+        error =
+            L"Package is not a GitHub MPQ release package.";
+        return false;
+    }
+
+    if (package.releasePolicy !=
+        L"latest_stable") {
+        error =
+            L"MPQ packages currently require latest-stable release tracking.";
+        return false;
+    }
+
+    if (package.asset.empty() ||
+        !EndsWithInsensitive(
+            package.asset,
+            L".mpq")) {
+        error =
+            L"MPQ packages require one exact .mpq release asset name.";
+        return false;
+    }
+
+    if (package.asset.find_first_of(
+            L"/\\") !=
+        std::wstring::npos) {
+        error =
+            L"MPQ asset name must be a filename, not a path.";
+        return false;
+    }
+
+    const std::wstring target =
+        CanonicalSeparators(
+            package.targetPath);
+
+    constexpr std::wstring_view prefix =
+        L"Data/patch-";
+    constexpr std::wstring_view suffix =
+        L".mpq";
+
+    const bool shaped =
+        target.size() ==
+            prefix.size() + 1 +
+                suffix.size() &&
+        EqualsInsensitive(
+            std::wstring_view(target).substr(
+                0,
+                prefix.size()),
+            prefix) &&
+        EqualsInsensitive(
+            std::wstring_view(target).substr(
+                target.size() -
+                    suffix.size()),
+            suffix);
+
+    if (!shaped) {
+        error =
+            L"MPQ destination must be a single Data/patch-X.mpq slot.";
+        return false;
+    }
+
+    const wchar_t letter =
+        static_cast<wchar_t>(
+            std::towupper(
+                target[prefix.size()]));
+
+    if (letter < L'A' ||
+        letter > L'Z' ||
+        !IsSafeRelativePath(target)) {
+        error =
+            L"MPQ destination must use a safe patch letter A through Z under WoW Data.";
+        return false;
+    }
+
+    const std::filesystem::path relative(
+        target);
+
+    if (relative.is_absolute()) {
+        error =
+            L"MPQ destination must remain relative to the WoW root.";
+        return false;
+    }
+
+    return true;
+}
+
 bool ValidateDurablePackageState(
     const std::vector<PackageRecord>& packages,
     std::wstring& error) {
@@ -2008,6 +2113,7 @@ bool ValidateDurablePackageState(
 
     std::vector<Ownership> addonRoots;
     std::vector<Ownership> directTargets;
+    std::vector<Ownership> mpqTargets;
 
     for (std::size_t index = 0;
          index < packages.size();
@@ -2108,6 +2214,29 @@ bool ValidateDurablePackageState(
             }
 
             directTargets.push_back(
+                {package.targetPath, package.id});
+        }
+
+        if (package.mode == L"release" &&
+            package.target == L"data") {
+            for (const auto& owner :
+                 mpqTargets) {
+                if (EqualsInsensitive(
+                        owner.value,
+                        package.targetPath)) {
+                    error =
+                        L"Conflicting MPQ destination reservation for '" +
+                        package.targetPath +
+                        L"' between packages '" +
+                        owner.packageId +
+                        L"' and '" +
+                        package.id +
+                        L"'.";
+                    return false;
+                }
+            }
+
+            mpqTargets.push_back(
                 {package.targetPath, package.id});
         }
     }
@@ -2411,12 +2540,23 @@ bool SetPackageLatestRevision(
             package,
             directError);
 
+    std::wstring mpqError;
+    const bool mpqReleasePackage =
+        package.mode == L"release" &&
+        ValidateMpqPackageRecord(
+            package,
+            mpqError);
+
     if (!branchPackage &&
-        !directReleasePackage) {
+        !directReleasePackage &&
+        !mpqReleasePackage) {
         error =
-            !directError.empty()
-                ? directError
-                : L"Only configured GitHub/GitLab branch or latest-stable GitHub direct-release packages can be refreshed.";
+            package.target == L"data" &&
+                    !mpqError.empty()
+                ? mpqError
+                : (!directError.empty()
+                    ? directError
+                    : L"Only configured GitHub/GitLab branch or latest-stable GitHub exact-release packages can be refreshed.");
         return false;
     }
 
@@ -2454,12 +2594,23 @@ bool SetPackageInstalledState(
             package,
             directError);
 
+    std::wstring mpqError;
+    const bool mpqReleasePackage =
+        package.mode == L"release" &&
+        ValidateMpqPackageRecord(
+            package,
+            mpqError);
+
     if (!branchPackage &&
-        !directReleasePackage) {
+        !directReleasePackage &&
+        !mpqReleasePackage) {
         error =
-            !directError.empty()
-                ? directError
-                : L"Only configured GitHub/GitLab branch or latest-stable GitHub direct-release packages can be installed.";
+            package.target == L"data" &&
+                    !mpqError.empty()
+                ? mpqError
+                : (!directError.empty()
+                    ? directError
+                    : L"Only configured GitHub/GitLab branch or latest-stable GitHub exact-release packages can be installed.");
         return false;
     }
 
@@ -2478,12 +2629,14 @@ bool SetPackageInstalledState(
         }
     }
 
-    if (directReleasePackage &&
+    if ((directReleasePackage ||
+         mpqReleasePackage) &&
         (installedFiles.size() != 1 ||
-         installedFiles.front() !=
-             package.targetPath)) {
+         !EqualsInsensitive(
+             installedFiles.front(),
+             package.targetPath))) {
         error =
-            L"Direct-release ownership must contain only the exact configured target file.";
+            L"Exact-release ownership must contain only the configured target file.";
         return false;
     }
 
@@ -2502,9 +2655,14 @@ bool ClearPackageInstalledState(
     error.clear();
 
     if (package.target != L"addons") {
-        error =
-            L"Only addon package installed state can be cleared by this operation.";
-        return false;
+        std::wstring mpqError;
+        if (!ValidateMpqPackageRecord(
+                package,
+                mpqError)) {
+            error =
+                L"Only addon or MPQ package installed state can be cleared by this operation.";
+            return false;
+        }
     }
 
     package.installedRevision.clear();
