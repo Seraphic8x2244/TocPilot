@@ -923,6 +923,7 @@ Do not add support for user-uploaded ZIP/7z/RAR/installer/bundle release assets 
 - Development prerelease `v0.4.1-dev.1` is published from exact commit `325523b05c34c59d6e15fe56cd152d9cfafb5fdf`. Development Release run `36888266631`, Windows x64 job `110457047207`, passed source-version validation, Release build, **20/20 CTest**, tag/assets publication, stable-channel isolation, and real development-channel self-update from parent `7cfa6ba984dbe909622941ae72c8157990cc05d7`. `TocPilot.exe`: 3,145,216 bytes, SHA-256 `996655e59732c7afca9934423d605e9565b8fc26912a048e06419de9e4511387`. Runtime viewport validation passed on 2026-10-01 for single-addon/branch actions, Refresh All, Update New and presentational actions; multi-package Add Git remains untested/non-blocking due to no available fixture. Keep **Clear WDB folder** and **DXVK advanced logging checkbox** deferred.
 - Startup scan auto-enter implementation `b539b593900ccc046baffeffdcdf19e9a57a8ffb` removes the normal click-to-continue splash gate while retaining the explicit self-update-failure acknowledgement. Draft PR #35 CI: Build run `36893192930`, Windows x64 job `110473610222`, Release build + **20/20 CTest passed**. This change is not in published `v0.4.1-dev.1`; include it in the next development prerelease.
 - v0.5.0 Phase 1 exact release-asset backend: **implemented / CI-checked / merged on `dev`; backend-only, runtime prerelease not required**. PR #36 tested exact head `f040de9f7a44c92c5b8ccc8e6ec8af068ede2d18`; Build run `36896441332`, Windows x64 job `110484495595`, passed the Release build and **21/21 CTest tests**, including `direct-dll-policy` and new `exact-release-asset-policy`. It squash-merged to `dev` as `2809f6296e461fe7f2ebd2bd4cb853dca80a5961`. New `exact_release_asset` code owns kind-aware (`Dll` / `Mpq`) latest-stable exact-asset source validation and metadata/checksum resolution, including the existing exact `<asset>.sha256` fallback. Existing direct-DLL package JSON/state validation, exact WoW-root destination, direct-write/no-staging behaviour, size/SHA-256 checks, trust/security policy and runtime semantics remain unchanged; `DirectDllRelease` now aliases the shared resolved-release model. No MPQ filesystem installation, MPQ target allocation, Add Git redesign, mixed queue or wording work was included.
+- v0.5.0 Phase 2 MPQ package/install backend: **implemented / CI-checked / merged on `dev`; backend-only, runtime prerelease not required**. PR #37 tested exact head `b57d7126d1e996f01a6b1eac48f760d3ca682b78`; Build run `36900202483`, Windows x64 job `110497168058`, passed the Release build and **22/22 CTest tests**, including new `mpq-package-backend`. It squash-merged to `dev` as `2723509f292655b5aae7c62e563965e0b387f2b3`. MPQ packages now use the shared exact latest-stable release-asset model, durable `Data/patch-A.mpq` through `Data/patch-Z.mpq` reservation, deterministic lowest-free-letter allocation from both live Data names and persisted TocPilot destinations, persisted target reuse by package identity, collision refusal, transactional install/update/remove with rollback material retained across the state-save boundary, and exact size/SHA-256 integrity verification. Existing direct-DLL direct-write/security behaviour remains separate and unchanged. No unified discovery, Add Git UI, mixed queue or wording work was included.
 
 ## v0.5.0 — Unified repository discovery / MPQ support
 
@@ -986,6 +987,8 @@ Scope:
 - no Add Git UI redesign yet.
 
 Gate: Release build + full tests. Backend-only; runtime prerelease optional.
+
+Status: **complete on `dev`** at merged source commit `2723509f292655b5aae7c62e563965e0b387f2b3`; PR #37 final Release CI passed **22/22 CTest** on exact tested head `b57d7126d1e996f01a6b1eac48f760d3ca682b78`. The first CI attempt exposed that standalone MPQ validation still accepted a mixed `source_path`; that validator hole was corrected before the final green gate. No visible runtime/UI path was wired to MPQs in this phase, so no Phase 2 runtime prerelease is required.
 
 #### Phase 3 — Unified repository candidate discovery
 
@@ -1106,17 +1109,17 @@ Gate: build + tests + visual/runtime smoke.
 
 ## Exact Next Step
 
-Start **v0.5.0 Phase 2 — MPQ package/install backend** in a fresh chat.
+Start **v0.5.0 Phase 3 — Unified repository candidate discovery** in a fresh chat.
 
-Phase 2 is backend-only. Do not start unified repository candidate discovery, Add Git selection UI, mixed install queues, or the wording pass.
+Phase 3 is backend discovery/model work only. Do not start the Add Git selection UI, mixed install queues, or the wording pass.
 
 Before editing:
 1. read `dev_rulebook.md` and this `DEV_PROGRESS.md`;
 2. verify the current `dev` HEAD;
-3. inspect the Phase 1 `exact_release_asset` backend, current package-state validation/ownership rules, direct-DLL separation, install/remove infrastructure and relevant tests;
-4. add MPQ package/state/install behaviour using the shared exact-release-asset model without weakening or rerouting the special DLL direct-write/security path.
+3. inspect the existing Add Git repository classification flow, branch/addon discovery, Phase 1 `exact_release_asset` backend, and Phase 2 MPQ package backend;
+4. preserve existing addon/DLL behaviour and keep GitLab branch-addon-only unless release support is separately scoped later.
 
-Implement the locked Phase 2 scope above: exact standalone `.mpq` package validation, deterministic WoW `Data\\` patch-letter assignment, persistence/reuse, collision refusal, install/update/remove/integrity verification, and focused deterministic tests. Stop after the Release build + full-test gate and update this file.
+Implement the locked Phase 3 scope above: one candidate/result model that independently discovers branch addon/library candidates and latest-stable GitHub DLL/MPQ assets, aggregates all valid classes without fallback suppression, keeps failed/empty classes from hiding successful ones, and adds focused deterministic tests. Stop after the Release build + full-test gate and update this file.
 
 The package-list viewport reset remains accepted for forward development from runtime-tested `v0.4.1-dev.1`; multi-package Add Git remains non-blocking runtime debt until Phase 5 gives us a practical mixed/multi fixture.
 
