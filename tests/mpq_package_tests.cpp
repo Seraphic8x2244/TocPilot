@@ -234,7 +234,9 @@ void TestAllocationAndPersistence(
     }
 
     auto reused =
-        reloaded.packages[1];
+        Package(
+            reloaded.packages[1].repository,
+            reloaded.packages[1].asset);
 
     if (!tp::AssignMpqTargetPath(
             root,
@@ -244,7 +246,20 @@ void TestAllocationAndPersistence(
         reused.targetPath !=
             L"Data/patch-C.mpq") {
         Fail(
-            "persisted MPQ target was reassigned");
+            "persisted MPQ target was not recovered by package identity");
+        return;
+    }
+
+    reused.targetPath =
+        L"Data/patch-D.mpq";
+
+    if (tp::AssignMpqTargetPath(
+            root,
+            reloaded.packages,
+            reused,
+            error)) {
+        Fail(
+            "persisted MPQ target was allowed to move to another letter");
         return;
     }
 
