@@ -1021,7 +1021,7 @@ bool CommitPreparedStaging(
                 target.c_str(),
                 staging.c_str(),
                 rollback.c_str(),
-                REPLACEFILE_WRITE_THROUGH,
+                0,
                 nullptr,
                 nullptr)) {
             error =
@@ -1627,7 +1627,7 @@ bool RollbackMpqInstall(
                     transaction.targetPath.c_str(),
                     transaction.rollbackPath.c_str(),
                     nullptr,
-                    REPLACEFILE_WRITE_THROUGH,
+                    0,
                     nullptr,
                     nullptr);
         } else {
