@@ -5926,6 +5926,290 @@ void UninstallPackage(
                 : MB_ICONWARNING));
 }
 
+void RemoveDirectDllPackage(
+    HWND hwnd,
+    std::size_t index) {
+    if (index >= g_state.packages.size()) {
+        return;
+    }
+
+    const auto package =
+        g_state.packages[index];
+
+    if (!tp::IsDirectDllPackage(
+            package)) {
+        return;
+    }
+
+    const bool installed =
+        !package.installedRevision.empty() &&
+        !package.installedFiles.empty();
+
+    std::wstring prompt =
+        L"Remove " +
+        package.name +
+        L" from TocPilot?";
+
+    if (installed) {
+        prompt +=
+            L"\r\n\r\nThe exact managed DLL will be removed from:\r\n" +
+            (g_root /
+             package.targetPath).wstring() +
+            L"\r\n\r\nNo backup or renamed DLL will be created.";
+    } else {
+        prompt +=
+            L"\r\n\r\nNo installed DLL is recorded. This removes only the package record.";
+    }
+
+    if (MessageBoxW(
+            hwnd,
+            prompt.c_str(),
+            L"TocPilot - Remove DLL",
+            MB_YESNO |
+                MB_ICONWARNING |
+                MB_DEFBUTTON2) != IDYES) {
+        return;
+    }
+
+    bool removedFile = false;
+    std::wstring error;
+
+    if (installed &&
+        !tp::RemoveDirectDll(
+            package,
+            g_root,
+            removedFile,
+            error)) {
+        MessageBoxW(
+            hwnd,
+            error.c_str(),
+            L"TocPilot - Remove DLL Failed",
+            MB_OK |
+                MB_ICONERROR);
+        return;
+    }
+
+    tp::AppState updatedState =
+        g_state;
+
+    if (!tp::RemovePackageRecord(
+            updatedState,
+            package.id,
+            error) ||
+        !tp::SaveState(
+            g_root,
+            updatedState,
+            error)) {
+        if (removedFile) {
+            SetPackageNeedsAttention(
+                package.id,
+                true);
+        }
+
+        std::wstring message =
+            package.name +
+            L": package state could not be saved - " +
+            error;
+
+        if (removedFile) {
+            message +=
+                L". The exact DLL was already removed and cannot be restored because direct-DLL management deliberately creates no backup DLL.";
+        }
+
+        if (g_packageHint) {
+            SetWindowTextW(
+                g_packageHint,
+                message.c_str());
+        }
+
+        MessageBoxW(
+            hwnd,
+            message.c_str(),
+            L"TocPilot - Remove DLL State Save Failed",
+            MB_OK |
+                MB_ICONWARNING);
+        RefreshPackageStateUi();
+        SelectPackageRow(index);
+        UpdatePackageButtons();
+        return;
+    }
+
+    g_state =
+        std::move(updatedState);
+    g_stateCreated = false;
+    g_stateError.clear();
+    g_packageViewOrder.clear();
+    SetPackageNeedsAttention(
+        package.id,
+        false);
+    RefreshPackageStateUi();
+}
+
+void RemoveMpqPackage(
+    HWND hwnd,
+    std::size_t index) {
+    if (index >= g_state.packages.size()) {
+        return;
+    }
+
+    const auto package =
+        g_state.packages[index];
+
+    if (!tp::IsMpqPackage(
+            package)) {
+        return;
+    }
+
+    const bool installed =
+        !package.installedRevision.empty() &&
+        !package.installedFiles.empty();
+
+    std::wstring prompt =
+        L"Remove " +
+        package.name +
+        L" from TocPilot?";
+
+    if (installed) {
+        prompt +=
+            L"\r\n\r\nThe managed MPQ at " +
+            (g_root /
+             package.targetPath).wstring() +
+            L" will be removed transactionally with rollback retained until package state is saved.";
+    } else {
+        prompt +=
+            L"\r\n\r\nNo installed MPQ is recorded. This removes the package record and releases its reserved patch-letter destination.";
+    }
+
+    if (MessageBoxW(
+            hwnd,
+            prompt.c_str(),
+            L"TocPilot - Remove MPQ",
+            MB_YESNO |
+                MB_ICONWARNING |
+                MB_DEFBUTTON2) != IDYES) {
+        return;
+    }
+
+    std::wstring error;
+    tp::MpqRemovalTransaction
+        transaction;
+
+    if (installed &&
+        !tp::BeginMpqRemoval(
+            package,
+            g_root,
+            g_state.packages,
+            transaction,
+            error)) {
+        MessageBoxW(
+            hwnd,
+            error.c_str(),
+            L"TocPilot - Remove MPQ Failed",
+            MB_OK |
+                MB_ICONERROR);
+        return;
+    }
+
+    tp::AppState updatedState =
+        g_state;
+
+    if (!tp::RemovePackageRecord(
+            updatedState,
+            package.id,
+            error)) {
+        if (transaction.active) {
+            std::wstring rollbackError;
+            tp::RollbackMpqRemoval(
+                transaction,
+                rollbackError);
+        }
+
+        MessageBoxW(
+            hwnd,
+            error.c_str(),
+            L"TocPilot - Remove MPQ Failed",
+            MB_OK |
+                MB_ICONERROR);
+        return;
+    }
+
+    if (!tp::SaveState(
+            g_root,
+            updatedState,
+            error)) {
+        const std::wstring saveError =
+            error;
+        std::wstring rollbackError;
+        const bool rolledBack =
+            !transaction.active ||
+            tp::RollbackMpqRemoval(
+                transaction,
+                rollbackError);
+
+        std::wstring message =
+            package.name +
+            L": package state could not be saved - " +
+            saveError;
+
+        if (installed && rolledBack) {
+            message +=
+                L". The previous MPQ was restored.";
+        } else if (!rolledBack) {
+            message +=
+                L". Filesystem rollback also failed: " +
+                rollbackError;
+        }
+
+        MessageBoxW(
+            hwnd,
+            message.c_str(),
+            rolledBack
+                ? L"TocPilot - Remove MPQ Rolled Back"
+                : L"TocPilot - MPQ Rollback Failed",
+            MB_OK |
+                MB_ICONERROR);
+        RefreshPackageStateUi();
+        SelectPackageRow(index);
+        UpdatePackageButtons();
+        return;
+    }
+
+    g_state =
+        std::move(updatedState);
+    g_stateCreated = false;
+    g_stateError.clear();
+    g_packageViewOrder.clear();
+
+    std::wstring cleanupError;
+    const bool cleanupOk =
+        !transaction.active ||
+        tp::FinalizeMpqRemoval(
+            transaction,
+            cleanupError);
+
+    RefreshPackageStateUi();
+
+    if (!cleanupOk) {
+        const std::wstring message =
+            package.name +
+            L": removal and package-state save succeeded, but MPQ rollback cleanup failed - " +
+            cleanupError;
+
+        if (g_packageHint) {
+            SetWindowTextW(
+                g_packageHint,
+                message.c_str());
+        }
+
+        MessageBoxW(
+            hwnd,
+            message.c_str(),
+            L"TocPilot - MPQ Removal Cleanup",
+            MB_OK |
+                MB_ICONWARNING);
+    }
+}
+
 void RemovePackage(
     HWND hwnd,
     std::size_t index) {
@@ -5935,6 +6219,22 @@ void RemovePackage(
 
     const auto package =
         g_state.packages[index];
+
+    if (tp::IsDirectDllPackage(
+            package)) {
+        RemoveDirectDllPackage(
+            hwnd,
+            index);
+        return;
+    }
+
+    if (tp::IsMpqPackage(
+            package)) {
+        RemoveMpqPackage(
+            hwnd,
+            index);
+        return;
+    }
 
     const bool hasInstalledFiles =
         package.target == L"addons" &&
