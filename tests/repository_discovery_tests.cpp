@@ -2,6 +2,7 @@
 
 #include <iostream>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace {
@@ -25,8 +26,9 @@ tp::AddonCandidate Addon(
     addon.installFolder =
         std::move(installFolder);
     addon.tocFiles.push_back(
-        addon.installFolder +
-        L".toc");
+        std::filesystem::path(
+            addon.installFolder +
+            L".toc"));
     return addon;
 }
 
