@@ -42,6 +42,7 @@ add_executable(TocPilot WIN32
     src/provider.cpp
     src/refresh_freshness.cpp
     src/removal_prompt.cpp
+    src/repository_discovery.cpp
     src/state.cpp
     src/splash.cpp
     src/toolbar_icons.cpp
@@ -337,6 +338,35 @@ if(BUILD_TESTING)
     endif()
 
     add_test(NAME mpq-package-backend COMMAND TocPilotMpqPackageTests)
+
+    add_executable(TocPilotRepositoryDiscoveryTests
+        tests/repository_discovery_tests.cpp
+        src/repository_discovery.cpp
+        src/archive.cpp
+        src/exact_release_asset.cpp
+        src/github_api.cpp
+        src/github_release.cpp
+        src/git_refs.cpp
+        src/gitlab_api.cpp
+    )
+    target_compile_features(TocPilotRepositoryDiscoveryTests PRIVATE cxx_std_20)
+    target_compile_definitions(TocPilotRepositoryDiscoveryTests PRIVATE
+        UNICODE
+        _UNICODE
+        WIN32_LEAN_AND_MEAN
+        NOMINMAX
+    )
+    target_include_directories(TocPilotRepositoryDiscoveryTests PRIVATE src)
+    target_link_libraries(TocPilotRepositoryDiscoveryTests PRIVATE
+        TocPilotMiniz
+        winhttp
+    )
+
+    if(MSVC)
+        target_compile_options(TocPilotRepositoryDiscoveryTests PRIVATE /W4 /permissive- /utf-8)
+    endif()
+
+    add_test(NAME repository-candidate-discovery COMMAND TocPilotRepositoryDiscoveryTests)
 
     add_executable(TocPilotAdoptionTests
         tests/adoption_tests.cpp
