@@ -31,6 +31,7 @@ add_executable(TocPilot WIN32
     src/branch_dialog.cpp
     src/direct_dll.cpp
     src/exact_release_asset.cpp
+    src/mpq_package.cpp
     src/github_api.cpp
     src/github_release.cpp
     src/git_refs.cpp
@@ -313,6 +314,29 @@ if(BUILD_TESTING)
     endif()
 
     add_test(NAME exact-release-asset-policy COMMAND TocPilotExactReleaseAssetTests)
+
+    add_executable(TocPilotMpqPackageTests
+        tests/mpq_package_tests.cpp
+        src/mpq_package.cpp
+        src/exact_release_asset.cpp
+        src/github_release.cpp
+        src/state.cpp
+    )
+    target_compile_features(TocPilotMpqPackageTests PRIVATE cxx_std_20)
+    target_compile_definitions(TocPilotMpqPackageTests PRIVATE
+        UNICODE
+        _UNICODE
+        WIN32_LEAN_AND_MEAN
+        NOMINMAX
+    )
+    target_include_directories(TocPilotMpqPackageTests PRIVATE src)
+    target_link_libraries(TocPilotMpqPackageTests PRIVATE winhttp bcrypt)
+
+    if(MSVC)
+        target_compile_options(TocPilotMpqPackageTests PRIVATE /W4 /permissive- /utf-8)
+    endif()
+
+    add_test(NAME mpq-package-backend COMMAND TocPilotMpqPackageTests)
 
     add_executable(TocPilotAdoptionTests
         tests/adoption_tests.cpp
