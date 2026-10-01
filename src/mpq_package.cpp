@@ -1149,6 +1149,46 @@ bool AssignMpqTargetPath(
         return false;
     }
 
+    const PackageRecord* persisted =
+        nullptr;
+
+    for (const auto& existing :
+         packages) {
+        if (!EqualsInsensitive(
+                existing.id,
+                package.id)) {
+            continue;
+        }
+
+        if (persisted) {
+            error =
+                L"Duplicate persisted package identity prevents deterministic MPQ target reuse.";
+            return false;
+        }
+
+        persisted =
+            &existing;
+    }
+
+    if (persisted &&
+        !persisted->targetPath.empty()) {
+        if (!package.targetPath.empty() &&
+            !EqualsInsensitive(
+                package.targetPath,
+                persisted->targetPath)) {
+            error =
+                L"Refusing to change the persisted MPQ patch-letter destination from '" +
+                persisted->targetPath +
+                L"' to '" +
+                package.targetPath +
+                L"'.";
+            return false;
+        }
+
+        package.targetPath =
+            persisted->targetPath;
+    }
+
     if (!package.targetPath.empty()) {
         if (!ValidateMpqPackage(
                 package,
