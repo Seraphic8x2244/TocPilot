@@ -1849,13 +1849,26 @@ bool ValidatePackageRecordSemantics(
                 L"mixes direct-release tracking with branch/source-path fields.");
         }
 
-        if (hasInstalledFiles &&
-            (package.installedFiles.size() != 1 ||
-             !EqualsInsensitive(
-                 package.installedFiles.front(),
-                 package.targetPath))) {
-            return fail(
-                L"records exact-release ownership outside the configured target file.");
+        if (hasInstalledFiles) {
+            if (package.installedFiles.size() != 1) {
+                return fail(
+                    L"records exact-release ownership outside the configured target file.");
+            }
+
+            if (directDll &&
+                package.installedFiles.front() !=
+                    package.targetPath) {
+                return fail(
+                    L"records direct-DLL ownership outside the exact configured target file.");
+            }
+
+            if (mpq &&
+                !EqualsInsensitive(
+                    package.installedFiles.front(),
+                    package.targetPath)) {
+                return fail(
+                    L"records MPQ ownership outside the configured Data target file.");
+            }
         }
         return true;
     }
@@ -2629,14 +2642,22 @@ bool SetPackageInstalledState(
         }
     }
 
-    if ((directReleasePackage ||
-         mpqReleasePackage) &&
+    if (directReleasePackage &&
+        (installedFiles.size() != 1 ||
+         installedFiles.front() !=
+             package.targetPath)) {
+        error =
+            L"Direct-release ownership must contain only the exact configured target file.";
+        return false;
+    }
+
+    if (mpqReleasePackage &&
         (installedFiles.size() != 1 ||
          !EqualsInsensitive(
              installedFiles.front(),
              package.targetPath))) {
         error =
-            L"Exact-release ownership must contain only the configured target file.";
+            L"MPQ ownership must contain only the configured Data target file.";
         return false;
     }
 
