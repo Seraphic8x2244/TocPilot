@@ -5,6 +5,7 @@
 #include "archive.h"
 #include "branch_dialog.h"
 #include "direct_dll.h"
+#include "mpq_package.h"
 #include "github_api.h"
 #include "git_refs.h"
 #include "gitlab_api.h"
@@ -14,6 +15,7 @@
 #include "refresh_freshness.h"
 #include "removal_prompt.h"
 #include "repository_discovery.h"
+#include "repository_install.h"
 #include "repository_selection.h"
 #include "repository_selection_dialog.h"
 #include "state.h"
@@ -65,6 +67,7 @@ constexpr UINT WM_TP_BRANCHES_READY = WM_APP + 6;
 constexpr UINT WM_TP_POSITION_BRANCH_SELECTOR = WM_APP + 7;
 constexpr UINT WM_TP_DLL_INSTALL_COMPLETE = WM_APP + 8;
 constexpr UINT WM_TP_SAVE_COLUMN_LAYOUT = WM_APP + 9;
+constexpr UINT WM_TP_MPQ_INSTALL_COMPLETE = WM_APP + 10;
 
 constexpr int IDC_WOW_STATUS = 1002;
 constexpr int IDC_GITHUB_STATUS = 1003;
@@ -234,8 +237,7 @@ std::vector<std::wstring> g_autoStatusPackageIds;
 std::vector<std::wstring> g_packageAttentionIds;
 std::vector<std::wstring> g_sessionUpdatedPackageIds;
 std::vector<std::wstring> g_packageLocalVersions;
-std::vector<std::size_t> g_addGitInstallQueue;
-std::size_t g_addGitInstallQueuePosition = 0;
+tp::RepositoryInstallQueue g_addGitInstallQueue;
 std::size_t g_autoStatusPosition = 0;
 std::size_t g_autoStatusCurrent = 0;
 std::size_t g_autoStatusUpdates = 0;
@@ -327,6 +329,30 @@ struct DirectDllInstallResult {
     std::uint64_t downloadedBytes = 0;
     std::wstring actualSha256;
     std::wstring error;
+};
+
+struct MpqInstallResult {
+    bool ok = false;
+    bool needsAttention = false;
+    std::size_t index = 0;
+    std::wstring packageId;
+    std::wstring packageName;
+    std::wstring asset;
+    std::wstring targetPath;
+    std::wstring resolvedTag;
+    std::uint64_t downloadedBytes = 0;
+    std::wstring actualSha256;
+    tp::MpqInstallTransaction transaction;
+    std::wstring error;
+
+    ~MpqInstallResult() {
+        if (transaction.active) {
+            std::wstring ignored;
+            tp::RollbackMpqInstall(
+                transaction,
+                ignored);
+        }
+    }
 };
 
 
@@ -3853,12 +3879,10 @@ void UpdatePackageButtons() {
                 selectedPackage->provider) &&
             selectedPackage->mode != L"release";
 
-        canRefresh =
+        const bool branchPackage =
             canSetBranch &&
             selectedPackage->mode == L"branch" &&
             !selectedPackage->ref.empty();
-
-        canInspect = canRefresh;
 
         std::wstring directDllError;
         const bool directDll =
@@ -3866,9 +3890,24 @@ void UpdatePackageButtons() {
                 *selectedPackage,
                 directDllError);
 
+        std::wstring mpqError;
+        const bool mpq =
+            tp::ValidateMpqPackage(
+                *selectedPackage,
+                mpqError);
+
+        canRefresh =
+            branchPackage ||
+            directDll ||
+            mpq;
+
+        canInspect =
+            branchPackage;
+
         canInstall =
-            canRefresh ||
-            directDll;
+            branchPackage ||
+            directDll ||
+            mpq;
 
         canUninstall =
             selectedPackage->target == L"addons" &&
@@ -4081,8 +4120,13 @@ void StartPackageRefresh(
         tp::IsDirectDllPackage(
             package);
 
+    const bool mpq =
+        tp::IsMpqPackage(
+            package);
+
     if (!branchPackage &&
-        !directDll) {
+        !directDll &&
+        !mpq) {
         return;
     }
 
@@ -4097,7 +4141,7 @@ void StartPackageRefresh(
             package.name +
             L": checking ";
 
-        if (directDll) {
+        if (directDll || mpq) {
             message +=
                 L"the latest stable GitHub release for exact asset '" +
                 package.asset +
@@ -4125,6 +4169,7 @@ void StartPackageRefresh(
          package,
          branchPackage,
          directDll,
+         mpq,
          wowRoot]() {
             auto result =
                 std::make_unique<
@@ -4188,6 +4233,62 @@ void StartPackageRefresh(
                             release;
 
                         if (!tp::ResolveLatestDirectDllRelease(
+                                package,
+                                release,
+                                result->error)) {
+                            result->needsAttention =
+                                DirectDllResolutionNeedsAttention(
+                                    result->error);
+                        } else {
+                            result->remoteSha =
+                                std::move(
+                                    release.tag);
+                            result->ok =
+                                true;
+                        }
+                    }
+                }
+            } else if (mpq) {
+                std::wstring configError;
+                if (!tp::ValidateMpqPackage(
+                        package,
+                        configError)) {
+                    result->error =
+                        std::move(configError);
+                    result->needsAttention =
+                        true;
+                } else {
+                    std::filesystem::path
+                        target;
+
+                    if (!tp::MpqTargetPath(
+                            wowRoot,
+                            package,
+                            target,
+                            result->error)) {
+                        result->needsAttention =
+                            true;
+                    } else if (
+                        !package.installedRevision.empty()) {
+                        std::error_code ec;
+                        const bool present =
+                            std::filesystem::is_regular_file(
+                                target,
+                                ec);
+
+                        if (!present ||
+                            ec) {
+                            result->error =
+                                L"The managed MPQ is missing from its reserved Data patch slot.";
+                            result->needsAttention =
+                                true;
+                        }
+                    }
+
+                    if (result->error.empty()) {
+                        tp::MpqRelease release;
+
+                        if (!tp::ResolveLatestMpqRelease(
                                 package,
                                 release,
                                 result->error)) {
@@ -4458,6 +4559,144 @@ void StartDirectDllInstall(
         .detach();
 }
 
+void StartMpqInstall(
+    HWND hwnd,
+    std::size_t index,
+    std::wstring knownReleaseTag) {
+    if (index >=
+        g_state.packages.size()) {
+        return;
+    }
+
+    const auto package =
+        g_state.packages[index];
+
+    std::wstring configError;
+    if (!tp::ValidateMpqPackage(
+            package,
+            configError)) {
+        SetPackageNeedsAttention(
+            package.id,
+            true);
+        SetPackageRowStatus(
+            index,
+            L"Needs Attention");
+
+        if (g_packageHint) {
+            const std::wstring message =
+                package.name +
+                L": " +
+                configError;
+            SetWindowTextW(
+                g_packageHint,
+                message.c_str());
+        }
+
+        UpdatePackageButtons();
+        return;
+    }
+
+    g_packageInstallInProgress =
+        true;
+    UpdatePackageButtons();
+
+    SetPackageRowStatus(
+        index,
+        package.installedRevision.empty()
+            ? L"Installing MPQ..."
+            : L"Updating MPQ...");
+
+    if (g_packageHint) {
+        const std::wstring message =
+            package.name +
+            L": downloading and verifying the exact latest-stable MPQ for " +
+            (g_root /
+             package.targetPath).wstring() +
+            L". The reserved patch-letter destination will not change.";
+
+        SetWindowTextW(
+            g_packageHint,
+            message.c_str());
+    }
+
+    const auto wowRoot =
+        g_root;
+    const auto packageSnapshot =
+        g_state.packages;
+
+    std::thread(
+        [hwnd,
+         index,
+         package,
+         knownReleaseTag =
+             std::move(
+                 knownReleaseTag),
+         wowRoot,
+         packageSnapshot]() mutable {
+            auto result =
+                std::make_unique<
+                    MpqInstallResult>();
+
+            result->index =
+                index;
+            result->packageId =
+                package.id;
+            result->packageName =
+                package.name;
+            result->asset =
+                package.asset;
+            result->targetPath =
+                package.targetPath;
+
+            tp::MpqRelease release;
+
+            if (!tp::ResolveLatestMpqRelease(
+                    package,
+                    release,
+                    result->error)) {
+                result->needsAttention =
+                    DirectDllResolutionNeedsAttention(
+                        result->error);
+            } else if (
+                !knownReleaseTag.empty() &&
+                release.tag !=
+                    knownReleaseTag) {
+                result->error =
+                    L"The latest stable release changed from " +
+                    knownReleaseTag +
+                    L" to " +
+                    release.tag +
+                    L" after the saved status check. Run Refresh All and retry so Update New never installs a different release than the one it displayed.";
+            } else {
+                result->resolvedTag =
+                    release.tag;
+
+                result->ok =
+                    tp::DownloadAndBeginMpqInstall(
+                        package,
+                        release,
+                        wowRoot,
+                        packageSnapshot,
+                        result->transaction,
+                        result->downloadedBytes,
+                        result->actualSha256,
+                        result->error);
+            }
+
+            if (!PostMessageW(
+                    hwnd,
+                    WM_TP_MPQ_INSTALL_COMPLETE,
+                    0,
+                    reinterpret_cast<LPARAM>(
+                        result.get()))) {
+                return;
+            }
+
+            result.release();
+        })
+        .detach();
+}
+
 void StartPackageInstall(
     HWND hwnd,
     std::size_t index,
@@ -4472,6 +4711,16 @@ void StartPackageInstall(
     if (tp::IsDirectDllPackage(
             package)) {
         StartDirectDllInstall(
+            hwnd,
+            index,
+            std::move(
+                knownRemoteSha));
+        return;
+    }
+
+    if (tp::IsMpqPackage(
+            package)) {
+        StartMpqInstall(
             hwnd,
             index,
             std::move(
@@ -4804,16 +5053,16 @@ void StartPackageReplacementInstall(
 bool IsAddGitInstallQueueCurrent(
     std::size_t index) {
     return
-        g_addGitInstallQueuePosition <
-            g_addGitInstallQueue.size() &&
-        g_addGitInstallQueue[
-            g_addGitInstallQueuePosition] ==
-            index;
+        index < g_state.packages.size() &&
+        tp::RepositoryInstallQueueHasCurrent(
+            g_addGitInstallQueue) &&
+        tp::RepositoryInstallQueueCurrentPackageId(
+            g_addGitInstallQueue) ==
+            g_state.packages[index].id;
 }
 
 void ClearAddGitInstallQueue() {
-    g_addGitInstallQueue.clear();
-    g_addGitInstallQueuePosition = 0;
+    g_addGitInstallQueue = {};
 }
 
 void FinishAddGitInstallQueue() {
@@ -4822,6 +5071,20 @@ void FinishAddGitInstallQueue() {
     ApplyPackageListViewportReset(
         tp::PackageListWorkScope::MultiPackage,
         tp::PackageListViewportPhase::Finish);
+}
+
+std::size_t FindAddGitQueuePackageIndex(
+    std::wstring_view packageId) {
+    for (std::size_t i = 0;
+         i < g_state.packages.size();
+         ++i) {
+        if (g_state.packages[i].id ==
+            packageId) {
+            return i;
+        }
+    }
+
+    return g_state.packages.size();
 }
 
 void StartAddGitInstallQueue(
@@ -4833,12 +5096,26 @@ void StartAddGitInstallQueue(
         return;
     }
 
-    g_addGitInstallQueue =
-        std::move(indices);
-    g_addGitInstallQueuePosition = 0;
+    std::wstring error;
+    if (!tp::BuildRepositoryInstallQueue(
+            g_state,
+            indices,
+            g_addGitInstallQueue,
+            error)) {
+        if (g_packageHint) {
+            SetWindowTextW(
+                g_packageHint,
+                error.c_str());
+        }
+        return;
+    }
 
+    const auto packageId =
+        tp::RepositoryInstallQueueCurrentPackageId(
+            g_addGitInstallQueue);
     const std::size_t index =
-        g_addGitInstallQueue.front();
+        FindAddGitQueuePackageIndex(
+            packageId);
 
     if (index >= g_state.packages.size()) {
         ClearAddGitInstallQueue();
@@ -4863,17 +5140,31 @@ bool ContinueAddGitInstallQueue(
         return false;
     }
 
-    ++g_addGitInstallQueuePosition;
+    const std::wstring completedPackageId =
+        g_state.packages[
+            completedIndex].id;
+    std::wstring error;
 
-    if (g_addGitInstallQueuePosition >=
-        g_addGitInstallQueue.size()) {
+    if (!tp::AdvanceRepositoryInstallQueue(
+            g_addGitInstallQueue,
+            completedPackageId,
+            error)) {
         ClearAddGitInstallQueue();
         return false;
     }
 
+    if (!tp::RepositoryInstallQueueHasCurrent(
+            g_addGitInstallQueue)) {
+        ClearAddGitInstallQueue();
+        return false;
+    }
+
+    const auto nextPackageId =
+        tp::RepositoryInstallQueueCurrentPackageId(
+            g_addGitInstallQueue);
     const std::size_t nextIndex =
-        g_addGitInstallQueue[
-            g_addGitInstallQueuePosition];
+        FindAddGitQueuePackageIndex(
+            nextPackageId);
 
     if (nextIndex >=
         g_state.packages.size()) {
