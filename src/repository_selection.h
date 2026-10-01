@@ -19,22 +19,11 @@ struct RepositorySelectionRow {
     std::wstring unavailableReason;
 };
 
-enum class RepositorySelectionExecution {
-    AddonsOnly,
-    SingleDll,
-    Deferred
-};
-
 bool BuildRepositorySelectionRows(
     const RepositoryDiscoveryResult& discovery,
     const std::vector<std::wstring>& mpqDestinations,
     const std::vector<std::wstring>& mpqErrors,
     std::vector<RepositorySelectionRow>& rows,
-    std::wstring& error);
-
-RepositorySelectionExecution ClassifyRepositorySelection(
-    const RepositoryDiscoveryResult& discovery,
-    const std::vector<std::size_t>& selectedIndices,
     std::wstring& error);
 
 } // namespace tp

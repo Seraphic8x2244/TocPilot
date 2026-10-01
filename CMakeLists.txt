@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.24)
 
-project(TocPilot VERSION 0.4.1 LANGUAGES C CXX)
+project(TocPilot VERSION 0.5.0 LANGUAGES C CXX)
 
 # miniz 3.1.2, pinned from richgel999/miniz commit
 # 77d0dce8627735138c51770d1799a1ef48f2117d.
@@ -43,6 +43,7 @@ add_executable(TocPilot WIN32
     src/refresh_freshness.cpp
     src/removal_prompt.cpp
     src/repository_discovery.cpp
+    src/repository_install.cpp
     src/repository_selection.cpp
     src/repository_selection_dialog.cpp
     src/state.cpp
@@ -382,6 +383,30 @@ if(BUILD_TESTING)
     endif()
 
     add_test(NAME repository-selection-policy COMMAND TocPilotRepositorySelectionTests)
+
+    add_executable(TocPilotRepositoryInstallTests
+        tests/repository_install_tests.cpp
+        src/repository_install.cpp
+        src/mpq_package.cpp
+        src/exact_release_asset.cpp
+        src/github_release.cpp
+        src/state.cpp
+    )
+    target_compile_features(TocPilotRepositoryInstallTests PRIVATE cxx_std_20)
+    target_compile_definitions(TocPilotRepositoryInstallTests PRIVATE
+        UNICODE
+        _UNICODE
+        WIN32_LEAN_AND_MEAN
+        NOMINMAX
+    )
+    target_include_directories(TocPilotRepositoryInstallTests PRIVATE src)
+    target_link_libraries(TocPilotRepositoryInstallTests PRIVATE winhttp bcrypt)
+
+    if(MSVC)
+        target_compile_options(TocPilotRepositoryInstallTests PRIVATE /W4 /permissive- /utf-8)
+    endif()
+
+    add_test(NAME repository-mixed-install-policy COMMAND TocPilotRepositoryInstallTests)
 
     add_executable(TocPilotAdoptionTests
         tests/adoption_tests.cpp

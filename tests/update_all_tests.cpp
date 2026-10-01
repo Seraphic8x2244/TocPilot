@@ -70,6 +70,40 @@ tp::PackageRecord DirectDllPackage(
     return package;
 }
 
+tp::PackageRecord MpqPackage(
+    std::wstring installed,
+    std::wstring latest) {
+    tp::PackageRecord package;
+    package.id =
+        L"github:Owner/WideScreens:release:WideLoadScreens.mpq";
+    package.name =
+        L"WideLoadScreens.mpq";
+    package.provider =
+        L"github";
+    package.repository =
+        L"Owner/WideScreens";
+    package.mode =
+        L"release";
+    package.releasePolicy =
+        L"latest_stable";
+    package.asset =
+        L"WideLoadScreens.mpq";
+    package.target =
+        L"data";
+    package.targetPath =
+        L"Data/patch-C.mpq";
+    package.installedRevision =
+        std::move(installed);
+    package.latestRevision =
+        std::move(latest);
+    if (!package.installedRevision.empty()) {
+        package.installedFiles = {
+            L"Data/patch-C.mpq"
+        };
+    }
+    return package;
+}
+
 } // namespace
 
 int main() {
@@ -111,6 +145,25 @@ int main() {
             L"v1.0.0",
             L"v1.1.0");
 
+    auto mpq =
+        MpqPackage(
+            L"v2.0.0",
+            L"v2.1.0");
+
+    auto mpqCurrent =
+        MpqPackage(
+            L"v2.1.0",
+            L"v2.1.0");
+    mpqCurrent.id =
+        L"github:Owner/WideScreens:release:Current.mpq";
+    mpqCurrent.asset =
+        L"Current.mpq";
+    mpqCurrent.targetPath =
+        L"Data/patch-D.mpq";
+    mpqCurrent.installedFiles = {
+        L"Data/patch-D.mpq"
+    };
+
     auto directDllCurrent =
         DirectDllPackage(
             L"v1.1.0",
@@ -133,18 +186,22 @@ int main() {
         unconfigured,
         missingOwnership,
         directDll,
-        directDllCurrent
+        directDllCurrent,
+        mpq,
+        mpqCurrent
     };
 
     auto progress =
         tp::MakeUpdateAllProgress(state);
 
-    if (progress.packageIds.size() != 3 ||
+    if (progress.packageIds.size() != 4 ||
         progress.packageIds[0] != update.id ||
         progress.packageIds[1] != gitlab.id ||
         progress.packageIds[2] !=
-            directDll.id) {
-        Fail("Update All should queue known GitHub/GitLab addon and DLL updates");
+            directDll.id ||
+        progress.packageIds[3] !=
+            mpq.id) {
+        Fail("Update All should queue known addon, DLL, and MPQ updates");
     }
 
     if (!tp::UpdateAllHasCurrent(progress) ||
@@ -187,9 +244,21 @@ int main() {
             tp::UpdateAllOutcome::Updated,
             {},
             error) ||
-        tp::UpdateAllHasCurrent(progress) ||
+        !tp::UpdateAllHasCurrent(progress) ||
+        tp::UpdateAllCurrentPackageId(progress) !=
+            mpq.id ||
         progress.updated != 3) {
-        Fail("Update All could not record the DLL update");
+        Fail("Update All did not advance from DLL to MPQ update");
+    }
+
+    if (!tp::CompleteUpdateAllItem(
+            progress,
+            tp::UpdateAllOutcome::Updated,
+            {},
+            error) ||
+        tp::UpdateAllHasCurrent(progress) ||
+        progress.updated != 4) {
+        Fail("Update All could not record the MPQ update");
     }
 
     if (tp::CompleteUpdateAllItem(

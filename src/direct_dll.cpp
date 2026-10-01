@@ -849,4 +849,64 @@ bool DownloadAndVerifyDirectDll(
     return true;
 }
 
+bool RemoveDirectDll(
+    const PackageRecord& package,
+    const std::filesystem::path& wowRoot,
+    bool& removed,
+    std::wstring& error) {
+    removed = false;
+    error.clear();
+
+    std::filesystem::path target;
+    if (!DirectDllTargetPath(
+            wowRoot,
+            package,
+            target,
+            error)) {
+        return false;
+    }
+
+    const DWORD attributes =
+        GetFileAttributesW(
+            target.c_str());
+
+    if (attributes ==
+        INVALID_FILE_ATTRIBUTES) {
+        const DWORD code =
+            GetLastError();
+
+        if (code ==
+                ERROR_FILE_NOT_FOUND ||
+            code ==
+                ERROR_PATH_NOT_FOUND) {
+            return true;
+        }
+
+        error =
+            L"Could not inspect the exact DLL destination before removal: " +
+            WindowsError(code);
+        return false;
+    }
+
+    if ((attributes &
+         FILE_ATTRIBUTE_DIRECTORY) != 0) {
+        error =
+            L"The configured DLL destination is a directory.";
+        return false;
+    }
+
+    if (!DeleteFileW(
+            target.c_str())) {
+        error =
+            L"Could not remove the exact managed DLL: " +
+            WindowsError(
+                GetLastError()) +
+            L". Close WoW and retry; security software may also be blocking the file.";
+        return false;
+    }
+
+    removed = true;
+    return true;
+}
+
 } // namespace tp
