@@ -492,9 +492,6 @@ std::wstring SplashStatusText() {
         return text;
     }
 
-    case StartupSplashPhase::AwaitingContinue:
-        return L"Click to continue!";
-
     case StartupSplashPhase::AppUpdateFailed:
         return L"Update failed - click to continue!";
     }
@@ -714,9 +711,6 @@ void RenderSplash() {
 
         if (g_phase ==
                 StartupSplashPhase::
-                    AwaitingContinue ||
-            g_phase ==
-                StartupSplashPhase::
                     AppUpdateFailed) {
             format.SetAlignment(
                 Gdiplus::
@@ -841,13 +835,10 @@ void RevealMainWindow() {
     }
 }
 
-void CloseSplashForContinue() {
+void CloseSplashAfterFailureAcknowledgement() {
     if (g_phase !=
-            StartupSplashPhase::
-                AwaitingContinue &&
-        g_phase !=
-            StartupSplashPhase::
-                AppUpdateFailed) {
+        StartupSplashPhase::
+            AppUpdateFailed) {
         return;
     }
 
@@ -873,9 +864,6 @@ LRESULT CALLBACK SplashWindowProc(
                 kSplashTimerId &&
             g_phase !=
                 StartupSplashPhase::
-                    AwaitingContinue &&
-            g_phase !=
-                StartupSplashPhase::
                     AppUpdateFailed) {
             g_dotCount =
                 g_dotCount >= 3
@@ -887,29 +875,23 @@ LRESULT CALLBACK SplashWindowProc(
 
     case WM_LBUTTONUP:
     case WM_RBUTTONUP:
-        CloseSplashForContinue();
+        CloseSplashAfterFailureAcknowledgement();
         return 0;
 
     case WM_KEYDOWN:
-        if ((g_phase ==
-                 StartupSplashPhase::
-                     AwaitingContinue ||
-             g_phase ==
-                 StartupSplashPhase::
-                     AppUpdateFailed) &&
+        if (g_phase ==
+                StartupSplashPhase::
+                    AppUpdateFailed &&
             (wParam == VK_RETURN ||
              wParam == VK_SPACE)) {
-            CloseSplashForContinue();
+            CloseSplashAfterFailureAcknowledgement();
         }
         return 0;
 
     case WM_SETCURSOR:
         if (g_phase ==
-                StartupSplashPhase::
-                    AwaitingContinue ||
-            g_phase ==
-                StartupSplashPhase::
-                    AppUpdateFailed) {
+            StartupSplashPhase::
+                AppUpdateFailed) {
             SetCursor(
                 LoadCursorW(
                     nullptr,
@@ -1084,6 +1066,21 @@ void SetStartupSplashPhase(
     g_dotCount = 1;
 
     RenderSplash();
+}
+
+void CompleteStartupSplash() {
+    if (!g_splashWindow) {
+        return;
+    }
+
+    HWND splash =
+        g_splashWindow;
+
+    RevealMainWindow();
+
+    if (IsWindow(splash)) {
+        DestroyWindow(splash);
+    }
 }
 
 bool IsStartupSplashActive() {

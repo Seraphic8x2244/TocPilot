@@ -8,7 +8,6 @@ enum class StartupSplashPhase {
     CheckingAppUpdate,
     ApplyingAppUpdate,
     ScanningAddonUpdates,
-    AwaitingContinue,
     AppUpdateFailed
 };
 
@@ -18,6 +17,8 @@ bool ShowStartupSplash(
 
 void SetStartupSplashPhase(
     StartupSplashPhase phase);
+
+void CompleteStartupSplash();
 
 bool IsStartupSplashActive();
 

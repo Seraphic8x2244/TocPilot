@@ -5019,12 +5019,14 @@ void SetStartupSplashCompletionPhase() {
         return;
     }
 
-    tp::SetStartupSplashPhase(
-        g_startupAppUpdateFailed
-            ? tp::StartupSplashPhase::
-                  AppUpdateFailed
-            : tp::StartupSplashPhase::
-                  AwaitingContinue);
+    if (g_startupAppUpdateFailed) {
+        tp::SetStartupSplashPhase(
+            tp::StartupSplashPhase::
+                AppUpdateFailed);
+        return;
+    }
+
+    tp::CompleteStartupSplash();
 }
 
 void FinishAutoStatusRefresh(HWND hwnd) {
