@@ -2042,6 +2042,13 @@ bool ValidateMpqPackageRecord(
         return false;
     }
 
+    if (!package.ref.empty() ||
+        !package.sourcePath.empty()) {
+        error =
+            L"MPQ release packages cannot also track a branch or repository source path.";
+        return false;
+    }
+
     if (package.asset.empty() ||
         !EndsWithInsensitive(
             package.asset,
