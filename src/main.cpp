@@ -11061,7 +11061,11 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
 
         g_packageInstallInProgress = false;
 
+        const bool addGitQueueStep =
+            IsAddGitInstallQueueCurrent(
+                result->index);
         const bool updateAllStep =
+            !addGitQueueStep &&
             IsUpdateAllCurrentPackage(
                 result->packageId);
 
@@ -11077,8 +11081,8 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                     result->index];
 
             trackingMatches =
-                package.mode ==
-                    L"release" &&
+                tp::IsDirectDllPackage(
+                    package) &&
                 package.asset ==
                     result->asset &&
                 package.targetPath ==
@@ -11094,6 +11098,10 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                 SetWindowTextW(
                     g_packageHint,
                     message.c_str());
+            }
+
+            if (addGitQueueStep) {
+                FinishAddGitInstallQueue();
             }
 
             if (updateAllStep) {
@@ -11139,6 +11147,10 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                 SetWindowTextW(
                     g_packageHint,
                     message.c_str());
+            }
+
+            if (addGitQueueStep) {
+                FinishAddGitInstallQueue();
             }
 
             if (updateAllStep) {
@@ -11190,6 +11202,10 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                     message.c_str());
             }
 
+            if (addGitQueueStep) {
+                FinishAddGitInstallQueue();
+            }
+
             if (updateAllStep) {
                 CompleteUpdateAllStep(
                     hwnd,
@@ -11231,9 +11247,24 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             return 0;
         }
 
+        if (addGitQueueStep) {
+            RefreshPackageStateUi();
+            if (ContinueAddGitInstallQueue(
+                    hwnd,
+                    index)) {
+                return 0;
+            }
+        }
+
         RefreshPackageStateUi();
         SelectPackageRow(index);
         UpdatePackageButtons();
+
+        if (addGitQueueStep) {
+            ApplyPackageListViewportReset(
+                tp::PackageListWorkScope::MultiPackage,
+                tp::PackageListViewportPhase::Finish);
+        }
 
         const auto& installed =
             g_state.packages[index];
@@ -11277,6 +11308,378 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             L"TocPilot - DLL Installed",
             MB_OK |
                 MB_ICONINFORMATION);
+
+        return 0;
+    }
+
+    case WM_TP_MPQ_INSTALL_COMPLETE: {
+        std::unique_ptr<MpqInstallResult>
+            result(
+                reinterpret_cast<
+                    MpqInstallResult*>(
+                        lParam));
+
+        g_packageInstallInProgress = false;
+
+        const bool addGitQueueStep =
+            IsAddGitInstallQueueCurrent(
+                result->index);
+        const bool updateAllStep =
+            !addGitQueueStep &&
+            IsUpdateAllCurrentPackage(
+                result->packageId);
+
+        bool trackingMatches = false;
+
+        if (result->index <
+                g_state.packages.size() &&
+            g_state.packages[
+                result->index].id ==
+                result->packageId) {
+            const auto& package =
+                g_state.packages[
+                    result->index];
+
+            trackingMatches =
+                tp::IsMpqPackage(
+                    package) &&
+                package.asset ==
+                    result->asset &&
+                package.targetPath ==
+                    result->targetPath;
+        }
+
+        if (!trackingMatches) {
+            std::wstring rollbackError;
+            if (result->transaction.active) {
+                tp::RollbackMpqInstall(
+                    result->transaction,
+                    rollbackError);
+            }
+
+            std::wstring message =
+                result->packageId +
+                L": MPQ install result was discarded because package tracking changed. Installed state was not changed.";
+
+            if (!rollbackError.empty()) {
+                message +=
+                    L" Rollback also failed: " +
+                    rollbackError;
+            }
+
+            if (g_packageHint) {
+                SetWindowTextW(
+                    g_packageHint,
+                    message.c_str());
+            }
+
+            if (addGitQueueStep) {
+                FinishAddGitInstallQueue();
+            }
+
+            if (updateAllStep) {
+                CompleteUpdateAllStep(
+                    hwnd,
+                    tp::UpdateAllOutcome::Failed,
+                    message);
+            } else {
+                UpdatePackageButtons();
+            }
+            return 0;
+        }
+
+        const auto index =
+            result->index;
+        const auto& currentPackage =
+            g_state.packages[index];
+        const bool wasUpdate =
+            !currentPackage.installedRevision.empty() &&
+            currentPackage.installedRevision !=
+                result->resolvedTag;
+
+        if (!result->ok) {
+            if (result->needsAttention) {
+                SetPackageNeedsAttention(
+                    result->packageId,
+                    true);
+            }
+
+            SetPackageRowStatus(
+                index,
+                result->needsAttention
+                    ? L"Needs Attention"
+                    : L"MPQ update failed");
+
+            const std::wstring message =
+                currentPackage.name +
+                L": MPQ install/update failed - " +
+                result->error +
+                L" Installed state was not advanced.";
+
+            if (g_packageHint) {
+                SetWindowTextW(
+                    g_packageHint,
+                    message.c_str());
+            }
+
+            if (addGitQueueStep) {
+                FinishAddGitInstallQueue();
+            }
+
+            if (updateAllStep) {
+                CompleteUpdateAllStep(
+                    hwnd,
+                    tp::UpdateAllOutcome::Failed,
+                    message,
+                    IsProviderRateLimitError(
+                        result->error));
+            } else {
+                MessageBoxW(
+                    hwnd,
+                    message.c_str(),
+                    L"TocPilot - MPQ Install Failed",
+                    MB_OK |
+                        MB_ICONWARNING);
+                SelectPackageRow(index);
+                UpdatePackageButtons();
+            }
+            return 0;
+        }
+
+        tp::AppState updatedState =
+            g_state;
+        std::wstring error;
+
+        if (!tp::SetPackageInstalledState(
+                updatedState.packages[index],
+                result->resolvedTag,
+                {result->targetPath},
+                error)) {
+            const std::wstring stateError =
+                error;
+            std::wstring rollbackError;
+            const bool rolledBack =
+                tp::RollbackMpqInstall(
+                    result->transaction,
+                    rollbackError);
+
+            std::wstring message =
+                currentPackage.name +
+                L": MPQ package state could not be prepared - " +
+                stateError;
+            if (!rolledBack) {
+                message +=
+                    L". Filesystem rollback also failed: " +
+                    rollbackError;
+            }
+
+            SetPackageRowStatus(
+                index,
+                rolledBack
+                    ? L"Install failed"
+                    : L"Rollback failed");
+
+            if (g_packageHint) {
+                SetWindowTextW(
+                    g_packageHint,
+                    message.c_str());
+            }
+
+            if (addGitQueueStep) {
+                FinishAddGitInstallQueue();
+            }
+
+            if (updateAllStep) {
+                CompleteUpdateAllStep(
+                    hwnd,
+                    tp::UpdateAllOutcome::Failed,
+                    message,
+                    !rolledBack);
+            } else {
+                MessageBoxW(
+                    hwnd,
+                    message.c_str(),
+                    rolledBack
+                        ? L"TocPilot - MPQ Install Failed"
+                        : L"TocPilot - MPQ Rollback Failed",
+                    MB_OK |
+                        MB_ICONERROR);
+                SelectPackageRow(index);
+                UpdatePackageButtons();
+            }
+            return 0;
+        }
+
+        if (!tp::SaveState(
+                g_root,
+                updatedState,
+                error)) {
+            const std::wstring saveError =
+                error;
+            std::wstring rollbackError;
+            const bool rolledBack =
+                tp::RollbackMpqInstall(
+                    result->transaction,
+                    rollbackError);
+
+            std::wstring message =
+                currentPackage.name +
+                L": MPQ package state could not be saved - " +
+                saveError;
+
+            if (rolledBack) {
+                message +=
+                    L". The previous Data patch state was restored.";
+            } else {
+                message +=
+                    L". Filesystem rollback also failed: " +
+                    rollbackError;
+            }
+
+            SetPackageRowStatus(
+                index,
+                rolledBack
+                    ? L"Install rolled back"
+                    : L"Rollback failed");
+
+            if (g_packageHint) {
+                SetWindowTextW(
+                    g_packageHint,
+                    message.c_str());
+            }
+
+            if (addGitQueueStep) {
+                FinishAddGitInstallQueue();
+            }
+
+            if (updateAllStep) {
+                CompleteUpdateAllStep(
+                    hwnd,
+                    tp::UpdateAllOutcome::Failed,
+                    message,
+                    !rolledBack);
+            } else {
+                MessageBoxW(
+                    hwnd,
+                    message.c_str(),
+                    rolledBack
+                        ? L"TocPilot - MPQ Install Rolled Back"
+                        : L"TocPilot - MPQ Rollback Failed",
+                    MB_OK |
+                        MB_ICONERROR);
+                SelectPackageRow(index);
+                UpdatePackageButtons();
+            }
+            return 0;
+        }
+
+        g_state =
+            std::move(updatedState);
+        g_stateCreated = false;
+        g_stateError.clear();
+
+        std::wstring cleanupError;
+        const bool cleanupOk =
+            tp::FinalizeMpqInstall(
+                result->transaction,
+                cleanupError);
+
+        SetPackageNeedsAttention(
+            result->packageId,
+            false);
+
+        if (wasUpdate) {
+            MarkPackageUpdatedThisSession(
+                result->packageId);
+        }
+
+        if (updateAllStep) {
+            RefreshPackageStateUi();
+            CompleteUpdateAllStep(
+                hwnd,
+                tp::UpdateAllOutcome::Updated,
+                cleanupOk
+                    ? std::wstring{}
+                    : currentPackage.name +
+                        L": MPQ update succeeded but rollback cleanup failed: " +
+                        cleanupError);
+            return 0;
+        }
+
+        if (addGitQueueStep) {
+            RefreshPackageStateUi();
+            if (ContinueAddGitInstallQueue(
+                    hwnd,
+                    index)) {
+                return 0;
+            }
+        }
+
+        RefreshPackageStateUi();
+        SelectPackageRow(index);
+        UpdatePackageButtons();
+
+        if (addGitQueueStep) {
+            ApplyPackageListViewportReset(
+                tp::PackageListWorkScope::MultiPackage,
+                tp::PackageListViewportPhase::Finish);
+        }
+
+        const auto& installed =
+            g_state.packages[index];
+
+        std::wstring message =
+            installed.name +
+            L": installed and verified release " +
+            installed.installedRevision +
+            L" at " +
+            (g_root /
+             installed.targetPath).wstring() +
+            L".";
+
+        if (!cleanupOk) {
+            message +=
+                L" Install succeeded, but rollback cleanup needs attention: " +
+                cleanupError;
+        }
+
+        if (g_packageHint) {
+            SetWindowTextW(
+                g_packageHint,
+                message.c_str());
+        }
+
+        std::wstring summary =
+            installed.name +
+            L" installed successfully.\r\n\r\nRepository: " +
+            installed.repository +
+            L"\r\nRelease: " +
+            installed.installedRevision +
+            L"\r\nAsset: " +
+            installed.asset +
+            L"\r\nDestination: " +
+            (g_root /
+             installed.targetPath).wstring() +
+            L"\r\nDownloaded: " +
+            std::to_wstring(
+                result->downloadedBytes) +
+            L" bytes\r\nSHA-256: " +
+            result->actualSha256;
+
+        if (!cleanupOk) {
+            summary +=
+                L"\r\n\r\nThe install and state save succeeded, but rollback cleanup failed:\r\n" +
+                cleanupError;
+        }
+
+        MessageBoxW(
+            hwnd,
+            summary.c_str(),
+            L"TocPilot - MPQ Installed",
+            MB_OK |
+                (cleanupOk
+                    ? MB_ICONINFORMATION
+                    : MB_ICONWARNING));
 
         return 0;
     }
