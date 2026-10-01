@@ -23,8 +23,19 @@ bool IsUpdateAllCandidate(const PackageRecord& package) {
         package.installedFiles.front() ==
             package.targetPath;
 
+    const bool mpq =
+        package.provider == L"github" &&
+        package.mode == L"release" &&
+        package.releasePolicy == L"latest_stable" &&
+        !package.asset.empty() &&
+        package.target == L"data" &&
+        !package.targetPath.empty() &&
+        package.installedFiles.size() == 1 &&
+        package.installedFiles.front() ==
+            package.targetPath;
+
     return
-        (branchAddon || directDll) &&
+        (branchAddon || directDll || mpq) &&
         !package.installedRevision.empty() &&
         !package.installedFiles.empty();
 }
