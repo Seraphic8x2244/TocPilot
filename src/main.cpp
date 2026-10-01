@@ -13,6 +13,7 @@
 #include "package_list_viewport.h"
 #include "refresh_freshness.h"
 #include "removal_prompt.h"
+#include "repository_discovery.h"
 #include "state.h"
 #include "splash.h"
 #include "toolbar_icons.h"
@@ -1812,76 +1813,6 @@ bool CleanupPackageStaging(
         package.provider,
         package.repository,
         error);
-}
-
-bool InspectAddGitRepositoryLayout(
-    const tp::PackageRecord& package,
-    tp::RepositoryAddonLayout& layout,
-    std::wstring& error) {
-    layout = {};
-    error.clear();
-
-    if (!SupportedBranchProvider(
-            package.provider) ||
-        package.mode != L"branch" ||
-        package.ref.empty() ||
-        package.latestRevision.empty()) {
-        error =
-            L"Add Git repository inspection requires a selected branch revision.";
-        return false;
-    }
-
-    tp::ArchiveInspection inspection;
-    std::uint64_t downloadedBytes = 0;
-
-    if (!ResetPackageStaging(
-            package,
-            g_root,
-            inspection.stagingDirectory,
-            error)) {
-        return false;
-    }
-
-    inspection.archivePath =
-        inspection.stagingDirectory /
-        L"archive.zip";
-    inspection.extractedRoot =
-        inspection.stagingDirectory /
-        L"extracted";
-
-    bool ok =
-        DownloadPackageBranchArchive(
-            package,
-            package.latestRevision,
-            inspection.archivePath,
-            downloadedBytes,
-            error) &&
-        tp::ExtractZipSecure(
-            inspection.archivePath,
-            inspection.extractedRoot,
-            inspection.entryCount,
-            inspection.totalUncompressedBytes,
-            error) &&
-        tp::DetectShallowRepositoryAddonLayout(
-            inspection.extractedRoot,
-            ProviderLabel(package.provider),
-            package.repository,
-            layout,
-            error);
-
-    std::wstring cleanupError;
-    if (!CleanupPackageStaging(
-            package,
-            g_root,
-            cleanupError) &&
-        ok) {
-        error =
-            L"Repository inspection succeeded, but staging cleanup failed: " +
-            cleanupError;
-        ok = false;
-    }
-
-    return ok;
 }
 
 bool PackageBranchMode(
@@ -9859,10 +9790,12 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                 UpdateWindow(hwnd);
             }
 
-            tp::RepositoryAddonLayout layout;
-            if (!InspectAddGitRepositoryLayout(
+            tp::RepositoryDiscoveryResult
+                discovery;
+            if (!tp::DiscoverRepositoryCandidates(
                     repositoryPackage,
-                    layout,
+                    g_root,
+                    discovery,
                     error)) {
                 MessageBoxW(
                     hwnd,
@@ -9871,6 +9804,19 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                     MB_OK | MB_ICONWARNING);
                 return 0;
             }
+
+            if (!discovery.branchSucceeded) {
+                MessageBoxW(
+                    hwnd,
+                    discovery.branchError.c_str(),
+                    L"TocPilot - Add Git Inspection Failed",
+                    MB_OK | MB_ICONWARNING);
+                return 0;
+            }
+
+            tp::RepositoryAddonLayout layout =
+                std::move(
+                    discovery.addonLayout);
 
             if (layout.kind ==
                 tp::RepositoryAddonLayoutKind::MixedAmbiguous) {
