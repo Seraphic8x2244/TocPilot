@@ -1,5 +1,7 @@
 #include "direct_dll.h"
 
+#include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <string>
 
@@ -64,6 +66,71 @@ void ExpectValid() {
         Fail(
             "direct DLL target path was not exact");
     }
+}
+
+void ExpectExactRemoval() {
+    const auto root =
+        std::filesystem::temp_directory_path() /
+        L"TocPilotDirectDllRemovalTests";
+
+    std::error_code ec;
+    std::filesystem::remove_all(
+        root,
+        ec);
+    ec.clear();
+    std::filesystem::create_directories(
+        root,
+        ec);
+
+    if (ec) {
+        Fail(
+            "could not create direct DLL removal test root");
+        return;
+    }
+
+    const auto target =
+        root / L"ClassicAPI.dll";
+
+    {
+        std::ofstream file(
+            target,
+            std::ios::binary);
+        file << "dll";
+    }
+
+    auto package =
+        ValidPackage();
+    bool removed = false;
+    std::wstring error;
+
+    if (!tp::RemoveDirectDll(
+            package,
+            root,
+            removed,
+            error) ||
+        !removed ||
+        std::filesystem::exists(
+            target)) {
+        Fail(
+            "exact direct DLL removal failed");
+    }
+
+    removed = true;
+    error.clear();
+
+    if (!tp::RemoveDirectDll(
+            package,
+            root,
+            removed,
+            error) ||
+        removed) {
+        Fail(
+            "missing direct DLL was not treated as already removed");
+    }
+
+    std::filesystem::remove_all(
+        root,
+        ec);
 }
 
 void ExpectInvalidVariants() {
@@ -160,6 +227,7 @@ void ExpectInvalidVariants() {
 
 int main() {
     ExpectValid();
+    ExpectExactRemoval();
     ExpectInvalidVariants();
 
     if (failures != 0) {
