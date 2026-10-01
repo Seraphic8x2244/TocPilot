@@ -1962,9 +1962,25 @@ std::wstring PackageStatusText(
 
     if (package.mode == L"release") {
         std::wstring error;
-        if (!tp::ValidateDirectDllPackage(
-                package,
-                error) ||
+        const bool directDll =
+            tp::IsDirectDllPackage(
+                package);
+        const bool mpq =
+            tp::IsMpqPackage(
+                package);
+
+        const bool valid =
+            directDll
+                ? tp::ValidateDirectDllPackage(
+                    package,
+                    error)
+                : (mpq
+                    ? tp::ValidateMpqPackage(
+                        package,
+                        error)
+                    : false);
+
+        if (!valid ||
             PackageNeedsAttention(
                 package.id)) {
             return L"Needs Attention";
@@ -1975,11 +1991,20 @@ std::wstring PackageStatusText(
         }
 
         std::filesystem::path target;
-        if (!tp::DirectDllTargetPath(
-                g_root,
-                package,
-                target,
-                error)) {
+        const bool targetValid =
+            directDll
+                ? tp::DirectDllTargetPath(
+                    g_root,
+                    package,
+                    target,
+                    error)
+                : tp::MpqTargetPath(
+                    g_root,
+                    package,
+                    target,
+                    error);
+
+        if (!targetValid) {
             return L"Needs Attention";
         }
 
