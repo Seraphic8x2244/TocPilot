@@ -924,6 +924,7 @@ Do not add support for user-uploaded ZIP/7z/RAR/installer/bundle release assets 
 - Startup scan auto-enter implementation `b539b593900ccc046baffeffdcdf19e9a57a8ffb` removes the normal click-to-continue splash gate while retaining the explicit self-update-failure acknowledgement. Draft PR #35 CI: Build run `36893192930`, Windows x64 job `110473610222`, Release build + **20/20 CTest passed**. This change is not in published `v0.4.1-dev.1`; include it in the next development prerelease.
 - v0.5.0 Phase 1 exact release-asset backend: **implemented / CI-checked / merged on `dev`; backend-only, runtime prerelease not required**. PR #36 tested exact head `f040de9f7a44c92c5b8ccc8e6ec8af068ede2d18`; Build run `36896441332`, Windows x64 job `110484495595`, passed the Release build and **21/21 CTest tests**, including `direct-dll-policy` and new `exact-release-asset-policy`. It squash-merged to `dev` as `2809f6296e461fe7f2ebd2bd4cb853dca80a5961`. New `exact_release_asset` code owns kind-aware (`Dll` / `Mpq`) latest-stable exact-asset source validation and metadata/checksum resolution, including the existing exact `<asset>.sha256` fallback. Existing direct-DLL package JSON/state validation, exact WoW-root destination, direct-write/no-staging behaviour, size/SHA-256 checks, trust/security policy and runtime semantics remain unchanged; `DirectDllRelease` now aliases the shared resolved-release model. No MPQ filesystem installation, MPQ target allocation, Add Git redesign, mixed queue or wording work was included.
 - v0.5.0 Phase 2 MPQ package/install backend: **implemented / CI-checked / merged on `dev`; backend-only, runtime prerelease not required**. PR #37 tested exact head `b57d7126d1e996f01a6b1eac48f760d3ca682b78`; Build run `36900202483`, Windows x64 job `110497168058`, passed the Release build and **22/22 CTest tests**, including new `mpq-package-backend`. It squash-merged to `dev` as `2723509f292655b5aae7c62e563965e0b387f2b3`. MPQ packages now use the shared exact latest-stable release-asset model, durable `Data/patch-A.mpq` through `Data/patch-Z.mpq` reservation, deterministic lowest-free-letter allocation from both live Data names and persisted TocPilot destinations, persisted target reuse by package identity, collision refusal, transactional install/update/remove with rollback material retained across the state-save boundary, and exact size/SHA-256 integrity verification. Existing direct-DLL direct-write/security behaviour remains separate and unchanged. No unified discovery, Add Git UI, mixed queue or wording work was included.
+- v0.5.0 Phase 3 unified repository candidate discovery: **implemented / CI-checked / merged on `dev`; backend-only, runtime prerelease not required**. PR #38 tested exact head `46d21be1289e5f7528e6662ca856f437cad742ba`; Build run `36906019134`, Windows x64 job `110516642569`, passed the Release build and complete **23/23 CTest suite**, including new `repository-candidate-discovery`. It squash-merged to `dev` as `132782f66e069774ca2b86ee04f728699e7755f8`. The new repository-discovery backend returns one result that independently records selected-branch shallow addon/library discovery and latest-stable GitHub release discovery, then aggregates every valid addon, exact standalone DLL and exact standalone MPQ candidate without fallback suppression. Branch and release failures remain independent; mixed root+child addon layouts remain ambiguous/non-selectable without hiding valid release assets; GitLab remains branch-addon-only. Existing Add Git presentation/install orchestration is intentionally unchanged in this phase, so MPQ/mixed selection is not exposed yet. No selection-UI redesign, mixed install queues or wording work was included.
 
 ## v0.5.0 — Unified repository discovery / MPQ support
 
@@ -1006,6 +1007,8 @@ Scope:
 - no major dialog redesign yet.
 
 Gate: Release build + full tests.
+
+Status: **complete on `dev`** at merged source commit `132782f66e069774ca2b86ee04f728699e7755f8`; PR #38 final Release CI passed **23/23 CTest** on exact tested head `46d21be1289e5f7528e6662ca856f437cad742ba`. The backend now produces one aggregated result with independent branch and GitHub latest-stable release discovery; ambiguous addon roots remain non-selectable while valid release DLL/MPQ candidates survive. Existing Add Git UI behaviour remains intentionally unchanged until Phase 4, so no Phase 3 runtime prerelease is required.
 
 #### Phase 4 — Add Git selection UI
 
@@ -1109,17 +1112,19 @@ Gate: build + tests + visual/runtime smoke.
 
 ## Exact Next Step
 
-Start **v0.5.0 Phase 3 — Unified repository candidate discovery** in a fresh chat.
+Start **v0.5.0 Phase 4 — Add Git selection UI** in a fresh chat.
 
-Phase 3 is backend discovery/model work only. Do not start the Add Git selection UI, mixed install queues, or the wording pass.
+Phase 3 is complete on `dev`. Phase 4 should consume the unified repository-discovery result and present the complete set of discovered addon/library/DLL/MPQ candidates in one selection surface while preserving the existing DLL trust confirmation and showing MPQ destination context before management begins.
 
 Before editing:
 1. read `dev_rulebook.md` and this `DEV_PROGRESS.md`;
 2. verify the current `dev` HEAD;
-3. inspect the existing Add Git repository classification flow, branch/addon discovery, Phase 1 `exact_release_asset` backend, and Phase 2 MPQ package backend;
-4. preserve existing addon/DLL behaviour and keep GitLab branch-addon-only unless release support is separately scoped later.
+3. inspect the Phase 3 `repository_discovery` result/candidate model plus the current Add Git and DLL-fallback dialogs;
+4. keep package creation/install orchestration out of this slice.
 
-Implement the locked Phase 3 scope above: one candidate/result model that independently discovers branch addon/library candidates and latest-stable GitHub DLL/MPQ assets, aggregates all valid classes without fallback suppression, keeps failed/empty classes from hiding successful ones, and adds focused deterministic tests. Stop after the Release build + full-test gate and update this file.
+Implement Phase 4 only: replace the user-facing normal-mode/DLL-fallback selection flow with discovery-first `Paste repository URL → Scan → choose available components → Add Selected`, allow one or several discovered components to be selected, identify branch sources versus latest-stable release assets, show proposed MPQ Data patch-letter destination, and retain DLL trust confirmation. Stop after the Release build + full-test gate and update this file.
+
+Do **not** start Phase 5 mixed package creation/install queues or the later wording pass.
 
 The package-list viewport reset remains accepted for forward development from runtime-tested `v0.4.1-dev.1`; multi-package Add Git remains non-blocking runtime debt until Phase 5 gives us a practical mixed/multi fixture.
 
