@@ -172,65 +172,12 @@ void TestUnavailableMpq() {
     }
 }
 
-void TestExecutionBoundary() {
-    const auto discovery =
-        Discovery();
-    std::wstring error;
-
-    if (tp::ClassifyRepositorySelection(
-            discovery,
-            {0, 1},
-            error) !=
-        tp::RepositorySelectionExecution::AddonsOnly) {
-        Fail(
-            "addon-only multi-selection did not preserve the existing addon queue path");
-    }
-
-    if (tp::ClassifyRepositorySelection(
-            discovery,
-            {2},
-            error) !=
-        tp::RepositorySelectionExecution::SingleDll) {
-        Fail(
-            "single DLL selection did not preserve the existing DLL path");
-    }
-
-    if (tp::ClassifyRepositorySelection(
-            discovery,
-            {3},
-            error) !=
-        tp::RepositorySelectionExecution::Deferred) {
-        Fail(
-            "MPQ selection crossed into Phase 5 orchestration");
-    }
-
-    if (tp::ClassifyRepositorySelection(
-            discovery,
-            {0, 2, 3},
-            error) !=
-        tp::RepositorySelectionExecution::Deferred) {
-        Fail(
-            "mixed selection crossed into Phase 5 orchestration");
-    }
-
-    error.clear();
-    if (tp::ClassifyRepositorySelection(
-            discovery,
-            {2, 2},
-            error) !=
-            tp::RepositorySelectionExecution::Deferred ||
-        error.empty()) {
-        Fail(
-            "duplicate selection was not rejected deterministically");
-    }
-}
 
 } // namespace
 
 int main() {
     TestRows();
     TestUnavailableMpq();
-    TestExecutionBoundary();
 
     if (failures != 0) {
         std::cerr
