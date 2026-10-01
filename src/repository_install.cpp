@@ -188,6 +188,25 @@ bool BuildRepositoryInstallItems(
                 items.clear();
                 return false;
             }
+
+            for (const auto& other :
+                 reserved) {
+                if (other.mode == L"release" &&
+                    other.target == L"wow_root" &&
+                    !other.targetPath.empty() &&
+                    EqualsInsensitive(
+                        other.targetPath,
+                        item.package.targetPath)) {
+                    error =
+                        L"DLL destination '" +
+                        item.package.targetPath +
+                        L"' is already reserved by package '" +
+                        other.id +
+                        L"'.";
+                    items.clear();
+                    return false;
+                }
+            }
             break;
         }
 
