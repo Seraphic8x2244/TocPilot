@@ -260,6 +260,49 @@ void TestMixedPackageCreationAndQueue(
     }
 }
 
+void TestReservedDllDestination(
+    const std::filesystem::path& root) {
+    auto discovery =
+        Discovery();
+
+    tp::PackageRecord existing =
+        tp::MakeRepositoryPackage(
+            L"github",
+            L"Other/ClassicAPI");
+    existing.id =
+        L"github:Other/ClassicAPI:release:ClassicAPI.dll";
+    existing.name =
+        L"ClassicAPI.dll";
+    existing.mode =
+        L"release";
+    existing.releasePolicy =
+        L"latest_stable";
+    existing.asset =
+        L"ClassicAPI.dll";
+    existing.target =
+        L"wow_root";
+    existing.targetPath =
+        L"ClassicAPI.dll";
+
+    std::vector<tp::RepositoryInstallItem>
+        items;
+    std::wstring error;
+
+    if (tp::BuildRepositoryInstallItems(
+            discovery,
+            {1},
+            root,
+            {existing},
+            items,
+            error) ||
+        error.find(
+            L"already reserved") ==
+            std::wstring::npos) {
+        Fail(
+            "existing direct DLL destination reservation was not preserved");
+    }
+}
+
 void TestSelectionValidation(
     const std::filesystem::path& root) {
     const auto discovery =
@@ -319,6 +362,8 @@ int main() {
             "could not create repository install test root");
     } else {
         TestMixedPackageCreationAndQueue(
+            root);
+        TestReservedDllDestination(
             root);
         TestSelectionValidation(
             root);
