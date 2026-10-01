@@ -9849,7 +9849,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                     Deferred) {
                 MessageBoxW(
                     hwnd,
-                    L"The selected components require MPQ or mixed-package creation/install orchestration. This Phase 4 build exposes and selects those candidates, but does not change package state for them yet.",
+                    L"This selection includes MPQ or mixed component types whose combined package creation/install path is not enabled yet. No package state was changed.",
                     L"TocPilot - Add Git",
                     MB_OK |
                         MB_ICONINFORMATION);
