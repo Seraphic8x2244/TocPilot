@@ -30,6 +30,7 @@ add_executable(TocPilot WIN32
     src/archive.cpp
     src/branch_dialog.cpp
     src/direct_dll.cpp
+    src/exact_release_asset.cpp
     src/github_api.cpp
     src/github_release.cpp
     src/git_refs.cpp
@@ -272,6 +273,7 @@ if(BUILD_TESTING)
     add_executable(TocPilotDirectDllTests
         tests/direct_dll_tests.cpp
         src/direct_dll.cpp
+        src/exact_release_asset.cpp
         src/github_release.cpp
         src/state.cpp
     )
@@ -290,6 +292,27 @@ if(BUILD_TESTING)
     endif()
 
     add_test(NAME direct-dll-policy COMMAND TocPilotDirectDllTests)
+
+    add_executable(TocPilotExactReleaseAssetTests
+        tests/exact_release_asset_tests.cpp
+        src/exact_release_asset.cpp
+        src/github_release.cpp
+    )
+    target_compile_features(TocPilotExactReleaseAssetTests PRIVATE cxx_std_20)
+    target_compile_definitions(TocPilotExactReleaseAssetTests PRIVATE
+        UNICODE
+        _UNICODE
+        WIN32_LEAN_AND_MEAN
+        NOMINMAX
+    )
+    target_include_directories(TocPilotExactReleaseAssetTests PRIVATE src)
+    target_link_libraries(TocPilotExactReleaseAssetTests PRIVATE winhttp)
+
+    if(MSVC)
+        target_compile_options(TocPilotExactReleaseAssetTests PRIVATE /W4 /permissive- /utf-8)
+    endif()
+
+    add_test(NAME exact-release-asset-policy COMMAND TocPilotExactReleaseAssetTests)
 
     add_executable(TocPilotAdoptionTests
         tests/adoption_tests.cpp

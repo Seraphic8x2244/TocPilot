@@ -1,6 +1,6 @@
 #pragma once
 
-#include "github_release.h"
+#include "exact_release_asset.h"
 #include "state.h"
 
 #include <cstdint>
@@ -9,11 +9,8 @@
 
 namespace tp {
 
-struct DirectDllRelease {
-    std::wstring tag;
-    GitHubReleaseAsset asset;
-    std::wstring expectedSha256;
-};
+using DirectDllRelease =
+    ExactReleaseAssetRelease;
 
 bool IsDirectDllPackage(
     const PackageRecord& package);

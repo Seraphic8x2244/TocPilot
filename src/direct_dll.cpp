@@ -22,8 +22,6 @@ constexpr wchar_t kUserAgent[] =
     L"TocPilot/" TOCPILOT_VERSION_W;
 constexpr std::uint64_t kMaxDllBytes =
     256ull * 1024ull * 1024ull;
-constexpr std::size_t kMaxChecksumBytes =
-    1024 * 1024;
 
 struct Handles {
     HINTERNET session = nullptr;
@@ -121,33 +119,6 @@ bool IsHexDigest(
                 (ch >= L'A' &&
                  ch <= L'F');
         });
-}
-
-bool NormalizeSha256Digest(
-    std::wstring digest,
-    std::wstring& normalized) {
-    constexpr std::wstring_view prefix =
-        L"sha256:";
-
-    if (digest.size() >=
-            prefix.size() &&
-        Lower(
-            digest.substr(
-                0,
-                prefix.size())) ==
-            prefix) {
-        digest.erase(
-            0,
-            prefix.size());
-    }
-
-    if (!IsHexDigest(digest)) {
-        return false;
-    }
-
-    normalized =
-        Lower(std::move(digest));
-    return true;
 }
 
 bool CrackUrl(
@@ -324,111 +295,6 @@ bool OpenUrl(
     }
 
     return true;
-}
-
-bool DownloadText(
-    const std::wstring& url,
-    std::string& body,
-    std::wstring& error) {
-    body.clear();
-
-    Handles handles;
-    DWORD status = 0;
-
-    if (!OpenUrl(
-            url,
-            handles,
-            status,
-            error)) {
-        return false;
-    }
-
-    if (status < 200 ||
-        status >= 300) {
-        error =
-            L"Checksum asset returned HTTP status " +
-            std::to_wstring(status) +
-            L".";
-        return false;
-    }
-
-    std::array<char, 4096> buffer{};
-
-    for (;;) {
-        DWORD read = 0;
-        if (!WinHttpReadData(
-                handles.request,
-                buffer.data(),
-                static_cast<DWORD>(
-                    buffer.size()),
-                &read)) {
-            error =
-                L"Could not read checksum asset: " +
-                WindowsError(
-                    GetLastError());
-            return false;
-        }
-
-        if (read == 0) {
-            break;
-        }
-
-        if (body.size() >
-            kMaxChecksumBytes -
-                static_cast<std::size_t>(
-                    read)) {
-            error =
-                L"Checksum asset exceeds the 1 MiB safety limit.";
-            return false;
-        }
-
-        body.append(
-            buffer.data(),
-            read);
-    }
-
-    return true;
-}
-
-bool ParseChecksumBody(
-    std::string_view body,
-    std::wstring& digest) {
-    for (std::size_t i = 0;
-         i + 64 <= body.size();
-         ++i) {
-        bool allHex = true;
-        for (std::size_t j = 0;
-             j < 64;
-             ++j) {
-            if (!std::isxdigit(
-                    static_cast<unsigned char>(
-                        body[i + j]))) {
-                allHex = false;
-                break;
-            }
-        }
-
-        if (!allHex) {
-            continue;
-        }
-
-        std::wstring candidate;
-        candidate.reserve(64);
-        for (std::size_t j = 0;
-             j < 64;
-             ++j) {
-            candidate.push_back(
-                static_cast<wchar_t>(
-                    body[i + j]));
-        }
-
-        digest =
-            Lower(
-                std::move(candidate));
-        return true;
-    }
-
-    return false;
 }
 
 bool Sha256File(
@@ -889,72 +755,11 @@ bool ResolveLatestDirectDllRelease(
         return false;
     }
 
-    GitHubReleaseInfo metadata;
-    if (!FetchLatestStableGitHubRelease(
-            package.repository,
-            metadata,
-            error)) {
-        return false;
-    }
-
-    if (!FindExactGitHubReleaseAsset(
-            metadata,
-            package.asset,
-            release.asset,
-            error)) {
-        return false;
-    }
-
-    release.tag =
-        metadata.tag;
-
-    if (NormalizeSha256Digest(
-            release.asset.digest,
-            release.expectedSha256)) {
-        return true;
-    }
-
-    GitHubReleaseAsset checksum;
-    std::wstring lookupError;
-    const std::wstring checksumName =
-        package.asset +
-        L".sha256";
-
-    if (!FindExactGitHubReleaseAsset(
-            metadata,
-            checksumName,
-            checksum,
-            lookupError)) {
-        error =
-            L"Release asset has no usable SHA-256 digest and no exact '" +
-            checksumName +
-            L"' checksum asset. TocPilot will not install an unverifiable DLL.";
-        release = {};
-        return false;
-    }
-
-    std::string body;
-    if (!DownloadText(
-            checksum.downloadUrl,
-            body,
-            error)) {
-        error =
-            L"Could not obtain the DLL checksum: " +
-            error;
-        release = {};
-        return false;
-    }
-
-    if (!ParseChecksumBody(
-            body,
-            release.expectedSha256)) {
-        error =
-            L"Checksum asset does not contain a SHA-256 digest.";
-        release = {};
-        return false;
-    }
-
-    return true;
+    return ResolveLatestStableExactReleaseAsset(
+        package,
+        ExactReleaseAssetKind::Dll,
+        release,
+        error);
 }
 
 bool DownloadAndVerifyDirectDll(
@@ -977,7 +782,9 @@ bool DownloadAndVerifyDirectDll(
         return false;
     }
 
-    if (release.tag.empty() ||
+    if (release.kind !=
+            ExactReleaseAssetKind::Dll ||
+        release.tag.empty() ||
         release.asset.name !=
             package.asset ||
         release.asset.downloadUrl.empty() ||

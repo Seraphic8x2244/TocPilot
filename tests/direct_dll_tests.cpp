@@ -86,6 +86,21 @@ void ExpectInvalidVariants() {
         auto package =
             ValidPackage();
         package.asset =
+            L"ClassicAPI.mpq";
+        package.targetPath =
+            package.asset;
+        if (tp::ValidateDirectDllPackage(
+                package,
+                error)) {
+            Fail(
+                "MPQ release asset was accepted as a direct DLL");
+        }
+    }
+
+    {
+        auto package =
+            ValidPackage();
+        package.asset =
             L"ClassicAPI.zip";
         package.targetPath =
             package.asset;
