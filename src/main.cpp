@@ -9959,15 +9959,26 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                         package.name +
                         L" from the latest stable GitHub release?";
 
-                    prompt +=
-                        L"\r\n\r\nTocPilot will download only the exact configured asset '" +
-                        package.asset +
-                        L"' directly to:\r\n" +
-                        (g_root /
-                         package.targetPath).wstring() +
-                        L"\r\n\r\nNo staged, temporary, renamed, or backup DLL will be created. "
-                        L"Close WoW before continuing. TocPilot will verify SHA-256 before "
-                        L"recording the installed release and will not change antivirus settings.";
+                    if (tp::IsMpqPackage(
+                            package)) {
+                        prompt +=
+                            L"\r\n\r\nTocPilot will download and verify only the exact configured MPQ asset '" +
+                            package.asset +
+                            L"', then update its reserved destination:\r\n" +
+                            (g_root /
+                             package.targetPath).wstring() +
+                            L"\r\n\r\nThe assigned patch letter will not change. Close WoW before continuing.";
+                    } else {
+                        prompt +=
+                            L"\r\n\r\nTocPilot will download only the exact configured asset '" +
+                            package.asset +
+                            L"' directly to:\r\n" +
+                            (g_root /
+                             package.targetPath).wstring() +
+                            L"\r\n\r\nNo staged, temporary, renamed, or backup DLL will be created. "
+                            L"Close WoW before continuing. TocPilot will verify SHA-256 before "
+                            L"recording the installed release and will not change antivirus settings.";
+                    }
                 } else {
                     if (package.installedRevision.empty()) {
                         prompt =
@@ -10618,8 +10629,10 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                         L"release" &&
                     tracked.asset ==
                         result->asset &&
-                    tracked.targetPath ==
-                        result->asset;
+                    (tp::IsDirectDllPackage(
+                         tracked) ||
+                     tp::IsMpqPackage(
+                         tracked));
             } else {
                 trackingMatches =
                     tracked.mode ==
