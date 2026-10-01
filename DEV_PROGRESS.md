@@ -932,4 +932,8 @@ When the user is ready to test it, publish it through the normal development pre
 4. Update New: list resets to the top at start and again after the final rebuild/sort, including the no-candidate completion path.
 5. Presentational-only actions such as selection, column sorting and Compact/Advanced presentation changes do not invoke a viewport reset.
 
+Next-build queue after the viewport runtime gate:
+
+- Remove the startup **click-to-continue** step after addon update scanning. Once startup scanning/update checks complete normally, TocPilot should proceed straight into the app without requiring an extra acknowledgement click.
+
 Account Sync is stable in `v0.4.0`. Preserve the explicit validation debt for Sync-before-Launch/Ctrl-click and induced backup/write-failure; those paths were accepted as non-blocking, not runtime-proven.
