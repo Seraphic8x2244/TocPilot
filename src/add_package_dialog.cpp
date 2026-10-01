@@ -1,12 +1,8 @@
 #include "add_package_dialog.h"
 
-#include "direct_dll.h"
-#include "github_release.h"
 #include "provider.h"
 
 #include <algorithm>
-#include <cwctype>
-#include <filesystem>
 #include <string>
 #include <utility>
 
@@ -15,24 +11,15 @@ namespace {
 
 constexpr wchar_t kClassName[] =
     L"TocPilotAddPackageDialog";
+
 constexpr int IDC_REPOSITORY_URL = 2001;
-constexpr int IDC_ADD_SOURCE = 2002;
+constexpr int IDC_SCAN_SOURCE = 2002;
 constexpr int IDC_RESULT = 2003;
 constexpr int IDC_CLOSE_DIALOG = 2004;
-constexpr int IDC_RELEASE_DLL = 2005;
-constexpr int IDC_DLL_ASSET_LABEL = 2006;
-constexpr int IDC_DLL_ASSET = 2007;
 
 struct DialogContext {
     PackageRecord* package = nullptr;
     bool accepted = false;
-    bool dllOnly = false;
-    bool releaseLoaded = false;
-    bool supportedDllFound = false;
-    std::wstring initialRepository;
-    std::wstring releaseRepository;
-    std::wstring loadError;
-    GitHubReleaseInfo release;
 };
 
 void SetControlFont(
@@ -86,405 +73,6 @@ DialogContext* Context(
             GWLP_USERDATA));
 }
 
-bool ReleaseDllChecked(
-    HWND hwnd) {
-    return SendMessageW(
-               GetDlgItem(
-                   hwnd,
-                   IDC_RELEASE_DLL),
-               BM_GETCHECK,
-               0,
-               0) ==
-        BST_CHECKED;
-}
-
-bool EndsWithInsensitive(
-    std::wstring_view value,
-    std::wstring_view suffix) {
-    if (value.size() <
-        suffix.size()) {
-        return false;
-    }
-
-    const std::size_t offset =
-        value.size() -
-        suffix.size();
-
-    for (std::size_t i = 0;
-         i < suffix.size();
-         ++i) {
-        if (std::towlower(
-                value[offset + i]) !=
-            std::towlower(
-                suffix[i])) {
-            return false;
-        }
-    }
-
-    return true;
-}
-
-bool SelectableDllAsset(
-    std::wstring_view name) {
-    return
-        !name.empty() &&
-        name.find_first_of(
-            L"/\\") ==
-            std::wstring_view::npos &&
-        EndsWithInsensitive(
-            name,
-            L".dll");
-}
-
-void UpdateDllControls(
-    HWND hwnd) {
-    DialogContext* context =
-        Context(hwnd);
-
-    const bool dllMode =
-        ReleaseDllChecked(hwnd);
-
-    const bool assetReady =
-        dllMode &&
-        context &&
-        context->releaseLoaded;
-
-    EnableWindow(
-        GetDlgItem(
-            hwnd,
-            IDC_DLL_ASSET_LABEL),
-        assetReady
-            ? TRUE
-            : FALSE);
-    EnableWindow(
-        GetDlgItem(
-            hwnd,
-            IDC_DLL_ASSET),
-        assetReady
-            ? TRUE
-            : FALSE);
-
-    SetWindowTextW(
-        GetDlgItem(
-            hwnd,
-            IDC_ADD_SOURCE),
-        dllMode
-            ? (assetReady
-                ? L"Manage DLL"
-                : L"Load DLLs")
-            : L"Continue");
-}
-
-void ResetDllRelease(
-    HWND hwnd) {
-    DialogContext* context =
-        Context(hwnd);
-
-    if (context) {
-        context->releaseLoaded =
-            false;
-        context->releaseRepository.clear();
-        context->release = {};
-    }
-
-    SendMessageW(
-        GetDlgItem(
-            hwnd,
-            IDC_DLL_ASSET),
-        CB_RESETCONTENT,
-        0,
-        0);
-
-    UpdateDllControls(hwnd);
-}
-
-std::filesystem::path
-ExecutableDirectory() {
-    std::wstring buffer(
-        32768,
-        L'\0');
-
-    const DWORD length =
-        GetModuleFileNameW(
-            nullptr,
-            buffer.data(),
-            static_cast<DWORD>(
-                buffer.size()));
-
-    if (length == 0 ||
-        length >=
-            buffer.size()) {
-        return {};
-    }
-
-    buffer.resize(length);
-    return std::filesystem::path(
-        buffer).parent_path();
-}
-
-bool LoadLatestStableDllAssets(
-    HWND hwnd,
-    const RepositoryIdentity& identity,
-    std::wstring& error) {
-    error.clear();
-
-    if (identity.provider !=
-        ProviderKind::GitHub) {
-        error =
-            L"Direct DLL management currently supports GitHub repositories only.";
-        return false;
-    }
-
-    SetWindowTextW(
-        GetDlgItem(
-            hwnd,
-            IDC_RESULT),
-        L"Resolving the latest stable GitHub release...");
-    UpdateWindow(hwnd);
-
-    GitHubReleaseInfo release;
-    if (!FetchLatestStableGitHubRelease(
-            identity.repository,
-            release,
-            error)) {
-        return false;
-    }
-
-    HWND assetControl =
-        GetDlgItem(
-            hwnd,
-            IDC_DLL_ASSET);
-
-    SendMessageW(
-        assetControl,
-        CB_RESETCONTENT,
-        0,
-        0);
-
-    std::size_t count = 0;
-
-    for (const auto& asset :
-         release.assets) {
-        if (!SelectableDllAsset(
-                asset.name)) {
-            continue;
-        }
-
-        if (SendMessageW(
-                assetControl,
-                CB_ADDSTRING,
-                0,
-                reinterpret_cast<LPARAM>(
-                    asset.name.c_str())) >=
-            0) {
-            ++count;
-        }
-    }
-
-    if (count == 0) {
-        error =
-            L"The latest stable release contains no selectable .dll assets.";
-        return false;
-    }
-
-    DialogContext* context =
-        Context(hwnd);
-
-    if (!context) {
-        error =
-            L"Could not store release selection state.";
-        return false;
-    }
-
-    context->releaseLoaded =
-        true;
-    context->releaseRepository =
-        identity.repository;
-    context->release =
-        std::move(release);
-
-    SendMessageW(
-        assetControl,
-        CB_SETCURSEL,
-        static_cast<WPARAM>(-1),
-        0);
-
-    UpdateDllControls(hwnd);
-
-    const std::wstring message =
-        L"Latest stable release " +
-        context->release.tag +
-        L" contains " +
-        std::to_wstring(count) +
-        (count == 1
-            ? L" DLL asset. Select it explicitly, then click Manage DLL."
-            : L" DLL assets. Select the exact one to manage, then click Manage DLL.");
-
-    SetWindowTextW(
-        GetDlgItem(
-            hwnd,
-            IDC_RESULT),
-        message.c_str());
-
-    SetFocus(assetControl);
-    return true;
-}
-
-bool PrepareSelectedReleaseDll(
-    HWND hwnd,
-    const RepositoryIdentity& identity,
-    PackageRecord& package,
-    std::wstring& error) {
-    error.clear();
-
-    DialogContext* context =
-        Context(hwnd);
-
-    if (!context ||
-        !context->releaseLoaded ||
-        context->releaseRepository !=
-            identity.repository) {
-        error =
-            L"Reload the latest stable release before selecting a DLL.";
-        return false;
-    }
-
-    const HWND assetControl =
-        GetDlgItem(
-            hwnd,
-            IDC_DLL_ASSET);
-
-    const LRESULT selected =
-        SendMessageW(
-            assetControl,
-            CB_GETCURSEL,
-            0,
-            0);
-
-    if (selected == CB_ERR) {
-        error =
-            L"Select one exact DLL asset from the latest stable release.";
-        return false;
-    }
-
-    const int length =
-        static_cast<int>(
-            SendMessageW(
-                assetControl,
-                CB_GETLBTEXTLEN,
-                static_cast<WPARAM>(
-                    selected),
-                0));
-
-    if (length <= 0) {
-        error =
-            L"The selected DLL asset name is invalid.";
-        return false;
-    }
-
-    std::wstring assetName(
-        static_cast<std::size_t>(
-            length) +
-            1,
-        L'\0');
-
-    SendMessageW(
-        assetControl,
-        CB_GETLBTEXT,
-        static_cast<WPARAM>(
-            selected),
-        reinterpret_cast<LPARAM>(
-            assetName.data()));
-
-    assetName.resize(
-        static_cast<std::size_t>(
-            length));
-
-    GitHubReleaseAsset exactAsset;
-    if (!FindExactGitHubReleaseAsset(
-            context->release,
-            assetName,
-            exactAsset,
-            error)) {
-        return false;
-    }
-
-    package =
-        MakeRepositoryPackage(
-            L"github",
-            identity.repository);
-
-    package.id =
-        L"github:" +
-        identity.repository +
-        L":release:" +
-        assetName;
-    package.name =
-        assetName;
-    package.mode =
-        L"release";
-    package.ref.clear();
-    package.releasePolicy =
-        L"latest_stable";
-    package.asset =
-        assetName;
-    package.target =
-        L"wow_root";
-    package.targetPath =
-        assetName;
-    package.installedRevision.clear();
-    package.latestRevision =
-        context->release.tag;
-    package.installedFiles.clear();
-
-    if (!ValidateDirectDllPackage(
-            package,
-            error)) {
-        return false;
-    }
-
-    const auto root =
-        ExecutableDirectory();
-
-    if (root.empty()) {
-        error =
-            L"Could not resolve the TocPilot/WoW directory.";
-        return false;
-    }
-
-    const std::filesystem::path
-        destination =
-            root /
-            package.targetPath;
-
-    const std::wstring warning =
-        L"DLLs contain executable code. Continue only if you trust this publisher.\r\n\r\n"
-        L"Repository: " +
-        identity.repository +
-        L"\r\nRelease policy: latest stable\r\nCurrent stable release: " +
-        context->release.tag +
-        L"\r\nSelected asset: " +
-        package.asset +
-        L"\r\nDestination: " +
-        destination.wstring() +
-        L"\r\n\r\nSecurity software may block or quarantine DLLs. TocPilot will not add exclusions, disable security software, or change antivirus settings. "
-        L"When installing or updating, TocPilot writes only to the exact destination above, creates no staged/temp/renamed/backup DLL, and records the release only after SHA-256 verification.\r\n\r\nManage this DLL?";
-
-    if (MessageBoxW(
-            hwnd,
-            warning.c_str(),
-            L"TocPilot - Trust DLL Publisher",
-            MB_YESNO |
-                MB_ICONWARNING |
-                MB_DEFBUTTON2) !=
-        IDYES) {
-        error.clear();
-        return false;
-    }
-
-    return true;
-}
-
 void ValidateAndAccept(
     HWND hwnd) {
     const HWND edit =
@@ -518,65 +106,7 @@ void ValidateAndAccept(
         !context->package) {
         SetWindowTextW(
             result,
-            L"Could not prepare the package record.");
-        return;
-    }
-
-    if (context->dllOnly) {
-        if (identity.provider !=
-            ProviderKind::GitHub) {
-            SetWindowTextW(
-                result,
-                L"DLL package not added: direct DLL management currently supports GitHub repositories only.");
-            return;
-        }
-
-        if (!context->releaseLoaded ||
-            context->releaseRepository !=
-                identity.repository) {
-            ResetDllRelease(hwnd);
-
-            if (!LoadLatestStableDllAssets(
-                    hwnd,
-                    identity,
-                    error)) {
-                context->loadError = error;
-                SetWindowTextW(
-                    result,
-                    (L"DLL package not added: " +
-                     error).c_str());
-            } else {
-                context->supportedDllFound = true;
-                context->loadError.clear();
-            }
-            return;
-        }
-
-        PackageRecord package;
-
-        if (!PrepareSelectedReleaseDll(
-                hwnd,
-                identity,
-                package,
-                error)) {
-            if (!error.empty()) {
-                SetWindowTextW(
-                    result,
-                    (L"DLL package not added: " +
-                     error).c_str());
-            } else {
-                SetWindowTextW(
-                    result,
-                    L"DLL package was not added.");
-            }
-            return;
-        }
-
-        *context->package =
-            std::move(package);
-        context->accepted =
-            true;
-        DestroyWindow(hwnd);
+            L"Could not prepare the repository scan.");
         return;
     }
 
@@ -624,7 +154,7 @@ LRESULT CALLBACK DialogProc(
             CreateWindowExW(
                 0,
                 L"STATIC",
-                L"Paste a public repository URL. Normal addon packages track a branch; DLL mode resolves the latest stable GitHub release first, then you choose one exact DLL asset.",
+                L"Paste a public GitHub or GitLab repository URL. TocPilot will scan the selected branch and, for GitHub, the latest stable release for supported components.",
                 WS_CHILD |
                     WS_VISIBLE |
                     SS_LEFT,
@@ -657,82 +187,23 @@ LRESULT CALLBACK DialogProc(
                 instance,
                 nullptr);
 
-        HWND dll =
+        HWND scan =
             CreateWindowExW(
                 0,
                 L"BUTTON",
-                L"Manage a latest-stable release DLL in the WoW root",
-                WS_CHILD |
-                    WS_VISIBLE |
-                    WS_TABSTOP |
-                    BS_AUTOCHECKBOX,
-                20,
-                100,
-                540,
-                24,
-                hwnd,
-                reinterpret_cast<HMENU>(
-                    static_cast<INT_PTR>(
-                        IDC_RELEASE_DLL)),
-                instance,
-                nullptr);
-
-        HWND assetLabel =
-            CreateWindowExW(
-                0,
-                L"STATIC",
-                L"Exact DLL asset:",
-                WS_CHILD |
-                    WS_VISIBLE,
-                20,
-                132,
-                145,
-                22,
-                hwnd,
-                reinterpret_cast<HMENU>(
-                    static_cast<INT_PTR>(
-                        IDC_DLL_ASSET_LABEL)),
-                instance,
-                nullptr);
-
-        HWND asset =
-            CreateWindowExW(
-                WS_EX_CLIENTEDGE,
-                L"COMBOBOX",
-                L"",
-                WS_CHILD |
-                    WS_VISIBLE |
-                    WS_TABSTOP |
-                    CBS_DROPDOWNLIST |
-                    WS_VSCROLL,
-                170,
-                128,
-                390,
-                180,
-                hwnd,
-                reinterpret_cast<HMENU>(
-                    static_cast<INT_PTR>(
-                        IDC_DLL_ASSET)),
-                instance,
-                nullptr);
-
-        HWND add =
-            CreateWindowExW(
-                0,
-                L"BUTTON",
-                L"Continue",
+                L"Scan",
                 WS_CHILD |
                     WS_VISIBLE |
                     WS_TABSTOP |
                     BS_DEFPUSHBUTTON,
                 20,
-                168,
+                108,
                 110,
                 30,
                 hwnd,
                 reinterpret_cast<HMENU>(
                     static_cast<INT_PTR>(
-                        IDC_ADD_SOURCE)),
+                        IDC_SCAN_SOURCE)),
                 instance,
                 nullptr);
 
@@ -746,7 +217,7 @@ LRESULT CALLBACK DialogProc(
                     WS_TABSTOP |
                     BS_PUSHBUTTON,
                 450,
-                168,
+                108,
                 110,
                 30,
                 hwnd,
@@ -760,14 +231,14 @@ LRESULT CALLBACK DialogProc(
             CreateWindowExW(
                 0,
                 L"STATIC",
-                L"Normal mode will ask for a branch next. In DLL mode, click Load DLLs to inspect the latest stable release; TocPilot will not guess an asset.",
+                L"Scan will ask which branch to inspect before showing every supported component TocPilot finds.",
                 WS_CHILD |
                     WS_VISIBLE |
                     SS_LEFT,
                 20,
-                210,
+                150,
                 540,
-                74,
+                48,
                 hwnd,
                 reinterpret_cast<HMENU>(
                     static_cast<INT_PTR>(
@@ -777,112 +248,17 @@ LRESULT CALLBACK DialogProc(
 
         SetControlFont(intro);
         SetControlFont(edit);
-        SetControlFont(dll);
-        SetControlFont(assetLabel);
-        SetControlFont(asset);
-        SetControlFont(add);
+        SetControlFont(scan);
         SetControlFont(close);
         SetControlFont(result);
 
-        DialogContext* context =
-            Context(hwnd);
-
-        if (context &&
-            context->dllOnly) {
-            SetWindowTextW(
-                intro,
-                L"No addon was found on the selected branch. TocPilot can fall back to an exact standalone DLL from the latest stable GitHub release.");
-            const std::wstring repositoryUrl =
-                L"https://github.com/" +
-                context->initialRepository;
-            SetWindowTextW(
-                edit,
-                repositoryUrl.c_str());
-            EnableWindow(
-                edit,
-                FALSE);
-            ShowWindow(
-                dll,
-                SW_HIDE);
-            SendMessageW(
-                dll,
-                BM_SETCHECK,
-                BST_CHECKED,
-                0);
-            SetWindowTextW(
-                result,
-                L"Checking the latest stable GitHub release for standalone DLL assets...");
-            UpdateDllControls(hwnd);
-
-            RepositoryIdentity identity;
-            std::wstring error;
-            if (!NormalizeRepositoryUrl(
-                    repositoryUrl,
-                    identity,
-                    error) ||
-                !LoadLatestStableDllAssets(
-                    hwnd,
-                    identity,
-                    error)) {
-                context->loadError = error;
-                SetWindowTextW(
-                    result,
-                    (L"No supported DLL was loaded: " +
-                     error).c_str());
-            } else {
-                context->supportedDllFound =
-                    true;
-                context->loadError.clear();
-            }
-
-            SetFocus(asset);
-        } else {
-            SetWindowTextW(
-                intro,
-                L"Paste a public GitHub or GitLab repository URL. TocPilot will ask for a branch, inspect only the repository root plus one directory level for addon .toc files, and classify the result automatically.");
-            SetWindowTextW(
-                result,
-                L"Continue to choose a branch. DLL fallback is checked only when that branch contains no detected addon.");
-            ShowWindow(
-                dll,
-                SW_HIDE);
-            ShowWindow(
-                assetLabel,
-                SW_HIDE);
-            ShowWindow(
-                asset,
-                SW_HIDE);
-            UpdateDllControls(hwnd);
-            SetFocus(edit);
-        }
+        SetFocus(edit);
         return 0;
     }
 
     case WM_COMMAND:
         if (LOWORD(wParam) ==
-                IDC_REPOSITORY_URL &&
-            HIWORD(wParam) ==
-                EN_CHANGE) {
-            DialogContext* context =
-                Context(hwnd);
-
-            if (context &&
-                context->releaseLoaded) {
-                ResetDllRelease(hwnd);
-            }
-            return 0;
-        }
-
-        if (LOWORD(wParam) ==
-                IDC_RELEASE_DLL &&
-            HIWORD(wParam) ==
-                BN_CLICKED) {
-            ResetDllRelease(hwnd);
-            return 0;
-        }
-
-        if (LOWORD(wParam) ==
-                IDC_ADD_SOURCE &&
+                IDC_SCAN_SOURCE &&
             HIWORD(wParam) ==
                 BN_CLICKED) {
             ValidateAndAccept(hwnd);
@@ -937,25 +313,27 @@ bool EnsureDialogClass() {
         kClassName;
 
     if (!RegisterClassExW(
-            &wc)) {
-        if (GetLastError() !=
+            &wc) &&
+        GetLastError() !=
             ERROR_CLASS_ALREADY_EXISTS) {
-            return false;
-        }
+        return false;
     }
 
     registered = true;
     return true;
 }
 
-bool RunPackageDialog(
+} // namespace
+
+bool ShowAddPackageDialog(
     HWND owner,
-    const wchar_t* title,
-    DialogContext& context) {
+    PackageRecord& package) {
+    package = {};
+
     if (!EnsureDialogClass()) {
         MessageBoxW(
             owner,
-            L"Could not create the Add Package window.",
+            L"Could not create the Add Git window.",
             L"TocPilot",
             MB_OK |
                 MB_ICONERROR);
@@ -968,7 +346,7 @@ bool RunPackageDialog(
         &ownerRect);
 
     constexpr int width = 600;
-    constexpr int height = 330;
+    constexpr int height = 250;
 
     const int ownerWidth =
         static_cast<int>(
@@ -997,12 +375,16 @@ bool RunPackageDialog(
              height) /
                 2);
 
+    DialogContext context;
+    context.package =
+        &package;
+
     HWND dialog =
         CreateWindowExW(
             WS_EX_DLGMODALFRAME |
                 WS_EX_CONTROLPARENT,
             kClassName,
-            title,
+            L"Add Git Repository",
             WS_CAPTION |
                 WS_SYSMENU |
                 WS_POPUP,
@@ -1019,7 +401,7 @@ bool RunPackageDialog(
     if (!dialog) {
         MessageBoxW(
             owner,
-            L"Could not create the Add Package window.",
+            L"Could not create the Add Git window.",
             L"TocPilot",
             MB_OK |
                 MB_ICONERROR);
@@ -1068,53 +450,6 @@ bool RunPackageDialog(
         TRUE);
     SetActiveWindow(owner);
     return context.accepted;
-}
-
-} // namespace
-
-bool ShowAddPackageDialog(
-    HWND owner,
-    PackageRecord& package) {
-    package = {};
-
-    DialogContext context;
-    context.package =
-        &package;
-
-    return RunPackageDialog(
-        owner,
-        L"Add Git Repository",
-        context);
-}
-
-bool ShowDirectDllFallbackDialog(
-    HWND owner,
-    std::wstring_view repository,
-    PackageRecord& package,
-    bool& supportedDllFound,
-    std::wstring& error) {
-    package = {};
-    supportedDllFound = false;
-    error.clear();
-
-    DialogContext context;
-    context.package =
-        &package;
-    context.dllOnly = true;
-    context.initialRepository =
-        std::wstring(repository);
-
-    const bool accepted =
-        RunPackageDialog(
-            owner,
-            L"Add Git - DLL Fallback",
-            context);
-
-    supportedDllFound =
-        context.supportedDllFound;
-    error =
-        std::move(context.loadError);
-    return accepted;
 }
 
 } // namespace tp

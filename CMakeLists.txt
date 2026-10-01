@@ -43,6 +43,8 @@ add_executable(TocPilot WIN32
     src/refresh_freshness.cpp
     src/removal_prompt.cpp
     src/repository_discovery.cpp
+    src/repository_selection.cpp
+    src/repository_selection_dialog.cpp
     src/state.cpp
     src/splash.cpp
     src/toolbar_icons.cpp
@@ -367,6 +369,19 @@ if(BUILD_TESTING)
     endif()
 
     add_test(NAME repository-candidate-discovery COMMAND TocPilotRepositoryDiscoveryTests)
+
+    add_executable(TocPilotRepositorySelectionTests
+        tests/repository_selection_tests.cpp
+        src/repository_selection.cpp
+    )
+    target_compile_features(TocPilotRepositorySelectionTests PRIVATE cxx_std_20)
+    target_include_directories(TocPilotRepositorySelectionTests PRIVATE src)
+
+    if(MSVC)
+        target_compile_options(TocPilotRepositorySelectionTests PRIVATE /W4 /permissive- /utf-8)
+    endif()
+
+    add_test(NAME repository-selection-policy COMMAND TocPilotRepositorySelectionTests)
 
     add_executable(TocPilotAdoptionTests
         tests/adoption_tests.cpp
