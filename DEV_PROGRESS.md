@@ -922,6 +922,7 @@ Do not add support for user-uploaded ZIP/7z/RAR/installer/bundle release assets 
 - Package-list viewport reset implementation commit `eace26841fdd41073413605bfb4f5f3c578b3da0` is CI-checked by Build run `36775185023`, Windows x64 job `110091188659`: Release build + **20/20 CTest passed**, including `package-list-viewport-policy`.
 - Development prerelease `v0.4.1-dev.1` is published from exact commit `325523b05c34c59d6e15fe56cd152d9cfafb5fdf`. Development Release run `36888266631`, Windows x64 job `110457047207`, passed source-version validation, Release build, **20/20 CTest**, tag/assets publication, stable-channel isolation, and real development-channel self-update from parent `7cfa6ba984dbe909622941ae72c8157990cc05d7`. `TocPilot.exe`: 3,145,216 bytes, SHA-256 `996655e59732c7afca9934423d605e9565b8fc26912a048e06419de9e4511387`. Runtime viewport validation passed on 2026-10-01 for single-addon/branch actions, Refresh All, Update New and presentational actions; multi-package Add Git remains untested/non-blocking due to no available fixture. Keep **Clear WDB folder** and **DXVK advanced logging checkbox** deferred.
 - Startup scan auto-enter implementation `b539b593900ccc046baffeffdcdf19e9a57a8ffb` removes the normal click-to-continue splash gate while retaining the explicit self-update-failure acknowledgement. Draft PR #35 CI: Build run `36893192930`, Windows x64 job `110473610222`, Release build + **20/20 CTest passed**. This change is not in published `v0.4.1-dev.1`; include it in the next development prerelease.
+- v0.5.0 Phase 1 exact release-asset backend: **implemented / CI-checked / merged on `dev`; backend-only, runtime prerelease not required**. PR #36 tested exact head `f040de9f7a44c92c5b8ccc8e6ec8af068ede2d18`; Build run `36896441332`, Windows x64 job `110484495595`, passed the Release build and **21/21 CTest tests**, including `direct-dll-policy` and new `exact-release-asset-policy`. It squash-merged to `dev` as `2809f6296e461fe7f2ebd2bd4cb853dca80a5961`. New `exact_release_asset` code owns kind-aware (`Dll` / `Mpq`) latest-stable exact-asset source validation and metadata/checksum resolution, including the existing exact `<asset>.sha256` fallback. Existing direct-DLL package JSON/state validation, exact WoW-root destination, direct-write/no-staging behaviour, size/SHA-256 checks, trust/security policy and runtime semantics remain unchanged; `DirectDllRelease` now aliases the shared resolved-release model. No MPQ filesystem installation, MPQ target allocation, Add Git redesign, mixed queue or wording work was included.
 
 ## v0.5.0 — Unified repository discovery / MPQ support
 
@@ -965,6 +966,8 @@ Scope:
 - no wording pass.
 
 Gate: Release build + full tests. No runtime prerelease required unless the refactor unexpectedly touches visible DLL behaviour.
+
+Status: **complete on `dev`** at merged source commit `2809f6296e461fe7f2ebd2bd4cb853dca80a5961`; PR #36 Release CI passed **21/21 CTest**. No visible DLL behaviour was intentionally changed, so no Phase 1 runtime prerelease is required.
 
 #### Phase 2 — MPQ package/install backend
 
@@ -1103,15 +1106,17 @@ Gate: build + tests + visual/runtime smoke.
 
 ## Exact Next Step
 
-Start **v0.5.0 Phase 1 — Generalise exact release-asset backend** in a fresh chat.
+Start **v0.5.0 Phase 2 — MPQ package/install backend** in a fresh chat.
 
-Do not start MPQ filesystem installation, unified discovery UI, or the wording pass in Phase 1.
+Phase 2 is backend-only. Do not start unified repository candidate discovery, Add Git selection UI, mixed install queues, or the wording pass.
 
 Before editing:
 1. read `dev_rulebook.md` and this `DEV_PROGRESS.md`;
 2. verify the current `dev` HEAD;
-3. inspect the existing `direct_dll`, GitHub release, package-state and related tests;
-4. preserve current DLL runtime semantics while extracting only the reusable exact-release-asset pieces.
+3. inspect the Phase 1 `exact_release_asset` backend, current package-state validation/ownership rules, direct-DLL separation, install/remove infrastructure and relevant tests;
+4. add MPQ package/state/install behaviour using the shared exact-release-asset model without weakening or rerouting the special DLL direct-write/security path.
+
+Implement the locked Phase 2 scope above: exact standalone `.mpq` package validation, deterministic WoW `Data\\` patch-letter assignment, persistence/reuse, collision refusal, install/update/remove/integrity verification, and focused deterministic tests. Stop after the Release build + full-test gate and update this file.
 
 The package-list viewport reset remains accepted for forward development from runtime-tested `v0.4.1-dev.1`; multi-package Add Git remains non-blocking runtime debt until Phase 5 gives us a practical mixed/multi fixture.
 
