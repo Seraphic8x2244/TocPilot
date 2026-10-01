@@ -14,6 +14,8 @@
 #include "refresh_freshness.h"
 #include "removal_prompt.h"
 #include "repository_discovery.h"
+#include "repository_selection.h"
+#include "repository_selection_dialog.h"
 #include "state.h"
 #include "splash.h"
 #include "toolbar_icons.h"
@@ -9781,9 +9783,9 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             if (g_packageHint) {
                 const std::wstring message =
                     repositoryPackage.name +
-                    L": inspecting " +
+                    L": scanning branch " +
                     repositoryPackage.ref +
-                    L" at repository root + one directory level...";
+                    L" and supported release assets...";
                 SetWindowTextW(
                     g_packageHint,
                     message.c_str());
@@ -9800,94 +9802,161 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                 MessageBoxW(
                     hwnd,
                     error.c_str(),
-                    L"TocPilot - Add Git Inspection Failed",
+                    L"TocPilot - Add Git Scan Failed",
                     MB_OK | MB_ICONWARNING);
                 return 0;
             }
 
-            if (!discovery.branchSucceeded) {
-                MessageBoxW(
+            std::vector<std::size_t>
+                selectedIndices;
+
+            if (!tp::ShowRepositorySelectionDialog(
                     hwnd,
-                    discovery.branchError.c_str(),
-                    L"TocPilot - Add Git Inspection Failed",
-                    MB_OK | MB_ICONWARNING);
+                    discovery,
+                    g_root,
+                    g_state.packages,
+                    selectedIndices,
+                    error)) {
+                if (!error.empty()) {
+                    MessageBoxW(
+                        hwnd,
+                        error.c_str(),
+                        L"TocPilot - Add Git",
+                        MB_OK |
+                            MB_ICONINFORMATION);
+                }
                 return 0;
             }
 
-            tp::RepositoryAddonLayout layout =
-                std::move(
-                    discovery.addonLayout);
+            const auto execution =
+                tp::ClassifyRepositorySelection(
+                    discovery,
+                    selectedIndices,
+                    error);
 
-            if (layout.kind ==
-                tp::RepositoryAddonLayoutKind::MixedAmbiguous) {
+            if (!error.empty()) {
                 MessageBoxW(
                     hwnd,
-                    L"Repository layout is ambiguous: TocPilot found both repository-root .toc files and immediate child addon roots. TocPilot will not guess which roots belong together.",
+                    error.c_str(),
                     L"TocPilot - Add Git",
-                    MB_OK | MB_ICONWARNING);
+                    MB_OK |
+                        MB_ICONERROR);
                 return 0;
             }
 
-            if (layout.kind ==
-                tp::RepositoryAddonLayoutKind::None) {
-                if (repositoryPackage.provider ==
-                    L"github") {
-                    tp::PackageRecord dllPackage;
-                    bool supportedDllFound = false;
-                    std::wstring dllError;
+            if (execution ==
+                tp::RepositorySelectionExecution::
+                    Deferred) {
+                MessageBoxW(
+                    hwnd,
+                    L"The selected components require MPQ or mixed-package creation/install orchestration. This Phase 4 build exposes and selects those candidates, but does not change package state for them yet.",
+                    L"TocPilot - Add Git",
+                    MB_OK |
+                        MB_ICONINFORMATION);
+                return 0;
+            }
 
-                    if (tp::ShowDirectDllFallbackDialog(
-                            hwnd,
-                            repositoryPackage.repository,
-                            dllPackage,
-                            supportedDllFound,
-                            dllError)) {
-                        tp::AppState updatedState =
-                            g_state;
+            if (execution ==
+                tp::RepositorySelectionExecution::
+                    SingleDll) {
+                const auto candidateIndex =
+                    selectedIndices.front();
 
-                        if (!tp::AppendPackage(
-                                updatedState,
-                                std::move(dllPackage),
-                                error) ||
-                            !tp::SaveState(
-                                g_root,
-                                updatedState,
-                                error)) {
-                            MessageBoxW(
-                                hwnd,
-                                error.c_str(),
-                                L"TocPilot - Add DLL",
-                                MB_OK | MB_ICONERROR);
-                            return 0;
-                        }
-
-                        const std::size_t index =
-                            updatedState.packages.size() - 1;
-
-                        g_state =
-                            std::move(updatedState);
-                        g_stateCreated = false;
-                        g_stateError.clear();
-
-                        RefreshPackageStateUi();
-                        SelectPackageRow(index);
-                        UpdatePackageButtons();
-                        StartPackageInstall(
-                            hwnd,
-                            index);
-                        return 0;
-                    }
-
-                    if (supportedDllFound) {
-                        return 0;
-                    }
+                if (candidateIndex >=
+                    discovery.candidates.size() ||
+                    discovery.candidates[
+                        candidateIndex].kind !=
+                        tp::RepositoryCandidateKind::
+                            Dll) {
+                    MessageBoxW(
+                        hwnd,
+                        L"The selected DLL changed unexpectedly.",
+                        L"TocPilot - Add Git",
+                        MB_OK |
+                            MB_ICONERROR);
+                    return 0;
                 }
 
-                MessageBoxW(
+                const auto& candidate =
+                    discovery.candidates[
+                        candidateIndex];
+
+                tp::PackageRecord dllPackage =
+                    tp::MakeRepositoryPackage(
+                        L"github",
+                        discovery.repository);
+
+                dllPackage.id =
+                    L"github:" +
+                    discovery.repository +
+                    L":release:" +
+                    candidate.releaseAsset.name;
+                dllPackage.name =
+                    candidate.releaseAsset.name;
+                dllPackage.mode =
+                    L"release";
+                dllPackage.ref.clear();
+                dllPackage.releasePolicy =
+                    L"latest_stable";
+                dllPackage.asset =
+                    candidate.releaseAsset.name;
+                dllPackage.sourcePath.clear();
+                dllPackage.target =
+                    L"wow_root";
+                dllPackage.targetPath =
+                    candidate.releaseAsset.name;
+                dllPackage.installedRevision.clear();
+                dllPackage.latestRevision =
+                    candidate.releaseTag;
+                dllPackage.installedFiles.clear();
+
+                if (!tp::ValidateDirectDllPackage(
+                        dllPackage,
+                        error)) {
+                    MessageBoxW(
+                        hwnd,
+                        error.c_str(),
+                        L"TocPilot - Add DLL",
+                        MB_OK |
+                            MB_ICONERROR);
+                    return 0;
+                }
+
+                tp::AppState updatedState =
+                    g_state;
+
+                if (!tp::AppendPackage(
+                        updatedState,
+                        std::move(dllPackage),
+                        error) ||
+                    !tp::SaveState(
+                        g_root,
+                        updatedState,
+                        error)) {
+                    MessageBoxW(
+                        hwnd,
+                        error.c_str(),
+                        L"TocPilot - Add DLL",
+                        MB_OK |
+                            MB_ICONERROR);
+                    return 0;
+                }
+
+                const std::size_t index =
+                    updatedState.packages.size() -
+                    1;
+
+                g_state =
+                    std::move(updatedState);
+                g_stateCreated = false;
+                g_stateError.clear();
+
+                RefreshPackageStateUi();
+                SelectPackageRow(index);
+                UpdatePackageButtons();
+                StartPackageInstall(
                     hwnd,
-                    L"No addon or supported DLL found",
-                    L"TocPilot - Add Git",
-                    MB_OK | MB_ICONINFORMATION);
+                    index);
                 return 0;
             }
 
@@ -9912,73 +9981,56 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                         error);
                 };
 
-            if (layout.kind ==
-                tp::RepositoryAddonLayoutKind::RootAddon) {
-                // Persist an explicit root marker so recursive install
-                // validation selects only the repository root candidate.
-                // Its subtree is still copied in full, including embedded
-                // libraries or modules with their own .toc files.
-                repositoryPackage.sourcePath =
-                    L".";
-                packagesToAdd.push_back(
-                    repositoryPackage);
-            } else if (
-                layout.kind ==
-                tp::RepositoryAddonLayoutKind::SingleNestedAddon) {
+            for (const auto candidateIndex :
+                 selectedIndices) {
+                if (candidateIndex >=
+                    discovery.candidates.size() ||
+                    discovery.candidates[
+                        candidateIndex].kind !=
+                        tp::RepositoryCandidateKind::
+                            Addon) {
+                    MessageBoxW(
+                        hwnd,
+                        L"The addon selection changed unexpectedly.",
+                        L"TocPilot - Add Git",
+                        MB_OK |
+                            MB_ICONERROR);
+                    return 0;
+                }
+
+                const auto& addon =
+                    discovery.candidates[
+                        candidateIndex].addon;
+
+                if (addon.repositoryRelativePath ==
+                    std::filesystem::path(L".")) {
+                    // Preserve the established root-package identity while
+                    // making the root selection explicit for install
+                    // validation.
+                    tp::PackageRecord rootPackage =
+                        repositoryPackage;
+                    rootPackage.sourcePath =
+                        L".";
+                    packagesToAdd.push_back(
+                        std::move(rootPackage));
+                    continue;
+                }
+
                 tp::PackageRecord child;
                 if (!makeChildPackage(
-                        layout.candidates.front(),
+                        addon,
                         child)) {
                     MessageBoxW(
                         hwnd,
                         error.c_str(),
                         L"TocPilot - Add Git",
-                        MB_OK | MB_ICONERROR);
+                        MB_OK |
+                            MB_ICONERROR);
                     return 0;
                 }
+
                 packagesToAdd.push_back(
                     std::move(child));
-            } else {
-                std::vector<std::size_t>
-                    selectedIndices;
-
-                if (!tp::ShowRepositoryLibraryDialog(
-                        hwnd,
-                        repositoryPackage.repository,
-                        repositoryPackage.ref,
-                        layout.candidates,
-                        selectedIndices)) {
-                    return 0;
-                }
-
-                for (const auto candidateIndex :
-                     selectedIndices) {
-                    if (candidateIndex >=
-                        layout.candidates.size()) {
-                        MessageBoxW(
-                            hwnd,
-                            L"The repository-library selection changed unexpectedly.",
-                            L"TocPilot - Add Git",
-                            MB_OK | MB_ICONERROR);
-                        return 0;
-                    }
-
-                    tp::PackageRecord child;
-                    if (!makeChildPackage(
-                            layout.candidates[
-                                candidateIndex],
-                            child)) {
-                        MessageBoxW(
-                            hwnd,
-                            error.c_str(),
-                            L"TocPilot - Add Git",
-                            MB_OK | MB_ICONERROR);
-                        return 0;
-                    }
-
-                    packagesToAdd.push_back(
-                        std::move(child));
-                }
             }
 
             if (packagesToAdd.empty()) {
