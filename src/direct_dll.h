@@ -38,4 +38,10 @@ bool DownloadAndVerifyDirectDll(
     std::wstring& actualSha256,
     std::wstring& error);
 
+bool RemoveDirectDll(
+    const PackageRecord& package,
+    const std::filesystem::path& wowRoot,
+    bool& removed,
+    std::wstring& error);
+
 } // namespace tp
