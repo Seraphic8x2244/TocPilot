@@ -923,15 +923,196 @@ Do not add support for user-uploaded ZIP/7z/RAR/installer/bundle release assets 
 - Development prerelease `v0.4.1-dev.1` is published from exact commit `325523b05c34c59d6e15fe56cd152d9cfafb5fdf`. Development Release run `36888266631`, Windows x64 job `110457047207`, passed source-version validation, Release build, **20/20 CTest**, tag/assets publication, stable-channel isolation, and real development-channel self-update from parent `7cfa6ba984dbe909622941ae72c8157990cc05d7`. `TocPilot.exe`: 3,145,216 bytes, SHA-256 `996655e59732c7afca9934423d605e9565b8fc26912a048e06419de9e4511387`. Runtime viewport validation passed on 2026-10-01 for single-addon/branch actions, Refresh All, Update New and presentational actions; multi-package Add Git remains untested/non-blocking due to no available fixture. Keep **Clear WDB folder** and **DXVK advanced logging checkbox** deferred.
 - Startup scan auto-enter implementation `b539b593900ccc046baffeffdcdf19e9a57a8ffb` removes the normal click-to-continue splash gate while retaining the explicit self-update-failure acknowledgement. Draft PR #35 CI: Build run `36893192930`, Windows x64 job `110473610222`, Release build + **20/20 CTest passed**. This change is not in published `v0.4.1-dev.1`; include it in the next development prerelease.
 
+## v0.5.0 — Unified repository discovery / MPQ support
+
+Target stable release: **v0.5.0**.
+
+Product contract for this release:
+
+- **Add Git becomes discovery-first rather than fallback-first.** A repository is inspected for every supported installable option and the user chooses what TocPilot should manage.
+- Branch/archive discovery and release-asset discovery are independent. Finding an addon must not suppress valid release DLL/MPQ choices, and failing one discovery category must not prevent the others from being offered.
+- Supported branch candidates remain:
+  - one addon rooted at repository root when a direct root `.toc` exists;
+  - an addon library when there is no root addon and immediate child folders contain direct `.toc` files.
+- Preserve the existing no-guess rule for overlapping/ambiguous addon roots unless deliberately revisited. The 0.5.0 change is about aggregating independent candidate classes, not making unsafe addon-root guesses.
+- Supported latest-stable GitHub release candidates become:
+  - exact standalone `.dll` assets;
+  - exact standalone `.mpq` assets.
+- One repository may therefore offer any combination of addon candidate(s), DLL asset(s), and MPQ asset(s). The selection UI should show all valid options together.
+- Each selected component remains an **independent TocPilot package record**, even when several came from the same repository. Branch addons track branch revisions; DLL/MPQ release assets track latest-stable release state independently.
+- MPQs install under WoW `Data\`.
+- TocPilot assigns each managed MPQ a non-conflicting patch-letter destination, treating both TocPilot-managed and unmanaged existing MPQ slots as occupied. The chosen destination is persisted in the package record and reused for all future updates; updates must never silently move an MPQ to another letter.
+- DLLs retain their existing exact-asset/latest-stable trust and security policy. MPQs use the same exact release-asset discovery/tracking model but may have their own safe filesystem write policy; do not weaken the special DLL direct-write/security behaviour merely to share code.
+- The existing startup auto-enter change at `b539b593900ccc046baffeffdcdf19e9a57a8ffb` is part of the 0.5.0 development line.
+- The dedicated user-facing wording pass remains part of the 0.5.0 release gate, but is kept separate from functional payload implementation.
+
+### 0.5.0 chat-sized implementation phases
+
+Each phase is intentionally bounded so a fresh chat can read `dev_rulebook.md` + `DEV_PROGRESS.md`, verify `dev`, complete one slice, CI-check it, update this file, and hand off.
+
+#### Phase 1 — Generalise exact release-asset backend
+
+Goal: create the backend abstraction needed for more than DLLs **without changing Add Git UI or current DLL runtime behaviour**.
+
+Scope:
+
+- identify/generalise the existing latest-stable exact-DLL release metadata/validation/resolution pieces into an exact release-asset model;
+- represent asset kind explicitly enough to distinguish DLL vs MPQ;
+- preserve existing DLL package/state compatibility and exact destination behaviour;
+- add focused tests proving existing DLL validation/resolution behaviour is unchanged;
+- no MPQ installation yet;
+- no Add Git UI redesign;
+- no wording pass.
+
+Gate: Release build + full tests. No runtime prerelease required unless the refactor unexpectedly touches visible DLL behaviour.
+
+#### Phase 2 — MPQ package/install backend
+
+Goal: support an independently managed exact latest-stable MPQ package end-to-end below the Add Git UI.
+
+Scope:
+
+- accept/select exact standalone `.mpq` release assets;
+- add MPQ package validation/state representation using the shared release-asset model;
+- implement deterministic WoW `Data\` destination assignment;
+- scan existing Data MPQ names plus persisted TocPilot destinations and choose an unused patch letter;
+- persist the assigned target path and never reassign it during normal updates;
+- refuse collisions rather than overwrite an unmanaged or differently owned slot;
+- implement MPQ install/update/remove and integrity verification;
+- add deterministic tests for letter allocation, persistence, collisions, update-in-place, removal, malformed package records and release-asset mismatch;
+- no Add Git UI redesign yet.
+
+Gate: Release build + full tests. Backend-only; runtime prerelease optional.
+
+#### Phase 3 — Unified repository candidate discovery
+
+Goal: replace sequential fallback classification with one backend discovery result.
+
+Scope:
+
+- introduce a candidate/result model that can contain multiple independent choices from one repository;
+- inspect the selected/default branch using the existing shallow addon rules;
+- independently inspect latest stable GitHub release for selectable DLL and MPQ assets;
+- aggregate valid addon/library/DLL/MPQ candidates instead of stopping after the first successful class;
+- one failed/empty class must not hide successful classes;
+- preserve GitLab's current capabilities: branch addon discovery only unless GitLab release support is separately added later;
+- focused tests for addon-only, library-only, DLL-only, MPQ-only, addon+DLL, addon+MPQ, addon+DLL+MPQ, and empty/ambiguous cases;
+- no major dialog redesign yet.
+
+Gate: Release build + full tests.
+
+#### Phase 4 — Add Git selection UI
+
+Goal: make Add Git present the complete discovery result and let the user choose.
+
+Target flow:
+
+`Paste repository URL → Scan → choose available components → Add Selected`
+
+Scope:
+
+- remove the user-facing “normal mode” / DLL fallback concept;
+- show all discovered candidates in one selection surface with clear type/source/destination context;
+- addon/library candidates identify the branch source;
+- DLL/MPQ candidates identify latest-stable release assets;
+- MPQ candidate shows its proposed Data patch-letter destination before management begins;
+- support selecting one or several candidates;
+- do not silently preselect dangerous executable DLL content unless the existing trust policy explicitly permits that UX;
+- keep trust confirmation for selected DLLs;
+- no broad wording pass outside this redesigned flow.
+
+Gate: Release build + full tests.
+
+#### Phase 5 — Mixed selection creation/install orchestration
+
+Goal: one Add Git operation can actually manage several selected component types safely.
+
+Scope:
+
+- create independent package records for each selected candidate;
+- generalise the current multi-addon Add Git queue so a mixed selection can install addon(s), DLL(s), and MPQ(s) in a deterministic sequence;
+- ensure one failure does not corrupt ownership/state for components already committed or not yet started;
+- preserve package ownership invariants;
+- ensure Refresh, Update New, Reinstall/Install and Remove route each package type to its correct backend;
+- verify list refresh/selection/viewport behaviour after mixed queues;
+- add integration tests around mixed repository selections and partial failure.
+
+Gate: Release build + full tests, then publish **v0.5.0-dev.1** for the first meaningful end-to-end runtime gate.
+
+Runtime gate should include:
+- startup auto-enter;
+- existing addon-only Add Git;
+- addon library Add Git when a fixture is available;
+- existing DLL Add Git/update regression;
+- MPQ-only add/install/update/remove;
+- addon + MPQ from one repository;
+- addon + DLL + MPQ from one repository when the upcoming real repository is available;
+- letter collision handling with an existing unmanaged MPQ;
+- independent update states when branch and release move separately.
+
+#### Phase 6 — Runtime fixes / dev prerelease iteration
+
+Goal: fix only defects exposed by the v0.5.0-dev.1 runtime matrix.
+
+Scope:
+
+- no opportunistic features;
+- publish `v0.5.0-dev.2` etc only as needed;
+- close the mixed-payload functional gate before wording work changes many strings.
+
+#### Phase 7A — Wording pass: main workflows
+
+Goal: remove developer-facing language from the everyday product surface without changing behaviour.
+
+Scope:
+
+- main window;
+- toolbar tooltips;
+- package list/status text;
+- startup/splash;
+- Refresh / Update / Install / Reinstall / Remove;
+- Compact/Advanced labels and common feedback;
+- use user-task language rather than internal implementation terminology.
+
+Gate: build + tests + visual/runtime smoke.
+
+#### Phase 7B — Wording pass: dialogs, errors and advanced surfaces
+
+Scope:
+
+- Add Git / repository discovery dialog;
+- branch selection;
+- DLL/MPQ trust/selection prompts;
+- Account Sync;
+- TocPilot update/settings surfaces;
+- empty/loading/error/recovery messages;
+- Advanced-only/help text;
+- preserve technical detail where it is genuinely useful for diagnostics, but remove implementation jargon from normal-path copy.
+
+Gate: build + tests + visual/runtime smoke.
+
+#### Phase 8 — v0.5.0 release gate
+
+- publish final 0.5.0 development prerelease if wording changes need runtime confirmation;
+- run focused regression for addon, library, DLL, MPQ and mixed-repository flows;
+- verify update/remove ownership and MPQ letter persistence;
+- verify startup auto-enter;
+- verify existing Account Sync and viewport accepted behaviour remains intact;
+- promote validated `dev` to `main`;
+- publish stable **v0.5.0** through the normal release/self-update path.
+
 ## Exact Next Step
 
-The startup **click-to-continue** removal is implemented and CI-checked on `dev` at `b539b593900ccc046baffeffdcdf19e9a57a8ffb`; it is not yet published or runtime-tested. Normal startup scan completion now goes straight into the app. Keep the separate self-update-failure acknowledgement unless the user explicitly changes that contract.
+Start **v0.5.0 Phase 1 — Generalise exact release-asset backend** in a fresh chat.
 
-Before more code, discuss and lock the next development steps with the user. The two requested topics waiting for that discussion are:
+Do not start MPQ filesystem installation, unified discovery UI, or the wording pass in Phase 1.
 
-- mixed-payload package detection/install rules, including repositories containing an addon plus associated MPQ and/or DLL payloads;
-- a dedicated full wording pass over user-facing UI text, kept separate from functional payload work.
+Before editing:
+1. read `dev_rulebook.md` and this `DEV_PROGRESS.md`;
+2. verify the current `dev` HEAD;
+3. inspect the existing `direct_dll`, GitHub release, package-state and related tests;
+4. preserve current DLL runtime semantics while extracting only the reusable exact-release-asset pieces.
 
-The package-list viewport reset remains accepted for forward development from runtime-tested `v0.4.1-dev.1`; multi-package Add Git remains non-blocking runtime debt.
+The package-list viewport reset remains accepted for forward development from runtime-tested `v0.4.1-dev.1`; multi-package Add Git remains non-blocking runtime debt until Phase 5 gives us a practical mixed/multi fixture.
 
-Account Sync is stable in `v0.4.0`. Preserve the explicit validation debt for Sync-before-Launch/Ctrl-click and induced backup/write-failure; those paths were accepted as non-blocking, not runtime-proven.
+Account Sync remains stable in `v0.4.0`, with the already documented non-blocking validation debt.
