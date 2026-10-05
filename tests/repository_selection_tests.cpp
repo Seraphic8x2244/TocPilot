@@ -138,6 +138,52 @@ void TestRows() {
     }
 }
 
+void TestSingleSelectableCandidatePolicy() {
+    std::size_t candidateIndex = 999;
+
+    if (tp::FindSingleSelectableRepositoryCandidate(
+            {},
+            candidateIndex)) {
+        Fail(
+            "empty selection rows incorrectly enabled the fast path");
+    }
+
+    tp::RepositorySelectionRow only;
+    only.candidateIndex = 7;
+
+    if (!tp::FindSingleSelectableRepositoryCandidate(
+            {only},
+            candidateIndex) ||
+        candidateIndex != 7) {
+        Fail(
+            "one selectable component did not enable the fast path");
+    }
+
+    tp::RepositorySelectionRow unavailable;
+    unavailable.candidateIndex = 3;
+    unavailable.selectable = false;
+
+    candidateIndex = 999;
+    if (!tp::FindSingleSelectableRepositoryCandidate(
+            {unavailable, only},
+            candidateIndex) ||
+        candidateIndex != 7) {
+        Fail(
+            "one valid selectable component plus unavailable content did not use the fast path");
+    }
+
+    tp::RepositorySelectionRow second;
+    second.candidateIndex = 8;
+
+    candidateIndex = 999;
+    if (tp::FindSingleSelectableRepositoryCandidate(
+            {only, second},
+            candidateIndex)) {
+        Fail(
+            "multiple selectable components incorrectly enabled the fast path");
+    }
+}
+
 void TestUnavailableMpq() {
     const auto discovery =
         Discovery();
@@ -177,6 +223,7 @@ void TestUnavailableMpq() {
 
 int main() {
     TestRows();
+    TestSingleSelectableCandidatePolicy();
     TestUnavailableMpq();
 
     if (failures != 0) {
