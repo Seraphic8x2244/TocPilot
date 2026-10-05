@@ -26,4 +26,8 @@ bool BuildRepositorySelectionRows(
     std::vector<RepositorySelectionRow>& rows,
     std::wstring& error);
 
+bool FindSingleSelectableRepositoryCandidate(
+    const std::vector<RepositorySelectionRow>& rows,
+    std::size_t& candidateIndex);
+
 } // namespace tp
