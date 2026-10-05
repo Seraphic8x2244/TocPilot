@@ -164,12 +164,11 @@ void TestSingleSelectableCandidatePolicy() {
     unavailable.selectable = false;
 
     candidateIndex = 999;
-    if (!tp::FindSingleSelectableRepositoryCandidate(
+    if (tp::FindSingleSelectableRepositoryCandidate(
             {unavailable, only},
-            candidateIndex) ||
-        candidateIndex != 7) {
+            candidateIndex)) {
         Fail(
-            "one valid selectable component plus unavailable content did not use the fast path");
+            "fast path hid unavailable collision content");
     }
 
     tp::RepositorySelectionRow second;
