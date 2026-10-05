@@ -129,7 +129,8 @@ bool FindSingleSelectableRepositoryCandidate(
 
     for (const auto& row : rows) {
         if (!row.selectable) {
-            continue;
+            candidateIndex = 0;
+            return false;
         }
 
         if (found) {
