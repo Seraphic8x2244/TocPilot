@@ -1,3 +1,4 @@
+#include "archive.h"
 #include "repository_install.h"
 
 #include <filesystem>
@@ -260,6 +261,170 @@ void TestMixedPackageCreationAndQueue(
     }
 }
 
+void TestRootAddonIdentity(
+    const std::filesystem::path& root) {
+    const auto extractedRoot =
+        root /
+        L"root-addon-discovery";
+    const auto wrapper =
+        extractedRoot /
+        L"Performante-main";
+
+    std::error_code ec;
+    std::filesystem::remove_all(
+        extractedRoot,
+        ec);
+    ec.clear();
+    std::filesystem::create_directories(
+        wrapper,
+        ec);
+
+    if (ec) {
+        Fail(
+            "could not create root-addon discovery fixture");
+        return;
+    }
+
+    {
+        std::ofstream toc(
+            wrapper /
+                L"Performante.toc",
+            std::ios::binary);
+        toc << "## Interface: 11200\n";
+    }
+
+    tp::RepositoryAddonLayout layout;
+    std::wstring error;
+
+    if (!tp::DetectShallowRepositoryAddonLayout(
+            extractedRoot,
+            L"GitHub",
+            L"Seraphic8x2244/Performante",
+            layout,
+            error) ||
+        layout.kind !=
+            tp::RepositoryAddonLayoutKind::RootAddon ||
+        layout.candidates.size() != 1 ||
+        !layout.candidates.front()
+             .repositoryRelativePath.empty()) {
+        Fail(
+            "real shallow root discovery did not emit the expected empty repository-relative path");
+        return;
+    }
+
+    tp::RepositoryDiscoveryResult discovery;
+    discovery.provider =
+        L"github";
+    discovery.repository =
+        L"Seraphic8x2244/Performante";
+    discovery.branch =
+        L"main";
+    discovery.branchRevision =
+        L"0123456789abcdef";
+    discovery.addonLayout =
+        layout;
+
+    tp::RepositoryCandidate candidate;
+    candidate.kind =
+        tp::RepositoryCandidateKind::Addon;
+    candidate.addon =
+        layout.candidates.front();
+    discovery.candidates.push_back(
+        candidate);
+
+    std::vector<tp::RepositoryInstallItem>
+        items;
+
+    if (!tp::BuildRepositoryInstallItems(
+            discovery,
+            {0},
+            root,
+            {},
+            items,
+            error) ||
+        items.size() != 1) {
+        Fail(
+            "real empty root discovery path could not build a package");
+        return;
+    }
+
+    const auto& rootPackage =
+        items.front().package;
+
+    if (rootPackage.id !=
+            L"github:Seraphic8x2244/Performante" ||
+        rootPackage.sourcePath !=
+            L"." ||
+        rootPackage.name !=
+            L"Performante" ||
+        rootPackage.ref !=
+            L"main" ||
+        rootPackage.latestRevision !=
+            L"0123456789abcdef") {
+        Fail(
+            "real empty root discovery path did not normalize to repository identity");
+        return;
+    }
+
+    tp::AppState state;
+    if (!tp::AppendPackage(
+            state,
+            rootPackage,
+            error)) {
+        Fail(
+            "normalized root package did not pass strict semantic validation");
+        return;
+    }
+
+    tp::PackageRecord malformed =
+        rootPackage;
+    malformed.id =
+        L"github:Seraphic8x2244/Performante:addon:";
+
+    tp::AppState malformedState;
+    error.clear();
+
+    if (tp::AppendPackage(
+            malformedState,
+            std::move(malformed),
+            error) ||
+        error.find(
+            L"id that does not match") ==
+            std::wstring::npos) {
+        Fail(
+            "strict package identity validation no longer rejects malformed root ids");
+        return;
+    }
+
+    tp::RepositoryDiscoveryResult
+        dotDiscovery =
+            discovery;
+    dotDiscovery.candidates.clear();
+    dotDiscovery.candidates.push_back(
+        AddonCandidate(
+            L".",
+            L"Performante"));
+
+    items.clear();
+    error.clear();
+
+    if (!tp::BuildRepositoryInstallItems(
+            dotDiscovery,
+            {0},
+            root,
+            {},
+            items,
+            error) ||
+        items.size() != 1 ||
+        items.front().package.id !=
+            L"github:Seraphic8x2244/Performante" ||
+        items.front().package.sourcePath !=
+            L".") {
+        Fail(
+            "literal dot root compatibility did not normalize to repository identity");
+    }
+}
+
 void TestReservedDllDestination(
     const std::filesystem::path& root) {
     auto discovery =
@@ -361,6 +526,8 @@ int main() {
         Fail(
             "could not create repository install test root");
     } else {
+        TestRootAddonIdentity(
+            root);
         TestMixedPackageCreationAndQueue(
             root);
         TestReservedDllDestination(
