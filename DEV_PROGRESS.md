@@ -25,7 +25,8 @@
 - Package-list viewport reset slice: **implemented / CI-checked / published in `v0.4.1-dev.1` / runtime-accepted for forward development on 2026-10-01**. Implementation commit: `eace26841fdd41073413605bfb4f5f3c578b3da0`; prerelease commit: `325523b05c34c59d6e15fe56cd152d9cfafb5fdf`. Runtime passed the exercised paths: single-addon branch/Inspect/Reinstall actions do not move the viewport; Refresh All resets at start/finish; Update New resets correctly; selection/sorting/Compact/Advanced presentation does not reset the viewport. Multi-package Add Git remains explicit non-blocking runtime debt because no suitable multi-addon repo was available. The package list rebuilds rows in place instead of clearing the control, `RefreshPackageStateUi()` no longer restores a semantic top row or calls `ListView_EnsureVisible`, and retained logical selection is restored without scrolling.
 - Viewport CI: draft validation PR #34 targeted the exact implementation commit and was closed without merge after Build run `36775185023`, Windows x64 job `110091188659`, passed the Release build and **20/20 CTest tests**, including `package-list-viewport-policy`.
 - Startup scan auto-enter slice: **implemented / CI-checked on `dev` / not yet released / runtime-untested** at implementation commit `b539b593900ccc046baffeffdcdf19e9a57a8ffb`. Normal startup completion after addon update scanning now reveals the main window and destroys the splash immediately; the old normal `AwaitingContinue` / “Click to continue!” state was removed. The separate `AppUpdateFailed` acknowledgement remains intentionally interactive so a failed self-update is still surfaced before entering the app. Draft validation PR #35 was closed unmerged after Build run `36893192930`, Windows x64 job `110473610222`, passed the Release build and **20/20 CTest tests**.
-- Current scope boundary: Phase 5 is published as `v0.5.0-dev.1` and the next gate is the documented end-to-end runtime matrix. Do not start Phase 6 unless that runtime testing exposes a defect, and do not begin the wording pass until the mixed-payload functional gate is closed. Preserve the accepted v0.4.0 Account Sync, viewport behaviour and inherited toolbar/DPI behaviour; unrelated deferred work remains out of scope.
+- `v0.5.0-dev.1` runtime matrix is **in progress and has exposed Phase 6 defects**. Passed so far: startup auto-enter; existing addon update; package-list viewport behaviour. Not yet testable for lack of suitable fixtures/updates: addon-library install, DLL update, MPQ-only lifecycle, addon+MPQ, addon+DLL+MPQ, MPQ collision handling, and independent branch/release movement. Add Git of root-level addon repository `Seraphic8x2244/Performante` fails before ownership/install because Phase 5 constructs an addon-style package identity from an empty discovered root path; durable semantic validation correctly rejects that identity mismatch. The Add Git flow also has an unnecessary standalone branch-selection modal before Contents; runtime feedback requests the slicker discovery flow documented under Phase 6.
+- Current scope boundary: **Phase 6 is now justified and active for the documented `v0.5.0-dev.1` runtime findings only.** Fix the root-addon identity defect and streamline Add Git branch/content selection as specified below; do not begin the broad wording pass until this functional gate is closed. Preserve the accepted v0.4.0 Account Sync, viewport behaviour and inherited toolbar/DPI behaviour; unrelated deferred work remains out of scope.
 - Audit continuity: `audit_dump.md` is a temporary scratch checkpoint for the interrupted broad audit only; this file remains the sole authoritative live development source of truth.
 - Documentation-only commits after the release do not change the published runtime baseline.
 
@@ -695,6 +696,13 @@ The prior v0.3.5 release also passed its documented 17/17 Release workflow valid
 
 ## Current Issues
 
+### v0.5.0-dev.1 runtime findings — Phase 6
+
+- **Root-addon Add Git identity defect:** runtime Add Git of `Seraphic8x2244/Performante` discovers the root addon but fails when saving the selected package with `Package 'github:Seraphic8x2244/Performante:addon:' has an id that does not match its provider/repository/source identity.` The discovered root candidate carries an empty `repositoryRelativePath`, while Phase 5 package creation recognises only literal `.` as the root case and otherwise calls the nested-addon package constructor. Correct fix: normalise the root representation at the package-creation boundary (empty and `.` must mean the same repository-root addon), keep semantic validation strict, and add a regression using the actual empty root path produced by discovery.
+- **Add Git flow is too modal:** current flow is URL → standalone branch dialog → scan → Contents. Desired normal flow is **URL → Scan default branch → Contents/Add**. The repository default branch should be resolved and scanned automatically. When multiple selectable components exist, Contents owns a visible branch dropdown showing the active addon branch; changing it rescans branch-based addon candidates and refreshes the Contents view. Latest-stable DLL/MPQ release candidates remain release-based and independent of branch choice.
+- **Single-content fast path:** when discovery yields exactly one valid selectable component, skip the generic Contents selection screen and proceed directly to its appropriate confirmation/install path. Do not bypass meaningful safety/ownership/trust prompts: DLL trust confirmation, ownership replacement, unmanaged-root refusal, MPQ destination conflict, or equivalent constraints still appear when applicable.
+- **Branch freshness invariant for the redesigned flow:** branch names may be cached for UI, but a branch selected from Contents must resolve its current remote HEAD before being treated as fresh or used for package/update decisions. Do not reproduce the separately documented stale branch-SHA behaviour in the new Add Git path.
+
 Published v0.3.11 added the focused self-update transport hardening and constrained/shared package-column layout on top of the runtime-accepted v0.3.10 baseline. On 2026-09-27 its installed self-update/startup-state path and requested column-layout matrix passed: Compact/Advanced primary-column constraints, Advanced-only boundary/reordering, bidirectional Name/Status width sharing, and persisted layout all passed. The adjacent Compact main-window-width round-trip regression found during that gate is fixed and published in v0.3.12. v0.3.12 is CI/release-verified and awaits only the focused runtime gate below; v0.3.10 remains the latest fully runtime-accepted release until that check passes. A1 remains accepted for forward development after fresh install, reinstall, Update New and Remove Addon passed in its earlier gate; managed same-root replacement remains explicit deferred runtime debt. Remove Addon was not repeated for the v0.3.10 gate and is non-blocking.
 
 P6A is complete. A1 transaction restart recovery is implemented, CI-checked and published in v0.3.8 at `17ce349273c6f2d76572c7107f3c6f7b139cf8d8`, and accepted for forward development with the same-root replacement runtime check deferred. It now writes a versioned, flushed pre-mutation journal; arms it with package/transaction identity, affected-root intent and durable pre/post state markers before live renames; recovers unfinished transactions before normal package mutation; and preserves evidence rather than guessing when durable state is ambiguous.
@@ -1065,17 +1073,38 @@ Runtime gate should include:
 - letter collision handling with an existing unmanaged MPQ;
 - independent update states when branch and release move separately.
 
-Status: **complete on `dev` and published as `v0.5.0-dev.1`; user runtime matrix pending**. PR #40 tested exact head `7093f97d35708a952883f201c6665447f0bc75fb` in Build run `36913804601`, Windows x64 job `110542709644`: Release build + **25/25 CTest passed**, including the new mixed-selection/failure coverage. It squash-merged as `1b671ddd3fb5d1df9cf0ed40adcb3aa60a6ae1e9`. Development Release run `36914667830`, Windows x64 job `110545587877`, independently passed **25/25 CTest**, published the prerelease assets, verified stable-channel isolation, and completed the real development-channel self-update from parent `70af56463ecbb16b2ca34d9ab3020ffa3bad0a2a`. Phase 5 implements independent records for every selected addon/DLL/MPQ candidate, deterministic mixed package-ID queueing, stop-on-failure semantics that preserve already committed and not-yet-started package state, existing-backend routing for Refresh/Update New/Install/Remove, MPQ state-save rollback safety and exact destination ownership protection. No Phase 6 or wording-pass work was started.
+Status: **complete on `dev` and published as `v0.5.0-dev.1`; runtime matrix started and Phase 6 defects exposed**. PR #40 tested exact head `7093f97d35708a952883f201c6665447f0bc75fb` in Build run `36913804601`, Windows x64 job `110542709644`: Release build + **25/25 CTest passed**, including the new mixed-selection/failure coverage. It squash-merged as `1b671ddd3fb5d1df9cf0ed40adcb3aa60a6ae1e9`. Development Release run `36914667830`, Windows x64 job `110545587877`, independently passed **25/25 CTest**, published the prerelease assets, verified stable-channel isolation, and completed the real development-channel self-update from parent `70af56463ecbb16b2ca34d9ab3020ffa3bad0a2a`. Runtime observations on `v0.5.0-dev.1`: startup auto-enter passed; existing addon update passed; viewport behaviour passed; addon-library/DLL-update/MPQ/mixed/collision/independent-movement cases remain untested because no suitable fixture or update was available. Root-level addon Add Git failed on Performante with a package-ID/source-identity mismatch, so the functional gate is not accepted yet. Phase 5 implementation itself remains the published baseline; corrective work belongs to Phase 6.
 
 #### Phase 6 — Runtime fixes / dev prerelease iteration
 
-Goal: fix only defects exposed by the v0.5.0-dev.1 runtime matrix.
+Goal: close the defects and unnecessary friction exposed by the `v0.5.0-dev.1` runtime gate without broadening into unrelated feature work.
 
-Scope:
+Current bounded scope:
 
-- no opportunistic features;
-- publish `v0.5.0-dev.2` etc only as needed;
-- close the mixed-payload functional gate before wording work changes many strings.
+1. **Fix repository-root addon package identity.**
+   - Treat discovery's empty repository-relative path and literal `.` as the same root-addon identity.
+   - Root addons keep the repository package ID (`provider:owner/repo`); nested/library addons keep the `:addon:<source>` identity.
+   - Do not weaken durable package semantic validation; it correctly caught the malformed record.
+   - Add deterministic regression coverage using the actual empty root path emitted by shallow discovery, plus `.` compatibility if still accepted internally.
+
+2. **Streamline Add Git branch/content flow.**
+   - Normal path: `Paste repository URL → Scan → Contents/Add`.
+   - Resolve and scan the provider's default branch automatically; remove the mandatory standalone branch-choice step before the user has seen repository contents.
+   - If discovery yields **2+ selectable components**, show Contents with an active-branch dropdown on that surface. Changing branch resolves that branch's current remote HEAD, rescans only branch-derived addon contents, and refreshes the candidate list; latest-stable DLL/MPQ candidates remain independent release results.
+   - If discovery yields **exactly 1 valid selectable component**, skip the generic Contents selection screen and proceed directly to the appropriate confirmation/install path.
+   - The single-content fast path must not skip required trust, ownership, collision or replacement prompts.
+   - Preserve access to non-default branches without making branch choice a blocking modal in the common case.
+   - Do not reuse a cached branch SHA as fresh state when switching branches; current remote HEAD must be resolved before the selection is used.
+
+3. **Runtime/release gate.**
+   - Release build + full CTest.
+   - Publish `v0.5.0-dev.2` through the development prerelease path.
+   - Re-test root-level addon Add Git and the streamlined default/switch-branch flows first, then continue the remaining Phase 5 runtime matrix as suitable real fixtures become available.
+
+Out of scope:
+- broad wording pass;
+- unrelated audit backlog/refactors;
+- inventing synthetic runtime acceptance for DLL/MPQ/mixed cases that still lack real fixtures.
 
 #### Phase 7A — Wording pass: main workflows
 
@@ -1120,22 +1149,23 @@ Gate: build + tests + visual/runtime smoke.
 
 ## Exact Next Step
 
-Run the **`v0.5.0-dev.1` end-to-end runtime matrix** against published commit `1b671ddd3fb5d1df9cf0ed40adcb3aa60a6ae1e9`.
+Start **Phase 6** from current `dev` only after verifying the remote head.
 
-Validate:
-1. startup auto-enter;
-2. existing addon-only Add Git;
-3. addon-library Add Git when a suitable fixture is available;
-4. existing DLL Add Git/update regression;
-5. MPQ-only add/install/update/remove;
-6. addon + MPQ from one repository;
-7. addon + DLL + MPQ from one repository when a suitable real repository is available;
-8. patch-letter collision handling with an existing unmanaged MPQ;
-9. independent update states when branch and release move separately;
-10. list selection/viewport behaviour across successful and partially failing mixed queues where practical.
+Implement the bounded `v0.5.0-dev.1` runtime corrections:
 
-If runtime testing exposes a defect, start **Phase 6** with only the defect(s) required to close this matrix and publish `v0.5.0-dev.2` or later as needed. If the runtime matrix passes, record acceptance before moving to the separate wording phases.
+1. fix root-addon package creation so the real empty discovery path is normalised to repository-root identity instead of producing `:addon:`;
+2. add regression coverage proving real root discovery can create/save/install a valid package without weakening semantic validation;
+3. replace the mandatory pre-scan branch modal with default-branch-first scanning;
+4. put branch switching on the Contents surface for multi-content repositories, with a fresh remote-HEAD resolve + branch-candidate rescan;
+5. skip the generic Contents chooser when exactly one valid selectable component exists, while preserving required DLL trust, ownership/replacement, unmanaged-root and MPQ collision prompts;
+6. run Release build + complete tests, then publish **`v0.5.0-dev.2`** for runtime validation.
 
-Do **not** start Phase 6 pre-emptively, do not start the wording pass in the runtime-validation chat, and keep unrelated deferred work out of this gate.
+First runtime checks on `dev.2`:
+- Performante/root-level addon Add Git succeeds;
+- ordinary one-addon repository follows the fast path without a redundant Contents chooser;
+- a multi-content repository shows Contents and active branch;
+- changing branch refreshes branch-derived contents from the branch's current remote HEAD;
+- release DLL/MPQ candidates remain independent of branch switching;
+- startup auto-enter and viewport behaviour remain unchanged.
 
-The package-list viewport reset remains accepted for forward development from runtime-tested `v0.4.1-dev.1`. Account Sync remains stable in `v0.4.0`, with the already documented non-blocking validation debt.
+After those pass, continue the still-blocked `v0.5.0` runtime matrix when suitable real DLL/MPQ/library/mixed fixtures become available. Do **not** start the broad wording pass until the functional Phase 6 gate is accepted.
