@@ -152,12 +152,39 @@ void AggregateRepositoryCandidates(
     }
 }
 
-bool DiscoverRepositoryCandidates(
+void ReplaceRepositoryBranchCandidates(
+    const RepositoryAddonLayout* addonLayout,
+    RepositoryDiscoveryResult& result) {
+    std::vector<RepositoryCandidate>
+        releaseCandidates;
+
+    for (const auto& candidate :
+         result.candidates) {
+        if (candidate.kind !=
+            RepositoryCandidateKind::Addon) {
+            releaseCandidates.push_back(
+                candidate);
+        }
+    }
+
+    result.candidates.clear();
+    AppendBranchCandidates(
+        addonLayout,
+        result.candidates);
+
+    result.candidates.insert(
+        result.candidates.end(),
+        std::make_move_iterator(
+            releaseCandidates.begin()),
+        std::make_move_iterator(
+            releaseCandidates.end()));
+}
+
+bool RescanRepositoryBranchCandidates(
     const PackageRecord& branchPackage,
     const std::filesystem::path& wowRoot,
     RepositoryDiscoveryResult& result,
     std::wstring& error) {
-    result = {};
     error.clear();
 
     if (!SupportedBranchProvider(
@@ -167,13 +194,24 @@ bool DiscoverRepositoryCandidates(
         branchPackage.ref.empty() ||
         branchPackage.latestRevision.empty()) {
         error =
-            L"Repository discovery requires a configured GitHub or GitLab branch package.";
+            L"Repository branch discovery requires a configured GitHub or GitLab branch package.";
         return false;
     }
 
     if (wowRoot.empty()) {
         error =
             L"Repository discovery requires the WoW root directory.";
+        return false;
+    }
+
+    if ((!result.provider.empty() &&
+         result.provider !=
+             branchPackage.provider) ||
+        (!result.repository.empty() &&
+         result.repository !=
+             branchPackage.repository)) {
+        error =
+            L"Repository branch rescan cannot change repository identity.";
         return false;
     }
 
@@ -185,8 +223,10 @@ bool DiscoverRepositoryCandidates(
         branchPackage.ref;
     result.branchRevision =
         branchPackage.latestRevision;
-
     result.branchAttempted = true;
+    result.branchSucceeded = false;
+    result.branchError.clear();
+    result.addonLayout = {};
 
     RepositoryAddonLayout addonLayout;
     std::filesystem::path stagingDirectory;
@@ -254,8 +294,31 @@ bool DiscoverRepositoryCandidates(
     if (result.branchSucceeded) {
         result.addonLayout =
             std::move(addonLayout);
-    } else {
-        result.addonLayout = {};
+    }
+
+    ReplaceRepositoryBranchCandidates(
+        result.branchSucceeded
+            ? &result.addonLayout
+            : nullptr,
+        result);
+
+    return true;
+}
+
+bool DiscoverRepositoryCandidates(
+    const PackageRecord& branchPackage,
+    const std::filesystem::path& wowRoot,
+    RepositoryDiscoveryResult& result,
+    std::wstring& error) {
+    result = {};
+    error.clear();
+
+    if (!RescanRepositoryBranchCandidates(
+            branchPackage,
+            wowRoot,
+            result,
+            error)) {
+        return false;
     }
 
     GitHubReleaseInfo release;
@@ -263,6 +326,9 @@ bool DiscoverRepositoryCandidates(
     if (branchPackage.provider ==
         L"github") {
         result.releaseAttempted = true;
+        result.releaseSucceeded = false;
+        result.releaseTag.clear();
+        result.releaseError.clear();
 
         if (FetchLatestStableGitHubRelease(
                 branchPackage.repository,
@@ -271,18 +337,12 @@ bool DiscoverRepositoryCandidates(
             result.releaseSucceeded = true;
             result.releaseTag =
                 release.tag;
+
+            AppendReleaseCandidates(
+                &release,
+                result.candidates);
         }
     }
-
-    AggregateRepositoryCandidates(
-        branchPackage.provider,
-        result.branchSucceeded
-            ? &result.addonLayout
-            : nullptr,
-        result.releaseSucceeded
-            ? &release
-            : nullptr,
-        result.candidates);
 
     return true;
 }
