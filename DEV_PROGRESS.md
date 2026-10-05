@@ -1106,6 +1106,8 @@ Out of scope:
 - unrelated audit backlog/refactors;
 - inventing synthetic runtime acceptance for DLL/MPQ/mixed cases that still lack real fixtures.
 
+Status: **implemented / CI-checked / published as `v0.5.0-dev.2` / runtime validation pending**. Phase 6 PR #41 final head `0dd22f087e38da4a1be96c554d2318d4af95f8c1` passed Build run `37378410558`, Windows x64 job `111993625004`: Release build + **25/25 CTest passed**. It squash-merged to `dev` as `8d4b6db9303637a745c1f3ce40f7ae3583755954`. Development Release run `37379258344`, Windows x64 job `111996628151`, independently passed Release build + **25/25 CTest**, created/published prerelease tag `v0.5.0-dev.2` at that merge commit, verified stable-channel isolation, and passed the real development-channel self-update from parent `6b677a0391de94c381492fbc42f2733a390126dd` to `v0.5.0-dev.2`. The root-addon regression uses the actual empty repository-relative path emitted by shallow discovery, proves the normalized root package can be saved and enter valid installed state, and confirms strict semantic validation still rejects the malformed `:addon:` identity. Runtime acceptance remains pending.
+
 #### Phase 7A — Wording pass: main workflows
 
 Goal: remove developer-facing language from the everyday product surface without changing behaviour.
@@ -1149,23 +1151,14 @@ Gate: build + tests + visual/runtime smoke.
 
 ## Exact Next Step
 
-Start **Phase 6** from current `dev` only after verifying the remote head.
+Runtime-validate **`v0.5.0-dev.2`** before any Phase 7 wording work.
 
-Implement the bounded `v0.5.0-dev.1` runtime corrections:
+First checks:
 
-1. fix root-addon package creation so the real empty discovery path is normalised to repository-root identity instead of producing `:addon:`;
-2. add regression coverage proving real root discovery can create/save/install a valid package without weakening semantic validation;
-3. replace the mandatory pre-scan branch modal with default-branch-first scanning;
-4. put branch switching on the Contents surface for multi-content repositories, with a fresh remote-HEAD resolve + branch-candidate rescan;
-5. skip the generic Contents chooser when exactly one valid selectable component exists, while preserving required DLL trust, ownership/replacement, unmanaged-root and MPQ collision prompts;
-6. run Release build + complete tests, then publish **`v0.5.0-dev.2`** for runtime validation.
+1. Add `Seraphic8x2244/Performante`: default `main` currently has no supported addon content, so Contents should remain available for branch choice; switch to `dev`, confirm the branch is rescanned from its current remote HEAD, and confirm the root-level addon installs successfully with repository-root package identity.
+2. Add an ordinary one-addon repository and confirm the single valid component fast path skips the redundant generic Contents chooser while preserving any required trust/ownership/replacement prompts.
+3. Use a multi-content repository and confirm Contents shows the active branch; switching branch refreshes only branch-derived addon candidates from that branch's current remote HEAD.
+4. Where suitable real fixtures exist, confirm latest-stable DLL/MPQ candidates remain independent of branch switching and collision/trust handling is still surfaced.
+5. Reconfirm startup auto-enter and accepted package-list viewport behaviour are unchanged.
 
-First runtime checks on `dev.2`:
-- Performante/root-level addon Add Git succeeds;
-- ordinary one-addon repository follows the fast path without a redundant Contents chooser;
-- a multi-content repository shows Contents and active branch;
-- changing branch refreshes branch-derived contents from the branch's current remote HEAD;
-- release DLL/MPQ candidates remain independent of branch switching;
-- startup auto-enter and viewport behaviour remain unchanged.
-
-After those pass, continue the still-blocked `v0.5.0` runtime matrix when suitable real DLL/MPQ/library/mixed fixtures become available. Do **not** start the broad wording pass until the functional Phase 6 gate is accepted.
+After those pass, continue the still-blocked `v0.5.0` runtime matrix when suitable real DLL/MPQ/library/mixed fixtures become available. Do **not** start the broad wording pass until the functional Phase 6 runtime gate is accepted.
