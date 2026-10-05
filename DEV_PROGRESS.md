@@ -705,6 +705,7 @@ A3 ZIP single-member allocation hardening is implemented, CI-checked, merged at 
 
 Remaining audited implementation priority after the v0.3.11 runtime gate starts with:
 
+- **branch-switch freshness defect:** the inline branch selector may reuse branch metadata cached earlier in the session. `ApplyBranchChoice()` stores that cached `branch.sha` into `latestRevision` and records the package as freshly refreshed, so switching to a branch can temporarily point TocPilot at an older commit until an explicit Refresh re-resolves the branch head. Confirmed with WanderingGaia: switching to `dev` exposed `0.2.7-dev` until Refresh fetched the current `0.2.8-dev` head. Correct contract: branch-name metadata may be cached for UI, but after selecting a branch TocPilot must resolve that branch's current remote HEAD SHA before treating it as fresh or using it for update/install decisions;
 - the dedicated Add-Git branch dialog has no per-request generation/repository token. Closing and reopening it while its detached lookup is still running leaves a rare stale-result/HWND-reuse race; the main inline branch selector already has a generation + package-ID guard;
 - Add Git latest-stable DLL discovery performs provider network I/O synchronously on the dialog thread, including the DLL-fallback dialog creation path, so provider timeout/failure can freeze that UI;
 - Update All does not treat branch-addon archive HTTP rate limiting as a queue-stop condition, unlike status refresh and direct-DLL update paths;
