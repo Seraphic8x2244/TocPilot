@@ -10485,6 +10485,10 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                 return 0;
             }
 
+            CacheRepositoryBranchInfo(
+                repositoryPackage,
+                repositoryInfo);
+
             std::vector<tp::RepositoryInstallItem>
                 installItems;
 
