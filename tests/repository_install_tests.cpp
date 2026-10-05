@@ -376,6 +376,29 @@ void TestRootAddonIdentity(
         return;
     }
 
+    if (!tp::SaveState(
+            root,
+            state,
+            error)) {
+        Fail(
+            "normalized root package could not be saved");
+        return;
+    }
+
+    if (!tp::SetPackageInstalledState(
+            state.packages.front(),
+            L"0123456789abcdef",
+            {L"Interface/AddOns/Performante/Performante.toc"},
+            error) ||
+        !tp::SaveState(
+            root,
+            state,
+            error)) {
+        Fail(
+            "normalized root package could not commit valid installed state");
+        return;
+    }
+
     tp::PackageRecord malformed =
         rootPackage;
     malformed.id =
