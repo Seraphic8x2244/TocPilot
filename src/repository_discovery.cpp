@@ -5,6 +5,7 @@
 #include "gitlab_api.h"
 
 #include <cstdint>
+#include <iterator>
 #include <utility>
 
 namespace tp {
