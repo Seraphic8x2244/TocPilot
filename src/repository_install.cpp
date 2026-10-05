@@ -135,8 +135,14 @@ bool BuildRepositoryInstallItems(
                 return false;
             }
 
-            if (candidate.addon.repositoryRelativePath ==
-                std::filesystem::path(L".")) {
+            const auto repositoryRelativePath =
+                candidate.addon.repositoryRelativePath
+                    .generic_wstring();
+            const bool repositoryRoot =
+                repositoryRelativePath.empty() ||
+                repositoryRelativePath == L".";
+
+            if (repositoryRoot) {
                 item.package =
                     MakeRepositoryPackage(
                         discovery.provider,
