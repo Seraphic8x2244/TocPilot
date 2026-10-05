@@ -1768,6 +1768,32 @@ bool ResolvePackageBranchHead(
         repositoryInfo);
 }
 
+bool ResolvePackageDefaultBranch(
+    const tp::PackageRecord& package,
+    std::wstring& branch,
+    std::wstring& remoteSha,
+    std::wstring& error,
+    tp::GitRemoteRepositoryInfo*
+        repositoryInfo = nullptr) {
+    const std::wstring host =
+        BranchProviderHost(
+            package.provider);
+
+    if (host.empty()) {
+        error =
+            L"Unsupported branch package provider.";
+        return false;
+    }
+
+    return tp::ResolvePublicGitDefaultBranch(
+        host,
+        package.repository,
+        branch,
+        remoteSha,
+        error,
+        repositoryInfo);
+}
+
 bool ResetPackageStaging(
     const tp::PackageRecord& package,
     const std::filesystem::path& wowRoot,
@@ -10381,23 +10407,22 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                 return 0;
             }
 
-            tp::BranchSelection selection;
-            if (!tp::ShowBranchDialog(
-                    hwnd,
-                    repositoryPackage,
-                    selection)) {
-                return 0;
-            }
-
-            CacheRepositoryBranchInfo(
-                repositoryPackage,
-                selection.repositoryInfo);
-
             std::wstring error;
-            if (!tp::SetPackageBranch(
+            std::wstring defaultBranch;
+            std::wstring defaultBranchSha;
+            tp::GitRemoteRepositoryInfo
+                repositoryInfo;
+
+            if (!ResolvePackageDefaultBranch(
                     repositoryPackage,
-                    std::move(selection.name),
-                    std::move(selection.sha),
+                    defaultBranch,
+                    defaultBranchSha,
+                    error,
+                    &repositoryInfo) ||
+                !tp::SetPackageBranch(
+                    repositoryPackage,
+                    std::move(defaultBranch),
+                    std::move(defaultBranchSha),
                     error)) {
                 MessageBoxW(
                     hwnd,
@@ -10406,6 +10431,10 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                     MB_OK | MB_ICONERROR);
                 return 0;
             }
+
+            CacheRepositoryBranchInfo(
+                repositoryPackage,
+                repositoryInfo);
 
             if (g_packageHint) {
                 const std::wstring message =
@@ -10440,6 +10469,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             if (!tp::ShowRepositorySelectionDialog(
                     hwnd,
                     discovery,
+                    repositoryInfo,
                     g_root,
                     g_state.packages,
                     selectedIndices,
@@ -10454,6 +10484,10 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                 }
                 return 0;
             }
+
+            CacheRepositoryBranchInfo(
+                repositoryPackage,
+                repositoryInfo);
 
             std::vector<tp::RepositoryInstallItem>
                 installItems;

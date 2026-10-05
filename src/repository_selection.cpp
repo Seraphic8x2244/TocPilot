@@ -121,5 +121,30 @@ bool BuildRepositorySelectionRows(
     return true;
 }
 
+bool FindSingleSelectableRepositoryCandidate(
+    const std::vector<RepositorySelectionRow>& rows,
+    std::size_t& candidateIndex) {
+    bool found = false;
+    candidateIndex = 0;
+
+    for (const auto& row : rows) {
+        if (!row.selectable) {
+            candidateIndex = 0;
+            return false;
+        }
+
+        if (found) {
+            candidateIndex = 0;
+            return false;
+        }
+
+        candidateIndex =
+            row.candidateIndex;
+        found = true;
+    }
+
+    return found;
+}
+
 
 } // namespace tp

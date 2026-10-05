@@ -50,6 +50,16 @@ void AggregateRepositoryCandidates(
     const GitHubReleaseInfo* release,
     std::vector<RepositoryCandidate>& candidates);
 
+void ReplaceRepositoryBranchCandidates(
+    const RepositoryAddonLayout* addonLayout,
+    RepositoryDiscoveryResult& result);
+
+bool RescanRepositoryBranchCandidates(
+    const PackageRecord& branchPackage,
+    const std::filesystem::path& wowRoot,
+    RepositoryDiscoveryResult& result,
+    std::wstring& error);
+
 bool DiscoverRepositoryCandidates(
     const PackageRecord& branchPackage,
     const std::filesystem::path& wowRoot,

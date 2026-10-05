@@ -27,6 +27,20 @@ bool FetchPublicGitRepositoryInfo(
     GitRemoteRepositoryInfo& info,
     std::wstring& error);
 
+bool SelectDefaultGitBranch(
+    const GitRemoteRepositoryInfo& info,
+    GitRemoteBranch& branch,
+    std::wstring& error);
+
+bool ResolvePublicGitDefaultBranch(
+    std::wstring_view host,
+    std::wstring_view repository,
+    std::wstring& branch,
+    std::wstring& remoteSha,
+    std::wstring& error,
+    GitRemoteRepositoryInfo*
+        repositoryInfo = nullptr);
+
 bool ParseGitSmartHttpBranchAdvertisement(
     std::string_view advertisement,
     std::string_view branch,

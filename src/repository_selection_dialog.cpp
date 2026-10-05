@@ -20,12 +20,16 @@ constexpr int IDC_COMPONENT_LIST = 6101;
 constexpr int IDC_SELECTION_STATUS = 6102;
 constexpr int IDC_ADD_SELECTED = 6103;
 constexpr int IDC_CANCEL_SELECTION = 6104;
+constexpr int IDC_BRANCH_COMBO = 6105;
 
 struct DialogContext {
-    const RepositoryDiscoveryResult* discovery = nullptr;
+    RepositoryDiscoveryResult* discovery = nullptr;
+    GitRemoteRepositoryInfo* repositoryInfo = nullptr;
+    const std::vector<PackageRecord>* existingPackages = nullptr;
     std::filesystem::path wowRoot;
     std::vector<RepositorySelectionRow> rows;
     std::vector<std::size_t>* selectedIndices = nullptr;
+    bool populatingBranchCombo = false;
     bool accepted = false;
 };
 
@@ -350,6 +354,289 @@ void UpdateSelectionState(
         message.c_str());
 }
 
+std::wstring BranchProviderHost(
+    std::wstring_view provider) {
+    if (provider == L"github") {
+        return L"github.com";
+    }
+
+    if (provider == L"gitlab") {
+        return L"gitlab.com";
+    }
+
+    return {};
+}
+
+void PopulateBranchCombo(
+    HWND hwnd,
+    DialogContext& context) {
+    const HWND combo =
+        GetDlgItem(
+            hwnd,
+            IDC_BRANCH_COMBO);
+
+    if (!combo ||
+        !context.discovery ||
+        !context.repositoryInfo) {
+        return;
+    }
+
+    context.populatingBranchCombo = true;
+
+    SendMessageW(
+        combo,
+        CB_RESETCONTENT,
+        0,
+        0);
+
+    int selected = -1;
+
+    for (std::size_t i = 0;
+         i < context.repositoryInfo->branches.size();
+         ++i) {
+        const auto& branch =
+            context.repositoryInfo->branches[i];
+
+        const LRESULT index =
+            SendMessageW(
+                combo,
+                CB_ADDSTRING,
+                0,
+                reinterpret_cast<LPARAM>(
+                    branch.name.c_str()));
+
+        if (index >= 0 &&
+            branch.name ==
+                context.discovery->branch) {
+            selected =
+                static_cast<int>(index);
+        }
+    }
+
+    if (selected < 0 &&
+        !context.repositoryInfo->defaultBranch.empty()) {
+        for (std::size_t i = 0;
+             i < context.repositoryInfo->branches.size();
+             ++i) {
+            if (context.repositoryInfo->branches[i].name ==
+                context.repositoryInfo->defaultBranch) {
+                selected =
+                    static_cast<int>(i);
+                break;
+            }
+        }
+    }
+
+    if (selected >= 0) {
+        SendMessageW(
+            combo,
+            CB_SETCURSEL,
+            static_cast<WPARAM>(selected),
+            0);
+    }
+
+    EnableWindow(
+        combo,
+        context.repositoryInfo->branches.size() > 1
+            ? TRUE
+            : FALSE);
+
+    context.populatingBranchCombo = false;
+}
+
+bool RefreshCandidateRows(
+    HWND hwnd,
+    DialogContext& context,
+    std::wstring& error) {
+    if (!context.discovery ||
+        !context.existingPackages) {
+        error =
+            L"Repository Contents state is incomplete.";
+        return false;
+    }
+
+    if (!BuildPreviewRows(
+            *context.discovery,
+            context.wowRoot,
+            *context.existingPackages,
+            context.rows,
+            error)) {
+        return false;
+    }
+
+    const HWND list =
+        GetDlgItem(
+            hwnd,
+            IDC_COMPONENT_LIST);
+
+    ListView_DeleteAllItems(
+        list);
+
+    for (std::size_t i = 0;
+         i < context.rows.size();
+         ++i) {
+        AddRow(
+            list,
+            static_cast<int>(i),
+            context.rows[i]);
+    }
+
+    EnableWindow(
+        GetDlgItem(
+            hwnd,
+            IDC_ADD_SELECTED),
+        FALSE);
+
+    UpdateSelectionState(
+        hwnd);
+    return true;
+}
+
+void SwitchBranch(
+    HWND hwnd) {
+    DialogContext* context =
+        Context(hwnd);
+
+    if (!context ||
+        context->populatingBranchCombo ||
+        !context->discovery ||
+        !context->repositoryInfo) {
+        return;
+    }
+
+    const LRESULT selected =
+        SendMessageW(
+            GetDlgItem(
+                hwnd,
+                IDC_BRANCH_COMBO),
+            CB_GETCURSEL,
+            0,
+            0);
+
+    if (selected == CB_ERR ||
+        selected < 0 ||
+        static_cast<std::size_t>(selected) >=
+            context->repositoryInfo->branches.size()) {
+        return;
+    }
+
+    const std::wstring branch =
+        context->repositoryInfo->branches[
+            static_cast<std::size_t>(selected)]
+            .name;
+
+    if (branch ==
+        context->discovery->branch) {
+        return;
+    }
+
+    const std::wstring host =
+        BranchProviderHost(
+            context->discovery->provider);
+
+    if (host.empty()) {
+        SetWindowTextW(
+            GetDlgItem(
+                hwnd,
+                IDC_SELECTION_STATUS),
+            L"Branch switching is not available for this repository provider.");
+        return;
+    }
+
+    SetWindowTextW(
+        GetDlgItem(
+            hwnd,
+            IDC_SELECTION_STATUS),
+        (L"Refreshing branch " +
+         branch +
+         L" from its current remote HEAD...")
+            .c_str());
+
+    EnableWindow(
+        GetDlgItem(
+            hwnd,
+            IDC_BRANCH_COMBO),
+        FALSE);
+    EnableWindow(
+        GetDlgItem(
+            hwnd,
+            IDC_ADD_SELECTED),
+        FALSE);
+    UpdateWindow(hwnd);
+
+    std::wstring remoteSha;
+    std::wstring error;
+    GitRemoteRepositoryInfo freshInfo;
+
+    if (!ResolvePublicGitBranchHead(
+            host,
+            context->discovery->repository,
+            branch,
+            remoteSha,
+            error,
+            &freshInfo)) {
+        SetWindowTextW(
+            GetDlgItem(
+                hwnd,
+                IDC_SELECTION_STATUS),
+            (L"Branch refresh failed: " +
+             error)
+                .c_str());
+        PopulateBranchCombo(
+            hwnd,
+            *context);
+        return;
+    }
+
+    PackageRecord branchPackage =
+        MakeRepositoryPackage(
+            context->discovery->provider,
+            context->discovery->repository);
+
+    if (!SetPackageBranch(
+            branchPackage,
+            branch,
+            remoteSha,
+            error) ||
+        !RescanRepositoryBranchCandidates(
+            branchPackage,
+            context->wowRoot,
+            *context->discovery,
+            error)) {
+        SetWindowTextW(
+            GetDlgItem(
+                hwnd,
+                IDC_SELECTION_STATUS),
+            (L"Branch refresh failed: " +
+             error)
+                .c_str());
+        PopulateBranchCombo(
+            hwnd,
+            *context);
+        return;
+    }
+
+    *context->repositoryInfo =
+        std::move(freshInfo);
+
+    if (!RefreshCandidateRows(
+            hwnd,
+            *context,
+            error)) {
+        SetWindowTextW(
+            GetDlgItem(
+                hwnd,
+                IDC_SELECTION_STATUS),
+            (L"Branch contents could not be refreshed: " +
+             error)
+                .c_str());
+    }
+
+    PopulateBranchCombo(
+        hwnd,
+        *context);
+}
+
 bool ConfirmDllTrust(
     HWND hwnd,
     const DialogContext& context,
@@ -517,6 +804,43 @@ LRESULT CALLBACK DialogProc(
                 instance,
                 nullptr);
 
+        HWND branchLabel =
+            CreateWindowExW(
+                0,
+                L"STATIC",
+                L"Branch:",
+                WS_CHILD |
+                    WS_VISIBLE,
+                20,
+                46,
+                55,
+                22,
+                hwnd,
+                nullptr,
+                instance,
+                nullptr);
+
+        HWND branchCombo =
+            CreateWindowExW(
+                0,
+                L"COMBOBOX",
+                nullptr,
+                WS_CHILD |
+                    WS_VISIBLE |
+                    WS_TABSTOP |
+                    CBS_DROPDOWNLIST |
+                    WS_VSCROLL,
+                78,
+                42,
+                300,
+                220,
+                hwnd,
+                reinterpret_cast<HMENU>(
+                    static_cast<INT_PTR>(
+                        IDC_BRANCH_COMBO)),
+                instance,
+                nullptr);
+
         HWND list =
             CreateWindowExW(
                 WS_EX_CLIENTEDGE,
@@ -528,7 +852,7 @@ LRESULT CALLBACK DialogProc(
                     LVS_REPORT |
                     LVS_SHOWSELALWAYS,
                 20,
-                46,
+                78,
                 740,
                 270,
                 hwnd,
@@ -594,7 +918,7 @@ LRESULT CALLBACK DialogProc(
                     WS_VISIBLE |
                     SS_LEFT,
                 20,
-                326,
+                358,
                 740,
                 50,
                 hwnd,
@@ -614,7 +938,7 @@ LRESULT CALLBACK DialogProc(
                     WS_TABSTOP |
                     BS_DEFPUSHBUTTON,
                 20,
-                384,
+                416,
                 125,
                 30,
                 hwnd,
@@ -634,7 +958,7 @@ LRESULT CALLBACK DialogProc(
                     WS_TABSTOP |
                     BS_PUSHBUTTON,
                 650,
-                384,
+                416,
                 110,
                 30,
                 hwnd,
@@ -645,6 +969,8 @@ LRESULT CALLBACK DialogProc(
                 nullptr);
 
         SetControlFont(introControl);
+        SetControlFont(branchLabel);
+        SetControlFont(branchCombo);
         SetControlFont(list);
         SetControlFont(status);
         SetControlFont(add);
@@ -653,6 +979,12 @@ LRESULT CALLBACK DialogProc(
         EnableWindow(
             add,
             FALSE);
+
+        if (context) {
+            PopulateBranchCombo(
+                hwnd,
+                *context);
+        }
 
         SetFocus(list);
         return 0;
@@ -676,6 +1008,14 @@ LRESULT CALLBACK DialogProc(
     }
 
     case WM_COMMAND:
+        if (LOWORD(wParam) ==
+                IDC_BRANCH_COMBO &&
+            HIWORD(wParam) ==
+                CBN_SELCHANGE) {
+            SwitchBranch(hwnd);
+            return 0;
+        }
+
         if (LOWORD(wParam) ==
                 IDC_ADD_SELECTED &&
             HIWORD(wParam) ==
@@ -745,7 +1085,8 @@ bool EnsureDialogClass() {
 
 bool ShowRepositorySelectionDialog(
     HWND owner,
-    const RepositoryDiscoveryResult& discovery,
+    RepositoryDiscoveryResult& discovery,
+    GitRemoteRepositoryInfo& repositoryInfo,
     const std::filesystem::path& wowRoot,
     const std::vector<PackageRecord>& existingPackages,
     std::vector<std::size_t>& selectedIndices,
@@ -753,7 +1094,68 @@ bool ShowRepositorySelectionDialog(
     selectedIndices.clear();
     error.clear();
 
-    if (discovery.candidates.empty()) {
+    if (!EnsureDialogClass()) {
+        error =
+            L"Could not create the repository component selection window.";
+        return false;
+    }
+
+    DialogContext context;
+    context.discovery =
+        &discovery;
+    context.repositoryInfo =
+        &repositoryInfo;
+    context.existingPackages =
+        &existingPackages;
+    context.wowRoot =
+        wowRoot;
+    context.selectedIndices =
+        &selectedIndices;
+
+    if (!BuildPreviewRows(
+            discovery,
+            wowRoot,
+            existingPackages,
+            context.rows,
+            error)) {
+        return false;
+    }
+
+    std::size_t singleCandidate = 0;
+    if (FindSingleSelectableRepositoryCandidate(
+            context.rows,
+            singleCandidate)) {
+        const auto it =
+            std::find_if(
+                context.rows.begin(),
+                context.rows.end(),
+                [&](const RepositorySelectionRow& row) {
+                    return
+                        row.selectable &&
+                        row.candidateIndex ==
+                            singleCandidate;
+                });
+
+        if (it == context.rows.end()) {
+            error =
+                L"Repository selection fast path could not resolve the discovered component.";
+            return false;
+        }
+
+        if (!ConfirmDllTrust(
+                owner,
+                context,
+                *it)) {
+            return false;
+        }
+
+        selectedIndices.push_back(
+            singleCandidate);
+        return true;
+    }
+
+    if (context.rows.empty() &&
+        repositoryInfo.branches.size() <= 1) {
         error =
             L"No supported addon, DLL, or MPQ components were discovered.";
 
@@ -781,36 +1183,13 @@ bool ShowRepositorySelectionDialog(
         return false;
     }
 
-    if (!EnsureDialogClass()) {
-        error =
-            L"Could not create the repository component selection window.";
-        return false;
-    }
-
-    DialogContext context;
-    context.discovery =
-        &discovery;
-    context.wowRoot =
-        wowRoot;
-    context.selectedIndices =
-        &selectedIndices;
-
-    if (!BuildPreviewRows(
-            discovery,
-            wowRoot,
-            existingPackages,
-            context.rows,
-            error)) {
-        return false;
-    }
-
     RECT ownerRect{};
     GetWindowRect(
         owner,
         &ownerRect);
 
     constexpr int width = 800;
-    constexpr int height = 470;
+    constexpr int height = 510;
 
     const int ownerWidth =
         static_cast<int>(
@@ -844,7 +1223,7 @@ bool ShowRepositorySelectionDialog(
             WS_EX_DLGMODALFRAME |
                 WS_EX_CONTROLPARENT,
             kClassName,
-            L"Add Git - Choose Components",
+            L"Add Git - Contents",
             WS_CAPTION |
                 WS_SYSMENU |
                 WS_POPUP,

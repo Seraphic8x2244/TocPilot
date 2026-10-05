@@ -154,6 +154,54 @@ int main(int argc, char** argv) {
     }
 
     {
+        tp::GitRemoteRepositoryInfo info;
+        std::wstring error;
+
+        if (!tp::ParseGitSmartHttpRepositoryAdvertisement(
+                Advertisement(),
+                info,
+                error)) {
+            Fail(
+                "default branch selection fixture could not be parsed");
+        } else {
+            tp::GitRemoteBranch selected;
+            if (!tp::SelectDefaultGitBranch(
+                    info,
+                    selected,
+                    error) ||
+                selected.name !=
+                    L"main" ||
+                selected.sha !=
+                    std::wstring(40, L'a')) {
+                Fail(
+                    "advertised default branch was not selected with its current advertised SHA");
+            }
+        }
+    }
+
+    {
+        tp::GitRemoteRepositoryInfo info;
+        info.defaultBranch =
+            L"missing";
+        info.branches.push_back(
+            {L"main", std::wstring(40, L'a')});
+
+        tp::GitRemoteBranch selected;
+        std::wstring error;
+
+        if (tp::SelectDefaultGitBranch(
+                info,
+                selected,
+                error) ||
+            error.find(
+                L"not present") ==
+                std::wstring::npos) {
+            Fail(
+                "missing advertised default branch was not rejected");
+        }
+    }
+
+    {
         std::string sha;
         std::wstring error;
         if (!tp::ParseGitSmartHttpBranchAdvertisement(

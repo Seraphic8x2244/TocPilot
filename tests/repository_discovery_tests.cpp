@@ -300,6 +300,77 @@ void TestEmptyFailureAndAmbiguousIsolation() {
         "ambiguous addon roots either leaked as selectable addons or hid release assets");
 }
 
+void TestBranchCandidateReplacementPreservesReleaseAssets() {
+    tp::RepositoryDiscoveryResult result;
+    result.provider =
+        L"github";
+    result.repository =
+        L"Owner/Repo";
+
+    const auto initialAddon =
+        Layout(
+            tp::RepositoryAddonLayoutKind::RootAddon,
+            {Addon(L".", L"Repo")});
+    const auto releases =
+        Release({
+            L"ClassicAPI.dll",
+            L"WideLoadScreens.mpq"
+        });
+
+    tp::AggregateRepositoryCandidates(
+        L"github",
+        &initialAddon,
+        &releases,
+        result.candidates);
+
+    const auto switchedBranch =
+        Layout(
+            tp::RepositoryAddonLayoutKind::RepositoryLibrary,
+            {
+                Addon(L"Beta", L"Beta"),
+                Addon(L"Gamma", L"Gamma")
+            });
+
+    tp::ReplaceRepositoryBranchCandidates(
+        &switchedBranch,
+        result);
+
+    ExpectCounts(
+        result.candidates,
+        2,
+        1,
+        1,
+        "branch candidate replacement changed independent release candidates");
+
+    if (result.candidates.size() != 4 ||
+        result.candidates[0].addon.installFolder !=
+            L"Beta" ||
+        result.candidates[1].addon.installFolder !=
+            L"Gamma" ||
+        result.candidates[2].releaseAsset.name !=
+            L"ClassicAPI.dll" ||
+        result.candidates[2].releaseTag !=
+            L"v1.2.3" ||
+        result.candidates[3].releaseAsset.name !=
+            L"WideLoadScreens.mpq" ||
+        result.candidates[3].releaseTag !=
+            L"v1.2.3") {
+        Fail(
+            "branch candidate replacement did not preserve release identity and ordering");
+    }
+
+    tp::ReplaceRepositoryBranchCandidates(
+        nullptr,
+        result);
+
+    ExpectCounts(
+        result.candidates,
+        0,
+        1,
+        1,
+        "failed or empty branch rescan hid independent release candidates");
+}
+
 void TestFilteringAndGitLabScope() {
     std::vector<tp::RepositoryCandidate>
         candidates;
@@ -357,6 +428,7 @@ void TestFilteringAndGitLabScope() {
 int main() {
     TestRequiredCombinations();
     TestEmptyFailureAndAmbiguousIsolation();
+    TestBranchCandidateReplacementPreservesReleaseAssets();
     TestFilteringAndGitLabScope();
 
     if (failures != 0) {
