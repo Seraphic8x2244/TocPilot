@@ -737,6 +737,82 @@ bool FetchPublicGitRepositoryInfo(
         error);
 }
 
+bool SelectDefaultGitBranch(
+    const GitRemoteRepositoryInfo& info,
+    GitRemoteBranch& branch,
+    std::wstring& error) {
+    branch = {};
+    error.clear();
+
+    if (info.defaultBranch.empty()) {
+        error =
+            L"Git repository did not advertise a default branch.";
+        return false;
+    }
+
+    const auto it = std::find_if(
+        info.branches.begin(),
+        info.branches.end(),
+        [&](const GitRemoteBranch& candidate) {
+            return candidate.name ==
+                info.defaultBranch;
+        });
+
+    if (it == info.branches.end() ||
+        it->sha.empty()) {
+        error =
+            L"Git repository default branch was not present in the advertised branch list.";
+        return false;
+    }
+
+    branch = *it;
+    return true;
+}
+
+bool ResolvePublicGitDefaultBranch(
+    std::wstring_view host,
+    std::wstring_view repository,
+    std::wstring& branch,
+    std::wstring& remoteSha,
+    std::wstring& error,
+    GitRemoteRepositoryInfo*
+        repositoryInfo) {
+    branch.clear();
+    remoteSha.clear();
+    error.clear();
+
+    if (repositoryInfo) {
+        *repositoryInfo = {};
+    }
+
+    GitRemoteRepositoryInfo info;
+    if (!FetchPublicGitRepositoryInfo(
+            host,
+            repository,
+            info,
+            error)) {
+        return false;
+    }
+
+    GitRemoteBranch selected;
+    if (!SelectDefaultGitBranch(
+            info,
+            selected,
+            error)) {
+        return false;
+    }
+
+    if (repositoryInfo) {
+        *repositoryInfo = info;
+    }
+
+    branch =
+        std::move(selected.name);
+    remoteSha =
+        std::move(selected.sha);
+    return true;
+}
+
 bool ParseGitSmartHttpBranchAdvertisement(
     std::string_view advertisement,
     std::string_view branch,
