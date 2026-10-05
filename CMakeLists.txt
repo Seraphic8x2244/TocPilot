@@ -387,6 +387,7 @@ if(BUILD_TESTING)
     add_executable(TocPilotRepositoryInstallTests
         tests/repository_install_tests.cpp
         src/repository_install.cpp
+        src/archive.cpp
         src/mpq_package.cpp
         src/exact_release_asset.cpp
         src/github_release.cpp
@@ -400,7 +401,11 @@ if(BUILD_TESTING)
         NOMINMAX
     )
     target_include_directories(TocPilotRepositoryInstallTests PRIVATE src)
-    target_link_libraries(TocPilotRepositoryInstallTests PRIVATE winhttp bcrypt)
+    target_link_libraries(TocPilotRepositoryInstallTests PRIVATE
+        TocPilotMiniz
+        winhttp
+        bcrypt
+    )
 
     if(MSVC)
         target_compile_options(TocPilotRepositoryInstallTests PRIVATE /W4 /permissive- /utf-8)
