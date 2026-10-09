@@ -850,10 +850,10 @@ bool EnsureDirectDllLoaderEntry(
 
     if (ec) {
         error =
-            L"Could not inspect dlls.txt: " +
-            std::wstring(
-                ec.message().begin(),
-                ec.message().end());
+            L"Could not inspect dlls.txt (filesystem error " +
+            std::to_wstring(
+                ec.value()) +
+            L").";
         return false;
     }
 
@@ -865,10 +865,10 @@ bool EnsureDirectDllLoaderEntry(
                 ec)) {
             if (ec) {
                 error =
-                    L"Could not inspect dlls.txt: " +
-                    std::wstring(
-                        ec.message().begin(),
-                        ec.message().end());
+                    L"Could not inspect dlls.txt (filesystem error " +
+                    std::to_wstring(
+                        ec.value()) +
+                    L").";
             } else {
                 error =
                     L"dlls.txt exists but is not a regular file.";
