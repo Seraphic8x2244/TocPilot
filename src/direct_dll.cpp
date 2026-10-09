@@ -10,6 +10,7 @@
 #include <cctype>
 #include <cwctype>
 #include <filesystem>
+#include <fstream>
 #include <limits>
 #include <string>
 #include <string_view>
@@ -497,6 +498,115 @@ bool Sha256File(
     return true;
 }
 
+bool WideToUtf8(
+    std::wstring_view value,
+    std::string& encoded,
+    std::wstring& error) {
+    encoded.clear();
+
+    if (value.empty()) {
+        error =
+            L"DLL loader entry is empty.";
+        return false;
+    }
+
+    const int required =
+        WideCharToMultiByte(
+            CP_UTF8,
+            WC_ERR_INVALID_CHARS,
+            value.data(),
+            static_cast<int>(
+                value.size()),
+            nullptr,
+            0,
+            nullptr,
+            nullptr);
+
+    if (required <= 0) {
+        error =
+            L"Could not encode the DLL filename for dlls.txt: " +
+            WindowsError(
+                GetLastError());
+        return false;
+    }
+
+    encoded.resize(
+        static_cast<std::size_t>(
+            required));
+
+    if (WideCharToMultiByte(
+            CP_UTF8,
+            WC_ERR_INVALID_CHARS,
+            value.data(),
+            static_cast<int>(
+                value.size()),
+            encoded.data(),
+            required,
+            nullptr,
+            nullptr) != required) {
+        encoded.clear();
+        error =
+            L"Could not encode the DLL filename for dlls.txt: " +
+            WindowsError(
+                GetLastError());
+        return false;
+    }
+
+    return true;
+}
+
+std::string_view TrimLoaderLine(
+    std::string_view line) {
+    while (!line.empty() &&
+           (line.front() == ' ' ||
+            line.front() == '\t')) {
+        line.remove_prefix(1);
+    }
+
+    while (!line.empty() &&
+           (line.back() == ' ' ||
+            line.back() == '\t')) {
+        line.remove_suffix(1);
+    }
+
+    return line;
+}
+
+bool LoaderEntryMatches(
+    std::string_view line,
+    std::string_view entry) {
+    if (line.size() !=
+        entry.size()) {
+        return false;
+    }
+
+    for (std::size_t index = 0;
+         index < line.size();
+         ++index) {
+        const unsigned char left =
+            static_cast<unsigned char>(
+                line[index]);
+        const unsigned char right =
+            static_cast<unsigned char>(
+                entry[index]);
+
+        if (left == right) {
+            continue;
+        }
+
+        if (left < 0x80 &&
+            right < 0x80 &&
+            std::tolower(left) ==
+                std::tolower(right)) {
+            continue;
+        }
+
+        return false;
+    }
+
+    return true;
+}
+
 bool ExistingTargetWritable(
     const std::filesystem::path& target,
     std::wstring& error) {
@@ -701,6 +811,250 @@ bool DownloadToFinalPath(
 
 } // namespace
 
+bool EnsureDirectDllLoaderEntry(
+    const std::filesystem::path& wowRoot,
+    const PackageRecord& package,
+    bool& changed,
+    std::wstring& error) {
+    changed = false;
+    error.clear();
+
+    if (wowRoot.empty()) {
+        error =
+            L"World of Warcraft root path is empty.";
+        return false;
+    }
+
+    if (!ValidateDirectDllPackage(
+            package,
+            error)) {
+        return false;
+    }
+
+    std::string entry;
+    if (!WideToUtf8(
+            package.targetPath,
+            entry,
+            error)) {
+        return false;
+    }
+
+    const auto loaderPath =
+        wowRoot / L"dlls.txt";
+
+    std::error_code ec;
+    const bool exists =
+        std::filesystem::exists(
+            loaderPath,
+            ec);
+
+    if (ec) {
+        error =
+            L"Could not inspect dlls.txt: " +
+            std::wstring(
+                ec.message().begin(),
+                ec.message().end());
+        return false;
+    }
+
+    std::string content;
+
+    if (exists) {
+        if (!std::filesystem::is_regular_file(
+                loaderPath,
+                ec)) {
+            if (ec) {
+                error =
+                    L"Could not inspect dlls.txt: " +
+                    std::wstring(
+                        ec.message().begin(),
+                        ec.message().end());
+            } else {
+                error =
+                    L"dlls.txt exists but is not a regular file.";
+            }
+            return false;
+        }
+
+        std::ifstream input(
+            loaderPath,
+            std::ios::binary);
+
+        if (!input) {
+            error =
+                L"Could not open dlls.txt for reading.";
+            return false;
+        }
+
+        input.seekg(
+            0,
+            std::ios::end);
+        const auto length =
+            input.tellg();
+
+        if (length < 0) {
+            error =
+                L"Could not determine dlls.txt size.";
+            return false;
+        }
+
+        input.seekg(
+            0,
+            std::ios::beg);
+
+        content.resize(
+            static_cast<std::size_t>(
+                length));
+
+        if (!content.empty()) {
+            input.read(
+                content.data(),
+                static_cast<std::streamsize>(
+                    content.size()));
+
+            if (!input) {
+                error =
+                    L"Could not read dlls.txt.";
+                return false;
+            }
+        }
+
+        if (content.size() >= 2) {
+            const unsigned char first =
+                static_cast<unsigned char>(
+                    content[0]);
+            const unsigned char second =
+                static_cast<unsigned char>(
+                    content[1]);
+
+            if ((first == 0xFF &&
+                 second == 0xFE) ||
+                (first == 0xFE &&
+                 second == 0xFF)) {
+                error =
+                    L"dlls.txt uses UTF-16 encoding. TocPilot left it unchanged because appending UTF-8 would corrupt the file.";
+                return false;
+            }
+        }
+
+        std::size_t offset = 0;
+        bool firstLine = true;
+
+        while (offset <=
+               content.size()) {
+            const auto end =
+                content.find_first_of(
+                    "\r\n",
+                    offset);
+
+            const auto lineEnd =
+                end == std::string::npos
+                    ? content.size()
+                    : end;
+
+            std::string_view line(
+                content.data() + offset,
+                lineEnd - offset);
+
+            if (firstLine &&
+                line.size() >= 3 &&
+                static_cast<unsigned char>(
+                    line[0]) == 0xEF &&
+                static_cast<unsigned char>(
+                    line[1]) == 0xBB &&
+                static_cast<unsigned char>(
+                    line[2]) == 0xBF) {
+                line.remove_prefix(3);
+            }
+
+            line =
+                TrimLoaderLine(line);
+
+            if (LoaderEntryMatches(
+                    line,
+                    entry)) {
+                return true;
+            }
+
+            if (end ==
+                std::string::npos) {
+                break;
+            }
+
+            offset = end + 1;
+            if (content[end] == '\r' &&
+                offset <
+                    content.size() &&
+                content[offset] == '\n') {
+                ++offset;
+            }
+
+            firstLine = false;
+        }
+    }
+
+    std::string newline =
+        "\r\n";
+
+    if (content.find(
+            "\r\n") !=
+        std::string::npos) {
+        newline =
+            "\r\n";
+    } else if (content.find(
+                   '\n') !=
+               std::string::npos) {
+        newline =
+            "\n";
+    } else if (content.find(
+                   '\r') !=
+               std::string::npos) {
+        newline =
+            "\r";
+    }
+
+    std::ofstream output(
+        loaderPath,
+        std::ios::binary |
+            (exists
+                ? std::ios::app
+                : std::ios::trunc));
+
+    if (!output) {
+        error =
+            L"Could not open dlls.txt for updating.";
+        return false;
+    }
+
+    if (!content.empty() &&
+        content.back() != '\r' &&
+        content.back() != '\n') {
+        output.write(
+            newline.data(),
+            static_cast<std::streamsize>(
+                newline.size()));
+    }
+
+    output.write(
+        entry.data(),
+        static_cast<std::streamsize>(
+            entry.size()));
+    output.write(
+        newline.data(),
+        static_cast<std::streamsize>(
+            newline.size()));
+    output.flush();
+
+    if (!output) {
+        error =
+            L"Could not append the managed DLL to dlls.txt.";
+        return false;
+    }
+
+    changed = true;
+    return true;
+}
+
 bool IsDirectDllPackage(
     const PackageRecord& package) {
     return
@@ -843,6 +1197,21 @@ bool DownloadAndVerifyDirectDll(
             L"The verified DLL disappeared before TocPilot could record installed state. Security software may have quarantined it.";
         downloadedBytes = 0;
         actualSha256.clear();
+        return false;
+    }
+
+    bool loaderChanged = false;
+    std::wstring loaderError;
+
+    if (!EnsureDirectDllLoaderEntry(
+            wowRoot,
+            package,
+            loaderChanged,
+            loaderError)) {
+        error =
+            L"The DLL was downloaded and SHA-256 verified, but TocPilot could not update dlls.txt - " +
+            loaderError +
+            L" The DLL remains at its exact destination and installed state was not advanced.";
         return false;
     }
 
