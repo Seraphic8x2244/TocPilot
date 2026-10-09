@@ -30,6 +30,12 @@ bool ResolveLatestDirectDllRelease(
     DirectDllRelease& release,
     std::wstring& error);
 
+bool EnsureDirectDllLoaderEntry(
+    const std::filesystem::path& wowRoot,
+    const PackageRecord& package,
+    bool& changed,
+    std::wstring& error);
+
 bool DownloadAndVerifyDirectDll(
     const PackageRecord& package,
     const DirectDllRelease& release,
