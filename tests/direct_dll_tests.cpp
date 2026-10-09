@@ -289,9 +289,29 @@ void ExpectDllsTxtRegistration() {
         }
     }
 
-    const std::string utf16 =
-        std::string("\xFF\xFE", 2) +
-        "C\0l\0a\0s\0s\0i\0c\0A\0P\0I\0.\0d\0l\0l\0\r\0\n\0";
+    const char utf16Bytes[] = {
+        static_cast<char>(0xFF),
+        static_cast<char>(0xFE),
+        'C', '\0',
+        'l', '\0',
+        'a', '\0',
+        's', '\0',
+        's', '\0',
+        'i', '\0',
+        'c', '\0',
+        'A', '\0',
+        'P', '\0',
+        'I', '\0',
+        '.', '\0',
+        'd', '\0',
+        'l', '\0',
+        'l', '\0',
+        '\r', '\0',
+        '\n', '\0'
+    };
+    const std::string utf16(
+        utf16Bytes,
+        sizeof(utf16Bytes));
 
     if (!WriteBytes(
             loader,
