@@ -5,7 +5,7 @@
 ## Current
 
 - Active branch: `dev`.
-- Source/application version: `v0.5.0-dev.3`.
+- Source/application version: `v0.5.0` release candidate.
 - Latest published stable release: `v0.4.0` at exact main/release commit `eee95cf319351adbef1a3b549f5fe9531f33567f`.
 - Latest published development prerelease: `v0.5.0-dev.3` at `e471aad66a64ddeb3f1458f2800edc3542b5521e`. GitHub stable `/releases/latest` remains non-prerelease `v0.4.0`.
 - Stable release/source commit and tag target: `eee95cf319351adbef1a3b549f5fe9531f33567f` (`v0.4.0`).
@@ -1108,57 +1108,49 @@ Out of scope:
 
 Status: **implemented / CI-checked / published; runtime validation partially passed**. Phase 6 PR #41 final head `0dd22f087e38da4a1be96c554d2318d4af95f8c1` passed Build run `37378410558`, Windows x64 job `111993625004`: Release build + **25/25 CTest passed**. It squash-merged to `dev` as `8d4b6db9303637a745c1f3ce40f7ae3583755954`; Development Release run `37379258344`, Windows x64 job `111996628151`, independently passed **25/25 CTest** and published `v0.5.0-dev.2`. Runtime then passed the Performante root-addon/default-to-`dev` branch flow and the ordinary single-addon default-branch fast path; the user explicitly preferred the streamlined flow. Direct-DLL follow-up PR #42 final head `58f3eff6caf166c14551619fa01c4747c60734ba` passed Build run `37958234647`, Windows x64 job `113914124151`, with Release build + **25/25 CTest passed**, including the expanded `direct-dll-policy` regression. It squash-merged as `e471aad66a64ddeb3f1458f2800edc3542b5521e`. Development Release run `37958978146`, Windows x64 job `113916651576`, independently passed Release build + **25/25 CTest**, published prerelease `v0.5.0-dev.3` at that exact merge commit, verified prerelease-channel metadata, and passed the real development-channel self-update from parent `fe2ab7f167b3b2b69b1c1e7032f0dcaddd37f1eb` to `v0.5.0-dev.3`. The new regression covers missing-file creation, byte-preserving append, case-insensitive duplicate avoidance with surrounding whitespace, and refusal to modify UTF-16 `dlls.txt`. Runtime validation of the new `dlls.txt` behavior remains pending.
 
-#### Phase 7A — Wording pass: main workflows
+#### Deferred to v0.5.1 — wording and extended runtime validation
 
-Goal: remove developer-facing language from the everyday product surface without changing behaviour.
+The user intentionally removed the wording pass, MPQ runtime validation and repository-library runtime validation from the v0.5.0 stable gate on 2026-10-10 so already-demonstrated stable-user bug fixes are not held back.
 
-Scope:
+Carry into v0.5.1:
 
-- main window;
-- toolbar tooltips;
-- package list/status text;
-- startup/splash;
-- Refresh / Update / Install / Reinstall / Remove;
-- Compact/Advanced labels and common feedback;
-- use user-task language rather than internal implementation terminology.
+- Phase 7A/7B wording cleanup across main workflows, dialogs, errors and advanced surfaces;
+- real MPQ lifecycle/collision/mixed-repository runtime validation;
+- real repository-library and multi-content branch-switch runtime validation;
+- runtime validation of the v0.5.0-dev.3 non-destructive `dlls.txt` registration behavior if not exercised before the next cycle;
+- any fixes exposed by those tests.
 
-Gate: build + tests + visual/runtime smoke.
+MPQ and repository-library support remain unadvertised/in-development for this release; absence of those runtime tests does not imply acceptance.
 
-#### Phase 7B — Wording pass: dialogs, errors and advanced surfaces
+#### Phase 8 — v0.5.0 stable release gate
 
-Scope:
+Decision on 2026-10-10: ship the current validated functional state to stable now.
 
-- Add Git / repository discovery dialog;
-- branch selection;
-- DLL/MPQ trust/selection prompts;
-- Account Sync;
-- TocPilot update/settings surfaces;
-- empty/loading/error/recovery messages;
-- Advanced-only/help text;
-- preserve technical detail where it is genuinely useful for diagnostics, but remove implementation jargon from normal-path copy.
+Required gate:
 
-Gate: build + tests + visual/runtime smoke.
+- stable source/version markers must all be `0.5.0` / `v0.5.0`;
+- Release build + full CTest on the exact promotion candidate;
+- promote the exact validated `dev` state to `main`;
+- publish stable `v0.5.0` through the normal Release workflow;
+- verify the stable tag/assets target the exact `main` release commit;
+- exercise/verify the workflow's normal stable release path.
 
-#### Phase 8 — v0.5.0 release gate
+Accepted runtime evidence carried into this release:
 
-- publish final 0.5.0 development prerelease if wording changes need runtime confirmation;
-- run focused regression for addon, library, DLL, MPQ and mixed-repository flows;
-- verify update/remove ownership and MPQ letter persistence;
-- verify startup auto-enter;
-- verify existing Account Sync and viewport accepted behaviour remains intact;
-- promote validated `dev` to `main`;
-- publish stable **v0.5.0** through the normal release/self-update path.
+- startup auto-enter;
+- existing addon update;
+- package-list viewport behavior;
+- Performante root-level addon install with default-branch discovery and live branch switch;
+- ordinary single-addon default-branch fast path;
+- user confirmed the streamlined Add Git flow is preferable.
+
+Known non-blocking validation debt moved to v0.5.1:
+
+- MPQ runtime paths;
+- repository-library/multi-content runtime paths;
+- wording pass;
+- direct-DLL `dlls.txt` runtime confirmation (automated regression coverage is green).
 
 ## Exact Next Step
 
-Runtime-validate **`v0.5.0-dev.3`** before any Phase 7 wording work.
-
-First checks:
-
-1. Let an installation on the development channel self-update to `v0.5.0-dev.3`.
-2. Add/manage a real direct-DLL repository and confirm the exact managed DLL filename is present in root `dlls.txt` after successful installation. Existing `dlls.txt` content must remain byte-for-byte unchanged before the appended entry; an existing equivalent entry must not be duplicated on reinstall/update.
-3. If convenient, exercise a `dlls.txt` fixture that already contains comments, spacing and other DLL entries and confirm they remain untouched.
-4. Use a multi-content repository when a suitable real fixture is available and confirm Contents shows the active branch; switching branch refreshes only branch-derived addon candidates from that branch's current remote HEAD.
-5. Continue the remaining real DLL/MPQ/library/mixed matrix only as suitable fixtures become available; do not invent synthetic runtime acceptance.
-
-The `v0.5.0-dev.2` Performante root-addon flow and ordinary single-addon fast path are already runtime-passed. Do **not** start the broad wording pass until the functional Phase 6 runtime gate is accepted.
+Prepare and validate stable **`v0.5.0`**, promote the exact candidate from `dev` to `main`, and publish it through the normal stable Release workflow. After publication, record the exact stable commit/tag/workflow provenance and start the next development cycle at **v0.5.1** with wording, MPQ and repository-library testing as explicit follow-up work.
