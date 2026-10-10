@@ -77,6 +77,23 @@ struct ItemAnalysis {
     std::vector<AccountCopy> confirmationTargets;
 };
 
+std::wstring FormatSyncFileTime(const std::filesystem::path& path) {
+    WIN32_FILE_ATTRIBUTE_DATA data{};
+    if (!GetFileAttributesExW(path.c_str(), GetFileExInfoStandard, &data)) {
+        return L"missing";
+    }
+    FILETIME local{};
+    SYSTEMTIME clock{};
+    if (!FileTimeToLocalFileTime(&data.ftLastWriteTime, &local) ||
+        !FileTimeToSystemTime(&local, &clock)) {
+        return L"unavailable";
+    }
+    wchar_t output[16]{};
+    swprintf_s(output, L"%02u:%02u:%02u",
+               clock.wHour, clock.wMinute, clock.wSecond);
+    return output;
+}
+
 std::size_t ItemIndex(AccountSyncItem item) {
     return static_cast<std::size_t>(item);
 }
@@ -1821,6 +1838,12 @@ void FillPreviewResult(
 
     result.sourceAccount =
         analysis.source.account;
+    result.timestampDetails = analysis.source.account + L" " +
+        FormatSyncFileTime(analysis.source.path);
+    for (const auto& target : analysis.confirmationTargets) {
+        result.timestampDetails += L"  >  " + target.account + L" " +
+            FormatSyncFileTime(target.path);
+    }
     result.comparerFallback =
         analysis.comparerFallback;
 
@@ -2758,6 +2781,13 @@ bool ComparePfUiFiles(
         !cacheEqual;
 
     return true;
+}
+
+std::wstring AccountSyncFileTime(
+    const std::filesystem::path& wowRoot,
+    std::wstring_view account,
+    AccountSyncItem item) {
+    return FormatSyncFileTime(AccountItemPath(wowRoot, account, item));
 }
 
 bool InspectAccountSync(
