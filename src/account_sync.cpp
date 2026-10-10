@@ -2993,14 +2993,25 @@ bool RunAccountSync(
                      analysis.confirmationTargets) {
                     std::wstring copyError;
 
-                    ItemAnalysis latest;
+                    AccountCopy liveSource = analysis.source;
+                    AccountCopy liveTarget = target;
                     std::wstring latestError;
-                    if (!AnalyzeItem(wowRoot, accounts, item, latest, latestError) ||
-                        !SameSyncPlan(analysis, latest)) {
+                    const bool unchanged =
+                        InspectCopy(liveSource.path, liveSource.exists, liveSource.modified, latestError) &&
+                        ReadSyncBytes(liveSource, latestError) &&
+                        InspectCopy(liveTarget.path, liveTarget.exists, liveTarget.modified, latestError) &&
+                        ReadSyncBytes(liveTarget, latestError) &&
+                        liveSource.exists == analysis.source.exists &&
+                        liveSource.modified == analysis.source.modified &&
+                        liveSource.bytes == analysis.source.bytes &&
+                        liveTarget.exists == target.exists &&
+                        liveTarget.modified == target.modified &&
+                        liveTarget.bytes == target.bytes;
+                    if (!unchanged) {
                         itemResult.fatal = true;
                         result.fatal = true;
                         itemResult.error = latestError.empty()
-                            ? L"Account Sync files changed before the write; confirm again."
+                            ? L"Source or destination changed before the write; confirm again."
                             : latestError;
                         if (error.empty()) error = itemResult.error;
                         break;
