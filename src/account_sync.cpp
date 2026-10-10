@@ -7,6 +7,7 @@
 #include <cwchar>
 #include <cwctype>
 #include <fstream>
+#include <iterator>
 #include <regex>
 #include <system_error>
 #include <utility>
