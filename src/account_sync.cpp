@@ -3,6 +3,7 @@
 #include <windows.h>
 
 #include <algorithm>
+#include <array>
 #include <cwchar>
 #include <cwctype>
 #include <fstream>
@@ -48,6 +49,7 @@ struct AccountCopy {
     std::filesystem::path path;
     bool exists = false;
     std::filesystem::file_time_type modified{};
+    std::string bytes;
 };
 
 struct PfUiFilePlan {
@@ -1336,6 +1338,48 @@ bool InspectCopy(
 }
 
 
+bool ReadSyncBytes(AccountCopy& copy, std::wstring& error) {
+    if (!copy.exists) {
+        return true;
+    }
+
+    std::ifstream file(copy.path, std::ios::binary);
+    if (!file) {
+        error = L"Could not read Account Sync contents for '" + copy.path.wstring() + L"'.";
+        return false;
+    }
+    copy.bytes.assign(std::istreambuf_iterator<char>(file),
+                      std::istreambuf_iterator<char>());
+    if (file.bad()) {
+        error = L"Account Sync file read failed for '" + copy.path.wstring() + L"'.";
+        return false;
+    }
+    return true;
+}
+
+bool SameSyncPlan(const ItemAnalysis& a, const ItemAnalysis& b) {
+    if (a.item != b.item || a.noSource != b.noSource ||
+        a.source.account != b.source.account ||
+        a.source.exists != b.source.exists ||
+        a.source.modified != b.source.modified ||
+        a.source.bytes != b.source.bytes ||
+        a.confirmationTargets.size() != b.confirmationTargets.size() ||
+        a.automaticTargets.size() != b.automaticTargets.size()) {
+        return false;
+    }
+    const auto equalCopy = [](const AccountCopy& x, const AccountCopy& y) {
+        return x.account == y.account && x.exists == y.exists &&
+               x.modified == y.modified && x.bytes == y.bytes;
+    };
+    for (std::size_t i = 0; i < a.confirmationTargets.size(); ++i) {
+        if (!equalCopy(a.confirmationTargets[i], b.confirmationTargets[i])) return false;
+    }
+    for (std::size_t i = 0; i < a.automaticTargets.size(); ++i) {
+        if (!equalCopy(a.automaticTargets[i], b.automaticTargets[i])) return false;
+    }
+    return true;
+}
+
 bool BuildPfUiSyncPlan(
     const std::filesystem::path& wowRoot,
     const std::vector<std::wstring>& accounts,
@@ -1694,6 +1738,10 @@ bool AnalyzeItem(
             return false;
         }
 
+        if (!ReadSyncBytes(copy, error)) {
+            return false;
+        }
+
         copies.push_back(
             std::move(copy));
     }
@@ -1739,7 +1787,8 @@ bool AnalyzeItem(
             existing[i];
 
         if (!(candidate.modified <
-              analysis.source.modified)) {
+              analysis.source.modified) ||
+            candidate.bytes == analysis.source.bytes) {
             continue;
         }
 
@@ -1831,7 +1880,8 @@ void FillPreviewResult(
         return;
     }
 
-    result.status = L"Up to date";
+    result.status = analysis.item == AccountSyncItem::PfUi
+        ? L"Up to date" : L"Already synced";
     result.action = L"No changes";
 }
 
@@ -2925,9 +2975,36 @@ bool RunAccountSync(
                     analysis.comparerFallback);
 
             if (accepted) {
+                ItemAnalysis fresh;
+                std::wstring freshnessError;
+                if (!AnalyzeItem(wowRoot, accounts, item, fresh, freshnessError) ||
+                    !SameSyncPlan(analysis, fresh)) {
+                    itemResult.fatal = true;
+                    result.fatal = true;
+                    itemResult.status = L"Changed during confirmation";
+                    itemResult.action = L"Sync cancelled; review and confirm again";
+                    itemResult.error = freshnessError.empty()
+                        ? L"Account Sync files or sync direction changed after approval."
+                        : freshnessError;
+                    if (error.empty()) error = itemResult.error;
+                    continue;
+                }
                 for (const auto& target :
                      analysis.confirmationTargets) {
                     std::wstring copyError;
+
+                    ItemAnalysis latest;
+                    std::wstring latestError;
+                    if (!AnalyzeItem(wowRoot, accounts, item, latest, latestError) ||
+                        !SameSyncPlan(analysis, latest)) {
+                        itemResult.fatal = true;
+                        result.fatal = true;
+                        itemResult.error = latestError.empty()
+                            ? L"Account Sync files changed before the write; confirm again."
+                            : latestError;
+                        if (error.empty()) error = itemResult.error;
+                        break;
+                    }
 
                     if (CopyTarget(
                             wowRoot,
