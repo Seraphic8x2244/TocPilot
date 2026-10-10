@@ -2457,6 +2457,20 @@ void RunPfUiSyncItem(
         return;
     }
 
+    std::vector<AccountCopy> expectedCopies;
+    for (const auto& entry : plan.files) {
+        AccountCopy snapshot = entry.copy;
+        if (!ReadSyncBytes(snapshot, planError)) {
+            itemResult.fatal = true;
+            itemResult.status = L"Error";
+            itemResult.error = planError;
+            runResult.fatal = true;
+            if (error.empty()) error = planError;
+            return;
+        }
+        expectedCopies.push_back(std::move(snapshot));
+    }
+
     ItemAnalysis analysis;
     FillPfUiAnalysis(
         plan,
@@ -2485,6 +2499,14 @@ void RunPfUiSyncItem(
     bool accepted = true;
 
     if (!confirmationAccounts.empty()) {
+        if (!CopiesStillCurrent(expectedCopies, planError)) {
+            itemResult.fatal = true;
+            itemResult.status = L"Changed before confirmation";
+            itemResult.error = planError;
+            runResult.fatal = true;
+            if (error.empty()) error = planError;
+            return;
+        }
         accepted =
             confirm &&
             confirm(
@@ -2494,6 +2516,14 @@ void RunPfUiSyncItem(
                 false);
         confirmationDeclined =
             !accepted;
+        if (!CopiesStillCurrent(expectedCopies, planError)) {
+            itemResult.fatal = true;
+            itemResult.status = L"Changed during confirmation";
+            itemResult.error = planError;
+            runResult.fatal = true;
+            if (error.empty()) error = planError;
+            return;
+        }
     }
 
     bool anyMergedCache = false;
@@ -2574,6 +2604,14 @@ void RunPfUiSyncItem(
                 write.fileIndex];
         std::wstring writeError;
 
+        if (!CopiesStillCurrent(expectedCopies, writeError)) {
+            itemResult.fatal = true;
+            runResult.fatal = true;
+            itemResult.error = writeError;
+            if (error.empty()) error = writeError;
+            return;
+        }
+
         if (!WritePfUiTarget(
                 wowRoot,
                 file,
@@ -2596,6 +2634,19 @@ void RunPfUiSyncItem(
         }
 
         ++modifiedTargets;
+        {
+            auto& snapshot = expectedCopies[write.fileIndex];
+            snapshot.bytes.clear();
+            std::wstring refreshError;
+            if (!InspectCopy(snapshot.path, snapshot.exists, snapshot.modified, refreshError) ||
+                !ReadSyncBytes(snapshot, refreshError)) {
+                itemResult.fatal = true;
+                runResult.fatal = true;
+                itemResult.error = refreshError;
+                if (error.empty()) error = refreshError;
+                return;
+            }
+        }
 
         if (write.cache) {
             ++automaticCopied;
