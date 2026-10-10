@@ -5,13 +5,19 @@
 #include "archive.h"
 #include "branch_dialog.h"
 #include "direct_dll.h"
+#include "mpq_package.h"
 #include "github_api.h"
 #include "git_refs.h"
 #include "gitlab_api.h"
 #include "install.h"
 #include "library_dialog.h"
+#include "package_list_viewport.h"
 #include "refresh_freshness.h"
 #include "removal_prompt.h"
+#include "repository_discovery.h"
+#include "repository_install.h"
+#include "repository_selection.h"
+#include "repository_selection_dialog.h"
 #include "state.h"
 #include "splash.h"
 #include "toolbar_icons.h"
@@ -61,6 +67,7 @@ constexpr UINT WM_TP_BRANCHES_READY = WM_APP + 6;
 constexpr UINT WM_TP_POSITION_BRANCH_SELECTOR = WM_APP + 7;
 constexpr UINT WM_TP_DLL_INSTALL_COMPLETE = WM_APP + 8;
 constexpr UINT WM_TP_SAVE_COLUMN_LAYOUT = WM_APP + 9;
+constexpr UINT WM_TP_MPQ_INSTALL_COMPLETE = WM_APP + 10;
 
 constexpr int IDC_WOW_STATUS = 1002;
 constexpr int IDC_GITHUB_STATUS = 1003;
@@ -230,8 +237,7 @@ std::vector<std::wstring> g_autoStatusPackageIds;
 std::vector<std::wstring> g_packageAttentionIds;
 std::vector<std::wstring> g_sessionUpdatedPackageIds;
 std::vector<std::wstring> g_packageLocalVersions;
-std::vector<std::size_t> g_addGitInstallQueue;
-std::size_t g_addGitInstallQueuePosition = 0;
+tp::RepositoryInstallQueue g_addGitInstallQueue;
 std::size_t g_autoStatusPosition = 0;
 std::size_t g_autoStatusCurrent = 0;
 std::size_t g_autoStatusUpdates = 0;
@@ -323,6 +329,30 @@ struct DirectDllInstallResult {
     std::uint64_t downloadedBytes = 0;
     std::wstring actualSha256;
     std::wstring error;
+};
+
+struct MpqInstallResult {
+    bool ok = false;
+    bool needsAttention = false;
+    std::size_t index = 0;
+    std::wstring packageId;
+    std::wstring packageName;
+    std::wstring asset;
+    std::wstring targetPath;
+    std::wstring resolvedTag;
+    std::uint64_t downloadedBytes = 0;
+    std::wstring actualSha256;
+    tp::MpqInstallTransaction transaction;
+    std::wstring error;
+
+    ~MpqInstallResult() {
+        if (transaction.active) {
+            std::wstring ignored;
+            tp::RollbackMpqInstall(
+                transaction,
+                ignored);
+        }
+    }
 };
 
 
@@ -1738,6 +1768,32 @@ bool ResolvePackageBranchHead(
         repositoryInfo);
 }
 
+bool ResolvePackageDefaultBranch(
+    const tp::PackageRecord& package,
+    std::wstring& branch,
+    std::wstring& remoteSha,
+    std::wstring& error,
+    tp::GitRemoteRepositoryInfo*
+        repositoryInfo = nullptr) {
+    const std::wstring host =
+        BranchProviderHost(
+            package.provider);
+
+    if (host.empty()) {
+        error =
+            L"Unsupported branch package provider.";
+        return false;
+    }
+
+    return tp::ResolvePublicGitDefaultBranch(
+        host,
+        package.repository,
+        branch,
+        remoteSha,
+        error,
+        repositoryInfo);
+}
+
 bool ResetPackageStaging(
     const tp::PackageRecord& package,
     const std::filesystem::path& wowRoot,
@@ -1811,76 +1867,6 @@ bool CleanupPackageStaging(
         package.provider,
         package.repository,
         error);
-}
-
-bool InspectAddGitRepositoryLayout(
-    const tp::PackageRecord& package,
-    tp::RepositoryAddonLayout& layout,
-    std::wstring& error) {
-    layout = {};
-    error.clear();
-
-    if (!SupportedBranchProvider(
-            package.provider) ||
-        package.mode != L"branch" ||
-        package.ref.empty() ||
-        package.latestRevision.empty()) {
-        error =
-            L"Add Git repository inspection requires a selected branch revision.";
-        return false;
-    }
-
-    tp::ArchiveInspection inspection;
-    std::uint64_t downloadedBytes = 0;
-
-    if (!ResetPackageStaging(
-            package,
-            g_root,
-            inspection.stagingDirectory,
-            error)) {
-        return false;
-    }
-
-    inspection.archivePath =
-        inspection.stagingDirectory /
-        L"archive.zip";
-    inspection.extractedRoot =
-        inspection.stagingDirectory /
-        L"extracted";
-
-    bool ok =
-        DownloadPackageBranchArchive(
-            package,
-            package.latestRevision,
-            inspection.archivePath,
-            downloadedBytes,
-            error) &&
-        tp::ExtractZipSecure(
-            inspection.archivePath,
-            inspection.extractedRoot,
-            inspection.entryCount,
-            inspection.totalUncompressedBytes,
-            error) &&
-        tp::DetectShallowRepositoryAddonLayout(
-            inspection.extractedRoot,
-            ProviderLabel(package.provider),
-            package.repository,
-            layout,
-            error);
-
-    std::wstring cleanupError;
-    if (!CleanupPackageStaging(
-            package,
-            g_root,
-            cleanupError) &&
-        ok) {
-        error =
-            L"Repository inspection succeeded, but staging cleanup failed: " +
-            cleanupError;
-        ok = false;
-    }
-
-    return ok;
 }
 
 bool PackageBranchMode(
@@ -2002,9 +1988,25 @@ std::wstring PackageStatusText(
 
     if (package.mode == L"release") {
         std::wstring error;
-        if (!tp::ValidateDirectDllPackage(
-                package,
-                error) ||
+        const bool directDll =
+            tp::IsDirectDllPackage(
+                package);
+        const bool mpq =
+            tp::IsMpqPackage(
+                package);
+
+        const bool valid =
+            directDll
+                ? tp::ValidateDirectDllPackage(
+                    package,
+                    error)
+                : (mpq
+                    ? tp::ValidateMpqPackage(
+                        package,
+                        error)
+                    : false);
+
+        if (!valid ||
             PackageNeedsAttention(
                 package.id)) {
             return L"Needs Attention";
@@ -2015,11 +2017,20 @@ std::wstring PackageStatusText(
         }
 
         std::filesystem::path target;
-        if (!tp::DirectDllTargetPath(
-                g_root,
-                package,
-                target,
-                error)) {
+        const bool targetValid =
+            directDll
+                ? tp::DirectDllTargetPath(
+                    g_root,
+                    package,
+                    target,
+                    error)
+                : tp::MpqTargetPath(
+                    g_root,
+                    package,
+                    target,
+                    error);
+
+        if (!targetValid) {
             return L"Needs Attention";
         }
 
@@ -2928,8 +2939,10 @@ void PopulatePackageList() {
     }
 
     RebuildPackageViewOrder();
-    ListView_DeleteAllItems(
-        g_packageList);
+
+    const int existingRows =
+        ListView_GetItemCount(
+            g_packageList);
 
     for (std::size_t displayIndex = 0;
          displayIndex <
@@ -2943,26 +2956,38 @@ void PopulatePackageList() {
             g_state.packages[
                 packageIndex];
 
-        LVITEMW item{};
-        item.mask =
-            LVIF_TEXT;
-        item.iItem =
-            static_cast<int>(
-                displayIndex);
-        item.iSubItem = 0;
         const std::wstring displayName =
             PackageDisplayName(package);
-        item.pszText =
-            const_cast<LPWSTR>(
-                displayName.c_str());
 
-        const int row =
-            ListView_InsertItem(
+        int row =
+            static_cast<int>(
+                displayIndex);
+
+        if (row < existingRows) {
+            ListView_SetItemText(
                 g_packageList,
-                &item);
+                row,
+                kPackageColumnName,
+                const_cast<LPWSTR>(
+                    displayName.c_str()));
+        } else {
+            LVITEMW item{};
+            item.mask =
+                LVIF_TEXT;
+            item.iItem = row;
+            item.iSubItem = 0;
+            item.pszText =
+                const_cast<LPWSTR>(
+                    displayName.c_str());
 
-        if (row < 0) {
-            continue;
+            row =
+                ListView_InsertItem(
+                    g_packageList,
+                    &item);
+
+            if (row < 0) {
+                continue;
+            }
         }
 
         const std::wstring website =
@@ -3023,6 +3048,18 @@ void PopulatePackageList() {
             kPackageColumnStatus,
             const_cast<LPWSTR>(
                 status.c_str()));
+    }
+
+    while (ListView_GetItemCount(
+               g_packageList) >
+           static_cast<int>(
+               g_packageViewOrder.size())) {
+        const int lastRow =
+            ListView_GetItemCount(
+                g_packageList) - 1;
+        ListView_DeleteItem(
+            g_packageList,
+            lastRow);
     }
 
     UpdatePackageSortIndicator();
@@ -3110,6 +3147,16 @@ void ScrollPackageListToTop() {
             g_packageList,
             0,
             first.top - currentTop.top);
+    }
+}
+
+void ApplyPackageListViewportReset(
+    tp::PackageListWorkScope scope,
+    tp::PackageListViewportPhase phase) {
+    if (tp::ShouldResetPackageListViewport(
+            scope,
+            phase)) {
+        ScrollPackageListToTop();
     }
 }
 
@@ -3883,12 +3930,10 @@ void UpdatePackageButtons() {
                 selectedPackage->provider) &&
             selectedPackage->mode != L"release";
 
-        canRefresh =
+        const bool branchPackage =
             canSetBranch &&
             selectedPackage->mode == L"branch" &&
             !selectedPackage->ref.empty();
-
-        canInspect = canRefresh;
 
         std::wstring directDllError;
         const bool directDll =
@@ -3896,9 +3941,24 @@ void UpdatePackageButtons() {
                 *selectedPackage,
                 directDllError);
 
+        std::wstring mpqError;
+        const bool mpq =
+            tp::ValidateMpqPackage(
+                *selectedPackage,
+                mpqError);
+
+        canRefresh =
+            branchPackage ||
+            directDll ||
+            mpq;
+
+        canInspect =
+            branchPackage;
+
         canInstall =
-            canRefresh ||
-            directDll;
+            branchPackage ||
+            directDll ||
+            mpq;
 
         canUninstall =
             selectedPackage->target == L"addons" &&
@@ -4054,24 +4114,14 @@ void RefreshPackageStateUi() {
                     selected)].id;
     }
 
-    std::wstring topPackageId;
-    if (g_packageList) {
-        const int topRow =
-            ListView_GetTopIndex(g_packageList);
-
-        if (topRow >= 0 &&
-            topRow < static_cast<int>(
-                g_packageViewOrder.size())) {
-            const std::size_t topIndex =
-                g_packageViewOrder[
-                    static_cast<std::size_t>(
-                        topRow)];
-
-            if (topIndex < g_state.packages.size()) {
-                topPackageId =
-                    g_state.packages[topIndex].id;
-            }
-        }
+    if (!selectedPackageId.empty() &&
+        g_packageList) {
+        ListView_SetItemState(
+            g_packageList,
+            -1,
+            0,
+            LVIS_SELECTED |
+                LVIS_FOCUSED);
     }
 
     SetIndicator(
@@ -4086,71 +4136,15 @@ void RefreshPackageStateUi() {
 
     PopulatePackageList();
 
-    if (!topPackageId.empty() &&
-        g_packageList) {
-        std::size_t topIndex =
-            g_state.packages.size();
-
-        for (std::size_t i = 0;
-             i < g_state.packages.size();
-             ++i) {
-            if (g_state.packages[i].id ==
-                topPackageId) {
-                topIndex = i;
-                break;
-            }
-        }
-
-        if (topIndex <
-            g_state.packages.size()) {
-            const int topRow =
-                PackageDisplayRow(topIndex);
-
-            if (topRow > 0) {
-                RECT first{};
-                RECT target{};
-
-                if (ListView_GetItemRect(
-                        g_packageList,
-                        0,
-                        &first,
-                        LVIR_BOUNDS) &&
-                    ListView_GetItemRect(
-                        g_packageList,
-                        topRow,
-                        &target,
-                        LVIR_BOUNDS)) {
-                    ListView_Scroll(
-                        g_packageList,
-                        0,
-                        target.top - first.top);
-                }
-            }
-        }
-    }
-
     if (!selectedPackageId.empty()) {
         for (std::size_t i = 0;
              i < g_state.packages.size();
              ++i) {
-            if (g_state.packages[i].id !=
+            if (g_state.packages[i].id ==
                 selectedPackageId) {
-                continue;
+                SelectPackageRow(i);
+                break;
             }
-
-            SelectPackageRow(i);
-
-            const int displayRow =
-                PackageDisplayRow(i);
-
-            if (displayRow >= 0 &&
-                g_packageList) {
-                ListView_EnsureVisible(
-                    g_packageList,
-                    displayRow,
-                    FALSE);
-            }
-            break;
         }
     }
 
@@ -4177,8 +4171,13 @@ void StartPackageRefresh(
         tp::IsDirectDllPackage(
             package);
 
+    const bool mpq =
+        tp::IsMpqPackage(
+            package);
+
     if (!branchPackage &&
-        !directDll) {
+        !directDll &&
+        !mpq) {
         return;
     }
 
@@ -4193,7 +4192,7 @@ void StartPackageRefresh(
             package.name +
             L": checking ";
 
-        if (directDll) {
+        if (directDll || mpq) {
             message +=
                 L"the latest stable GitHub release for exact asset '" +
                 package.asset +
@@ -4221,6 +4220,7 @@ void StartPackageRefresh(
          package,
          branchPackage,
          directDll,
+         mpq,
          wowRoot]() {
             auto result =
                 std::make_unique<
@@ -4284,6 +4284,62 @@ void StartPackageRefresh(
                             release;
 
                         if (!tp::ResolveLatestDirectDllRelease(
+                                package,
+                                release,
+                                result->error)) {
+                            result->needsAttention =
+                                DirectDllResolutionNeedsAttention(
+                                    result->error);
+                        } else {
+                            result->remoteSha =
+                                std::move(
+                                    release.tag);
+                            result->ok =
+                                true;
+                        }
+                    }
+                }
+            } else if (mpq) {
+                std::wstring configError;
+                if (!tp::ValidateMpqPackage(
+                        package,
+                        configError)) {
+                    result->error =
+                        std::move(configError);
+                    result->needsAttention =
+                        true;
+                } else {
+                    std::filesystem::path
+                        target;
+
+                    if (!tp::MpqTargetPath(
+                            wowRoot,
+                            package,
+                            target,
+                            result->error)) {
+                        result->needsAttention =
+                            true;
+                    } else if (
+                        !package.installedRevision.empty()) {
+                        std::error_code ec;
+                        const bool present =
+                            std::filesystem::is_regular_file(
+                                target,
+                                ec);
+
+                        if (!present ||
+                            ec) {
+                            result->error =
+                                L"The managed MPQ is missing from its reserved Data patch slot.";
+                            result->needsAttention =
+                                true;
+                        }
+                    }
+
+                    if (result->error.empty()) {
+                        tp::MpqRelease release;
+
+                        if (!tp::ResolveLatestMpqRelease(
                                 package,
                                 release,
                                 result->error)) {
@@ -4554,6 +4610,144 @@ void StartDirectDllInstall(
         .detach();
 }
 
+void StartMpqInstall(
+    HWND hwnd,
+    std::size_t index,
+    std::wstring knownReleaseTag) {
+    if (index >=
+        g_state.packages.size()) {
+        return;
+    }
+
+    const auto package =
+        g_state.packages[index];
+
+    std::wstring configError;
+    if (!tp::ValidateMpqPackage(
+            package,
+            configError)) {
+        SetPackageNeedsAttention(
+            package.id,
+            true);
+        SetPackageRowStatus(
+            index,
+            L"Needs Attention");
+
+        if (g_packageHint) {
+            const std::wstring message =
+                package.name +
+                L": " +
+                configError;
+            SetWindowTextW(
+                g_packageHint,
+                message.c_str());
+        }
+
+        UpdatePackageButtons();
+        return;
+    }
+
+    g_packageInstallInProgress =
+        true;
+    UpdatePackageButtons();
+
+    SetPackageRowStatus(
+        index,
+        package.installedRevision.empty()
+            ? L"Installing MPQ..."
+            : L"Updating MPQ...");
+
+    if (g_packageHint) {
+        const std::wstring message =
+            package.name +
+            L": downloading and verifying the exact latest-stable MPQ for " +
+            (g_root /
+             package.targetPath).wstring() +
+            L". The reserved patch-letter destination will not change.";
+
+        SetWindowTextW(
+            g_packageHint,
+            message.c_str());
+    }
+
+    const auto wowRoot =
+        g_root;
+    const auto packageSnapshot =
+        g_state.packages;
+
+    std::thread(
+        [hwnd,
+         index,
+         package,
+         knownReleaseTag =
+             std::move(
+                 knownReleaseTag),
+         wowRoot,
+         packageSnapshot]() mutable {
+            auto result =
+                std::make_unique<
+                    MpqInstallResult>();
+
+            result->index =
+                index;
+            result->packageId =
+                package.id;
+            result->packageName =
+                package.name;
+            result->asset =
+                package.asset;
+            result->targetPath =
+                package.targetPath;
+
+            tp::MpqRelease release;
+
+            if (!tp::ResolveLatestMpqRelease(
+                    package,
+                    release,
+                    result->error)) {
+                result->needsAttention =
+                    DirectDllResolutionNeedsAttention(
+                        result->error);
+            } else if (
+                !knownReleaseTag.empty() &&
+                release.tag !=
+                    knownReleaseTag) {
+                result->error =
+                    L"The latest stable release changed from " +
+                    knownReleaseTag +
+                    L" to " +
+                    release.tag +
+                    L" after the saved status check. Run Refresh All and retry so Update New never installs a different release than the one it displayed.";
+            } else {
+                result->resolvedTag =
+                    release.tag;
+
+                result->ok =
+                    tp::DownloadAndBeginMpqInstall(
+                        package,
+                        release,
+                        wowRoot,
+                        packageSnapshot,
+                        result->transaction,
+                        result->downloadedBytes,
+                        result->actualSha256,
+                        result->error);
+            }
+
+            if (!PostMessageW(
+                    hwnd,
+                    WM_TP_MPQ_INSTALL_COMPLETE,
+                    0,
+                    reinterpret_cast<LPARAM>(
+                        result.get()))) {
+                return;
+            }
+
+            result.release();
+        })
+        .detach();
+}
+
 void StartPackageInstall(
     HWND hwnd,
     std::size_t index,
@@ -4568,6 +4762,16 @@ void StartPackageInstall(
     if (tp::IsDirectDllPackage(
             package)) {
         StartDirectDllInstall(
+            hwnd,
+            index,
+            std::move(
+                knownRemoteSha));
+        return;
+    }
+
+    if (tp::IsMpqPackage(
+            package)) {
+        StartMpqInstall(
             hwnd,
             index,
             std::move(
@@ -4900,16 +5104,38 @@ void StartPackageReplacementInstall(
 bool IsAddGitInstallQueueCurrent(
     std::size_t index) {
     return
-        g_addGitInstallQueuePosition <
-            g_addGitInstallQueue.size() &&
-        g_addGitInstallQueue[
-            g_addGitInstallQueuePosition] ==
-            index;
+        index < g_state.packages.size() &&
+        tp::RepositoryInstallQueueHasCurrent(
+            g_addGitInstallQueue) &&
+        tp::RepositoryInstallQueueCurrentPackageId(
+            g_addGitInstallQueue) ==
+            g_state.packages[index].id;
 }
 
 void ClearAddGitInstallQueue() {
-    g_addGitInstallQueue.clear();
-    g_addGitInstallQueuePosition = 0;
+    g_addGitInstallQueue = {};
+}
+
+void FinishAddGitInstallQueue() {
+    ClearAddGitInstallQueue();
+    RefreshPackageStateUi();
+    ApplyPackageListViewportReset(
+        tp::PackageListWorkScope::MultiPackage,
+        tp::PackageListViewportPhase::Finish);
+}
+
+std::size_t FindAddGitQueuePackageIndex(
+    std::wstring_view packageId) {
+    for (std::size_t i = 0;
+         i < g_state.packages.size();
+         ++i) {
+        if (g_state.packages[i].id ==
+            packageId) {
+            return i;
+        }
+    }
+
+    return g_state.packages.size();
 }
 
 void StartAddGitInstallQueue(
@@ -4921,17 +5147,35 @@ void StartAddGitInstallQueue(
         return;
     }
 
-    g_addGitInstallQueue =
-        std::move(indices);
-    g_addGitInstallQueuePosition = 0;
+    std::wstring error;
+    if (!tp::BuildRepositoryInstallQueue(
+            g_state,
+            indices,
+            g_addGitInstallQueue,
+            error)) {
+        if (g_packageHint) {
+            SetWindowTextW(
+                g_packageHint,
+                error.c_str());
+        }
+        return;
+    }
 
+    const auto packageId =
+        tp::RepositoryInstallQueueCurrentPackageId(
+            g_addGitInstallQueue);
     const std::size_t index =
-        g_addGitInstallQueue.front();
+        FindAddGitQueuePackageIndex(
+            packageId);
 
     if (index >= g_state.packages.size()) {
         ClearAddGitInstallQueue();
         return;
     }
+
+    ApplyPackageListViewportReset(
+        tp::PackageListWorkScope::MultiPackage,
+        tp::PackageListViewportPhase::Start);
 
     StartPackageInstall(
         hwnd,
@@ -4947,17 +5191,31 @@ bool ContinueAddGitInstallQueue(
         return false;
     }
 
-    ++g_addGitInstallQueuePosition;
+    const std::wstring completedPackageId =
+        g_state.packages[
+            completedIndex].id;
+    std::wstring error;
 
-    if (g_addGitInstallQueuePosition >=
-        g_addGitInstallQueue.size()) {
+    if (!tp::AdvanceRepositoryInstallQueue(
+            g_addGitInstallQueue,
+            completedPackageId,
+            error)) {
         ClearAddGitInstallQueue();
         return false;
     }
 
+    if (!tp::RepositoryInstallQueueHasCurrent(
+            g_addGitInstallQueue)) {
+        ClearAddGitInstallQueue();
+        return false;
+    }
+
+    const auto nextPackageId =
+        tp::RepositoryInstallQueueCurrentPackageId(
+            g_addGitInstallQueue);
     const std::size_t nextIndex =
-        g_addGitInstallQueue[
-            g_addGitInstallQueuePosition];
+        FindAddGitQueuePackageIndex(
+            nextPackageId);
 
     if (nextIndex >=
         g_state.packages.size()) {
@@ -5036,12 +5294,14 @@ void SetStartupSplashCompletionPhase() {
         return;
     }
 
-    tp::SetStartupSplashPhase(
-        g_startupAppUpdateFailed
-            ? tp::StartupSplashPhase::
-                  AppUpdateFailed
-            : tp::StartupSplashPhase::
-                  AwaitingContinue);
+    if (g_startupAppUpdateFailed) {
+        tp::SetStartupSplashPhase(
+            tp::StartupSplashPhase::
+                AppUpdateFailed);
+        return;
+    }
+
+    tp::CompleteStartupSplash();
 }
 
 void FinishAutoStatusRefresh(HWND hwnd) {
@@ -5054,7 +5314,9 @@ void FinishAutoStatusRefresh(HWND hwnd) {
     }
 
     RefreshPackageStateUi();
-    ScrollPackageListToTop();
+    ApplyPackageListViewportReset(
+        tp::PackageListWorkScope::WholeList,
+        tp::PackageListViewportPhase::Finish);
 
     std::wstring message =
         L"Status check complete: " +
@@ -5165,6 +5427,10 @@ void StartAutoStatusRefresh(HWND hwnd) {
         return;
     }
 
+    ApplyPackageListViewportReset(
+        tp::PackageListWorkScope::WholeList,
+        tp::PackageListViewportPhase::Start);
+
     g_autoStatusPackageIds.clear();
     ClearSessionUpdatedPackages();
     RefreshPackageStateUi();
@@ -5186,7 +5452,9 @@ void StartAutoStatusRefresh(HWND hwnd) {
     }
 
     if (g_autoStatusPackageIds.empty()) {
-        ScrollPackageListToTop();
+        ApplyPackageListViewportReset(
+            tp::PackageListWorkScope::WholeList,
+            tp::PackageListViewportPhase::Finish);
         SetStartupSplashCompletionPhase();
         return;
     }
@@ -5229,7 +5497,9 @@ void FinishUpdateAll() {
         L"Update");
 
     RefreshPackageStateUi();
-    ScrollPackageListToTop();
+    ApplyPackageListViewportReset(
+        tp::PackageListWorkScope::WholeList,
+        tp::PackageListViewportPhase::Finish);
 
     std::wstring summary =
         L"Update New finished: " +
@@ -5316,6 +5586,10 @@ void CompleteUpdateAllStep(
         SetWindowTextW(
         g_updateAllButton,
         L"Update");
+        RefreshPackageStateUi();
+        ApplyPackageListViewportReset(
+            tp::PackageListWorkScope::WholeList,
+            tp::PackageListViewportPhase::Finish);
         UpdatePackageButtons();
 
         MessageBoxW(
@@ -5343,6 +5617,10 @@ void StartUpdateAll(HWND hwnd) {
         g_appUpdateInProgress) {
         return;
     }
+
+    ApplyPackageListViewportReset(
+        tp::PackageListWorkScope::WholeList,
+        tp::PackageListViewportPhase::Start);
 
     auto progress =
         tp::MakeUpdateAllProgress(g_state);
@@ -5396,6 +5674,9 @@ void StartUpdateAll(HWND hwnd) {
     if (progress.packageIds.empty()) {
         SetRoutinePackageFeedback(
             L"There are no installed addons currently marked Update available. Run Refresh All to check for new revisions.");
+        ApplyPackageListViewportReset(
+            tp::PackageListWorkScope::WholeList,
+            tp::PackageListViewportPhase::Finish);
         return;
     }
 
@@ -5696,6 +5977,290 @@ void UninstallPackage(
                 : MB_ICONWARNING));
 }
 
+void RemoveDirectDllPackage(
+    HWND hwnd,
+    std::size_t index) {
+    if (index >= g_state.packages.size()) {
+        return;
+    }
+
+    const auto package =
+        g_state.packages[index];
+
+    if (!tp::IsDirectDllPackage(
+            package)) {
+        return;
+    }
+
+    const bool installed =
+        !package.installedRevision.empty() &&
+        !package.installedFiles.empty();
+
+    std::wstring prompt =
+        L"Remove " +
+        package.name +
+        L" from TocPilot?";
+
+    if (installed) {
+        prompt +=
+            L"\r\n\r\nThe exact managed DLL will be removed from:\r\n" +
+            (g_root /
+             package.targetPath).wstring() +
+            L"\r\n\r\nNo backup or renamed DLL will be created.";
+    } else {
+        prompt +=
+            L"\r\n\r\nNo installed DLL is recorded. This removes only the package record.";
+    }
+
+    if (MessageBoxW(
+            hwnd,
+            prompt.c_str(),
+            L"TocPilot - Remove DLL",
+            MB_YESNO |
+                MB_ICONWARNING |
+                MB_DEFBUTTON2) != IDYES) {
+        return;
+    }
+
+    bool removedFile = false;
+    std::wstring error;
+
+    if (installed &&
+        !tp::RemoveDirectDll(
+            package,
+            g_root,
+            removedFile,
+            error)) {
+        MessageBoxW(
+            hwnd,
+            error.c_str(),
+            L"TocPilot - Remove DLL Failed",
+            MB_OK |
+                MB_ICONERROR);
+        return;
+    }
+
+    tp::AppState updatedState =
+        g_state;
+
+    if (!tp::RemovePackageRecord(
+            updatedState,
+            package.id,
+            error) ||
+        !tp::SaveState(
+            g_root,
+            updatedState,
+            error)) {
+        if (removedFile) {
+            SetPackageNeedsAttention(
+                package.id,
+                true);
+        }
+
+        std::wstring message =
+            package.name +
+            L": package state could not be saved - " +
+            error;
+
+        if (removedFile) {
+            message +=
+                L". The exact DLL was already removed and cannot be restored because direct-DLL management deliberately creates no backup DLL.";
+        }
+
+        if (g_packageHint) {
+            SetWindowTextW(
+                g_packageHint,
+                message.c_str());
+        }
+
+        MessageBoxW(
+            hwnd,
+            message.c_str(),
+            L"TocPilot - Remove DLL State Save Failed",
+            MB_OK |
+                MB_ICONWARNING);
+        RefreshPackageStateUi();
+        SelectPackageRow(index);
+        UpdatePackageButtons();
+        return;
+    }
+
+    g_state =
+        std::move(updatedState);
+    g_stateCreated = false;
+    g_stateError.clear();
+    g_packageViewOrder.clear();
+    SetPackageNeedsAttention(
+        package.id,
+        false);
+    RefreshPackageStateUi();
+}
+
+void RemoveMpqPackage(
+    HWND hwnd,
+    std::size_t index) {
+    if (index >= g_state.packages.size()) {
+        return;
+    }
+
+    const auto package =
+        g_state.packages[index];
+
+    if (!tp::IsMpqPackage(
+            package)) {
+        return;
+    }
+
+    const bool installed =
+        !package.installedRevision.empty() &&
+        !package.installedFiles.empty();
+
+    std::wstring prompt =
+        L"Remove " +
+        package.name +
+        L" from TocPilot?";
+
+    if (installed) {
+        prompt +=
+            L"\r\n\r\nThe managed MPQ at " +
+            (g_root /
+             package.targetPath).wstring() +
+            L" will be removed transactionally with rollback retained until package state is saved.";
+    } else {
+        prompt +=
+            L"\r\n\r\nNo installed MPQ is recorded. This removes the package record and releases its reserved patch-letter destination.";
+    }
+
+    if (MessageBoxW(
+            hwnd,
+            prompt.c_str(),
+            L"TocPilot - Remove MPQ",
+            MB_YESNO |
+                MB_ICONWARNING |
+                MB_DEFBUTTON2) != IDYES) {
+        return;
+    }
+
+    std::wstring error;
+    tp::MpqRemovalTransaction
+        transaction;
+
+    if (installed &&
+        !tp::BeginMpqRemoval(
+            package,
+            g_root,
+            g_state.packages,
+            transaction,
+            error)) {
+        MessageBoxW(
+            hwnd,
+            error.c_str(),
+            L"TocPilot - Remove MPQ Failed",
+            MB_OK |
+                MB_ICONERROR);
+        return;
+    }
+
+    tp::AppState updatedState =
+        g_state;
+
+    if (!tp::RemovePackageRecord(
+            updatedState,
+            package.id,
+            error)) {
+        if (transaction.active) {
+            std::wstring rollbackError;
+            tp::RollbackMpqRemoval(
+                transaction,
+                rollbackError);
+        }
+
+        MessageBoxW(
+            hwnd,
+            error.c_str(),
+            L"TocPilot - Remove MPQ Failed",
+            MB_OK |
+                MB_ICONERROR);
+        return;
+    }
+
+    if (!tp::SaveState(
+            g_root,
+            updatedState,
+            error)) {
+        const std::wstring saveError =
+            error;
+        std::wstring rollbackError;
+        const bool rolledBack =
+            !transaction.active ||
+            tp::RollbackMpqRemoval(
+                transaction,
+                rollbackError);
+
+        std::wstring message =
+            package.name +
+            L": package state could not be saved - " +
+            saveError;
+
+        if (installed && rolledBack) {
+            message +=
+                L". The previous MPQ was restored.";
+        } else if (!rolledBack) {
+            message +=
+                L". Filesystem rollback also failed: " +
+                rollbackError;
+        }
+
+        MessageBoxW(
+            hwnd,
+            message.c_str(),
+            rolledBack
+                ? L"TocPilot - Remove MPQ Rolled Back"
+                : L"TocPilot - MPQ Rollback Failed",
+            MB_OK |
+                MB_ICONERROR);
+        RefreshPackageStateUi();
+        SelectPackageRow(index);
+        UpdatePackageButtons();
+        return;
+    }
+
+    g_state =
+        std::move(updatedState);
+    g_stateCreated = false;
+    g_stateError.clear();
+    g_packageViewOrder.clear();
+
+    std::wstring cleanupError;
+    const bool cleanupOk =
+        !transaction.active ||
+        tp::FinalizeMpqRemoval(
+            transaction,
+            cleanupError);
+
+    RefreshPackageStateUi();
+
+    if (!cleanupOk) {
+        const std::wstring message =
+            package.name +
+            L": removal and package-state save succeeded, but MPQ rollback cleanup failed - " +
+            cleanupError;
+
+        if (g_packageHint) {
+            SetWindowTextW(
+                g_packageHint,
+                message.c_str());
+        }
+
+        MessageBoxW(
+            hwnd,
+            message.c_str(),
+            L"TocPilot - MPQ Removal Cleanup",
+            MB_OK |
+                MB_ICONWARNING);
+    }
+}
+
 void RemovePackage(
     HWND hwnd,
     std::size_t index) {
@@ -5705,6 +6270,22 @@ void RemovePackage(
 
     const auto package =
         g_state.packages[index];
+
+    if (tp::IsDirectDllPackage(
+            package)) {
+        RemoveDirectDllPackage(
+            hwnd,
+            index);
+        return;
+    }
+
+    if (tp::IsMpqPackage(
+            package)) {
+        RemoveMpqPackage(
+            hwnd,
+            index);
+        return;
+    }
 
     const bool hasInstalledFiles =
         package.target == L"addons" &&
@@ -9729,15 +10310,26 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                         package.name +
                         L" from the latest stable GitHub release?";
 
-                    prompt +=
-                        L"\r\n\r\nTocPilot will download only the exact configured asset '" +
-                        package.asset +
-                        L"' directly to:\r\n" +
-                        (g_root /
-                         package.targetPath).wstring() +
-                        L"\r\n\r\nNo staged, temporary, renamed, or backup DLL will be created. "
-                        L"Close WoW before continuing. TocPilot will verify SHA-256 before "
-                        L"recording the installed release and will not change antivirus settings.";
+                    if (tp::IsMpqPackage(
+                            package)) {
+                        prompt +=
+                            L"\r\n\r\nTocPilot will download and verify only the exact configured MPQ asset '" +
+                            package.asset +
+                            L"', then update its reserved destination:\r\n" +
+                            (g_root /
+                             package.targetPath).wstring() +
+                            L"\r\n\r\nThe assigned patch letter will not change. Close WoW before continuing.";
+                    } else {
+                        prompt +=
+                            L"\r\n\r\nTocPilot will download only the exact configured asset '" +
+                            package.asset +
+                            L"' directly to:\r\n" +
+                            (g_root /
+                             package.targetPath).wstring() +
+                            L"\r\n\r\nNo staged, temporary, renamed, or backup DLL will be created. "
+                            L"Close WoW before continuing. TocPilot will verify SHA-256 before "
+                            L"recording the installed release and will not change antivirus settings.";
+                    }
                 } else {
                     if (package.installedRevision.empty()) {
                         prompt =
@@ -9815,23 +10407,22 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                 return 0;
             }
 
-            tp::BranchSelection selection;
-            if (!tp::ShowBranchDialog(
-                    hwnd,
-                    repositoryPackage,
-                    selection)) {
-                return 0;
-            }
-
-            CacheRepositoryBranchInfo(
-                repositoryPackage,
-                selection.repositoryInfo);
-
             std::wstring error;
-            if (!tp::SetPackageBranch(
+            std::wstring defaultBranch;
+            std::wstring defaultBranchSha;
+            tp::GitRemoteRepositoryInfo
+                repositoryInfo;
+
+            if (!ResolvePackageDefaultBranch(
                     repositoryPackage,
-                    std::move(selection.name),
-                    std::move(selection.sha),
+                    defaultBranch,
+                    defaultBranchSha,
+                    error,
+                    &repositoryInfo) ||
+                !tp::SetPackageBranch(
+                    repositoryPackage,
+                    std::move(defaultBranch),
+                    std::move(defaultBranchSha),
                     error)) {
                 MessageBoxW(
                     hwnd,
@@ -9841,203 +10432,105 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                 return 0;
             }
 
+            CacheRepositoryBranchInfo(
+                repositoryPackage,
+                repositoryInfo);
+
             if (g_packageHint) {
                 const std::wstring message =
                     repositoryPackage.name +
-                    L": inspecting " +
+                    L": scanning branch " +
                     repositoryPackage.ref +
-                    L" at repository root + one directory level...";
+                    L" and supported release assets...";
                 SetWindowTextW(
                     g_packageHint,
                     message.c_str());
                 UpdateWindow(hwnd);
             }
 
-            tp::RepositoryAddonLayout layout;
-            if (!InspectAddGitRepositoryLayout(
+            tp::RepositoryDiscoveryResult
+                discovery;
+            if (!tp::DiscoverRepositoryCandidates(
                     repositoryPackage,
-                    layout,
+                    g_root,
+                    discovery,
                     error)) {
                 MessageBoxW(
                     hwnd,
                     error.c_str(),
-                    L"TocPilot - Add Git Inspection Failed",
+                    L"TocPilot - Add Git Scan Failed",
                     MB_OK | MB_ICONWARNING);
                 return 0;
             }
 
-            if (layout.kind ==
-                tp::RepositoryAddonLayoutKind::MixedAmbiguous) {
-                MessageBoxW(
+            std::vector<std::size_t>
+                selectedIndices;
+
+            if (!tp::ShowRepositorySelectionDialog(
                     hwnd,
-                    L"Repository layout is ambiguous: TocPilot found both repository-root .toc files and immediate child addon roots. TocPilot will not guess which roots belong together.",
-                    L"TocPilot - Add Git",
-                    MB_OK | MB_ICONWARNING);
-                return 0;
-            }
-
-            if (layout.kind ==
-                tp::RepositoryAddonLayoutKind::None) {
-                if (repositoryPackage.provider ==
-                    L"github") {
-                    tp::PackageRecord dllPackage;
-                    bool supportedDllFound = false;
-                    std::wstring dllError;
-
-                    if (tp::ShowDirectDllFallbackDialog(
-                            hwnd,
-                            repositoryPackage.repository,
-                            dllPackage,
-                            supportedDllFound,
-                            dllError)) {
-                        tp::AppState updatedState =
-                            g_state;
-
-                        if (!tp::AppendPackage(
-                                updatedState,
-                                std::move(dllPackage),
-                                error) ||
-                            !tp::SaveState(
-                                g_root,
-                                updatedState,
-                                error)) {
-                            MessageBoxW(
-                                hwnd,
-                                error.c_str(),
-                                L"TocPilot - Add DLL",
-                                MB_OK | MB_ICONERROR);
-                            return 0;
-                        }
-
-                        const std::size_t index =
-                            updatedState.packages.size() - 1;
-
-                        g_state =
-                            std::move(updatedState);
-                        g_stateCreated = false;
-                        g_stateError.clear();
-
-                        RefreshPackageStateUi();
-                        SelectPackageRow(index);
-                        UpdatePackageButtons();
-                        StartPackageInstall(
-                            hwnd,
-                            index);
-                        return 0;
-                    }
-
-                    if (supportedDllFound) {
-                        return 0;
-                    }
-                }
-
-                MessageBoxW(
-                    hwnd,
-                    L"No addon or supported DLL found",
-                    L"TocPilot - Add Git",
-                    MB_OK | MB_ICONINFORMATION);
-                return 0;
-            }
-
-            std::vector<tp::PackageRecord>
-                packagesToAdd;
-
-            auto makeChildPackage =
-                [&](const tp::AddonCandidate& candidate,
-                    tp::PackageRecord& child) {
-                    child =
-                        tp::MakeRepositoryAddonPackage(
-                            repositoryPackage.provider,
-                            repositoryPackage.repository,
-                            candidate.repositoryRelativePath
-                                .generic_wstring(),
-                            candidate.installFolder);
-
-                    return tp::SetPackageBranch(
-                        child,
-                        repositoryPackage.ref,
-                        repositoryPackage.latestRevision,
-                        error);
-                };
-
-            if (layout.kind ==
-                tp::RepositoryAddonLayoutKind::RootAddon) {
-                // Persist an explicit root marker so recursive install
-                // validation selects only the repository root candidate.
-                // Its subtree is still copied in full, including embedded
-                // libraries or modules with their own .toc files.
-                repositoryPackage.sourcePath =
-                    L".";
-                packagesToAdd.push_back(
-                    repositoryPackage);
-            } else if (
-                layout.kind ==
-                tp::RepositoryAddonLayoutKind::SingleNestedAddon) {
-                tp::PackageRecord child;
-                if (!makeChildPackage(
-                        layout.candidates.front(),
-                        child)) {
+                    discovery,
+                    repositoryInfo,
+                    g_root,
+                    g_state.packages,
+                    selectedIndices,
+                    error)) {
+                if (!error.empty()) {
                     MessageBoxW(
                         hwnd,
                         error.c_str(),
                         L"TocPilot - Add Git",
-                        MB_OK | MB_ICONERROR);
-                    return 0;
+                        MB_OK |
+                            MB_ICONINFORMATION);
                 }
-                packagesToAdd.push_back(
-                    std::move(child));
-            } else {
-                std::vector<std::size_t>
-                    selectedIndices;
-
-                if (!tp::ShowRepositoryLibraryDialog(
-                        hwnd,
-                        repositoryPackage.repository,
-                        repositoryPackage.ref,
-                        layout.candidates,
-                        selectedIndices)) {
-                    return 0;
-                }
-
-                for (const auto candidateIndex :
-                     selectedIndices) {
-                    if (candidateIndex >=
-                        layout.candidates.size()) {
-                        MessageBoxW(
-                            hwnd,
-                            L"The repository-library selection changed unexpectedly.",
-                            L"TocPilot - Add Git",
-                            MB_OK | MB_ICONERROR);
-                        return 0;
-                    }
-
-                    tp::PackageRecord child;
-                    if (!makeChildPackage(
-                            layout.candidates[
-                                candidateIndex],
-                            child)) {
-                        MessageBoxW(
-                            hwnd,
-                            error.c_str(),
-                            L"TocPilot - Add Git",
-                            MB_OK | MB_ICONERROR);
-                        return 0;
-                    }
-
-                    packagesToAdd.push_back(
-                        std::move(child));
-                }
+                return 0;
             }
 
-            if (packagesToAdd.empty()) {
+            CacheRepositoryBranchInfo(
+                repositoryPackage,
+                repositoryInfo);
+
+            std::vector<tp::RepositoryInstallItem>
+                installItems;
+
+            if (!tp::BuildRepositoryInstallItems(
+                    discovery,
+                    selectedIndices,
+                    g_root,
+                    g_state.packages,
+                    installItems,
+                    error)) {
+                MessageBoxW(
+                    hwnd,
+                    error.c_str(),
+                    L"TocPilot - Add Git",
+                    MB_OK |
+                        MB_ICONERROR);
+                return 0;
+            }
+
+            if (installItems.empty()) {
                 return 0;
             }
 
             std::size_t replacementOwnerIndex =
                 g_state.packages.size();
+            std::size_t replacementItemIndex =
+                installItems.size();
 
-            for (const auto& package :
-                 packagesToAdd) {
+            for (std::size_t itemIndex = 0;
+                 itemIndex < installItems.size();
+                 ++itemIndex) {
+                const auto& item =
+                    installItems[itemIndex];
+
+                if (item.kind !=
+                    tp::RepositoryCandidateKind::
+                        Addon) {
+                    continue;
+                }
+
+                const auto& package =
+                    item.package;
                 const std::size_t ownerIndex =
                     tp::FindPackageOwningAddonRoot(
                         g_state,
@@ -10061,13 +10554,13 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                         return 0;
                     }
 
-                    if (packagesToAdd.size() != 1) {
+                    if (installItems.size() != 1) {
                         const std::wstring message =
-                            L"The selected repository-library set includes addon root '" +
+                            L"The selected components include addon root '" +
                             package.name +
                             L"', which is already owned by '" +
                             owner.name +
-                            L"'.\r\n\r\nTocPilot will not create overlapping package records. Select that colliding addon by itself if you want to overwrite the existing managed addon.";
+                            L"'.\r\n\r\nTocPilot will not combine an ownership-transfer replacement with other new package records. Select that colliding addon by itself if you want to overwrite the existing managed addon.";
                         MessageBoxW(
                             hwnd,
                             message.c_str(),
@@ -10100,6 +10593,8 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
 
                     replacementOwnerIndex =
                         ownerIndex;
+                    replacementItemIndex =
+                        itemIndex;
                     continue;
                 }
 
@@ -10148,8 +10643,10 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                 const auto& owner =
                     g_state.packages[
                         replacementOwnerIndex];
-                const auto& replacement =
-                    packagesToAdd.front();
+                auto replacement =
+                    installItems[
+                        replacementItemIndex]
+                        .package;
 
                 const std::wstring prompt =
                     L"Addon root '" +
@@ -10176,8 +10673,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
 
                 StartPackageReplacementInstall(
                     hwnd,
-                    std::move(
-                        packagesToAdd.front()),
+                    std::move(replacement),
                     replacementOwnerIndex);
                 return 0;
             }
@@ -10187,19 +10683,21 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             std::vector<std::size_t>
                 installIndices;
             installIndices.reserve(
-                packagesToAdd.size());
+                installItems.size());
 
-            for (auto& package :
-                 packagesToAdd) {
+            for (auto& item :
+                 installItems) {
                 if (!tp::AppendPackage(
                         updatedState,
-                        std::move(package),
+                        std::move(
+                            item.package),
                         error)) {
                     MessageBoxW(
                         hwnd,
                         error.c_str(),
                         L"TocPilot - Add Git",
-                        MB_OK | MB_ICONWARNING);
+                        MB_OK |
+                            MB_ICONWARNING);
                     return 0;
                 }
 
@@ -10215,7 +10713,8 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                     hwnd,
                     error.c_str(),
                     L"TocPilot - Add Git",
-                    MB_OK | MB_ICONERROR);
+                    MB_OK |
+                        MB_ICONERROR);
                 return 0;
             }
 
@@ -10232,7 +10731,8 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             if (installIndices.size() > 1) {
                 StartAddGitInstallQueue(
                     hwnd,
-                    std::move(installIndices));
+                    std::move(
+                        installIndices));
             } else {
                 const std::size_t index =
                     installIndices.front();
@@ -10488,8 +10988,10 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                         L"release" &&
                     tracked.asset ==
                         result->asset &&
-                    tracked.targetPath ==
-                        result->asset;
+                    (tp::IsDirectDllPackage(
+                         tracked) ||
+                     tp::IsMpqPackage(
+                         tracked));
             } else {
                 trackingMatches =
                     tracked.mode ==
@@ -10918,7 +11420,11 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
 
         g_packageInstallInProgress = false;
 
+        const bool addGitQueueStep =
+            IsAddGitInstallQueueCurrent(
+                result->index);
         const bool updateAllStep =
+            !addGitQueueStep &&
             IsUpdateAllCurrentPackage(
                 result->packageId);
 
@@ -10934,8 +11440,8 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                     result->index];
 
             trackingMatches =
-                package.mode ==
-                    L"release" &&
+                tp::IsDirectDllPackage(
+                    package) &&
                 package.asset ==
                     result->asset &&
                 package.targetPath ==
@@ -10951,6 +11457,10 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                 SetWindowTextW(
                     g_packageHint,
                     message.c_str());
+            }
+
+            if (addGitQueueStep) {
+                FinishAddGitInstallQueue();
             }
 
             if (updateAllStep) {
@@ -10996,6 +11506,10 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                 SetWindowTextW(
                     g_packageHint,
                     message.c_str());
+            }
+
+            if (addGitQueueStep) {
+                FinishAddGitInstallQueue();
             }
 
             if (updateAllStep) {
@@ -11047,6 +11561,10 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                     message.c_str());
             }
 
+            if (addGitQueueStep) {
+                FinishAddGitInstallQueue();
+            }
+
             if (updateAllStep) {
                 CompleteUpdateAllStep(
                     hwnd,
@@ -11088,9 +11606,24 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             return 0;
         }
 
+        if (addGitQueueStep) {
+            RefreshPackageStateUi();
+            if (ContinueAddGitInstallQueue(
+                    hwnd,
+                    index)) {
+                return 0;
+            }
+        }
+
         RefreshPackageStateUi();
         SelectPackageRow(index);
         UpdatePackageButtons();
+
+        if (addGitQueueStep) {
+            ApplyPackageListViewportReset(
+                tp::PackageListWorkScope::MultiPackage,
+                tp::PackageListViewportPhase::Finish);
+        }
 
         const auto& installed =
             g_state.packages[index];
@@ -11138,6 +11671,378 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
         return 0;
     }
 
+    case WM_TP_MPQ_INSTALL_COMPLETE: {
+        std::unique_ptr<MpqInstallResult>
+            result(
+                reinterpret_cast<
+                    MpqInstallResult*>(
+                        lParam));
+
+        g_packageInstallInProgress = false;
+
+        const bool addGitQueueStep =
+            IsAddGitInstallQueueCurrent(
+                result->index);
+        const bool updateAllStep =
+            !addGitQueueStep &&
+            IsUpdateAllCurrentPackage(
+                result->packageId);
+
+        bool trackingMatches = false;
+
+        if (result->index <
+                g_state.packages.size() &&
+            g_state.packages[
+                result->index].id ==
+                result->packageId) {
+            const auto& package =
+                g_state.packages[
+                    result->index];
+
+            trackingMatches =
+                tp::IsMpqPackage(
+                    package) &&
+                package.asset ==
+                    result->asset &&
+                package.targetPath ==
+                    result->targetPath;
+        }
+
+        if (!trackingMatches) {
+            std::wstring rollbackError;
+            if (result->transaction.active) {
+                tp::RollbackMpqInstall(
+                    result->transaction,
+                    rollbackError);
+            }
+
+            std::wstring message =
+                result->packageId +
+                L": MPQ install result was discarded because package tracking changed. Installed state was not changed.";
+
+            if (!rollbackError.empty()) {
+                message +=
+                    L" Rollback also failed: " +
+                    rollbackError;
+            }
+
+            if (g_packageHint) {
+                SetWindowTextW(
+                    g_packageHint,
+                    message.c_str());
+            }
+
+            if (addGitQueueStep) {
+                FinishAddGitInstallQueue();
+            }
+
+            if (updateAllStep) {
+                CompleteUpdateAllStep(
+                    hwnd,
+                    tp::UpdateAllOutcome::Failed,
+                    message);
+            } else {
+                UpdatePackageButtons();
+            }
+            return 0;
+        }
+
+        const auto index =
+            result->index;
+        const auto& currentPackage =
+            g_state.packages[index];
+        const bool wasUpdate =
+            !currentPackage.installedRevision.empty() &&
+            currentPackage.installedRevision !=
+                result->resolvedTag;
+
+        if (!result->ok) {
+            if (result->needsAttention) {
+                SetPackageNeedsAttention(
+                    result->packageId,
+                    true);
+            }
+
+            SetPackageRowStatus(
+                index,
+                result->needsAttention
+                    ? L"Needs Attention"
+                    : L"MPQ update failed");
+
+            const std::wstring message =
+                currentPackage.name +
+                L": MPQ install/update failed - " +
+                result->error +
+                L" Installed state was not advanced.";
+
+            if (g_packageHint) {
+                SetWindowTextW(
+                    g_packageHint,
+                    message.c_str());
+            }
+
+            if (addGitQueueStep) {
+                FinishAddGitInstallQueue();
+            }
+
+            if (updateAllStep) {
+                CompleteUpdateAllStep(
+                    hwnd,
+                    tp::UpdateAllOutcome::Failed,
+                    message,
+                    IsProviderRateLimitError(
+                        result->error));
+            } else {
+                MessageBoxW(
+                    hwnd,
+                    message.c_str(),
+                    L"TocPilot - MPQ Install Failed",
+                    MB_OK |
+                        MB_ICONWARNING);
+                SelectPackageRow(index);
+                UpdatePackageButtons();
+            }
+            return 0;
+        }
+
+        tp::AppState updatedState =
+            g_state;
+        std::wstring error;
+
+        if (!tp::SetPackageInstalledState(
+                updatedState.packages[index],
+                result->resolvedTag,
+                {result->targetPath},
+                error)) {
+            const std::wstring stateError =
+                error;
+            std::wstring rollbackError;
+            const bool rolledBack =
+                tp::RollbackMpqInstall(
+                    result->transaction,
+                    rollbackError);
+
+            std::wstring message =
+                currentPackage.name +
+                L": MPQ package state could not be prepared - " +
+                stateError;
+            if (!rolledBack) {
+                message +=
+                    L". Filesystem rollback also failed: " +
+                    rollbackError;
+            }
+
+            SetPackageRowStatus(
+                index,
+                rolledBack
+                    ? L"Install failed"
+                    : L"Rollback failed");
+
+            if (g_packageHint) {
+                SetWindowTextW(
+                    g_packageHint,
+                    message.c_str());
+            }
+
+            if (addGitQueueStep) {
+                FinishAddGitInstallQueue();
+            }
+
+            if (updateAllStep) {
+                CompleteUpdateAllStep(
+                    hwnd,
+                    tp::UpdateAllOutcome::Failed,
+                    message,
+                    !rolledBack);
+            } else {
+                MessageBoxW(
+                    hwnd,
+                    message.c_str(),
+                    rolledBack
+                        ? L"TocPilot - MPQ Install Failed"
+                        : L"TocPilot - MPQ Rollback Failed",
+                    MB_OK |
+                        MB_ICONERROR);
+                SelectPackageRow(index);
+                UpdatePackageButtons();
+            }
+            return 0;
+        }
+
+        if (!tp::SaveState(
+                g_root,
+                updatedState,
+                error)) {
+            const std::wstring saveError =
+                error;
+            std::wstring rollbackError;
+            const bool rolledBack =
+                tp::RollbackMpqInstall(
+                    result->transaction,
+                    rollbackError);
+
+            std::wstring message =
+                currentPackage.name +
+                L": MPQ package state could not be saved - " +
+                saveError;
+
+            if (rolledBack) {
+                message +=
+                    L". The previous Data patch state was restored.";
+            } else {
+                message +=
+                    L". Filesystem rollback also failed: " +
+                    rollbackError;
+            }
+
+            SetPackageRowStatus(
+                index,
+                rolledBack
+                    ? L"Install rolled back"
+                    : L"Rollback failed");
+
+            if (g_packageHint) {
+                SetWindowTextW(
+                    g_packageHint,
+                    message.c_str());
+            }
+
+            if (addGitQueueStep) {
+                FinishAddGitInstallQueue();
+            }
+
+            if (updateAllStep) {
+                CompleteUpdateAllStep(
+                    hwnd,
+                    tp::UpdateAllOutcome::Failed,
+                    message,
+                    !rolledBack);
+            } else {
+                MessageBoxW(
+                    hwnd,
+                    message.c_str(),
+                    rolledBack
+                        ? L"TocPilot - MPQ Install Rolled Back"
+                        : L"TocPilot - MPQ Rollback Failed",
+                    MB_OK |
+                        MB_ICONERROR);
+                SelectPackageRow(index);
+                UpdatePackageButtons();
+            }
+            return 0;
+        }
+
+        g_state =
+            std::move(updatedState);
+        g_stateCreated = false;
+        g_stateError.clear();
+
+        std::wstring cleanupError;
+        const bool cleanupOk =
+            tp::FinalizeMpqInstall(
+                result->transaction,
+                cleanupError);
+
+        SetPackageNeedsAttention(
+            result->packageId,
+            false);
+
+        if (wasUpdate) {
+            MarkPackageUpdatedThisSession(
+                result->packageId);
+        }
+
+        if (updateAllStep) {
+            RefreshPackageStateUi();
+            CompleteUpdateAllStep(
+                hwnd,
+                tp::UpdateAllOutcome::Updated,
+                cleanupOk
+                    ? std::wstring{}
+                    : currentPackage.name +
+                        L": MPQ update succeeded but rollback cleanup failed: " +
+                        cleanupError);
+            return 0;
+        }
+
+        if (addGitQueueStep) {
+            RefreshPackageStateUi();
+            if (ContinueAddGitInstallQueue(
+                    hwnd,
+                    index)) {
+                return 0;
+            }
+        }
+
+        RefreshPackageStateUi();
+        SelectPackageRow(index);
+        UpdatePackageButtons();
+
+        if (addGitQueueStep) {
+            ApplyPackageListViewportReset(
+                tp::PackageListWorkScope::MultiPackage,
+                tp::PackageListViewportPhase::Finish);
+        }
+
+        const auto& installed =
+            g_state.packages[index];
+
+        std::wstring message =
+            installed.name +
+            L": installed and verified release " +
+            installed.installedRevision +
+            L" at " +
+            (g_root /
+             installed.targetPath).wstring() +
+            L".";
+
+        if (!cleanupOk) {
+            message +=
+                L" Install succeeded, but rollback cleanup needs attention: " +
+                cleanupError;
+        }
+
+        if (g_packageHint) {
+            SetWindowTextW(
+                g_packageHint,
+                message.c_str());
+        }
+
+        std::wstring summary =
+            installed.name +
+            L" installed successfully.\r\n\r\nRepository: " +
+            installed.repository +
+            L"\r\nRelease: " +
+            installed.installedRevision +
+            L"\r\nAsset: " +
+            installed.asset +
+            L"\r\nDestination: " +
+            (g_root /
+             installed.targetPath).wstring() +
+            L"\r\nDownloaded: " +
+            std::to_wstring(
+                result->downloadedBytes) +
+            L" bytes\r\nSHA-256: " +
+            result->actualSha256;
+
+        if (!cleanupOk) {
+            summary +=
+                L"\r\n\r\nThe install and state save succeeded, but rollback cleanup failed:\r\n" +
+                cleanupError;
+        }
+
+        MessageBoxW(
+            hwnd,
+            summary.c_str(),
+            L"TocPilot - MPQ Installed",
+            MB_OK |
+                (cleanupOk
+                    ? MB_ICONINFORMATION
+                    : MB_ICONWARNING));
+
+        return 0;
+    }
+
     case WM_TP_PACKAGE_INSTALL_COMPLETE: {
         std::unique_ptr<PackageInstallResult> result(
             reinterpret_cast<PackageInstallResult*>(
@@ -11179,7 +12084,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             }
 
             if (addGitQueueStep) {
-                ClearAddGitInstallQueue();
+                FinishAddGitInstallQueue();
             }
 
             if (updateAllStep) {
@@ -11225,7 +12130,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             }
 
             if (addGitQueueStep) {
-                ClearAddGitInstallQueue();
+                FinishAddGitInstallQueue();
             }
 
             if (updateAllStep) {
@@ -11322,7 +12227,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             }
 
             if (addGitQueueStep) {
-                ClearAddGitInstallQueue();
+                FinishAddGitInstallQueue();
             }
 
             if (updateAllStep) {
@@ -11386,7 +12291,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             }
 
             if (addGitQueueStep) {
-                ClearAddGitInstallQueue();
+                FinishAddGitInstallQueue();
             }
 
             if (updateAllStep) {
@@ -11432,7 +12337,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             }
 
             if (addGitQueueStep) {
-                ClearAddGitInstallQueue();
+                FinishAddGitInstallQueue();
             }
 
             if (updateAllStep) {
@@ -11500,7 +12405,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             }
 
             if (addGitQueueStep) {
-                ClearAddGitInstallQueue();
+                FinishAddGitInstallQueue();
             }
 
             if (updateAllStep) {
@@ -11591,6 +12496,13 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
         RefreshPackageStateUi();
         SelectPackageRow(index);
         UpdatePackageButtons();
+
+        if (addGitQueueStep) {
+            ApplyPackageListViewportReset(
+                tp::PackageListWorkScope::MultiPackage,
+                tp::PackageListViewportPhase::Finish);
+        }
+
         const std::wstring shortSha =
             installedPackage.installedRevision.substr(
                 0,

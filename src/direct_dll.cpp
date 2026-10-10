@@ -10,6 +10,7 @@
 #include <cctype>
 #include <cwctype>
 #include <filesystem>
+#include <fstream>
 #include <limits>
 #include <string>
 #include <string_view>
@@ -22,8 +23,6 @@ constexpr wchar_t kUserAgent[] =
     L"TocPilot/" TOCPILOT_VERSION_W;
 constexpr std::uint64_t kMaxDllBytes =
     256ull * 1024ull * 1024ull;
-constexpr std::size_t kMaxChecksumBytes =
-    1024 * 1024;
 
 struct Handles {
     HINTERNET session = nullptr;
@@ -121,33 +120,6 @@ bool IsHexDigest(
                 (ch >= L'A' &&
                  ch <= L'F');
         });
-}
-
-bool NormalizeSha256Digest(
-    std::wstring digest,
-    std::wstring& normalized) {
-    constexpr std::wstring_view prefix =
-        L"sha256:";
-
-    if (digest.size() >=
-            prefix.size() &&
-        Lower(
-            digest.substr(
-                0,
-                prefix.size())) ==
-            prefix) {
-        digest.erase(
-            0,
-            prefix.size());
-    }
-
-    if (!IsHexDigest(digest)) {
-        return false;
-    }
-
-    normalized =
-        Lower(std::move(digest));
-    return true;
 }
 
 bool CrackUrl(
@@ -324,111 +296,6 @@ bool OpenUrl(
     }
 
     return true;
-}
-
-bool DownloadText(
-    const std::wstring& url,
-    std::string& body,
-    std::wstring& error) {
-    body.clear();
-
-    Handles handles;
-    DWORD status = 0;
-
-    if (!OpenUrl(
-            url,
-            handles,
-            status,
-            error)) {
-        return false;
-    }
-
-    if (status < 200 ||
-        status >= 300) {
-        error =
-            L"Checksum asset returned HTTP status " +
-            std::to_wstring(status) +
-            L".";
-        return false;
-    }
-
-    std::array<char, 4096> buffer{};
-
-    for (;;) {
-        DWORD read = 0;
-        if (!WinHttpReadData(
-                handles.request,
-                buffer.data(),
-                static_cast<DWORD>(
-                    buffer.size()),
-                &read)) {
-            error =
-                L"Could not read checksum asset: " +
-                WindowsError(
-                    GetLastError());
-            return false;
-        }
-
-        if (read == 0) {
-            break;
-        }
-
-        if (body.size() >
-            kMaxChecksumBytes -
-                static_cast<std::size_t>(
-                    read)) {
-            error =
-                L"Checksum asset exceeds the 1 MiB safety limit.";
-            return false;
-        }
-
-        body.append(
-            buffer.data(),
-            read);
-    }
-
-    return true;
-}
-
-bool ParseChecksumBody(
-    std::string_view body,
-    std::wstring& digest) {
-    for (std::size_t i = 0;
-         i + 64 <= body.size();
-         ++i) {
-        bool allHex = true;
-        for (std::size_t j = 0;
-             j < 64;
-             ++j) {
-            if (!std::isxdigit(
-                    static_cast<unsigned char>(
-                        body[i + j]))) {
-                allHex = false;
-                break;
-            }
-        }
-
-        if (!allHex) {
-            continue;
-        }
-
-        std::wstring candidate;
-        candidate.reserve(64);
-        for (std::size_t j = 0;
-             j < 64;
-             ++j) {
-            candidate.push_back(
-                static_cast<wchar_t>(
-                    body[i + j]));
-        }
-
-        digest =
-            Lower(
-                std::move(candidate));
-        return true;
-    }
-
-    return false;
 }
 
 bool Sha256File(
@@ -628,6 +495,115 @@ bool Sha256File(
     }
 
     cleanup();
+    return true;
+}
+
+bool WideToUtf8(
+    std::wstring_view value,
+    std::string& encoded,
+    std::wstring& error) {
+    encoded.clear();
+
+    if (value.empty()) {
+        error =
+            L"DLL loader entry is empty.";
+        return false;
+    }
+
+    const int required =
+        WideCharToMultiByte(
+            CP_UTF8,
+            WC_ERR_INVALID_CHARS,
+            value.data(),
+            static_cast<int>(
+                value.size()),
+            nullptr,
+            0,
+            nullptr,
+            nullptr);
+
+    if (required <= 0) {
+        error =
+            L"Could not encode the DLL filename for dlls.txt: " +
+            WindowsError(
+                GetLastError());
+        return false;
+    }
+
+    encoded.resize(
+        static_cast<std::size_t>(
+            required));
+
+    if (WideCharToMultiByte(
+            CP_UTF8,
+            WC_ERR_INVALID_CHARS,
+            value.data(),
+            static_cast<int>(
+                value.size()),
+            encoded.data(),
+            required,
+            nullptr,
+            nullptr) != required) {
+        encoded.clear();
+        error =
+            L"Could not encode the DLL filename for dlls.txt: " +
+            WindowsError(
+                GetLastError());
+        return false;
+    }
+
+    return true;
+}
+
+std::string_view TrimLoaderLine(
+    std::string_view line) {
+    while (!line.empty() &&
+           (line.front() == ' ' ||
+            line.front() == '\t')) {
+        line.remove_prefix(1);
+    }
+
+    while (!line.empty() &&
+           (line.back() == ' ' ||
+            line.back() == '\t')) {
+        line.remove_suffix(1);
+    }
+
+    return line;
+}
+
+bool LoaderEntryMatches(
+    std::string_view line,
+    std::string_view entry) {
+    if (line.size() !=
+        entry.size()) {
+        return false;
+    }
+
+    for (std::size_t index = 0;
+         index < line.size();
+         ++index) {
+        const unsigned char left =
+            static_cast<unsigned char>(
+                line[index]);
+        const unsigned char right =
+            static_cast<unsigned char>(
+                entry[index]);
+
+        if (left == right) {
+            continue;
+        }
+
+        if (left < 0x80 &&
+            right < 0x80 &&
+            std::tolower(left) ==
+                std::tolower(right)) {
+            continue;
+        }
+
+        return false;
+    }
+
     return true;
 }
 
@@ -835,6 +811,250 @@ bool DownloadToFinalPath(
 
 } // namespace
 
+bool EnsureDirectDllLoaderEntry(
+    const std::filesystem::path& wowRoot,
+    const PackageRecord& package,
+    bool& changed,
+    std::wstring& error) {
+    changed = false;
+    error.clear();
+
+    if (wowRoot.empty()) {
+        error =
+            L"World of Warcraft root path is empty.";
+        return false;
+    }
+
+    if (!ValidateDirectDllPackage(
+            package,
+            error)) {
+        return false;
+    }
+
+    std::string entry;
+    if (!WideToUtf8(
+            package.targetPath,
+            entry,
+            error)) {
+        return false;
+    }
+
+    const auto loaderPath =
+        wowRoot / L"dlls.txt";
+
+    std::error_code ec;
+    const bool exists =
+        std::filesystem::exists(
+            loaderPath,
+            ec);
+
+    if (ec) {
+        error =
+            L"Could not inspect dlls.txt (filesystem error " +
+            std::to_wstring(
+                ec.value()) +
+            L").";
+        return false;
+    }
+
+    std::string content;
+
+    if (exists) {
+        if (!std::filesystem::is_regular_file(
+                loaderPath,
+                ec)) {
+            if (ec) {
+                error =
+                    L"Could not inspect dlls.txt (filesystem error " +
+                    std::to_wstring(
+                        ec.value()) +
+                    L").";
+            } else {
+                error =
+                    L"dlls.txt exists but is not a regular file.";
+            }
+            return false;
+        }
+
+        std::ifstream input(
+            loaderPath,
+            std::ios::binary);
+
+        if (!input) {
+            error =
+                L"Could not open dlls.txt for reading.";
+            return false;
+        }
+
+        input.seekg(
+            0,
+            std::ios::end);
+        const auto length =
+            input.tellg();
+
+        if (length < 0) {
+            error =
+                L"Could not determine dlls.txt size.";
+            return false;
+        }
+
+        input.seekg(
+            0,
+            std::ios::beg);
+
+        content.resize(
+            static_cast<std::size_t>(
+                length));
+
+        if (!content.empty()) {
+            input.read(
+                content.data(),
+                static_cast<std::streamsize>(
+                    content.size()));
+
+            if (!input) {
+                error =
+                    L"Could not read dlls.txt.";
+                return false;
+            }
+        }
+
+        if (content.size() >= 2) {
+            const unsigned char first =
+                static_cast<unsigned char>(
+                    content[0]);
+            const unsigned char second =
+                static_cast<unsigned char>(
+                    content[1]);
+
+            if ((first == 0xFF &&
+                 second == 0xFE) ||
+                (first == 0xFE &&
+                 second == 0xFF)) {
+                error =
+                    L"dlls.txt uses UTF-16 encoding. TocPilot left it unchanged because appending UTF-8 would corrupt the file.";
+                return false;
+            }
+        }
+
+        std::size_t offset = 0;
+        bool firstLine = true;
+
+        while (offset <=
+               content.size()) {
+            const auto end =
+                content.find_first_of(
+                    "\r\n",
+                    offset);
+
+            const auto lineEnd =
+                end == std::string::npos
+                    ? content.size()
+                    : end;
+
+            std::string_view line(
+                content.data() + offset,
+                lineEnd - offset);
+
+            if (firstLine &&
+                line.size() >= 3 &&
+                static_cast<unsigned char>(
+                    line[0]) == 0xEF &&
+                static_cast<unsigned char>(
+                    line[1]) == 0xBB &&
+                static_cast<unsigned char>(
+                    line[2]) == 0xBF) {
+                line.remove_prefix(3);
+            }
+
+            line =
+                TrimLoaderLine(line);
+
+            if (LoaderEntryMatches(
+                    line,
+                    entry)) {
+                return true;
+            }
+
+            if (end ==
+                std::string::npos) {
+                break;
+            }
+
+            offset = end + 1;
+            if (content[end] == '\r' &&
+                offset <
+                    content.size() &&
+                content[offset] == '\n') {
+                ++offset;
+            }
+
+            firstLine = false;
+        }
+    }
+
+    std::string newline =
+        "\r\n";
+
+    if (content.find(
+            "\r\n") !=
+        std::string::npos) {
+        newline =
+            "\r\n";
+    } else if (content.find(
+                   '\n') !=
+               std::string::npos) {
+        newline =
+            "\n";
+    } else if (content.find(
+                   '\r') !=
+               std::string::npos) {
+        newline =
+            "\r";
+    }
+
+    std::ofstream output(
+        loaderPath,
+        std::ios::binary |
+            (exists
+                ? std::ios::app
+                : std::ios::trunc));
+
+    if (!output) {
+        error =
+            L"Could not open dlls.txt for updating.";
+        return false;
+    }
+
+    if (!content.empty() &&
+        content.back() != '\r' &&
+        content.back() != '\n') {
+        output.write(
+            newline.data(),
+            static_cast<std::streamsize>(
+                newline.size()));
+    }
+
+    output.write(
+        entry.data(),
+        static_cast<std::streamsize>(
+            entry.size()));
+    output.write(
+        newline.data(),
+        static_cast<std::streamsize>(
+            newline.size()));
+    output.flush();
+
+    if (!output) {
+        error =
+            L"Could not append the managed DLL to dlls.txt.";
+        return false;
+    }
+
+    changed = true;
+    return true;
+}
+
 bool IsDirectDllPackage(
     const PackageRecord& package) {
     return
@@ -889,72 +1109,11 @@ bool ResolveLatestDirectDllRelease(
         return false;
     }
 
-    GitHubReleaseInfo metadata;
-    if (!FetchLatestStableGitHubRelease(
-            package.repository,
-            metadata,
-            error)) {
-        return false;
-    }
-
-    if (!FindExactGitHubReleaseAsset(
-            metadata,
-            package.asset,
-            release.asset,
-            error)) {
-        return false;
-    }
-
-    release.tag =
-        metadata.tag;
-
-    if (NormalizeSha256Digest(
-            release.asset.digest,
-            release.expectedSha256)) {
-        return true;
-    }
-
-    GitHubReleaseAsset checksum;
-    std::wstring lookupError;
-    const std::wstring checksumName =
-        package.asset +
-        L".sha256";
-
-    if (!FindExactGitHubReleaseAsset(
-            metadata,
-            checksumName,
-            checksum,
-            lookupError)) {
-        error =
-            L"Release asset has no usable SHA-256 digest and no exact '" +
-            checksumName +
-            L"' checksum asset. TocPilot will not install an unverifiable DLL.";
-        release = {};
-        return false;
-    }
-
-    std::string body;
-    if (!DownloadText(
-            checksum.downloadUrl,
-            body,
-            error)) {
-        error =
-            L"Could not obtain the DLL checksum: " +
-            error;
-        release = {};
-        return false;
-    }
-
-    if (!ParseChecksumBody(
-            body,
-            release.expectedSha256)) {
-        error =
-            L"Checksum asset does not contain a SHA-256 digest.";
-        release = {};
-        return false;
-    }
-
-    return true;
+    return ResolveLatestStableExactReleaseAsset(
+        package,
+        ExactReleaseAssetKind::Dll,
+        release,
+        error);
 }
 
 bool DownloadAndVerifyDirectDll(
@@ -977,7 +1136,9 @@ bool DownloadAndVerifyDirectDll(
         return false;
     }
 
-    if (release.tag.empty() ||
+    if (release.kind !=
+            ExactReleaseAssetKind::Dll ||
+        release.tag.empty() ||
         release.asset.name !=
             package.asset ||
         release.asset.downloadUrl.empty() ||
@@ -1039,6 +1200,81 @@ bool DownloadAndVerifyDirectDll(
         return false;
     }
 
+    bool loaderChanged = false;
+    std::wstring loaderError;
+
+    if (!EnsureDirectDllLoaderEntry(
+            wowRoot,
+            package,
+            loaderChanged,
+            loaderError)) {
+        error =
+            L"The DLL was downloaded and SHA-256 verified, but TocPilot could not update dlls.txt - " +
+            loaderError +
+            L" The DLL remains at its exact destination and installed state was not advanced.";
+        return false;
+    }
+
+    return true;
+}
+
+bool RemoveDirectDll(
+    const PackageRecord& package,
+    const std::filesystem::path& wowRoot,
+    bool& removed,
+    std::wstring& error) {
+    removed = false;
+    error.clear();
+
+    std::filesystem::path target;
+    if (!DirectDllTargetPath(
+            wowRoot,
+            package,
+            target,
+            error)) {
+        return false;
+    }
+
+    const DWORD attributes =
+        GetFileAttributesW(
+            target.c_str());
+
+    if (attributes ==
+        INVALID_FILE_ATTRIBUTES) {
+        const DWORD code =
+            GetLastError();
+
+        if (code ==
+                ERROR_FILE_NOT_FOUND ||
+            code ==
+                ERROR_PATH_NOT_FOUND) {
+            return true;
+        }
+
+        error =
+            L"Could not inspect the exact DLL destination before removal: " +
+            WindowsError(code);
+        return false;
+    }
+
+    if ((attributes &
+         FILE_ATTRIBUTE_DIRECTORY) != 0) {
+        error =
+            L"The configured DLL destination is a directory.";
+        return false;
+    }
+
+    if (!DeleteFileW(
+            target.c_str())) {
+        error =
+            L"Could not remove the exact managed DLL: " +
+            WindowsError(
+                GetLastError()) +
+            L". Close WoW and retry; security software may also be blocking the file.";
+        return false;
+    }
+
+    removed = true;
     return true;
 }
 

@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.24)
 
-project(TocPilot VERSION 0.4.0 LANGUAGES C CXX)
+project(TocPilot VERSION 0.5.0 LANGUAGES C CXX)
 
 # miniz 3.1.2, pinned from richgel999/miniz commit
 # 77d0dce8627735138c51770d1799a1ef48f2117d.
@@ -30,6 +30,8 @@ add_executable(TocPilot WIN32
     src/archive.cpp
     src/branch_dialog.cpp
     src/direct_dll.cpp
+    src/exact_release_asset.cpp
+    src/mpq_package.cpp
     src/github_api.cpp
     src/github_release.cpp
     src/git_refs.cpp
@@ -40,6 +42,10 @@ add_executable(TocPilot WIN32
     src/provider.cpp
     src/refresh_freshness.cpp
     src/removal_prompt.cpp
+    src/repository_discovery.cpp
+    src/repository_install.cpp
+    src/repository_selection.cpp
+    src/repository_selection_dialog.cpp
     src/state.cpp
     src/splash.cpp
     src/toolbar_icons.cpp
@@ -272,6 +278,7 @@ if(BUILD_TESTING)
     add_executable(TocPilotDirectDllTests
         tests/direct_dll_tests.cpp
         src/direct_dll.cpp
+        src/exact_release_asset.cpp
         src/github_release.cpp
         src/state.cpp
     )
@@ -290,6 +297,121 @@ if(BUILD_TESTING)
     endif()
 
     add_test(NAME direct-dll-policy COMMAND TocPilotDirectDllTests)
+
+    add_executable(TocPilotExactReleaseAssetTests
+        tests/exact_release_asset_tests.cpp
+        src/exact_release_asset.cpp
+        src/github_release.cpp
+    )
+    target_compile_features(TocPilotExactReleaseAssetTests PRIVATE cxx_std_20)
+    target_compile_definitions(TocPilotExactReleaseAssetTests PRIVATE
+        UNICODE
+        _UNICODE
+        WIN32_LEAN_AND_MEAN
+        NOMINMAX
+    )
+    target_include_directories(TocPilotExactReleaseAssetTests PRIVATE src)
+    target_link_libraries(TocPilotExactReleaseAssetTests PRIVATE winhttp)
+
+    if(MSVC)
+        target_compile_options(TocPilotExactReleaseAssetTests PRIVATE /W4 /permissive- /utf-8)
+    endif()
+
+    add_test(NAME exact-release-asset-policy COMMAND TocPilotExactReleaseAssetTests)
+
+    add_executable(TocPilotMpqPackageTests
+        tests/mpq_package_tests.cpp
+        src/mpq_package.cpp
+        src/exact_release_asset.cpp
+        src/github_release.cpp
+        src/state.cpp
+    )
+    target_compile_features(TocPilotMpqPackageTests PRIVATE cxx_std_20)
+    target_compile_definitions(TocPilotMpqPackageTests PRIVATE
+        UNICODE
+        _UNICODE
+        WIN32_LEAN_AND_MEAN
+        NOMINMAX
+    )
+    target_include_directories(TocPilotMpqPackageTests PRIVATE src)
+    target_link_libraries(TocPilotMpqPackageTests PRIVATE winhttp bcrypt)
+
+    if(MSVC)
+        target_compile_options(TocPilotMpqPackageTests PRIVATE /W4 /permissive- /utf-8)
+    endif()
+
+    add_test(NAME mpq-package-backend COMMAND TocPilotMpqPackageTests)
+
+    add_executable(TocPilotRepositoryDiscoveryTests
+        tests/repository_discovery_tests.cpp
+        src/repository_discovery.cpp
+        src/archive.cpp
+        src/exact_release_asset.cpp
+        src/github_api.cpp
+        src/github_release.cpp
+        src/git_refs.cpp
+        src/gitlab_api.cpp
+    )
+    target_compile_features(TocPilotRepositoryDiscoveryTests PRIVATE cxx_std_20)
+    target_compile_definitions(TocPilotRepositoryDiscoveryTests PRIVATE
+        UNICODE
+        _UNICODE
+        WIN32_LEAN_AND_MEAN
+        NOMINMAX
+    )
+    target_include_directories(TocPilotRepositoryDiscoveryTests PRIVATE src)
+    target_link_libraries(TocPilotRepositoryDiscoveryTests PRIVATE
+        TocPilotMiniz
+        winhttp
+    )
+
+    if(MSVC)
+        target_compile_options(TocPilotRepositoryDiscoveryTests PRIVATE /W4 /permissive- /utf-8)
+    endif()
+
+    add_test(NAME repository-candidate-discovery COMMAND TocPilotRepositoryDiscoveryTests)
+
+    add_executable(TocPilotRepositorySelectionTests
+        tests/repository_selection_tests.cpp
+        src/repository_selection.cpp
+    )
+    target_compile_features(TocPilotRepositorySelectionTests PRIVATE cxx_std_20)
+    target_include_directories(TocPilotRepositorySelectionTests PRIVATE src)
+
+    if(MSVC)
+        target_compile_options(TocPilotRepositorySelectionTests PRIVATE /W4 /permissive- /utf-8)
+    endif()
+
+    add_test(NAME repository-selection-policy COMMAND TocPilotRepositorySelectionTests)
+
+    add_executable(TocPilotRepositoryInstallTests
+        tests/repository_install_tests.cpp
+        src/repository_install.cpp
+        src/archive.cpp
+        src/mpq_package.cpp
+        src/exact_release_asset.cpp
+        src/github_release.cpp
+        src/state.cpp
+    )
+    target_compile_features(TocPilotRepositoryInstallTests PRIVATE cxx_std_20)
+    target_compile_definitions(TocPilotRepositoryInstallTests PRIVATE
+        UNICODE
+        _UNICODE
+        WIN32_LEAN_AND_MEAN
+        NOMINMAX
+    )
+    target_include_directories(TocPilotRepositoryInstallTests PRIVATE src)
+    target_link_libraries(TocPilotRepositoryInstallTests PRIVATE
+        TocPilotMiniz
+        winhttp
+        bcrypt
+    )
+
+    if(MSVC)
+        target_compile_options(TocPilotRepositoryInstallTests PRIVATE /W4 /permissive- /utf-8)
+    endif()
+
+    add_test(NAME repository-mixed-install-policy COMMAND TocPilotRepositoryInstallTests)
 
     add_executable(TocPilotAdoptionTests
         tests/adoption_tests.cpp
@@ -367,6 +489,18 @@ if(BUILD_TESTING)
     endif()
 
     add_test(NAME window-layout-roundtrip COMMAND TocPilotWindowLayoutTests)
+
+    add_executable(TocPilotPackageListViewportTests
+        tests/package_list_viewport_tests.cpp
+    )
+    target_compile_features(TocPilotPackageListViewportTests PRIVATE cxx_std_20)
+    target_include_directories(TocPilotPackageListViewportTests PRIVATE src)
+
+    if(MSVC)
+        target_compile_options(TocPilotPackageListViewportTests PRIVATE /W4 /permissive- /utf-8)
+    endif()
+
+    add_test(NAME package-list-viewport-policy COMMAND TocPilotPackageListViewportTests)
 
 
     add_executable(TocPilotAccountSyncTests

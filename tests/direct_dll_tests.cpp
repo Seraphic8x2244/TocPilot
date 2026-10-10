@@ -1,7 +1,10 @@
 #include "direct_dll.h"
 
+#include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <string>
+#include <string_view>
 
 namespace {
 
@@ -13,6 +16,66 @@ void Fail(
         << message
         << '\n';
     ++failures;
+}
+
+std::string ReadBytes(
+    const std::filesystem::path& path) {
+    std::ifstream input(
+        path,
+        std::ios::binary);
+
+    if (!input) {
+        return {};
+    }
+
+    input.seekg(
+        0,
+        std::ios::end);
+    const auto length =
+        input.tellg();
+    input.seekg(
+        0,
+        std::ios::beg);
+
+    if (length < 0) {
+        return {};
+    }
+
+    std::string bytes(
+        static_cast<std::size_t>(
+            length),
+        '\0');
+
+    if (!bytes.empty()) {
+        input.read(
+            bytes.data(),
+            static_cast<std::streamsize>(
+                bytes.size()));
+    }
+
+    return bytes;
+}
+
+bool WriteBytes(
+    const std::filesystem::path& path,
+    std::string_view bytes) {
+    std::ofstream output(
+        path,
+        std::ios::binary |
+            std::ios::trunc);
+
+    if (!output) {
+        return false;
+    }
+
+    output.write(
+        bytes.data(),
+        static_cast<std::streamsize>(
+            bytes.size()));
+    output.flush();
+    return
+        static_cast<bool>(
+            output);
 }
 
 tp::PackageRecord ValidPackage() {
@@ -66,6 +129,218 @@ void ExpectValid() {
     }
 }
 
+void ExpectExactRemoval() {
+    const auto root =
+        std::filesystem::temp_directory_path() /
+        L"TocPilotDirectDllRemovalTests";
+
+    std::error_code ec;
+    std::filesystem::remove_all(
+        root,
+        ec);
+    ec.clear();
+    std::filesystem::create_directories(
+        root,
+        ec);
+
+    if (ec) {
+        Fail(
+            "could not create direct DLL removal test root");
+        return;
+    }
+
+    const auto target =
+        root / L"ClassicAPI.dll";
+
+    {
+        std::ofstream file(
+            target,
+            std::ios::binary);
+        file << "dll";
+    }
+
+    auto package =
+        ValidPackage();
+    bool removed = false;
+    std::wstring error;
+
+    if (!tp::RemoveDirectDll(
+            package,
+            root,
+            removed,
+            error) ||
+        !removed ||
+        std::filesystem::exists(
+            target)) {
+        Fail(
+            "exact direct DLL removal failed");
+    }
+
+    removed = true;
+    error.clear();
+
+    if (!tp::RemoveDirectDll(
+            package,
+            root,
+            removed,
+            error) ||
+        removed) {
+        Fail(
+            "missing direct DLL was not treated as already removed");
+    }
+
+    std::filesystem::remove_all(
+        root,
+        ec);
+}
+
+void ExpectDllsTxtRegistration() {
+    const auto root =
+        std::filesystem::temp_directory_path() /
+        L"TocPilotDirectDllLoaderTests";
+
+    std::error_code ec;
+    std::filesystem::remove_all(
+        root,
+        ec);
+    ec.clear();
+    std::filesystem::create_directories(
+        root,
+        ec);
+
+    if (ec) {
+        Fail(
+            "could not create direct DLL loader test root");
+        return;
+    }
+
+    const auto loader =
+        root / L"dlls.txt";
+    auto package =
+        ValidPackage();
+    bool changed = false;
+    std::wstring error;
+
+    if (!tp::EnsureDirectDllLoaderEntry(
+            root,
+            package,
+            changed,
+            error) ||
+        !changed ||
+        ReadBytes(loader) !=
+            "ClassicAPI.dll\r\n") {
+        Fail(
+            "missing dlls.txt was not created with the exact DLL entry");
+    }
+
+    const std::string existing =
+        "# keep this comment\r\n"
+        "nampower.dll\r\n"
+        "  another.dll  \r\n"
+        "# ClassicAPI.dll is only mentioned here\r\n"
+        "last.dll";
+
+    if (!WriteBytes(
+            loader,
+            existing)) {
+        Fail(
+            "could not prepare dlls.txt preservation fixture");
+    } else {
+        changed = false;
+        error.clear();
+
+        if (!tp::EnsureDirectDllLoaderEntry(
+                root,
+                package,
+                changed,
+                error) ||
+            !changed ||
+            ReadBytes(loader) !=
+                existing +
+                "\r\nClassicAPI.dll\r\n") {
+            Fail(
+                "dlls.txt append did not preserve existing content exactly");
+        }
+    }
+
+    const std::string duplicate =
+        "# untouched\n"
+        "\tclassicapi.DLL  \n"
+        "OtherHook.dll\n";
+
+    if (!WriteBytes(
+            loader,
+            duplicate)) {
+        Fail(
+            "could not prepare dlls.txt duplicate fixture");
+    } else {
+        changed = true;
+        error.clear();
+
+        if (!tp::EnsureDirectDllLoaderEntry(
+                root,
+                package,
+                changed,
+                error) ||
+            changed ||
+            ReadBytes(loader) !=
+                duplicate) {
+            Fail(
+                "existing dlls.txt entry was duplicated or rewritten");
+        }
+    }
+
+    const char utf16Bytes[] = {
+        static_cast<char>(0xFF),
+        static_cast<char>(0xFE),
+        'C', '\0',
+        'l', '\0',
+        'a', '\0',
+        's', '\0',
+        's', '\0',
+        'i', '\0',
+        'c', '\0',
+        'A', '\0',
+        'P', '\0',
+        'I', '\0',
+        '.', '\0',
+        'd', '\0',
+        'l', '\0',
+        'l', '\0',
+        '\r', '\0',
+        '\n', '\0'
+    };
+    const std::string utf16(
+        utf16Bytes,
+        sizeof(utf16Bytes));
+
+    if (!WriteBytes(
+            loader,
+            utf16)) {
+        Fail(
+            "could not prepare UTF-16 dlls.txt fixture");
+    } else {
+        changed = true;
+        error.clear();
+
+        if (tp::EnsureDirectDllLoaderEntry(
+                root,
+                package,
+                changed,
+                error) ||
+            changed ||
+            ReadBytes(loader) !=
+                utf16) {
+            Fail(
+                "UTF-16 dlls.txt was modified instead of being left untouched");
+        }
+    }
+
+    std::filesystem::remove_all(
+        root,
+        ec);
+}
+
 void ExpectInvalidVariants() {
     std::wstring error;
 
@@ -79,6 +354,21 @@ void ExpectInvalidVariants() {
                 error)) {
             Fail(
                 "prerelease DLL policy was accepted");
+        }
+    }
+
+    {
+        auto package =
+            ValidPackage();
+        package.asset =
+            L"ClassicAPI.mpq";
+        package.targetPath =
+            package.asset;
+        if (tp::ValidateDirectDllPackage(
+                package,
+                error)) {
+            Fail(
+                "MPQ release asset was accepted as a direct DLL");
         }
     }
 
@@ -145,6 +435,8 @@ void ExpectInvalidVariants() {
 
 int main() {
     ExpectValid();
+    ExpectExactRemoval();
+    ExpectDllsTxtRegistration();
     ExpectInvalidVariants();
 
     if (failures != 0) {

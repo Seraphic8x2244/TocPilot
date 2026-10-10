@@ -5,9 +5,9 @@
 ## Current
 
 - Active branch: `dev`.
-- Source/application version: `v0.4.0`.
+- Source/application version: `v0.5.0` release candidate.
 - Latest published stable release: `v0.4.0` at exact main/release commit `eee95cf319351adbef1a3b549f5fe9531f33567f`.
-- Latest published development prerelease: `v0.3.23-dev.2` at `5b1575ac72e8db1edc2aac6962bec0a528e732e1`. GitHub stable `/releases/latest` now resolves to non-prerelease `v0.4.0`.
+- Latest published development prerelease: `v0.5.0-dev.3` at `e471aad66a64ddeb3f1458f2800edc3542b5521e`. GitHub stable `/releases/latest` remains non-prerelease `v0.4.0`.
 - Stable release/source commit and tag target: `eee95cf319351adbef1a3b549f5fe9531f33567f` (`v0.4.0`).
 - Current stable/accepted product baseline is `v0.4.0` at `eee95cf319351adbef1a3b549f5fe9531f33567f`. Account Sync is accepted for the runtime paths exercised on 2026-09-30, with explicit non-blocking validation debt for Sync-before-Launch/Ctrl-click and induced backup/write-failure. The previously accepted v0.3.22 toolbar/DPI behaviour remains inherited; slight softness at Windows 125% scaling remains accepted as normal fractional-DPI rendering.
 - Last known-good Account-Sync-free code baseline is published/runtime-accepted `v0.3.22` at `8678334c0a0015eba14aecf58f7c416c045f6581`. The final pre-Account-Sync repository commit is documentation-only `6fcf117cf4f639612827acf88b10c6933f4b7802`, so its executable source is equivalent to that accepted v0.3.22 baseline.
@@ -22,8 +22,11 @@
 - v0.3.15 Compact divider transaction fix: **implemented / CI-checked / merged / published; partial runtime pass**. Expanding the left Compact column no longer creates a horizontal scrollbar immediately, but the divider transaction still clamps both primary columns only to the generic 40 px floor. This lets the right visible column shrink below its intended Compact minimum; after entering that invalid state, dragging back left can expose a horizontal scrollbar. Fix by enforcing the real per-column Compact minima throughout fitting and divider transactions.
 - v0.3.16 Compact minimum-width fix: **implemented / CI-checked / merged / published; partial runtime pass**. Self-update passed; the companion column now stops at its intended minimum in both column orders; whole-window resize and Advanced regression checks passed. Remaining failure: when dragging the middle divider back left after pushing it right, a horizontal scrollbar still appears. This is now isolated to reverse-direction transaction ordering rather than width limits.
 - v0.3.17 reverse-direction divider fix: **implemented / CI-checked / merged / published / runtime-accepted**. Compact divider dragging is a fully owned two-column transaction: the shrinking column is applied first, the growing column second, and the native one-column commit is cancelled under a re-entrancy guard. User runtime confirmed the rightward clamp, leftward reversal, both Name/Status orders, window resizing and Advanced regression checks all pass with no horizontal scrollbar.
-- Current goal: **Refresh All viewport jump** is the next active development item now that Account Sync is published stable in `v0.4.0`. Preserve the accepted Account Sync behaviour and its explicit validation-debt record; do not silently reopen or rewrite those results.
-- Current scope boundary: investigate/fix only the **Refresh All viewport jump**, preserving top/selection identity across re-sort/repopulate. Preserve the accepted v0.4.0 Account Sync and inherited toolbar/DPI behaviour. Do not mix async latest-stable DLL discovery, Add-Git stale-request work, warning cleanup, rate-limit propagation, staging-name cleanup, Clear WDB, DXVK logging or P6C art/skin work into this slice.
+- Package-list viewport reset slice: **implemented / CI-checked / published in `v0.4.1-dev.1` / runtime-accepted for forward development on 2026-10-01**. Implementation commit: `eace26841fdd41073413605bfb4f5f3c578b3da0`; prerelease commit: `325523b05c34c59d6e15fe56cd152d9cfafb5fdf`. Runtime passed the exercised paths: single-addon branch/Inspect/Reinstall actions do not move the viewport; Refresh All resets at start/finish; Update New resets correctly; selection/sorting/Compact/Advanced presentation does not reset the viewport. Multi-package Add Git remains explicit non-blocking runtime debt because no suitable multi-addon repo was available. The package list rebuilds rows in place instead of clearing the control, `RefreshPackageStateUi()` no longer restores a semantic top row or calls `ListView_EnsureVisible`, and retained logical selection is restored without scrolling.
+- Viewport CI: draft validation PR #34 targeted the exact implementation commit and was closed without merge after Build run `36775185023`, Windows x64 job `110091188659`, passed the Release build and **20/20 CTest tests**, including `package-list-viewport-policy`.
+- Startup scan auto-enter slice: **implemented / CI-checked on `dev` / not yet released / runtime-untested** at implementation commit `b539b593900ccc046baffeffdcdf19e9a57a8ffb`. Normal startup completion after addon update scanning now reveals the main window and destroys the splash immediately; the old normal `AwaitingContinue` / “Click to continue!” state was removed. The separate `AppUpdateFailed` acknowledgement remains intentionally interactive so a failed self-update is still surfaced before entering the app. Draft validation PR #35 was closed unmerged after Build run `36893192930`, Windows x64 job `110473610222`, passed the Release build and **20/20 CTest tests**.
+- `v0.5.0` runtime matrix is **in progress**. Accepted so far: startup auto-enter, existing addon update and package-list viewport behaviour from the dev.1 gate; on `v0.5.0-dev.2`, root-level `Seraphic8x2244/Performante` Add Git passed through default-branch discovery -> Contents -> `dev` branch switch -> root install, and the user explicitly preferred the streamlined flow; an ordinary single-addon repository on its default branch also passed the direct fast path with Contents correctly skipped. Still pending for suitable real fixtures: multi-content branch switching, addon-library install, DLL update, MPQ-only lifecycle, addon+MPQ, addon+DLL+MPQ, MPQ collision handling and independent branch/release movement. A direct-DLL follow-up found on 2026-10-09 is now published in `v0.5.0-dev.3`: successful managed DLL installs ensure the exact DLL filename is present in root `dlls.txt` without rewriting existing bytes, preserve existing comments/spacing/order, avoid case-insensitive duplicates, and refuse UTF-16 input rather than corrupting it. That new `dlls.txt` behaviour is runtime-pending.
+- Current scope boundary: **Phase 6 implementation is closed except for fixes demonstrated by runtime testing.** `v0.5.0-dev.2` passed the root-addon and single-addon fast-path checks; `v0.5.0-dev.3` contains the narrow direct-DLL `dlls.txt` registration follow-up and is awaiting runtime validation. Do not begin the broad wording pass until the functional Phase 6 gate is accepted. Preserve the accepted v0.4.0 Account Sync, viewport behaviour and inherited toolbar/DPI behaviour; unrelated deferred work remains out of scope.
 - Audit continuity: `audit_dump.md` is a temporary scratch checkpoint for the interrupted broad audit only; this file remains the sole authoritative live development source of truth.
 - Documentation-only commits after the release do not change the published runtime baseline.
 
@@ -81,35 +84,36 @@ Current supported source families:
 - GitHub branch packages;
 - public GitLab branch packages;
 - GitHub latest-stable exact standalone DLL release assets;
+- GitHub latest-stable exact standalone MPQ release assets;
 - TocPilot's own GitHub Release self-update.
 
 Branch packages store/compare the selected remote commit SHA and create no local Git repository.
 
-Release/DLL packages track the exact release policy/asset/destination needed to update deterministically.
+Exact release-asset packages track the release policy, exact asset and persistent destination needed to update deterministically.
 
 Private repositories/tokens and self-hosted GitLab remain deferred.
 
 ### Repository Classification
 
-Add Git classification is intentionally shallow and deterministic.
+Add Git discovery is intentionally shallow and deterministic.
 
-After removing the provider archive wrapper, inspect only:
+After removing the provider archive wrapper, branch-addon discovery inspects only:
 
 - direct `.toc` files in repository root;
 - direct `.toc` files in each immediate child directory.
 
-Classification:
+Branch classification remains:
 
 1. root `.toc` -> root addon;
 2. no root `.toc` + one immediate child addon -> single nested addon;
 3. no root `.toc` + multiple immediate child addons -> repository library with selectable children;
-4. root addon plus immediate-child addon roots -> mixed/ambiguous; stop rather than guess;
-5. no addon roots on GitHub -> latest-stable exact standalone-DLL fallback;
-6. no addon roots on GitLab -> concise no-addon result; GitLab release support is not implied.
+4. root addon plus immediate-child addon roots -> mixed/ambiguous; do not guess between overlapping addon roots.
+
+For GitHub, latest-stable release discovery runs independently of branch-addon discovery and contributes every valid exact standalone `.dll` and `.mpq` asset to the same candidate result. A successful category does not suppress another category, and one category failing does not erase valid candidates from the other. GitLab remains branch-addon-only; GitLab release support is not implied.
 
 Do not recursively search arbitrary repository depth to classify libraries. Once a specific addon root is selected, its subtree can be copied/validated normally.
 
-Repository-library siblings are independent selectable install units unless explicit dependency work is added later.
+Repository-library siblings and release assets are independent selectable install units unless explicit dependency work is added later.
 
 ### Ownership / Installation
 
@@ -346,7 +350,7 @@ Row semantics retained from v0.3.4:
 - selected rows keep the normal Windows selection background, but semantic row text colour should remain visible while selected;
 - green session state clears on Refresh All or exit;
 - Refresh All and Update New process packages in current visible list order;
-- Update New returns the package list to the top when complete.
+- Update New follows the general bulk/whole-list viewport-reset contract below.
 
 Advanced column widths/order are persisted. The dedicated Lock Columns UI/behaviour is removed in v0.3.6. Starting with v0.3.11, persistence enforces the two-column invariant: `Name` and `Status` are always the first two columns and may only swap with each other; Advanced-only columns stay to their right. `Name`/`Status` widths are one shared pair of values across Compact and Advanced, so resizing in either mode updates what the other mode inherits. Advanced-only widths/order remain Advanced-specific. The legacy JSON `package_columns_locked` field is retained for state compatibility but no longer controls the UI.
 
@@ -360,6 +364,29 @@ Branch-selector target behaviour after the v0.3.6 runtime follow-up:
 - Add Git already fetches the full Git smart-HTTP branch advertisement in the branch chooser; reuse that result to seed runtime metadata rather than immediately fetching it again;
 - normal branch-head refresh also fetches the full advertisement internally, so retain/reuse that information to discover newly added/removed remote branches during ordinary startup/Refresh All checks without an extra branch-list request.
 
+### Package-list viewport reset — locked design
+
+Goal: make list movement predictable and intentionally simple. The previous attempt to preserve the visible top package / selected-package viewport across repopulate and re-sort is removed rather than repaired.
+
+Authoritative behaviour:
+
+- **Single-addon action:** do **not** move the package-list viewport at start or finish. This remains true even if the implementation internally routes the action through queue machinery; effective work scope of one package means no viewport reset.
+- **Bulk / multi-addon action:** scroll the package list to the top when the operation **starts**, then scroll it to the top again when the operation **finishes**.
+- **Whole-list operations** such as Refresh All / Update All follow the same start + finish reset rule, whether or not the implementation uses the same queue object as package updates.
+- The finish reset occurs after the final list rebuild/re-sort so the user sees the completed result from the top.
+- The start reset occurs before bulk/whole-list work begins so progress begins from a consistent visible position.
+- Remove the old preservation/restoration behaviour for prior scroll position, previous top-row package identity, and selection-driven viewport restoration during bulk/whole-list rebuilds.
+- Do not layer the new reset rule on top of the old preservation path; there must be one authoritative viewport behaviour.
+- Existing logical package selection may remain where needed by surrounding UI behaviour, but bulk/whole-list completion must **not** scroll that selection back into view after the explicit top reset.
+- Purely presentational controls that do not start package work or rebuild/re-sort the package list are outside this rule and must not reset the viewport.
+
+Implementation direction:
+
+- identify the narrow shared boundaries for operation start and operation completion rather than scattering scroll-to-top calls through individual package handlers;
+- make scope explicit enough to distinguish one-package work from multi-package/whole-list work even when both share queue infrastructure;
+- strip the old `RefreshPackageStateUi()` top/selection viewport anchoring logic that causes the arbitrary mid-list jump;
+- preserve single-addon locality: targeted install/update/reinstall/remove work should leave the user's current list position untouched;
+- add focused automated coverage for: single-package no movement, multi-package start reset, multi-package finish reset, whole-list start reset, whole-list finish reset, and no selection-driven re-scroll after a bulk finish reset.
 ### Account Sync — agreed design / implementation recovery
 
 Goal: retire the user's current `wtf_sync.bat` by moving its account-data synchronization and launch convenience into TocPilot without adding a menu-heavy launch flow.
@@ -669,6 +696,13 @@ The prior v0.3.5 release also passed its documented 17/17 Release workflow valid
 
 ## Current Issues
 
+### v0.5.0-dev.1 runtime findings — Phase 6
+
+- **Root-addon Add Git identity defect:** runtime Add Git of `Seraphic8x2244/Performante` discovers the root addon but fails when saving the selected package with `Package 'github:Seraphic8x2244/Performante:addon:' has an id that does not match its provider/repository/source identity.` The discovered root candidate carries an empty `repositoryRelativePath`, while Phase 5 package creation recognises only literal `.` as the root case and otherwise calls the nested-addon package constructor. Correct fix: normalise the root representation at the package-creation boundary (empty and `.` must mean the same repository-root addon), keep semantic validation strict, and add a regression using the actual empty root path produced by discovery.
+- **Add Git flow is too modal:** current flow is URL → standalone branch dialog → scan → Contents. Desired normal flow is **URL → Scan default branch → Contents/Add**. The repository default branch should be resolved and scanned automatically. When multiple selectable components exist, Contents owns a visible branch dropdown showing the active addon branch; changing it rescans branch-based addon candidates and refreshes the Contents view. Latest-stable DLL/MPQ release candidates remain release-based and independent of branch choice.
+- **Single-content fast path:** when discovery yields exactly one valid selectable component, skip the generic Contents selection screen and proceed directly to its appropriate confirmation/install path. Do not bypass meaningful safety/ownership/trust prompts: DLL trust confirmation, ownership replacement, unmanaged-root refusal, MPQ destination conflict, or equivalent constraints still appear when applicable.
+- **Branch freshness invariant for the redesigned flow:** branch names may be cached for UI, but a branch selected from Contents must resolve its current remote HEAD before being treated as fresh or used for package/update decisions. Do not reproduce the separately documented stale branch-SHA behaviour in the new Add Git path.
+
 Published v0.3.11 added the focused self-update transport hardening and constrained/shared package-column layout on top of the runtime-accepted v0.3.10 baseline. On 2026-09-27 its installed self-update/startup-state path and requested column-layout matrix passed: Compact/Advanced primary-column constraints, Advanced-only boundary/reordering, bidirectional Name/Status width sharing, and persisted layout all passed. The adjacent Compact main-window-width round-trip regression found during that gate is fixed and published in v0.3.12. v0.3.12 is CI/release-verified and awaits only the focused runtime gate below; v0.3.10 remains the latest fully runtime-accepted release until that check passes. A1 remains accepted for forward development after fresh install, reinstall, Update New and Remove Addon passed in its earlier gate; managed same-root replacement remains explicit deferred runtime debt. Remove Addon was not repeated for the v0.3.10 gate and is non-blocking.
 
 P6A is complete. A1 transaction restart recovery is implemented, CI-checked and published in v0.3.8 at `17ce349273c6f2d76572c7107f3c6f7b139cf8d8`, and accepted for forward development with the same-root replacement runtime check deferred. It now writes a versioned, flushed pre-mutation journal; arms it with package/transaction identity, affected-root intent and durable pre/post state markers before live renames; recovers unfinished transactions before normal package mutation; and preserves evidence rather than guessing when durable state is ambiguous.
@@ -679,6 +713,7 @@ A3 ZIP single-member allocation hardening is implemented, CI-checked, merged at 
 
 Remaining audited implementation priority after the v0.3.11 runtime gate starts with:
 
+- **branch-switch freshness defect:** the inline branch selector may reuse branch metadata cached earlier in the session. `ApplyBranchChoice()` stores that cached `branch.sha` into `latestRevision` and records the package as freshly refreshed, so switching to a branch can temporarily point TocPilot at an older commit until an explicit Refresh re-resolves the branch head. Confirmed with WanderingGaia: switching to `dev` exposed `0.2.7-dev` until Refresh fetched the current `0.2.8-dev` head. Correct contract: branch-name metadata may be cached for UI, but after selecting a branch TocPilot must resolve that branch's current remote HEAD SHA before treating it as fresh or using it for update/install decisions;
 - the dedicated Add-Git branch dialog has no per-request generation/repository token. Closing and reopening it while its detached lookup is still running leaves a rare stale-result/HWND-reuse race; the main inline branch selector already has a generation + package-ID guard;
 - Add Git latest-stable DLL discovery performs provider network I/O synchronously on the dialog thread, including the DLL-fallback dialog creation path, so provider timeout/failure can freeze that UI;
 - Update All does not treat branch-addon archive HTTP rate limiting as a queue-stop condition, unlike status refresh and direct-DLL update paths;
@@ -686,7 +721,7 @@ Remaining audited implementation priority after the v0.3.11 runtime gate starts 
 
 Lower-priority/test/build findings and contract-driven direct-DLL risks are retained in `audit_dump.md`.
 
-New deferred UI observation from 2026-09-27: after **Refresh All**, the addon package list appears to jump to an arbitrary mid-list position. Code review points to `RefreshPackageStateUi()` preserving the identity of the previous top/selected package across repopulate/re-sort; when `ClearSessionUpdatedPackages()` changes ordering, that same package can move to a different display row and the viewport follows it. This is likely not 'first addon in JSON'. Keep this queued separately; do not mix it into the Compact two-column fill/split slice. The async/UI pass found no high/medium GDI/icon ownership leak. It did confirm low-priority cleanup/debt: the old hidden branch COMBOBOX is now dead infrastructure after the list-cell popup redesign; main close can abandon non-install async work/staging; several rare Win32 control/subclass/timer/GetMessage failures are not surfaced.
+UI observation from 2026-09-27: after **Refresh All**, the addon package list could jump to an arbitrary mid-list position because `RefreshPackageStateUi()` preserved the identity of the previous top/selected package across repopulate/re-sort; when ordering changed, the viewport followed that package. **Superseded design decision on 2026-09-30:** do not repair or retain that preservation behaviour. Remove it and use the explicit single-addon versus bulk/whole-list reset contract instead. The async/UI pass otherwise found no high/medium GDI/icon ownership leak. It did confirm low-priority cleanup/debt: the old hidden branch COMBOBOX is now dead infrastructure after the list-cell popup redesign; main close can abandon non-install async work/staging; several rare Win32 control/subclass/timer/GetMessage failures are not surfaced.
 
 Final severity/order:
 
@@ -696,7 +731,7 @@ Final severity/order:
 4. **SELF-UPDATE TRANSPORT + COLUMN LAYOUT:** **IMPLEMENTED / CI-CHECKED / MERGED / PUBLISHED in v0.3.11; REQUESTED RUNTIME MATRIX PASSED** — installed update/startup-state and the constrained/shared column behavior passed on 2026-09-27.
 5. **COMPACT MAIN-WINDOW WIDTH FOLLOW-UP:** v0.3.12 implemented capture/restore; v0.3.13 fixed the startup-default-vs-real-minimum edge. **v0.3.13 PUBLISHED / CI-CHECKED / RUNTIME-ACCEPTED**.
 6. **CURRENT NARROW UI FOLLOW-UP — icon-toolbar pass:** replace the wide text toolbar presentation with compact icon buttons while preserving existing command behavior; details are locked under P6B below.
-7. **NEXT NARROW UI FOLLOW-UP AFTER TOOLBAR PASS — Refresh All viewport jump:** investigate preserved top/selection identity across re-sort/repopulate.
+7. **CURRENT NARROW UI FOLLOW-UP — package-list viewport reset:** remove the old viewport-preservation path and implement the locked single-addon versus bulk/whole-list start/finish reset contract.
 8. **NEXT ROBUSTNESS SOURCE WORK AFTER UI FOLLOW-UPS — async latest-stable DLL discovery:** remove provider I/O from the dialog thread.
 6. **MEDIUM/LOW — Add-Git branch-dialog request identity:** reject stale close/reopen completions.
 7. **MEDIUM/LOW — Update All archive rate-limit propagation:** confirmed provider 429 should stop later provider-heavy queue work.
@@ -823,7 +858,6 @@ After P6 is accepted, reprioritize the deferred feature backlog rather than auto
 
 Current deferred work includes:
 
-- **Refresh All viewport jump** — still queued after Account Sync; investigate preserved top/selection identity across re-sort/repopulate;
 - **Clear WDB folder** — future Advanced feature;
 - **DXVK advanced logging checkbox** — future Advanced option; the BAT's current `DXVK_LOG_LEVEL=debug` behaviour should become optional rather than forced. `WoW_d3d9.log` archival can be reconsidered with this work and is not part of the locked Account Sync scope;
 - P5 import/export;
@@ -895,15 +929,228 @@ Do not add support for user-uploaded ZIP/7z/RAR/installer/bundle release assets 
 - Stable Release workflow run `36767072167`, Windows x64 Release job `110063804704`, passed source-version validation, Release build, **19/19 CTest**, SHA-256 sidecar generation, tag creation/verification and asset publication from exact main commit `eee95cf319351adbef1a3b549f5fe9531f33567f`.
 - Published `v0.4.0` is non-draft/non-prerelease and GitHub `/releases/latest` resolves to it. `TocPilot.exe`: 3,145,728 bytes, SHA-256 `43dcd24c99373d79f4ad949467856389660c35e653d8b1401d1b873274d04119`. `TocPilot.exe.sha256`: 78 bytes; asset SHA-256 `45000dd1a049b91f8a38f0eac0d24620a69c6fa467a3aec19fb574c3400e109f`.
 - `v0.3.22` at `8678334c0a0015eba14aecf58f7c416c045f6581` remains the last Account-Sync-free rollback baseline; current stable is `v0.4.0` at `eee95cf319351adbef1a3b549f5fe9531f33567f`.
-- Keep **Refresh All viewport jump** queued immediately after the stable promotion. Keep **Clear WDB folder** and **DXVK advanced logging checkbox** deferred.
+- Package-list viewport reset implementation commit `eace26841fdd41073413605bfb4f5f3c578b3da0` is CI-checked by Build run `36775185023`, Windows x64 job `110091188659`: Release build + **20/20 CTest passed**, including `package-list-viewport-policy`.
+- Development prerelease `v0.4.1-dev.1` is published from exact commit `325523b05c34c59d6e15fe56cd152d9cfafb5fdf`. Development Release run `36888266631`, Windows x64 job `110457047207`, passed source-version validation, Release build, **20/20 CTest**, tag/assets publication, stable-channel isolation, and real development-channel self-update from parent `7cfa6ba984dbe909622941ae72c8157990cc05d7`. `TocPilot.exe`: 3,145,216 bytes, SHA-256 `996655e59732c7afca9934423d605e9565b8fc26912a048e06419de9e4511387`. Runtime viewport validation passed on 2026-10-01 for single-addon/branch actions, Refresh All, Update New and presentational actions; multi-package Add Git remains untested/non-blocking due to no available fixture. Keep **Clear WDB folder** and **DXVK advanced logging checkbox** deferred.
+- Startup scan auto-enter implementation `b539b593900ccc046baffeffdcdf19e9a57a8ffb` removes the normal click-to-continue splash gate while retaining the explicit self-update-failure acknowledgement. Draft PR #35 CI: Build run `36893192930`, Windows x64 job `110473610222`, Release build + **20/20 CTest passed**. This change is not in published `v0.4.1-dev.1`; include it in the next development prerelease.
+- v0.5.0 Phase 1 exact release-asset backend: **implemented / CI-checked / merged on `dev`; backend-only, runtime prerelease not required**. PR #36 tested exact head `f040de9f7a44c92c5b8ccc8e6ec8af068ede2d18`; Build run `36896441332`, Windows x64 job `110484495595`, passed the Release build and **21/21 CTest tests**, including `direct-dll-policy` and new `exact-release-asset-policy`. It squash-merged to `dev` as `2809f6296e461fe7f2ebd2bd4cb853dca80a5961`. New `exact_release_asset` code owns kind-aware (`Dll` / `Mpq`) latest-stable exact-asset source validation and metadata/checksum resolution, including the existing exact `<asset>.sha256` fallback. Existing direct-DLL package JSON/state validation, exact WoW-root destination, direct-write/no-staging behaviour, size/SHA-256 checks, trust/security policy and runtime semantics remain unchanged; `DirectDllRelease` now aliases the shared resolved-release model. No MPQ filesystem installation, MPQ target allocation, Add Git redesign, mixed queue or wording work was included.
+- v0.5.0 Phase 2 MPQ package/install backend: **implemented / CI-checked / merged on `dev`; backend-only, runtime prerelease not required**. PR #37 tested exact head `b57d7126d1e996f01a6b1eac48f760d3ca682b78`; Build run `36900202483`, Windows x64 job `110497168058`, passed the Release build and **22/22 CTest tests**, including new `mpq-package-backend`. It squash-merged to `dev` as `2723509f292655b5aae7c62e563965e0b387f2b3`. MPQ packages now use the shared exact latest-stable release-asset model, durable `Data/patch-A.mpq` through `Data/patch-Z.mpq` reservation, deterministic lowest-free-letter allocation from both live Data names and persisted TocPilot destinations, persisted target reuse by package identity, collision refusal, transactional install/update/remove with rollback material retained across the state-save boundary, and exact size/SHA-256 integrity verification. Existing direct-DLL direct-write/security behaviour remains separate and unchanged. No unified discovery, Add Git UI, mixed queue or wording work was included.
+- v0.5.0 Phase 3 unified repository candidate discovery: **implemented / CI-checked / merged on `dev`; backend-only, runtime prerelease not required**. PR #38 tested exact head `46d21be1289e5f7528e6662ca856f437cad742ba`; Build run `36906019134`, Windows x64 job `110516642569`, passed the Release build and complete **23/23 CTest suite**, including new `repository-candidate-discovery`. It squash-merged to `dev` as `132782f66e069774ca2b86ee04f728699e7755f8`. The new repository-discovery backend returns one result that independently records selected-branch shallow addon/library discovery and latest-stable GitHub release discovery, then aggregates every valid addon, exact standalone DLL and exact standalone MPQ candidate without fallback suppression. Branch and release failures remain independent; mixed root+child addon layouts remain ambiguous/non-selectable without hiding valid release assets; GitLab remains branch-addon-only. Existing Add Git presentation/install orchestration is intentionally unchanged in this phase, so MPQ/mixed selection is not exposed yet. No selection-UI redesign, mixed install queues or wording work was included.
+- v0.5.0 Phase 4 Add Git selection UI: **implemented / CI-checked / merged on `dev`; visible selection UI, end-to-end mixed runtime gate deferred to Phase 5 prerelease**. PR #39 tested exact head `55d8c0efd509531d10b88c0db96888721b43353d`; Build run `36910036992`, Windows x64 job `110530123352`, passed the Release build and complete **24/24 CTest suite**, including new `repository-selection-policy`. It squash-merged to `dev` as `940acbb0a50d343cdee03e8919e4e5ed764c2b45`. Add Git is now discovery-first: repository URL → Scan/branch selection → one checkbox surface containing every discovered addon/library/DLL/MPQ candidate, with branch vs latest-stable source context and deterministic proposed `Data/patch-X.mpq` destinations. DLLs are never preselected and retain explicit publisher-trust confirmation. Existing addon-only multi-install orchestration and the existing single-DLL install path remain unchanged; MPQ or mixed-type selections deliberately stop before package-state mutation because package creation/install orchestration remains Phase 5 scope. No broad wording pass was included.
+- v0.5.0 Phase 5 mixed selection creation/install orchestration: **implemented / CI-checked / merged / published in `v0.5.0-dev.1`; end-to-end user runtime matrix pending**. PR #40 tested exact head `7093f97d35708a952883f201c6665447f0bc75fb`; Build run `36913804601`, Windows x64 job `110542709644`, passed the Release build and complete **25/25 CTest suite**, including `repository-mixed-install-policy`. It squash-merged to `dev` as `1b671ddd3fb5d1df9cf0ed40adcb3aa60a6ae1e9`. Development Release run `36914667830`, job `110545587877`, passed source-version validation, an independent Release build and **25/25 CTest suite**, prerelease publication/channel isolation, and real development-channel self-update from parent `70af56463ecbb16b2ca34d9ab3020ffa3bad0a2a` to `v0.5.0-dev.1`. The prerelease contains `TocPilot.exe` (3,237,376 bytes, SHA-256 `6abb811e4040602a8e66d0694db63c6e40ed21b3cf2cde054d8934bc79643346`) plus its sidecar; stable `/releases/latest` remains `v0.4.0`. Mixed Add Git now creates independent addon/DLL/MPQ package records, persists all selected records before deterministic package-ID queue execution, routes each package through its established backend, stops a mixed queue at the failing package without advancing its installed state or corrupting already committed/later package ownership, preserves MPQ rollback across state-save boundaries, includes MPQs in Refresh/Update New/Install/Remove routing, and protects exact DLL/MPQ destination reservations. Direct-DLL removal remains exact-path/no-backup in keeping with the existing DLL security model. No Phase 6 fixes or wording-pass work was included.
+
+## v0.5.0 — Unified repository discovery / MPQ support
+
+Target stable release: **v0.5.0**.
+
+Product contract for this release:
+
+- **Add Git becomes discovery-first rather than fallback-first.** A repository is inspected for every supported installable option and the user chooses what TocPilot should manage.
+- Branch/archive discovery and release-asset discovery are independent. Finding an addon must not suppress valid release DLL/MPQ choices, and failing one discovery category must not prevent the others from being offered.
+- Supported branch candidates remain:
+  - one addon rooted at repository root when a direct root `.toc` exists;
+  - an addon library when there is no root addon and immediate child folders contain direct `.toc` files.
+- Preserve the existing no-guess rule for overlapping/ambiguous addon roots unless deliberately revisited. The 0.5.0 change is about aggregating independent candidate classes, not making unsafe addon-root guesses.
+- Supported latest-stable GitHub release candidates become:
+  - exact standalone `.dll` assets;
+  - exact standalone `.mpq` assets.
+- One repository may therefore offer any combination of addon candidate(s), DLL asset(s), and MPQ asset(s). The selection UI should show all valid options together.
+- Each selected component remains an **independent TocPilot package record**, even when several came from the same repository. Branch addons track branch revisions; DLL/MPQ release assets track latest-stable release state independently.
+- MPQs install under WoW `Data\`.
+- TocPilot assigns each managed MPQ a non-conflicting patch-letter destination, treating both TocPilot-managed and unmanaged existing MPQ slots as occupied. The chosen destination is persisted in the package record and reused for all future updates; updates must never silently move an MPQ to another letter.
+- DLLs retain their existing exact-asset/latest-stable trust and security policy. MPQs use the same exact release-asset discovery/tracking model but may have their own safe filesystem write policy; do not weaken the special DLL direct-write/security behaviour merely to share code.
+- The existing startup auto-enter change at `b539b593900ccc046baffeffdcdf19e9a57a8ffb` is part of the 0.5.0 development line.
+- The dedicated user-facing wording pass remains part of the 0.5.0 release gate, but is kept separate from functional payload implementation.
+
+### 0.5.0 chat-sized implementation phases
+
+Each phase is intentionally bounded so a fresh chat can read `dev_rulebook.md` + `DEV_PROGRESS.md`, verify `dev`, complete one slice, CI-check it, update this file, and hand off.
+
+#### Phase 1 — Generalise exact release-asset backend
+
+Goal: create the backend abstraction needed for more than DLLs **without changing Add Git UI or current DLL runtime behaviour**.
+
+Scope:
+
+- identify/generalise the existing latest-stable exact-DLL release metadata/validation/resolution pieces into an exact release-asset model;
+- represent asset kind explicitly enough to distinguish DLL vs MPQ;
+- preserve existing DLL package/state compatibility and exact destination behaviour;
+- add focused tests proving existing DLL validation/resolution behaviour is unchanged;
+- no MPQ installation yet;
+- no Add Git UI redesign;
+- no wording pass.
+
+Gate: Release build + full tests. No runtime prerelease required unless the refactor unexpectedly touches visible DLL behaviour.
+
+Status: **complete on `dev`** at merged source commit `2809f6296e461fe7f2ebd2bd4cb853dca80a5961`; PR #36 Release CI passed **21/21 CTest**. No visible DLL behaviour was intentionally changed, so no Phase 1 runtime prerelease is required.
+
+#### Phase 2 — MPQ package/install backend
+
+Goal: support an independently managed exact latest-stable MPQ package end-to-end below the Add Git UI.
+
+Scope:
+
+- accept/select exact standalone `.mpq` release assets;
+- add MPQ package validation/state representation using the shared release-asset model;
+- implement deterministic WoW `Data\` destination assignment;
+- scan existing Data MPQ names plus persisted TocPilot destinations and choose an unused patch letter;
+- persist the assigned target path and never reassign it during normal updates;
+- refuse collisions rather than overwrite an unmanaged or differently owned slot;
+- implement MPQ install/update/remove and integrity verification;
+- add deterministic tests for letter allocation, persistence, collisions, update-in-place, removal, malformed package records and release-asset mismatch;
+- no Add Git UI redesign yet.
+
+Gate: Release build + full tests. Backend-only; runtime prerelease optional.
+
+Status: **complete on `dev`** at merged source commit `2723509f292655b5aae7c62e563965e0b387f2b3`; PR #37 final Release CI passed **22/22 CTest** on exact tested head `b57d7126d1e996f01a6b1eac48f760d3ca682b78`. The first CI attempt exposed that standalone MPQ validation still accepted a mixed `source_path`; that validator hole was corrected before the final green gate. No visible runtime/UI path was wired to MPQs in this phase, so no Phase 2 runtime prerelease is required.
+
+#### Phase 3 — Unified repository candidate discovery
+
+Goal: replace sequential fallback classification with one backend discovery result.
+
+Scope:
+
+- introduce a candidate/result model that can contain multiple independent choices from one repository;
+- inspect the selected/default branch using the existing shallow addon rules;
+- independently inspect latest stable GitHub release for selectable DLL and MPQ assets;
+- aggregate valid addon/library/DLL/MPQ candidates instead of stopping after the first successful class;
+- one failed/empty class must not hide successful classes;
+- preserve GitLab's current capabilities: branch addon discovery only unless GitLab release support is separately added later;
+- focused tests for addon-only, library-only, DLL-only, MPQ-only, addon+DLL, addon+MPQ, addon+DLL+MPQ, and empty/ambiguous cases;
+- no major dialog redesign yet.
+
+Gate: Release build + full tests.
+
+Status: **complete on `dev`** at merged source commit `132782f66e069774ca2b86ee04f728699e7755f8`; PR #38 final Release CI passed **23/23 CTest** on exact tested head `46d21be1289e5f7528e6662ca856f437cad742ba`. The backend now produces one aggregated result with independent branch and GitHub latest-stable release discovery; ambiguous addon roots remain non-selectable while valid release DLL/MPQ candidates survive. Existing Add Git UI behaviour remains intentionally unchanged until Phase 4, so no Phase 3 runtime prerelease is required.
+
+#### Phase 4 — Add Git selection UI
+
+Goal: make Add Git present the complete discovery result and let the user choose.
+
+Target flow:
+
+`Paste repository URL → Scan → choose available components → Add Selected`
+
+Scope:
+
+- remove the user-facing “normal mode” / DLL fallback concept;
+- show all discovered candidates in one selection surface with clear type/source/destination context;
+- addon/library candidates identify the branch source;
+- DLL/MPQ candidates identify latest-stable release assets;
+- MPQ candidate shows its proposed Data patch-letter destination before management begins;
+- support selecting one or several candidates;
+- do not silently preselect dangerous executable DLL content unless the existing trust policy explicitly permits that UX;
+- keep trust confirmation for selected DLLs;
+- no broad wording pass outside this redesigned flow.
+
+Gate: Release build + full tests.
+
+Status: **complete on `dev`** at merged source commit `940acbb0a50d343cdee03e8919e4e5ed764c2b45`; PR #39 final Release CI passed **24/24 CTest** on exact tested head `55d8c0efd509531d10b88c0db96888721b43353d`. The old normal-mode/DLL-fallback presentation is gone. One unified candidate surface now exposes addon/library/DLL/MPQ choices together, identifies branch versus latest-stable sources, previews deterministic MPQ Data patch-letter destinations, permits multi-selection, and retains explicit DLL trust confirmation without preselection. Phase 4 preserves the existing addon-only queue and single-DLL execution path; MPQ/mixed package creation and install sequencing are intentionally still deferred to Phase 5.
+
+#### Phase 5 — Mixed selection creation/install orchestration
+
+Goal: one Add Git operation can actually manage several selected component types safely.
+
+Scope:
+
+- create independent package records for each selected candidate;
+- generalise the current multi-addon Add Git queue so a mixed selection can install addon(s), DLL(s), and MPQ(s) in a deterministic sequence;
+- ensure one failure does not corrupt ownership/state for components already committed or not yet started;
+- preserve package ownership invariants;
+- ensure Refresh, Update New, Reinstall/Install and Remove route each package type to its correct backend;
+- verify list refresh/selection/viewport behaviour after mixed queues;
+- add integration tests around mixed repository selections and partial failure.
+
+Gate: Release build + full tests, then publish **v0.5.0-dev.1** for the first meaningful end-to-end runtime gate.
+
+Runtime gate should include:
+- startup auto-enter;
+- existing addon-only Add Git;
+- addon library Add Git when a fixture is available;
+- existing DLL Add Git/update regression;
+- MPQ-only add/install/update/remove;
+- addon + MPQ from one repository;
+- addon + DLL + MPQ from one repository when the upcoming real repository is available;
+- letter collision handling with an existing unmanaged MPQ;
+- independent update states when branch and release move separately.
+
+Status: **complete on `dev` and published as `v0.5.0-dev.1`; runtime matrix started and Phase 6 defects exposed**. PR #40 tested exact head `7093f97d35708a952883f201c6665447f0bc75fb` in Build run `36913804601`, Windows x64 job `110542709644`: Release build + **25/25 CTest passed**, including the new mixed-selection/failure coverage. It squash-merged as `1b671ddd3fb5d1df9cf0ed40adcb3aa60a6ae1e9`. Development Release run `36914667830`, Windows x64 job `110545587877`, independently passed **25/25 CTest**, published the prerelease assets, verified stable-channel isolation, and completed the real development-channel self-update from parent `70af56463ecbb16b2ca34d9ab3020ffa3bad0a2a`. Runtime observations on `v0.5.0-dev.1`: startup auto-enter passed; existing addon update passed; viewport behaviour passed; addon-library/DLL-update/MPQ/mixed/collision/independent-movement cases remain untested because no suitable fixture or update was available. Root-level addon Add Git failed on Performante with a package-ID/source-identity mismatch, so the functional gate is not accepted yet. Phase 5 implementation itself remains the published baseline; corrective work belongs to Phase 6.
+
+#### Phase 6 — Runtime fixes / dev prerelease iteration
+
+Goal: close the defects and unnecessary friction exposed by the `v0.5.0-dev.1` runtime gate without broadening into unrelated feature work.
+
+Current bounded scope:
+
+1. **Fix repository-root addon package identity.**
+   - Treat discovery's empty repository-relative path and literal `.` as the same root-addon identity.
+   - Root addons keep the repository package ID (`provider:owner/repo`); nested/library addons keep the `:addon:<source>` identity.
+   - Do not weaken durable package semantic validation; it correctly caught the malformed record.
+   - Add deterministic regression coverage using the actual empty root path emitted by shallow discovery, plus `.` compatibility if still accepted internally.
+
+2. **Streamline Add Git branch/content flow.**
+   - Normal path: `Paste repository URL → Scan → Contents/Add`.
+   - Resolve and scan the provider's default branch automatically; remove the mandatory standalone branch-choice step before the user has seen repository contents.
+   - If discovery yields **2+ selectable components**, show Contents with an active-branch dropdown on that surface. Changing branch resolves that branch's current remote HEAD, rescans only branch-derived addon contents, and refreshes the candidate list; latest-stable DLL/MPQ candidates remain independent release results.
+   - If discovery yields **exactly 1 valid selectable component**, skip the generic Contents selection screen and proceed directly to the appropriate confirmation/install path.
+   - The single-content fast path must not skip required trust, ownership, collision or replacement prompts.
+   - Preserve access to non-default branches without making branch choice a blocking modal in the common case.
+   - Do not reuse a cached branch SHA as fresh state when switching branches; current remote HEAD must be resolved before the selection is used.
+
+3. **Runtime/release gate.**
+   - Release build + full CTest.
+   - Publish `v0.5.0-dev.2` through the development prerelease path.
+   - Re-test root-level addon Add Git and the streamlined default/switch-branch flows first, then continue the remaining Phase 5 runtime matrix as suitable real fixtures become available.
+
+Out of scope:
+- broad wording pass;
+- unrelated audit backlog/refactors;
+- inventing synthetic runtime acceptance for DLL/MPQ/mixed cases that still lack real fixtures.
+
+Status: **implemented / CI-checked / published; runtime validation partially passed**. Phase 6 PR #41 final head `0dd22f087e38da4a1be96c554d2318d4af95f8c1` passed Build run `37378410558`, Windows x64 job `111993625004`: Release build + **25/25 CTest passed**. It squash-merged to `dev` as `8d4b6db9303637a745c1f3ce40f7ae3583755954`; Development Release run `37379258344`, Windows x64 job `111996628151`, independently passed **25/25 CTest** and published `v0.5.0-dev.2`. Runtime then passed the Performante root-addon/default-to-`dev` branch flow and the ordinary single-addon default-branch fast path; the user explicitly preferred the streamlined flow. Direct-DLL follow-up PR #42 final head `58f3eff6caf166c14551619fa01c4747c60734ba` passed Build run `37958234647`, Windows x64 job `113914124151`, with Release build + **25/25 CTest passed**, including the expanded `direct-dll-policy` regression. It squash-merged as `e471aad66a64ddeb3f1458f2800edc3542b5521e`. Development Release run `37958978146`, Windows x64 job `113916651576`, independently passed Release build + **25/25 CTest**, published prerelease `v0.5.0-dev.3` at that exact merge commit, verified prerelease-channel metadata, and passed the real development-channel self-update from parent `fe2ab7f167b3b2b69b1c1e7032f0dcaddd37f1eb` to `v0.5.0-dev.3`. The new regression covers missing-file creation, byte-preserving append, case-insensitive duplicate avoidance with surrounding whitespace, and refusal to modify UTF-16 `dlls.txt`. Runtime validation of the new `dlls.txt` behavior remains pending.
+
+#### Deferred to v0.5.1 — wording and extended runtime validation
+
+The user intentionally removed the wording pass, MPQ runtime validation and repository-library runtime validation from the v0.5.0 stable gate on 2026-10-10 so already-demonstrated stable-user bug fixes are not held back.
+
+Carry into v0.5.1:
+
+- Phase 7A/7B wording cleanup across main workflows, dialogs, errors and advanced surfaces;
+- real MPQ lifecycle/collision/mixed-repository runtime validation;
+- real repository-library and multi-content branch-switch runtime validation;
+- runtime validation of the v0.5.0-dev.3 non-destructive `dlls.txt` registration behavior if not exercised before the next cycle;
+- any fixes exposed by those tests.
+
+MPQ and repository-library support remain unadvertised/in-development for this release; absence of those runtime tests does not imply acceptance.
+
+#### Phase 8 — v0.5.0 stable release gate
+
+Decision on 2026-10-10: ship the current validated functional state to stable now.
+
+Required gate:
+
+- stable source/version markers must all be `0.5.0` / `v0.5.0`;
+- Release build + full CTest on the exact promotion candidate;
+- promote the exact validated `dev` state to `main`;
+- publish stable `v0.5.0` through the normal Release workflow;
+- verify the stable tag/assets target the exact `main` release commit;
+- exercise/verify the workflow's normal stable release path.
+
+Accepted runtime evidence carried into this release:
+
+- startup auto-enter;
+- existing addon update;
+- package-list viewport behavior;
+- Performante root-level addon install with default-branch discovery and live branch switch;
+- ordinary single-addon default-branch fast path;
+- user confirmed the streamlined Add Git flow is preferable.
+
+Known non-blocking validation debt moved to v0.5.1:
+
+- MPQ runtime paths;
+- repository-library/multi-content runtime paths;
+- wording pass;
+- direct-DLL `dlls.txt` runtime confirmation (automated regression coverage is green).
 
 ## Exact Next Step
 
-Start the queued **Refresh All viewport jump** slice from the post-release `v0.4.0` baseline:
-
-1. Verify `dev` is aligned with the post-release main documentation checkpoint before editing.
-2. Inspect the current Refresh All re-sort/repopulate path and identify why viewport/top-row and/or selection identity moves.
-3. Design the narrowest preservation mechanism for visible top/selection identity before changing runtime code.
-4. Implement and test only that behaviour on a focused branch; do not mix unrelated refresh/provider/UI work.
-
-Account Sync is now stable in `v0.4.0`. Preserve the explicit validation debt for Sync-before-Launch/Ctrl-click and induced backup/write-failure; those paths were accepted as non-blocking, not runtime-proven.
+Prepare and validate stable **`v0.5.0`**, promote the exact candidate from `dev` to `main`, and publish it through the normal stable Release workflow. After publication, record the exact stable commit/tag/workflow provenance and start the next development cycle at **v0.5.1** with wording, MPQ and repository-library testing as explicit follow-up work.
