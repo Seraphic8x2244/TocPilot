@@ -4,6 +4,8 @@
 
 ## Current
 
+- 2026-10-10 Account Sync reliability follow-up implemented on `dev` through `11400fc8a23daa78eea7048a2a1f0b2e1f380a04` (**source implemented, Windows CI and runtime NOT YET VERIFIED**). Macros/keybindings inspect and compare exact file bytes; identical copies are `Already synced`, never queued for confirmation, backup, or overwrite. Different content retains the existing native-precision newest-source rule and older-target confirmation policy. Preview and confirmation now show per-account local modified times including seconds, without rounding comparison timestamps. Before confirmation and after approval, pending plans are checked against fresh contents and timestamps; snapshots are rechecked before each destination write, accounting for TocPilot's own earlier writes in multi-target jobs. pfUI's profile comparison/cache merge is unchanged; its underlying file snapshots are also guarded from modification between inspection, approval, and writes. Changed snapshots abort rather than silently changing the approved direction. Targeted regression tests added for identical macros/bindings and destination modifications during a dialog. No release/version bump or main changes in this slice. **Next:** run Windows Release build and CTest, fix any demonstrated defects, validate runtime with blackwaves/blackwavestwo, then select a new development prerelease version for normal self-update testing. In particular test multi-target sync, pfUI cache updates, and source/destination changes with the confirmation dialog open.
+
 - Active branch: `dev`.
 - Source/application version: `v0.5.0` stable.
 - Latest published stable release: `v0.5.0` at exact main/release commit `1173a91918db134939b65c0a37891abce35dfb37`.
