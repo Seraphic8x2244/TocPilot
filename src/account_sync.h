@@ -34,6 +34,7 @@ struct PfUiComparison {
 struct AccountSyncItemResult {
     AccountSyncItem item = AccountSyncItem::Macros;
     std::wstring sourceAccount;
+    std::wstring timestampDetails;
     std::vector<std::wstring> confirmationTargets;
     std::vector<std::wstring> automaticTargets;
     bool comparerFallback = false;
@@ -89,6 +90,11 @@ bool ComparePfUiFiles(
     const std::filesystem::path& pathB,
     PfUiComparison& comparison,
     std::wstring& error);
+
+std::wstring AccountSyncFileTime(
+    const std::filesystem::path& wowRoot,
+    std::wstring_view account,
+    AccountSyncItem item);
 
 bool InspectAccountSync(
     const std::filesystem::path& wowRoot,
