@@ -1825,6 +1825,64 @@ void TestPfUiMissingTargetTargetedCreation() {
         ec);
 }
 
+void TestIdenticalSyncFilesAndStaleApproval() {
+    for (const auto item : {tp::AccountSyncItem::Macros,
+                            tp::AccountSyncItem::Keybindings}) {
+        const auto root = TestRoot(item == tp::AccountSyncItem::Macros
+            ? L"identical-macros" : L"identical-bindings");
+        ResetRoot(root);
+        const auto fileName = item == tp::AccountSyncItem::Macros
+            ? L"macros-cache.txt" : L"bindings-cache.wtf";
+        const auto source = AccountFile(root, L"ALPHA", fileName);
+        const auto target = AccountFile(root, L"BETA", fileName);
+        WriteText(source, "same bytes");
+        WriteText(target, "same bytes");
+        MakeNewer(source, target);
+        tp::AccountSyncConfig config;
+        config.accounts = {L"ALPHA", L"BETA"};
+        config.macros = item == tp::AccountSyncItem::Macros;
+        config.keybindings = item == tp::AccountSyncItem::Keybindings;
+        std::array<tp::AccountSyncItemResult, tp::kAccountSyncItemCount> preview{};
+        std::wstring error;
+        Check(tp::InspectAccountSync(root, config, preview, error),
+              "identical files should inspect");
+        const auto& row = preview[static_cast<std::size_t>(item)];
+        Check(row.status == L"Already synced" && !row.confirmationRequired,
+              "identical bytes must be already synced irrespective of modified time");
+        Check(row.timestampDetails.find(L"ALPHA") != std::wstring::npos &&
+              row.timestampDetails.find(L":") != std::wstring::npos,
+              "preview should include source account and seconds-resolution time");
+        int prompts = 0;
+        tp::AccountSyncRunResult result;
+        Check(tp::RunAccountSync(root, config,
+              [&](tp::AccountSyncItem, std::wstring_view,
+                  const std::vector<std::wstring>&, bool) {
+                  ++prompts; return true;
+              }, result, error), "identical sync should run");
+        Check(prompts == 0 && !result.fatal && BackupRunFolders(root).empty(),
+              "identical content must not prompt, back up or overwrite");
+        Check(ReadText(target) == "same bytes", "identical destination should stay unchanged");
+
+        WriteText(target, "different bytes");
+        MakeNewer(source, target);
+        result = {};
+        prompts = 0;
+        Check(tp::RunAccountSync(root, config,
+              [&](tp::AccountSyncItem, std::wstring_view,
+                  const std::vector<std::wstring>&, bool) {
+                  ++prompts;
+                  WriteText(target, "changed while dialog shown");
+                  return true;
+              }, result, error), "stale sync should report result");
+        Check(prompts == 1 && result.fatal &&
+              ReadText(target) == "changed while dialog shown" &&
+              BackupRunFolders(root).empty(),
+              "changed destination during approval must cancel before backup/write");
+        std::error_code ec;
+        std::filesystem::remove_all(root, ec);
+    }
+}
+
 void TestPreAccountSyncStateLoad() {
     const auto root =
         TestRoot(L"pre-account-sync-state");
@@ -1995,6 +2053,7 @@ int main() {
     TestBackupRunFolderCollision();
     TestNoSourceItem();
     TestPfUiMissingTargetTargetedCreation();
+    TestIdenticalSyncFilesAndStaleApproval();
     TestPreAccountSyncStateLoad();
     TestLaunchFlowPreservesConsoleIntent();
     TestStatePersistence();
