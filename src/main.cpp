@@ -7785,7 +7785,8 @@ void SetAccountSyncStatusRows(
             index,
             2,
             const_cast<LPWSTR>(
-                row.action.c_str()));
+                (row.action + (row.timestampDetails.empty() ? L"" :
+                    L" | " + row.timestampDetails)).c_str()));
     }
 }
 
@@ -7857,13 +7858,17 @@ bool ConfirmAccountSyncTargets(
     }
 
     prompt += L"?\r\n\r\n";
+    prompt += L"Source: " + std::wstring(sourceAccount) +
+        L" (" + tp::AccountSyncFileTime(g_root, sourceAccount, item) +
+        L")\r\nDestinations:\r\n";
 
     for (const auto& target :
          targets) {
         prompt +=
             L"• " +
-            target +
-            L"\r\n";
+            target + L" (" +
+            tp::AccountSyncFileTime(g_root, target, item) +
+            L")\r\n";
     }
 
     if (comparerFallback) {
