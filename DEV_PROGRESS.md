@@ -5,11 +5,11 @@
 ## Current
 
 - Active branch: `dev`.
-- Source/application version: `v0.5.0` release candidate.
-- Latest published stable release: `v0.4.0` at exact main/release commit `eee95cf319351adbef1a3b549f5fe9531f33567f`.
-- Latest published development prerelease: `v0.5.0-dev.3` at `e471aad66a64ddeb3f1458f2800edc3542b5521e`. GitHub stable `/releases/latest` remains non-prerelease `v0.4.0`.
-- Stable release/source commit and tag target: `eee95cf319351adbef1a3b549f5fe9531f33567f` (`v0.4.0`).
-- Current stable/accepted product baseline is `v0.4.0` at `eee95cf319351adbef1a3b549f5fe9531f33567f`. Account Sync is accepted for the runtime paths exercised on 2026-09-30, with explicit non-blocking validation debt for Sync-before-Launch/Ctrl-click and induced backup/write-failure. The previously accepted v0.3.22 toolbar/DPI behaviour remains inherited; slight softness at Windows 125% scaling remains accepted as normal fractional-DPI rendering.
+- Source/application version: `v0.5.0` stable.
+- Latest published stable release: `v0.5.0` at exact main/release commit `1173a91918db134939b65c0a37891abce35dfb37`.
+- Latest published development prerelease before stable promotion: `v0.5.0-dev.3` at `e471aad66a64ddeb3f1458f2800edc3542b5521e`. GitHub stable `/releases/latest` now resolves to `v0.5.0`.
+- Stable release/source commit and tag target: `1173a91918db134939b65c0a37891abce35dfb37` (`v0.5.0`).
+- Current stable product baseline is `v0.5.0` at `1173a91918db134939b65c0a37891abce35dfb37`, released with explicit non-blocking validation debt for wording, MPQ runtime paths, repository-library/multi-content runtime paths, and direct-DLL `dlls.txt` runtime confirmation. Account Sync is accepted for the runtime paths exercised on 2026-09-30, with explicit non-blocking validation debt for Sync-before-Launch/Ctrl-click and induced backup/write-failure. The previously accepted v0.3.22 toolbar/DPI behaviour remains inherited; slight softness at Windows 125% scaling remains accepted as normal fractional-DPI rendering.
 - Last known-good Account-Sync-free code baseline is published/runtime-accepted `v0.3.22` at `8678334c0a0015eba14aecf58f7c416c045f6581`. The final pre-Account-Sync repository commit is documentation-only `6fcf117cf4f639612827acf88b10c6933f4b7802`, so its executable source is equivalent to that accepted v0.3.22 baseline.
 - Account Sync recovery checkpoint `2e80b1378a7a01bb311140828e4e54069b1576d6` passed Build workflow run `36440593954`, Windows x64 job `108989739617`, with **19/19 CTest tests**, including `account-sync-safety`. That recovery line is now superseded by published stable `v0.4.0`; keep the checkpoint only as provenance.
 - A1 runtime gate: **accepted for forward development** on 2026-09-26. Fresh install, reinstall, Update New and Remove Addon passed. Managed same-root replacement runtime validation is explicitly deferred rather than blocking later work. The deterministic crash-window tests remain the primary validation for restart-recovery semantics.
@@ -1124,18 +1124,20 @@ MPQ and repository-library support remain unadvertised/in-development for this r
 
 #### Phase 8 — v0.5.0 stable release gate
 
-Decision on 2026-10-10: ship the current validated functional state to stable now.
+Status: **complete / published stable on 2026-10-10**.
 
-Required gate:
+Release preparation PR #43 changed only stable version/release metadata and the development contract. Its exact candidate head `23f99b18531a8c694129786c7f6b9d7117056717` passed the Windows x64 Release build and **25/25 CTest** on rerun in Build run `38054424890`, job `114220848164`. The first attempt's sole failure was the external `self-update-live-latest` request being refused/rate-limited; the unchanged rerun passed that test.
 
-- stable source/version markers must all be `0.5.0` / `v0.5.0`;
-- Release build + full CTest on the exact promotion candidate;
-- promote the exact validated `dev` state to `main`;
-- publish stable `v0.5.0` through the normal Release workflow;
-- verify the stable tag/assets target the exact `main` release commit;
-- exercise/verify the workflow's normal stable release path.
+PR #43 squash-merged to `dev` as `e2b433c4eb27f9aa53585387335802b7f2838860`. Promotion PR #44 then passed its exact-head Release CI and merged `dev` to `main` with history preserved as `1173a91918db134939b65c0a37891abce35dfb37`.
 
-Accepted runtime evidence carried into this release:
+Stable Release workflow run `38055408047`, Windows x64 job `114222725305`, rebuilt and tested that exact `main` commit, passed **25/25 CTest**, generated the SHA-256 sidecar, created tag `v0.5.0`, and published the stable release assets. GitHub `/releases/latest` resolves to non-draft/non-prerelease `v0.5.0` at that exact commit.
+
+Published stable assets:
+
+- `TocPilot.exe` — 3,250,176 bytes — SHA-256 `6ea99ebdb7cac4cb29b62ed43d23bc0c219245f60d24615841e3d23bcc65a86e`;
+- `TocPilot.exe.sha256` — 78 bytes.
+
+Accepted runtime evidence carried into v0.5.0:
 
 - startup auto-enter;
 - existing addon update;
@@ -1144,13 +1146,13 @@ Accepted runtime evidence carried into this release:
 - ordinary single-addon default-branch fast path;
 - user confirmed the streamlined Add Git flow is preferable.
 
-Known non-blocking validation debt moved to v0.5.1:
+Known validation debt intentionally deferred to v0.5.1:
 
-- MPQ runtime paths;
-- repository-library/multi-content runtime paths;
 - wording pass;
-- direct-DLL `dlls.txt` runtime confirmation (automated regression coverage is green).
+- MPQ runtime lifecycle/collision/mixed-repository paths;
+- repository-library/multi-content runtime paths;
+- direct-DLL `dlls.txt` runtime confirmation (automated coverage is green).
 
 ## Exact Next Step
 
-Prepare and validate stable **`v0.5.0`**, promote the exact candidate from `dev` to `main`, and publish it through the normal stable Release workflow. After publication, record the exact stable commit/tag/workflow provenance and start the next development cycle at **v0.5.1** with wording, MPQ and repository-library testing as explicit follow-up work.
+Begin the **v0.5.1** development cycle from the published `v0.5.0` stable baseline. Priorities are the deferred wording pass plus user-led MPQ and repository-library/multi-content runtime testing; fix only defects those tests expose. The stable-user stale-SHA branch-switch bug is fixed in `v0.5.0` and is now on `main`.
