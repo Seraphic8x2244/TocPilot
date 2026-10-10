@@ -9757,7 +9757,8 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
         ListView_SetExtendedListViewStyle(
             g_accountSyncStatusList,
             LVS_EX_FULLROWSELECT |
-                LVS_EX_DOUBLEBUFFER);
+                LVS_EX_DOUBLEBUFFER |
+                LVS_EX_LABELTIP);
 
         struct AccountSyncColumn {
             const wchar_t* label;
