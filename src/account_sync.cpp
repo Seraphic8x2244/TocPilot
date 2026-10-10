@@ -73,6 +73,7 @@ struct ItemAnalysis {
     bool noSource = false;
     bool comparerFallback = false;
     AccountCopy source;
+    std::vector<AccountCopy> observedCopies;
     std::vector<AccountCopy> automaticTargets;
     std::vector<AccountCopy> confirmationTargets;
 };
@@ -1374,12 +1375,30 @@ bool ReadSyncBytes(AccountCopy& copy, std::wstring& error) {
     return true;
 }
 
+bool CopiesStillCurrent(const std::vector<AccountCopy>& expected,
+                        std::wstring& error) {
+    for (const auto& original : expected) {
+        AccountCopy live = original;
+        live.bytes.clear();
+        if (!InspectCopy(live.path, live.exists, live.modified, error) ||
+            !ReadSyncBytes(live, error)) return false;
+        if (live.exists != original.exists ||
+            (live.exists && (live.modified != original.modified ||
+                             live.bytes != original.bytes))) {
+            error = L"Account Sync files changed after confirmation; review the new plan.";
+            return false;
+        }
+    }
+    return true;
+}
+
 bool SameSyncPlan(const ItemAnalysis& a, const ItemAnalysis& b) {
     if (a.item != b.item || a.noSource != b.noSource ||
         a.source.account != b.source.account ||
         a.source.exists != b.source.exists ||
         a.source.modified != b.source.modified ||
         a.source.bytes != b.source.bytes ||
+        a.observedCopies.size() != b.observedCopies.size() ||
         a.confirmationTargets.size() != b.confirmationTargets.size() ||
         a.automaticTargets.size() != b.automaticTargets.size()) {
         return false;
@@ -1388,6 +1407,9 @@ bool SameSyncPlan(const ItemAnalysis& a, const ItemAnalysis& b) {
         return x.account == y.account && x.exists == y.exists &&
                x.modified == y.modified && x.bytes == y.bytes;
     };
+    for (std::size_t i = 0; i < a.observedCopies.size(); ++i) {
+        if (!equalCopy(a.observedCopies[i], b.observedCopies[i])) return false;
+    }
     for (std::size_t i = 0; i < a.confirmationTargets.size(); ++i) {
         if (!equalCopy(a.confirmationTargets[i], b.confirmationTargets[i])) return false;
     }
@@ -1762,6 +1784,8 @@ bool AnalyzeItem(
         copies.push_back(
             std::move(copy));
     }
+
+    analysis.observedCopies = copies;
 
     std::vector<AccountCopy> existing;
 
@@ -3005,6 +3029,7 @@ bool RunAccountSync(
                     analysis.comparerFallback);
 
             if (accepted) {
+                std::vector<AccountCopy> expectedCopies = analysis.observedCopies;
                 ItemAnalysis fresh;
                 std::wstring freshnessError;
                 if (!AnalyzeItem(wowRoot, accounts, item, fresh, freshnessError) ||
@@ -3023,26 +3048,11 @@ bool RunAccountSync(
                      analysis.confirmationTargets) {
                     std::wstring copyError;
 
-                    AccountCopy liveSource = analysis.source;
-                    AccountCopy liveTarget = target;
                     std::wstring latestError;
-                    const bool unchanged =
-                        InspectCopy(liveSource.path, liveSource.exists, liveSource.modified, latestError) &&
-                        ReadSyncBytes(liveSource, latestError) &&
-                        InspectCopy(liveTarget.path, liveTarget.exists, liveTarget.modified, latestError) &&
-                        ReadSyncBytes(liveTarget, latestError) &&
-                        liveSource.exists == analysis.source.exists &&
-                        liveSource.modified == analysis.source.modified &&
-                        liveSource.bytes == analysis.source.bytes &&
-                        liveTarget.exists == target.exists &&
-                        liveTarget.modified == target.modified &&
-                        liveTarget.bytes == target.bytes;
-                    if (!unchanged) {
+                    if (!CopiesStillCurrent(expectedCopies, latestError)) {
                         itemResult.fatal = true;
                         result.fatal = true;
-                        itemResult.error = latestError.empty()
-                            ? L"Source or destination changed before the write; confirm again."
-                            : latestError;
+                        itemResult.error = latestError;
                         if (error.empty()) error = itemResult.error;
                         break;
                     }
@@ -3055,6 +3065,21 @@ bool RunAccountSync(
                             backupRunFolder,
                             copyError)) {
                         ++confirmedCopied;
+                        for (auto& observed : expectedCopies) {
+                            if (observed.account == target.account) {
+                                observed.bytes.clear();
+                                std::wstring refreshError;
+                                if (!InspectCopy(observed.path, observed.exists,
+                                                 observed.modified, refreshError) ||
+                                    !ReadSyncBytes(observed, refreshError)) {
+                                    itemResult.fatal = true;
+                                    result.fatal = true;
+                                    itemResult.error = refreshError;
+                                    if (error.empty()) error = refreshError;
+                                }
+                                break;
+                            }
+                        }
                     } else {
                         itemResult.fatal = true;
                         result.fatal = true;
