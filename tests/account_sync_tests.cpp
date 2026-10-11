@@ -1418,7 +1418,7 @@ void TestBackupFailureBlocksOverwrite() {
         ec);
 }
 
-void TestCopyFailureKeepsBackup() {
+void TestSourceRemovalDuringApprovalIsRejected() {
     const auto root =
         TestRoot(L"copy-failure");
     ResetRoot(root);
@@ -1470,34 +1470,17 @@ void TestCopyFailureKeepsBackup() {
             },
             result,
             error),
-        "copy failure should be reported through run result");
+        "stale source should be reported through run result");
     Check(
         result.fatal,
-        "copy failure after backup must be fatal");
+        "source disappearance must invalidate confirmation");
     Check(
         ReadText(target) == "old",
         "failed source copy must leave destination content unchanged");
 
-    bool foundBackup = false;
-    for (const auto& folder :
-         BackupRunFolders(root)) {
-        const auto backup =
-            folder /
-            L"BETA" /
-            L"macros-cache.txt";
-
-        if (std::filesystem::is_regular_file(
-                backup)) {
-            foundBackup = true;
-            Check(
-                ReadText(backup) == "old",
-                "copy failure must leave the successful backup intact");
-        }
-    }
-
     Check(
-        foundBackup,
-        "copy failure after successful backup should retain a backup file");
+        BackupRunFolders(root).empty(),
+        "source disappearance during confirmation must stop before any backup");
 
     std::error_code ec;
     std::filesystem::remove_all(
@@ -2049,7 +2032,7 @@ int main() {
     TestPfUiEqualTimestampConflictTieBreak();
     TestEqualTimestampAndDecline();
     TestBackupFailureBlocksOverwrite();
-    TestCopyFailureKeepsBackup();
+    TestSourceRemovalDuringApprovalIsRejected();
     TestBackupRunFolderCollision();
     TestNoSourceItem();
     TestPfUiMissingTargetTargetedCreation();
