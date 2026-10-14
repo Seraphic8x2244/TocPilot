@@ -2083,7 +2083,7 @@ void TestTileProjectionGroupsAndTransfers() {
     int macroWrites = 0, bindingWrites = 0;
     std::vector<std::wstring> macroTargets, bindingTargets;
     for (const auto& op : model.operations) {
-        Check(op.kind == K::CopyFile && op.requiresConfirmation,
+        Check(op.kind == K::CopyWholeFile && op.requiresConfirmation,
               "macro/keybinding plans must be confirmed file copies");
         if (op.row == R::Macros) {
             ++macroWrites;
