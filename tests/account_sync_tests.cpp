@@ -1437,6 +1437,11 @@ void TestBackupFailureBlocksOverwrite() {
     Check(
         ReadText(target) == "old",
         "backup failure must prevent destination overwrite");
+    const auto& failed = result.items[static_cast<std::size_t>(tp::AccountSyncItem::Macros)].targetOutcomes;
+    Check(failed.size() == 1 && failed[0].account == L"BETA" &&
+          failed[0].row == tp::AccountSyncTileRow::Macros &&
+          !failed[0].succeeded && !failed[0].declined,
+          "backup failure must record a failed target outcome, never a success tick");
 
     std::error_code ec;
     std::filesystem::remove_all(
@@ -1507,6 +1512,10 @@ void TestSourceRemovalDuringApprovalIsRejected() {
     Check(
         BackupRunFolders(root).empty(),
         "source disappearance during confirmation must stop before any backup");
+    for (const auto& outcome : result.items[static_cast<std::size_t>(tp::AccountSyncItem::Macros)].targetOutcomes) {
+        Check(!outcome.succeeded,
+              "stale source must not produce a successful destination outcome");
+    }
 
     std::error_code ec;
     std::filesystem::remove_all(
