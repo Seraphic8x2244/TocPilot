@@ -163,8 +163,10 @@ inline AccountSyncItem ItemForRow(AccountSyncTileRow row) {
 
 inline std::wstring SnapshotTime(const AccountSyncTileCell& cell) {
     if (!cell.exists) return L"missing";
-    const auto systemTime =
-        std::chrono::file_clock::to_sys(cell.modified);
+    // MSVC's std::filesystem clock does not expose file_clock::to_sys.
+    // Conversion is display-only; sync decisions retain the native timestamp.
+    const auto systemTime = std::chrono::system_clock::now() +
+        (cell.modified - std::filesystem::file_time_type::clock::now());
     const std::time_t seconds = std::chrono::system_clock::to_time_t(systemTime);
     std::tm local{};
     if (localtime_s(&local, &seconds) != 0) return L"unavailable";
