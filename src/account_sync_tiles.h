@@ -223,6 +223,33 @@ inline std::wstring SelectionDetails(const View& view,
         } else {
             details += L"supported pfUI cache values differ (merge inputs, not newest-file copying)";
         }
+        if ((row == AccountSyncTileRow::PfUiSettings ||
+             row == AccountSyncTileRow::PfUiCache) && cell.exists && otherCell.exists) {
+            std::vector<std::string> different;
+            for (const auto& entry : cell.semanticEntries) {
+                const auto found = std::find_if(otherCell.semanticEntries.begin(),
+                    otherCell.semanticEntries.end(), [&](const auto& candidate) {
+                        return candidate.first == entry.first;
+                    });
+                if (found == otherCell.semanticEntries.end() || found->second != entry.second)
+                    different.push_back(entry.first);
+            }
+            for (const auto& entry : otherCell.semanticEntries) {
+                const bool found = std::any_of(cell.semanticEntries.begin(),
+                    cell.semanticEntries.end(), [&](const auto& candidate) {
+                        return candidate.first == entry.first;
+                    });
+                if (!found) different.push_back(entry.first);
+            }
+            if (!different.empty()) {
+                details += L" [different entries: ";
+                for (std::size_t d = 0; d < different.size(); ++d) {
+                    if (d) details += L", ";
+                    details += std::wstring(different[d].begin(), different[d].end());
+                }
+                details += L"]";
+            }
+        }
         details += L"; observed: " + SnapshotTime(otherCell) +
             L" (local time)\r\n";
     }
