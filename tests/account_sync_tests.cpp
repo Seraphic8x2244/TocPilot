@@ -2218,6 +2218,19 @@ void TestTileProjectionPfUiSeparateRows() {
           model.accounts[2].rows[cache].state == S::Older,
           "newest pfUI file can itself require merged cache data");
 
+    const auto& aSettings = model.accounts[0].rows[settings].semanticEntries;
+    const auto& bSettings = model.accounts[1].rows[settings].semanticEntries;
+    Check(!aSettings.empty() && !bSettings.empty() && aSettings != bSettings,
+          "pfUI Settings tiles must retain account-specific inspected profile entry signatures");
+    const auto& aCache = model.accounts[0].rows[cache].semanticEntries;
+    const auto& bCache = model.accounts[1].rows[cache].semanticEntries;
+    Check(aCache.size() == 3 && bCache.size() == 3 && aCache != bCache &&
+          aCache[0].first == "libhealth" && aCache[1].first == "gold" &&
+          aCache[2].first == "prediction",
+          "Cache detail must expose the three supported merge sections per account");
+    Check(model.accounts[2].rows[settings].semanticEntries.empty() &&
+          model.accounts[2].rows[cache].semanticEntries.empty(),
+          "missing pfUI files must not invent semantic detail entries");
     int profiles = 0, caches = 0;
     for (const auto& op : model.operations) {
         if (op.kind == K::ReplaceProfiles) {
