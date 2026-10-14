@@ -2,6 +2,8 @@
 
 > Live TocPilot development context for a fresh chat. Keep this current and concise. Git carries chronology; this file carries the current product contract and next work.
 
+**Slice 3 continuation (2026-10-15; INCOMPLETE):** Verified starting `dev` HEAD exactly `66522a885e1c24df46d2bf90dc81ce6d5988abe4`. Run `38651017252`: Windows x64 Release compiled; 25/26 CTest passed; the only failure, `self-update-live-latest`, encountered a refused/rate-limited GitHub API call and is not demonstrated to be an Account Sync defect. Commits `1643a80f8a2ee0d3829bca074d203810ef9ac410` and `9449a54130389ead0986864717961892490264b0` clarify pfUI confirmation: it approves Settings/profile replacement, while existing-file Cache merges are independent and missing-file creation requires approval. The sync engine is unchanged. CI runs `38652250403` and `38652269208` were in progress/queued when checked; not yet validated. Remaining: concrete per-account pfUI semantic differences, strict operation/dialog parity, remaining failure/staleness/backup regressions, green Windows CI, version bump and genuine Development Release plus assets/metadata/updater E2E. No release or `main` change.
+
 ## Account Sync UI — fixed-width account tiles (Slices 1–2 implemented; Windows runtime pending)
 
 Replace the current Account Sync comparison/status table with horizontally arranged, fixed-width **account tiles**. Each selected account gets one tile; the layout remains consistent for two, three, or more accounts. Retain the current window width and use a **horizontal scrollbar** when the selected tiles do not fit. Avoid switching to a different UI model for 3+ accounts.
