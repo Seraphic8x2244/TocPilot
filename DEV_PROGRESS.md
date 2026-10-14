@@ -2,6 +2,38 @@
 
 > Live TocPilot development context for a fresh chat. Keep this current and concise. Git carries chronology; this file carries the current product contract and next work.
 
+## Planned Account Sync UI — account tiles (agreed 2026-10-14; not implemented)
+
+Replace the current Account Sync comparison/status table with horizontally arranged, fixed-width **account tiles**. Each selected account gets one tile; the layout remains consistent for two, three, or more accounts. Retain the current window width and use a **horizontal scrollbar** when the selected tiles do not fit. Avoid switching to a different UI model for 3+ accounts.
+
+Tile hierarchy (aligned across all tiles):
+
+```text
+[Account name]
+Keybinds
+Macros
+pfUI                 <- neutral, inactive section heading
+  Settings           <- actionable pfUI profile/settings comparison
+  Cache              <- actionable supported cache merge comparison
+```
+
+**Visual semantics**
+
+- File/status **text colour**, on the existing white background: **green = good / the applicable sync rule is satisfied**, **blue = newer**, **amber = older**, **black = default/neutral/unclassified**. Green is *not* merely a timestamp match; it means the relevant macro, keybinding, pfUI Settings or supported Cache sync criteria are already satisfied. Contents, not just timestamps, determine equality for macros/keybindings.
+- The **pfUI** parent is black/neutral, not clickable and carries no operation icon. Only **Settings** and **Cache** display state and sync operation indicators.
+- **Arrows, ticks, and warning exclamation marks are reserved for actual operations/outcomes**, never used as labels for accounts or files. An arrow between aligned tiles denotes the direction of an actual proposed copy/merge; a tick indicates an operation completed successfully; an exclamation denotes a needed confirmation/attention. No arrow for an unchanged/satisfied row. Do not confuse older/newer *state* with the direction of an operation.
+- Timestamps remain visible via an item-details selection and in confirmation, clearly labelled per account to seconds; sorting/decisions retain native full-precision timestamps.
+- Do not repeat redundant `No changes` action text next to a healthy status.
+
+**Multiple accounts and transfer planning**
+
+- Show all selected accounts as peers; do not restrict Account Sync to pairs. If one account has new macros while the other two already match, show only necessary changes. If a middle account has newer pfUI Settings, it can supply both neighbours. If two accounts already share the same newest keybinding content, they are one logically matching source group: update the older/differing account **once**, not by cascading unnecessary copies across both matching sources.
+- Compute and display the actual operation plan, respecting existing newest-source selection/confirmation rules for macros/keybindings and the established **pfUI_profiles source selection + supported cache merge/conflict-resolution** semantics. Splitting pfUI into two visible subrows is strictly presentational; don't replace cache merging with whole-file newest-wins copying.
+- Preview and confirmation must re-inspect and revalidate relevant files immediately before approval/commit; any changed source, target, direction or planned changes requires fresh confirmation, with backup-before-overwrite retained.
+- Keep account selection, Sync Now, Sync-before-Launch and existing configuration persistence; redesign only the presentation/interaction and the minimum required plan-to-UI projection.
+
+**Status / next work:** UI design accepted, **not implemented**. Implement in a focused `dev` slice with aligned row/arrow placement, multiple-account (2/3+) cases, scrolling and narrow-window checks, colour semantics, pfUI split-row consistency, and preservation of content-aware sync/freshness checks. Build/CTest then publish a real development prerelease for user runtime testing; no `main` changes until accepted.
+
 ## Current
 
 - 2026-10-11 `v0.5.1-dev.2` CI run `38151452564`: Release build and 25/25 CTest passed; prerelease assets/checksum and metadata verification passed, but final self-update E2E test failed because bootstrap used HEAD^, which already contained the same version tag. This was a workflow test-fixture error, not evidence of an updater failure. Fix at `81b00ce8bfd9320a67bf4a72bd359248dcd15a7b`: bootstrap from published stable `v0.5.0` instead. Prepare `v0.5.1-dev.3` as a new prerelease candidate so the corrected workflow can validate the real stable -> development update transition. No new Account Sync runtime observations yet.
