@@ -48,6 +48,14 @@ int main() {
             "scroll resets when all tiles fit");
     }
 
+    // Existing main-window 400px minimum at 96 DPI must fit the
+    // strip without expanding the window or clipping the package list.
+    Check(78 + kSyncTileMinimumPackageListHeight + 10 +
+              kSyncTilePanelHeight + 20 <= 400,
+          "tiles and package list must fit the minimum client height");
+    Check(kSyncTilePanelHeight - 4 - 17 >= 3 + kSyncTileHeight,
+          "tile and horizontal scrollbar must fit in the panel");
+
     Check(SyncTileContentWidth(0, 96) == 0,
         "no-account projection produces no tile strip");
     Check(SyncTileContentWidth(

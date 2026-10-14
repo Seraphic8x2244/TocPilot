@@ -1575,7 +1575,7 @@ void LayoutControls(HWND hwnd) {
              .accountSyncPfUi);
 
     const int accountSyncPanelHeight =
-        ScaleUi(hwnd, 164);
+        ScaleUi(hwnd, tp::kSyncTilePanelHeight);
     const int accountSyncPanelGap =
         ScaleUi(hwnd, 10);
 
@@ -1590,7 +1590,7 @@ void LayoutControls(HWND hwnd) {
             ScaleUi(
                 hwnd,
                 showAccountSyncPanel
-                    ? 160
+                    ? tp::kSyncTileMinimumPackageListHeight
                     : 220),
             height -
                 listTop -
