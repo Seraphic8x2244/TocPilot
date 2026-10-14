@@ -7875,6 +7875,23 @@ bool RunAccountSyncFromUi(
         return false;
     }
 
+    if (!beforeLaunch) {
+        std::wstring summary = L"Account Sync completed.\r\n\r\n";
+        for (const auto& item : result.items) {
+            if (!tp::AccountSyncItemEnabled(config, item.item)) continue;
+            summary += tp::AccountSyncItemLabel(item.item);
+            summary += L": ";
+            summary += item.status.empty() ? L"No reported result" : item.status;
+            summary += L" (";
+            summary += std::to_wstring(item.copiedTargets);
+            summary += L" destination(s) updated)";
+            if (item.confirmationDeclined) summary += L" - confirmation declined";
+            summary += L"\r\n";
+        }
+        summary += L"\r\nAccount tiles have been refreshed from disk.";
+        MessageBoxW(owner, summary.c_str(), L"TocPilot - Account Sync",
+                    MB_OK | MB_ICONINFORMATION);
+    }
     return true;
 }
 
