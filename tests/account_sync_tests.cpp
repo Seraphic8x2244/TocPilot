@@ -1062,6 +1062,13 @@ void TestPfUiProfileDecline() {
     Check(
         !result.fatal,
         "declining profile sync should not be fatal");
+    const auto& pfOutcomes =
+        result.items[static_cast<std::size_t>(tp::AccountSyncItem::PfUi)].targetOutcomes;
+    Check(pfOutcomes.size() == 1 &&
+          pfOutcomes[0].account == L"BETA" &&
+          pfOutcomes[0].row == tp::AccountSyncTileRow::PfUiSettings &&
+          !pfOutcomes[0].succeeded && pfOutcomes[0].declined,
+          "declined pfUI profile confirmation must record only Settings, not Cache");
     Check(
         ReadText(target) ==
             targetText,
@@ -1359,6 +1366,13 @@ void TestEqualTimestampAndDecline() {
     Check(
         !result.fatal,
         "declined confirmation must not be fatal");
+    const auto& bindingOutcomes =
+        result.items[static_cast<std::size_t>(tp::AccountSyncItem::Keybindings)].targetOutcomes;
+    Check(bindingOutcomes.size() == 1 &&
+          bindingOutcomes[0].account == L"BETA" &&
+          bindingOutcomes[0].row == tp::AccountSyncTileRow::Keybindings &&
+          !bindingOutcomes[0].succeeded && bindingOutcomes[0].declined,
+          "declined keybinding write must be recorded for its exact destination");
     Check(
         ReadText(target) == "beta",
         "declined target must remain unchanged");
