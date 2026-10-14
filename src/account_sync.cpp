@@ -90,8 +90,9 @@ std::wstring FormatSyncFileTime(const std::filesystem::path& path) {
         !FileTimeToSystemTime(&local, &clock)) {
         return L"unavailable";
     }
-    wchar_t output[16]{};
-    swprintf_s(output, L"%02u:%02u:%02u",
+    wchar_t output[32]{};
+    swprintf_s(output, L"%04u-%02u-%02u %02u:%02u:%02u",
+               clock.wYear, clock.wMonth, clock.wDay,
                clock.wHour, clock.wMinute, clock.wSecond);
     return output;
 }
