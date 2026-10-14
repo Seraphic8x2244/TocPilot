@@ -49,12 +49,12 @@ inline unsigned Dpi(HWND hwnd) {
 inline void UpdateScrollbar(HWND hwnd, View& view) {
     RECT client{};
     GetClientRect(hwnd, &client);
-    const int width = std::max(0, client.right - client.left);
+    const int width = std::max(0, static_cast<int>(client.right - client.left));
     const int content = SyncTileContentWidth(
         view.projection.accounts.size(), Dpi(hwnd));
     view.offset = ClampSyncTileScroll(view.offset, content, width);
 
-    SCROLLINFOW scroll{};
+    SCROLLINFO scroll{};
     scroll.cbSize = sizeof(scroll);
     scroll.fMask = SIF_RANGE | SIF_PAGE | SIF_POS;
     scroll.nMin = 0;
@@ -295,7 +295,7 @@ inline LRESULT CALLBACK WindowProc(HWND hwnd, UINT message,
         return 0;
     case WM_HSCROLL:
         if (view) {
-            SCROLLINFOW scroll{};
+            SCROLLINFO scroll{};
             scroll.cbSize = sizeof(scroll);
             scroll.fMask = SIF_ALL;
             GetScrollInfo(hwnd, SB_HORZ, &scroll);
