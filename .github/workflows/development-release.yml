@@ -84,6 +84,8 @@ jobs:
 
       - name: Test Release
         run: ctest --test-dir build -C Release --output-on-failure
+        env:
+          TOCPILOT_GITHUB_API_TOKEN: ${{ github.token }}
 
       - name: Write SHA-256 sidecar
         shell: pwsh
@@ -160,6 +162,7 @@ jobs:
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
+          TOCPILOT_GITHUB_API_TOKEN: ${{ github.token }}
         run: |
           $tag = "${{ steps.release.outputs.tag }}"
           # The previous commit may already contain this release version.
