@@ -3097,9 +3097,27 @@ bool InspectAccountSyncTiles(
 
         addGroup(i, AccountSyncTileRow::PfUiSettings,
                  PfUiRootSignature(FindPfUiRoot(file.document, "pfUI_profiles")));
+        const auto* profileRoot = FindPfUiRoot(file.document, "pfUI_profiles");
+        if (profileRoot) {
+            for (const auto& entry : profileRoot->children) {
+                std::string signature;
+                AppendPfUiNodeSignature(entry, signature);
+                cell(i, AccountSyncTileRow::PfUiSettings).semanticEntries.emplace_back(
+                    entry.key, std::move(signature));
+            }
+        }
         std::string cacheSignature;
         if (!PfUiCacheSignature(file.document, cacheSignature, error)) return false;
         addGroup(i, AccountSyncTileRow::PfUiCache, cacheSignature);
+        for (std::size_t key = 0; key < kPfUiMergeCacheKeys.size(); ++key) {
+            std::wstring cacheError;
+            const auto* node = SupportedPfUiCacheNode(file.document, key, cacheError);
+            if (!cacheError.empty()) { error = cacheError; return false; }
+            std::string signature = "<absent>";
+            if (node) { signature.clear(); AppendPfUiNodeSignature(*node, signature); }
+            cell(i, AccountSyncTileRow::PfUiCache).semanticEntries.emplace_back(
+                kPfUiMergeCacheKeys[key], std::move(signature));
+        }
 
         for (std::size_t key = 0; key < kPfUiMergeCacheKeys.size(); ++key) {
             std::wstring cacheError;
