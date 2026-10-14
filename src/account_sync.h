@@ -31,6 +31,23 @@ struct PfUiComparison {
     bool cacheChanged = false;
 };
 
+// Recorded only at the engine's actual write/approval boundary; a fresh
+// inspection must never be mistaken for a successful operation.
+enum class AccountSyncTileRow {
+    Keybindings = 0,
+    Macros,
+    PfUiSettings,
+    PfUiCache
+};
+
+struct AccountSyncTargetOutcome {
+    std::wstring account;
+    AccountSyncTileRow row = AccountSyncTileRow::Keybindings;
+    bool succeeded = false;
+    bool declined = false;
+    std::wstring error;
+};
+
 struct AccountSyncItemResult {
     AccountSyncItem item = AccountSyncItem::Macros;
     std::wstring sourceAccount;
@@ -42,6 +59,7 @@ struct AccountSyncItemResult {
     bool confirmationDeclined = false;
     bool fatal = false;
     std::size_t copiedTargets = 0;
+    std::vector<AccountSyncTargetOutcome> targetOutcomes;
     std::wstring status;
     std::wstring action;
     std::wstring error;
@@ -51,12 +69,7 @@ struct AccountSyncItemResult {
 // Read-only, snapshot-of-inspection projection for the future account tiles.
 // This is not an approved/executable plan. RunAccountSync must still reanalyse
 // and obtain its own confirmation and file freshness checks before writing.
-enum class AccountSyncTileRow {
-    Keybindings = 0,
-    Macros,
-    PfUiSettings,
-    PfUiCache
-};
+
 
 inline constexpr std::size_t kAccountSyncTileRowCount = 4;
 
