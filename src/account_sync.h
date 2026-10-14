@@ -93,6 +93,8 @@ struct AccountSyncTileCell {
     bool exists = false;
     // Zero denotes no content-equivalence group. Groups are 1-based.
     std::size_t matchingGroup = 0;
+    // Semantic pfUI entries observed during this read-only inspection.
+    std::vector<std::pair<std::string, std::string>> semanticEntries;
     // Keep full filesystem precision; formatting to seconds is a UI concern.
     std::filesystem::file_time_type modified{};
 };
