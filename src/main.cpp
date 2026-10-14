@@ -7887,6 +7887,17 @@ bool RunAccountSyncFromUi(
             summary += L" destination(s) updated)";
             if (item.confirmationDeclined) summary += L" - confirmation declined";
             summary += L"\r\n";
+            for (const auto& outcome : item.targetOutcomes) {
+                const wchar_t* row = outcome.row == tp::AccountSyncTileRow::Macros
+                    ? L"Macros" : outcome.row == tp::AccountSyncTileRow::Keybindings
+                    ? L"Keybinds" : outcome.row == tp::AccountSyncTileRow::PfUiSettings
+                    ? L"pfUI Settings" : L"pfUI Cache";
+                summary += L"  " + outcome.account + L" / " + row + L": ";
+                summary += outcome.declined ? L"declined" :
+                    outcome.succeeded ? L"updated" : L"failed";
+                if (!outcome.error.empty()) summary += L" - " + outcome.error;
+                summary += L"\r\n";
+            }
         }
         summary += L"\r\nAccount tiles have been refreshed from disk.";
         MessageBoxW(owner, summary.c_str(), L"TocPilot - Account Sync",
