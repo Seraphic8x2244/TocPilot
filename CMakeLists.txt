@@ -523,4 +523,17 @@ if(BUILD_TESTING)
 
     add_test(NAME account-sync-safety COMMAND TocPilotAccountSyncTests)
 
+    add_executable(TocPilotAccountSyncTileLayoutTests
+        tests/account_sync_tile_layout_tests.cpp
+    )
+    target_compile_features(TocPilotAccountSyncTileLayoutTests PRIVATE cxx_std_20)
+    target_include_directories(TocPilotAccountSyncTileLayoutTests PRIVATE src)
+
+    if(MSVC)
+        target_compile_options(TocPilotAccountSyncTileLayoutTests PRIVATE /W4 /permissive- /utf-8)
+    endif()
+
+    add_test(NAME account-sync-tile-layout COMMAND TocPilotAccountSyncTileLayoutTests)
+
+
 endif()
