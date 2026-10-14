@@ -27,6 +27,7 @@ inline constexpr wchar_t kClassName[] = L"TocPilotAccountSyncTileViewport";
 struct View {
     AccountSyncTileProjection projection;
     std::wstring error;
+    std::vector<AccountSyncTargetOutcome> outcomes;
     int offset = 0;
     HFONT font = nullptr;
     std::filesystem::path wowRoot;
@@ -377,8 +378,14 @@ inline void PaintTiles(HWND hwnd, HDC dc, const View& view) {
             RECT status{x + inside + labelWidth, y,
                         x + tileWidth - ScaleSyncTile(6, dpi),
                         y + rowHeight};
-            DrawTextIn(dc, DetailText(view.projection, cell, op),
-                       status, color, DT_RIGHT);
+            std::wstring statusText = DetailText(view.projection, cell, op);
+            for (const auto& outcome : view.outcomes) {
+                if (outcome.account != tile.account || outcome.row != row) continue;
+                if (outcome.succeeded) statusText = L"\u2713 " + statusText;
+                else if (!outcome.declined) statusText = L"! " + statusText;
+                break;
+            }
+            DrawTextIn(dc, statusText, status, color, DT_RIGHT);
         }
     }
 
@@ -550,11 +557,13 @@ inline HWND CreateAccountSyncTileViewport(HWND parent, int id) {
 
 inline void SetAccountSyncTilePreview(
     HWND hwnd, AccountSyncTileProjection projection, std::wstring error,
-    const std::filesystem::path& wowRoot) {
+    const std::filesystem::path& wowRoot,
+    std::vector<AccountSyncTargetOutcome> outcomes = {}) {
     if (!hwnd) return;
     auto* view = account_sync_tiles_detail::Get(hwnd);
     if (!view) return;
     view->projection = std::move(projection);
+    view->outcomes = std::move(outcomes);
     view->wowRoot = wowRoot;
     view->selectedAccount = -1;
     view->selectedRow = -1;
