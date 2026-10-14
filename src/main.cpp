@@ -7704,7 +7704,8 @@ tp::AccountSyncConfig CurrentAccountSyncConfig() {
     return config;
 }
 
-void RefreshAccountSyncPreview() {
+void RefreshAccountSyncPreview(
+    std::vector<tp::AccountSyncTargetOutcome> outcomes = {}) {
     if (!g_accountSyncTilesView) return;
 
     tp::AccountSyncTileProjection projection;
@@ -7721,7 +7722,8 @@ void RefreshAccountSyncPreview() {
     // Display only. The authoritative engine independently re-inspects,
     // confirms, revalidates freshness and performs protected writes.
     tp::SetAccountSyncTilePreview(
-        g_accountSyncTilesView, std::move(projection), std::move(error), g_root);
+        g_accountSyncTilesView, std::move(projection), std::move(error),
+        g_root, std::move(outcomes));
 }
 
 bool ConfirmAccountSyncTargets(
@@ -7842,9 +7844,13 @@ bool RunAccountSyncFromUi(
             result,
             error);
 
-    // The tiles are always a fresh read-only inspection, never the
-    // authority for execution or an assumed successful outcome.
-    RefreshAccountSyncPreview();
+    // The refreshed projection is independently inspected; outcome markers
+    // derive only from actual engine write attempts, not green tile states.
+    std::vector<tp::AccountSyncTargetOutcome> outcomes;
+    for (const auto& item : result.items)
+        outcomes.insert(outcomes.end(), item.targetOutcomes.begin(),
+                        item.targetOutcomes.end());
+    RefreshAccountSyncPreview(std::move(outcomes));
 
     if (!ran ||
         result.fatal) {
