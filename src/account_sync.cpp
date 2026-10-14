@@ -2595,6 +2595,19 @@ void RunPfUiSyncItem(
             std::move(write));
     }
 
+    if (!accepted) {
+        for (const auto& file : plan.files) {
+            if (!file.copy.exists || file.profileSync)
+                itemResult.targetOutcomes.push_back(
+                    {file.copy.account, AccountSyncTileRow::PfUiSettings,
+                     false, true, {}});
+            if (!file.copy.exists && anyMergedCache)
+                itemResult.targetOutcomes.push_back(
+                    {file.copy.account, AccountSyncTileRow::PfUiCache,
+                     false, true, {}});
+        }
+    }
+
     std::size_t automaticCopied = 0;
     std::size_t confirmedCopied = 0;
     std::size_t modifiedTargets = 0;
@@ -2620,6 +2633,12 @@ void RunPfUiSyncItem(
                 write.content,
                 backupRunFolder,
                 writeError)) {
+            if (write.profiles) itemResult.targetOutcomes.push_back(
+                {file.copy.account, AccountSyncTileRow::PfUiSettings,
+                 false, false, writeError});
+            if (write.cache) itemResult.targetOutcomes.push_back(
+                {file.copy.account, AccountSyncTileRow::PfUiCache,
+                 false, false, writeError});
             itemResult.fatal = true;
             runResult.fatal = true;
 
@@ -2635,6 +2654,10 @@ void RunPfUiSyncItem(
             continue;
         }
 
+        if (write.profiles) itemResult.targetOutcomes.push_back(
+            {file.copy.account, AccountSyncTileRow::PfUiSettings, true, false, {}});
+        if (write.cache) itemResult.targetOutcomes.push_back(
+            {file.copy.account, AccountSyncTileRow::PfUiCache, true, false, {}});
         ++modifiedTargets;
         {
             auto& snapshot = expectedCopies[write.fileIndex];
@@ -3255,6 +3278,8 @@ bool RunAccountSync(
 
         std::size_t automaticCopied = 0;
         std::size_t confirmedCopied = 0;
+        const auto outcomeRow = item == AccountSyncItem::Macros
+            ? AccountSyncTileRow::Macros : AccountSyncTileRow::Keybindings;
 
         for (const auto& target :
              analysis.automaticTargets) {
@@ -3268,7 +3293,11 @@ bool RunAccountSync(
                     backupRunFolder,
                     copyError)) {
                 ++automaticCopied;
+                itemResult.targetOutcomes.push_back(
+                    {target.account, outcomeRow, true, false, {}});
             } else {
+                itemResult.targetOutcomes.push_back(
+                    {target.account, outcomeRow, false, false, copyError});
                 itemResult.fatal = true;
                 result.fatal = true;
 
@@ -3345,6 +3374,8 @@ bool RunAccountSync(
                             backupRunFolder,
                             copyError)) {
                         ++confirmedCopied;
+                        itemResult.targetOutcomes.push_back(
+                            {target.account, outcomeRow, true, false, {}});
                         for (auto& observed : expectedCopies) {
                             if (observed.account == target.account) {
                                 observed.bytes.clear();
@@ -3361,6 +3392,8 @@ bool RunAccountSync(
                             }
                         }
                     } else {
+                        itemResult.targetOutcomes.push_back(
+                            {target.account, outcomeRow, false, false, copyError});
                         itemResult.fatal = true;
                         result.fatal = true;
 
@@ -3376,6 +3409,9 @@ bool RunAccountSync(
                 }
             } else {
                 confirmationDeclined = true;
+                for (const auto& target : analysis.confirmationTargets)
+                    itemResult.targetOutcomes.push_back(
+                        {target.account, outcomeRow, false, true, {}});
             }
         }
 
