@@ -2070,11 +2070,11 @@ void TestTileProjectionGroupsAndTransfers() {
               model.accounts[1].rows[m].matchingGroup,
           "older byte-identical macro source must share a content group");
     Check(model.accounts[0].rows[m].state == S::RuleSatisfied &&
-          model.accounts[1].rows[m].state == S::Newer &&
+          model.accounts[1].rows[m].state == S::Default &&
           model.accounts[2].rows[m].state == S::Older &&
           model.accounts[3].rows[m].state == S::Older &&
           model.accounts[4].rows[m].state == S::Default,
-          "macro statuses distinguish matching, newest, older, missing and equal-time conflict");
+          "macro statuses distinguish matching, unresolved equal-time conflicts, older and missing");
     Check(model.accounts[2].rows[k].state == S::Newer &&
           model.accounts[0].rows[k].state == S::Older &&
           model.accounts[1].rows[k].state == S::Older,
