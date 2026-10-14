@@ -2236,6 +2236,18 @@ void TestTileProjectionPfUiSeparateRows() {
     }
     Check(profiles == 2 && caches == 3,
           "missing account needs one profile-creation action plus conditional cache merge");
+    for (const auto& op : model.operations) {
+        if (op.kind == K::ReplaceProfiles) {
+            Check(op.requiresConfirmation && !op.selectedSourceAccount.empty(),
+                  "every displayed Settings replacement must be an approved source-to-target write");
+        } else if (op.kind == K::MergeSupportedCache) {
+            Check(op.selectedSourceAccount.empty() && !op.sourceAccounts.empty(),
+                  "Cache merge must never display a spurious single-file copy source");
+            Check(op.requiresConfirmation == op.createsFile,
+                  "only Cache file creation may inherit Settings confirmation");
+        }
+    }
+
     std::array<tp::AccountSyncItemResult, tp::kAccountSyncItemCount> preview{};
     Check(tp::InspectAccountSync(root, cfg, preview, error),
           "pfUI summary inspection should succeed");
