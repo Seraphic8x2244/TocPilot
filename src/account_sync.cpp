@@ -3037,7 +3037,7 @@ bool InspectAccountSyncTiles(
         for (const auto& target : analysis.confirmationTargets) {
             AccountSyncTileOperation op;
             op.row = row;
-            op.kind = AccountSyncTileOperationKind::CopyFile;
+            op.kind = AccountSyncTileOperationKind::CopyWholeFile;
             op.targetAccount = target.account;
             op.selectedSourceAccount = analysis.source.account;
             op.sourceAccounts = projection.matchingGroups[sourceGroup - 1].accounts;
