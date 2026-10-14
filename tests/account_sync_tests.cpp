@@ -1861,6 +1861,27 @@ void TestIdenticalSyncFilesAndStaleApproval() {
               ReadText(target) == "changed while dialog shown" &&
               BackupRunFolders(root).empty(),
               "changed destination during approval must cancel before backup/write");
+        // A source edited during approval must invalidate the plan even when
+        // its native filesystem modified time is restored exactly.
+        WriteText(target, "older target again");
+        MakeNewer(source, target);
+        const auto sourceTime = std::filesystem::last_write_time(source);
+        const auto targetBefore = ReadText(target);
+        result = {};
+        prompts = 0;
+        Check(tp::RunAccountSync(root, config,
+              [&](tp::AccountSyncItem, std::wstring_view,
+                  const std::vector<std::wstring>&, bool) {
+                  ++prompts;
+                  WriteText(source, "source changed while approving");
+                  std::filesystem::last_write_time(source, sourceTime);
+                  return true;
+              }, result, error), "changed source should report result");
+        Check(prompts == 1 && result.fatal &&
+              ReadText(target) == targetBefore &&
+              BackupRunFolders(root).empty(),
+              "same-timestamp source content change must block overwrite and backup");
+
         std::error_code ec;
         std::filesystem::remove_all(root, ec);
     }
