@@ -173,6 +173,15 @@ inline std::wstring SnapshotTime(const AccountSyncTileCell& cell) {
     return buffer;
 }
 
+inline std::wstring AccountSnapshotTime(
+    const AccountSyncTileProjection& projection,
+    std::wstring_view account, AccountSyncTileRow row) {
+    const int index = AccountIndex(projection, account);
+    if (index < 0) return L"not in inspection";
+    return SnapshotTime(projection.accounts[static_cast<std::size_t>(index)]
+                            .rows[static_cast<std::size_t>(row)]);
+}
+
 inline std::wstring SelectionDetails(const View& view,
                                      std::size_t index,
                                      AccountSyncTileRow row) {
@@ -225,19 +234,14 @@ inline std::wstring SelectionDetails(const View& view,
         if (!op.selectedSourceAccount.empty()) {
             details += L"Source: " + op.selectedSourceAccount + L"\r\n";
             details += L"Source modified time: " +
-                SnapshotTime(view.projection.accounts[
-                    static_cast<std::size_t>(AccountIndex(
-                        view.projection, op.selectedSourceAccount))].rows[
-                            static_cast<std::size_t>(row)]) + L" (local time)\r\n";
+                AccountSnapshotTime(view.projection, op.selectedSourceAccount, row) + L" (local time)\r\n";
         }
         if (!op.sourceAccounts.empty()) {
             details += op.kind == AccountSyncTileOperationKind::MergeSupportedCache
                 ? L"Cache contributors:\r\n" : L"Equivalent source candidates:\r\n";
             for (const auto& source : op.sourceAccounts) {
                 details += L"  " + source + L" (";
-                details += SnapshotTime(view.projection.accounts[
-                    static_cast<std::size_t>(AccountIndex(view.projection, source))].rows[
-                        static_cast<std::size_t>(row)]);
+                details += AccountSnapshotTime(view.projection, source, row);
                 details += L" local)\r\n";
             }
         }
