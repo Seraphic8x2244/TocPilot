@@ -47,6 +47,80 @@ struct AccountSyncItemResult {
     std::wstring error;
 };
 
+
+// Read-only, snapshot-of-inspection projection for the future account tiles.
+// This is not an approved/executable plan. RunAccountSync must still reanalyse
+// and obtain its own confirmation and file freshness checks before writing.
+enum class AccountSyncTileRow {
+    Keybindings = 0,
+    Macros,
+    PfUiSettings,
+    PfUiCache
+};
+
+inline constexpr std::size_t kAccountSyncTileRowCount = 4;
+
+enum class AccountSyncTileState {
+    Default,
+    RuleSatisfied,
+    Newer,
+    Older
+};
+
+enum class AccountSyncTileOperationKind {
+    CopyFile,
+    ReplaceProfiles,
+    MergeSupportedCache
+};
+
+struct AccountSyncTileCell {
+    AccountSyncTileRow row = AccountSyncTileRow::Keybindings;
+    AccountSyncTileState state = AccountSyncTileState::Default;
+    bool enabled = false;
+    bool exists = false;
+    // Zero denotes no content-equivalence group. Groups are 1-based.
+    std::size_t matchingGroup = 0;
+    // Keep full filesystem precision; formatting to seconds is a UI concern.
+    std::filesystem::file_time_type modified{};
+};
+
+struct AccountSyncTileAccount {
+    std::wstring account;
+    std::array<AccountSyncTileCell, kAccountSyncTileRowCount> rows{};
+};
+
+struct AccountSyncTileGroup {
+    AccountSyncTileRow row = AccountSyncTileRow::Keybindings;
+    std::vector<std::wstring> accounts;
+    bool selectedSourceGroup = false;
+};
+
+struct AccountSyncTileOperation {
+    AccountSyncTileRow row = AccountSyncTileRow::Keybindings;
+    AccountSyncTileOperationKind kind = AccountSyncTileOperationKind::CopyFile;
+    std::wstring targetAccount;
+    // Copy/profile operation: the exact engine-selected account.
+    // Cache merge: empty; contributors are independent group-wide inputs.
+    std::wstring selectedSourceAccount;
+    // Equivalent candidates for a copy/profile source, or all accounts with
+    // supported cache input for a cache merge. Not a chain of operations.
+    std::vector<std::wstring> sourceAccounts;
+    bool requiresConfirmation = false;
+    bool createsFile = false;
+};
+
+struct AccountSyncTileProjection {
+    std::vector<AccountSyncTileAccount> accounts;
+    std::vector<AccountSyncTileGroup> matchingGroups;
+    std::vector<AccountSyncTileOperation> operations;
+};
+
+bool InspectAccountSyncTiles(
+    const std::filesystem::path& wowRoot,
+    const AccountSyncConfig& config,
+    AccountSyncTileProjection& projection,
+    std::wstring& error);
+
 struct AccountSyncRunResult {
     std::array<AccountSyncItemResult, kAccountSyncItemCount> items;
     bool fatal = false;
