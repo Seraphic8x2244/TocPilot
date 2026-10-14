@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <cstdlib>
 #include <array>
+#include <filesystem>
 #include <memory>
 #include <new>
 #include <string>
@@ -24,6 +25,9 @@ struct View {
     std::wstring error;
     int offset = 0;
     HFONT font = nullptr;
+    std::filesystem::path wowRoot;
+    int selectedAccount = -1;
+    int selectedRow = -1;
 };
 
 inline View* Get(HWND hwnd) {
@@ -143,6 +147,100 @@ inline std::wstring DetailText(
     return L"";
 }
 
+
+inline AccountSyncItem ItemForRow(AccountSyncTileRow row) {
+    switch (row) {
+    case AccountSyncTileRow::Keybindings: return AccountSyncItem::Keybindings;
+    case AccountSyncTileRow::Macros: return AccountSyncItem::Macros;
+    default: return AccountSyncItem::PfUi;
+    }
+}
+
+inline std::wstring SelectionDetails(const View& view,
+                                     std::size_t index,
+                                     AccountSyncTileRow row) {
+    const auto& account = view.projection.accounts[index];
+    const auto& cell = account.rows[static_cast<std::size_t>(row)];
+    std::wstring details = std::wstring(RowLabel(row)) + L" - " +
+        account.account + L"\r\n\r\n";
+    if (!cell.enabled) return details + L"Not enabled for synchronization.";
+    details += L"Selected account: " + account.account + L"\r\n";
+    details += L"Local modified time: " +
+        AccountSyncFileTime(view.wowRoot, account.account, ItemForRow(row)) +
+        L" (local time)\r\n";
+    details += L"File: ";
+    details += cell.exists ? L"present\r\n" : L"missing\r\n";
+    if (cell.matchingGroup) {
+        details += L"Content group: " + std::to_wstring(cell.matchingGroup) + L"\r\n";
+    }
+    bool planned = false;
+    for (const auto& op : view.projection.operations) {
+        if (op.row != row || op.targetAccount != account.account) continue;
+        planned = true;
+        details += L"\r\nPlanned operation: ";
+        switch (op.kind) {
+        case AccountSyncTileOperationKind::CopyWholeFile:
+            details += L"copy file"; break;
+        case AccountSyncTileOperationKind::ReplaceProfiles:
+            details += L"replace pfUI profiles/settings"; break;
+        case AccountSyncTileOperationKind::MergeSupportedCache:
+            details += L"merge supported pfUI cache"; break;
+        }
+        details += L"\r\nDestination: " + op.targetAccount + L"\r\n";
+        if (!op.selectedSourceAccount.empty()) {
+            details += L"Source: " + op.selectedSourceAccount + L"\r\n";
+            details += L"Source modified time: " +
+                AccountSyncFileTime(view.wowRoot, op.selectedSourceAccount,
+                                    ItemForRow(row)) + L" (local time)\r\n";
+        }
+        if (!op.sourceAccounts.empty()) {
+            details += op.kind == AccountSyncTileOperationKind::MergeSupportedCache
+                ? L"Cache contributors:\r\n" : L"Equivalent source candidates:\r\n";
+            for (const auto& source : op.sourceAccounts) {
+                details += L"  " + source + L" (";
+                details += AccountSyncFileTime(view.wowRoot, source, ItemForRow(row));
+                details += L" local)\r\n";
+            }
+        }
+        details += op.createsFile ? L"Destination will be created.\r\n"
+                                  : L"Existing destination will be updated.\r\n";
+        if (op.requiresConfirmation) details += L"Confirmation required.\r\n";
+    }
+    if (!planned) {
+        details += L"\r\nNo planned write to this account for this row.\r\n";
+        details += cell.state == AccountSyncTileState::RuleSatisfied
+            ? L"The applicable synchronization rule is satisfied."
+            : L"No transfer or merge is proposed by the current inspection.";
+    }
+    details += L"\r\n\r\nThis is a read-only snapshot. Sync Now revalidates files before writing.";
+    return details;
+}
+
+inline void SelectAt(HWND hwnd, View& view, int px, int py) {
+    const unsigned dpi = Dpi(hwnd);
+    const int width = ScaleSyncTile(kSyncTileWidth, dpi);
+    const int rowHeight = ScaleSyncTile(19, dpi);
+    constexpr std::array<AccountSyncTileRow, kAccountSyncTileRowCount> rows{
+        AccountSyncTileRow::Keybindings, AccountSyncTileRow::Macros,
+        AccountSyncTileRow::PfUiSettings, AccountSyncTileRow::PfUiCache
+    };
+    for (std::size_t i = 0; i < view.projection.accounts.size(); ++i) {
+        const int x = SyncTileX(i, dpi) - view.offset;
+        if (px < x || px >= x + width) continue;
+        for (const auto row : rows) {
+            const int y = SyncTileRowY(VisualRow(row), dpi);
+            if (py < y || py >= y + rowHeight) continue;
+            view.selectedAccount = static_cast<int>(i);
+            view.selectedRow = static_cast<int>(row);
+            InvalidateRect(hwnd, nullptr, FALSE);
+            const auto details = SelectionDetails(view, i, row);
+            MessageBoxW(GetParent(hwnd), details.c_str(),
+                        L"TocPilot - Account Sync Details", MB_OK | MB_ICONINFORMATION);
+            return;
+        }
+    }
+}
+
 inline void PaintTiles(HWND hwnd, HDC dc, const View& view) {
     RECT client{};
     GetClientRect(hwnd, &client);
@@ -212,6 +310,14 @@ inline void PaintTiles(HWND hwnd, HDC dc, const View& view) {
                 row == AccountSyncTileRow::PfUiSettings ||
                 row == AccountSyncTileRow::PfUiCache
                     ? ScaleSyncTile(11, dpi) : 0;
+            if (view.selectedAccount == static_cast<int>(i) &&
+                view.selectedRow == static_cast<int>(row)) {
+                RECT highlight{x + inside - ScaleSyncTile(2, dpi), y,
+                               x + tileWidth - ScaleSyncTile(4, dpi), y + rowHeight};
+                HBRUSH brush = CreateSolidBrush(RGB(230, 240, 252));
+                FillRect(dc, &highlight, brush);
+                DeleteObject(brush);
+            }
             const COLORREF color = cell.enabled
                 ? StateColor(cell.state) : RGB(24, 24, 24);
             RECT label{x + inside + indent, y,
@@ -324,6 +430,9 @@ inline LRESULT CALLBACK WindowProc(HWND hwnd, UINT message,
             }
         }
         return 0;
+    case WM_LBUTTONUP:
+        if (view) SelectAt(hwnd, *view, GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam));
+        return 0;
     case WM_MOUSEWHEEL:
     case WM_MOUSEHWHEEL:
         if (view) {
@@ -391,11 +500,15 @@ inline HWND CreateAccountSyncTileViewport(HWND parent, int id) {
 }
 
 inline void SetAccountSyncTilePreview(
-    HWND hwnd, AccountSyncTileProjection projection, std::wstring error) {
+    HWND hwnd, AccountSyncTileProjection projection, std::wstring error,
+    const std::filesystem::path& wowRoot) {
     if (!hwnd) return;
     auto* view = account_sync_tiles_detail::Get(hwnd);
     if (!view) return;
     view->projection = std::move(projection);
+    view->wowRoot = wowRoot;
+    view->selectedAccount = -1;
+    view->selectedRow = -1;
     view->error = std::move(error);
     account_sync_tiles_detail::UpdateScrollbar(hwnd, *view);
     InvalidateRect(hwnd, nullptr, TRUE);
