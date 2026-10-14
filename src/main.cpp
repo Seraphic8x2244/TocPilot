@@ -7762,7 +7762,7 @@ bool ConfirmAccountSyncTargets(
     }
 
     if (item == tp::AccountSyncItem::PfUi) {
-        prompt += L"\\r\\nThis confirmation controls pfUI profiles/settings replacement. "
+        prompt += L"\r\nThis confirmation controls pfUI profiles/settings replacement. "
                   L"Supported pfUI cache entries are merged independently "
                   L"for existing account files; creating a missing pfUI file "
                   L"requires this approval.";
