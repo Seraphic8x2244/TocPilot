@@ -9,6 +9,9 @@
 #include <algorithm>
 #include <cstdlib>
 #include <array>
+#include <chrono>
+#include <ctime>
+#include <cwchar>
 #include <filesystem>
 #include <memory>
 #include <new>
@@ -157,6 +160,19 @@ inline AccountSyncItem ItemForRow(AccountSyncTileRow row) {
     }
 }
 
+inline std::wstring SnapshotTime(const AccountSyncTileCell& cell) {
+    if (!cell.exists) return L"missing";
+    const auto systemTime =
+        std::chrono::file_clock::to_sys(cell.modified);
+    const std::time_t seconds = std::chrono::system_clock::to_time_t(systemTime);
+    std::tm local{};
+    if (localtime_s(&local, &seconds) != 0) return L"unavailable";
+    wchar_t buffer[32]{};
+    if (wcsftime(buffer, std::size(buffer), L"%Y-%m-%d %H:%M:%S", &local) == 0)
+        return L"unavailable";
+    return buffer;
+}
+
 inline std::wstring SelectionDetails(const View& view,
                                      std::size_t index,
                                      AccountSyncTileRow row) {
@@ -167,7 +183,7 @@ inline std::wstring SelectionDetails(const View& view,
     if (!cell.enabled) return details + L"Not enabled for synchronization.";
     details += L"Selected account: " + account.account + L"\r\n";
     details += L"Local modified time: " +
-        AccountSyncFileTime(view.wowRoot, account.account, ItemForRow(row)) +
+        SnapshotTime(cell) +
         L" (local time)\r\n";
     details += L"File: ";
     details += cell.exists ? L"present\r\n" : L"missing\r\n";
@@ -209,15 +225,19 @@ inline std::wstring SelectionDetails(const View& view,
         if (!op.selectedSourceAccount.empty()) {
             details += L"Source: " + op.selectedSourceAccount + L"\r\n";
             details += L"Source modified time: " +
-                AccountSyncFileTime(view.wowRoot, op.selectedSourceAccount,
-                                    ItemForRow(row)) + L" (local time)\r\n";
+                SnapshotTime(view.projection.accounts[
+                    static_cast<std::size_t>(AccountIndex(
+                        view.projection, op.selectedSourceAccount))].rows[
+                            static_cast<std::size_t>(row)]) + L" (local time)\r\n";
         }
         if (!op.sourceAccounts.empty()) {
             details += op.kind == AccountSyncTileOperationKind::MergeSupportedCache
                 ? L"Cache contributors:\r\n" : L"Equivalent source candidates:\r\n";
             for (const auto& source : op.sourceAccounts) {
                 details += L"  " + source + L" (";
-                details += AccountSyncFileTime(view.wowRoot, source, ItemForRow(row));
+                details += SnapshotTime(view.projection.accounts[
+                    static_cast<std::size_t>(AccountIndex(view.projection, source))].rows[
+                        static_cast<std::size_t>(row)]);
                 details += L" local)\r\n";
             }
         }
