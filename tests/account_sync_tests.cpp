@@ -2020,9 +2020,246 @@ void TestStatePersistence() {
         ec);
 }
 
+
+void TestTileProjectionGroupsAndTransfers() {
+    const auto root = TestRoot(L"tile-multi-account");
+    ResetRoot(root);
+    const auto a = AccountFile(root, L"ALPHA", L"macros-cache.txt");
+    const auto b = AccountFile(root, L"BETA", L"macros-cache.txt");
+    const auto c = AccountFile(root, L"GAMMA", L"macros-cache.txt");
+    const auto e = AccountFile(root, L"EPSILON", L"macros-cache.txt");
+    WriteText(a, "winner");
+    WriteText(b, "winner");
+    WriteText(c, "different");
+    WriteText(e, "equal-time-conflict");
+    MakeNewer(a, b);
+    MakeNewer(a, c);
+    std::error_code ec;
+    std::filesystem::last_write_time(
+        e, std::filesystem::last_write_time(a), ec);
+    Check(!ec, "equal-time tile fixture should set timestamps");
+
+    const auto ka = AccountFile(root, L"ALPHA", L"bindings-cache.wtf");
+    const auto kb = AccountFile(root, L"BETA", L"bindings-cache.wtf");
+    const auto kc = AccountFile(root, L"GAMMA", L"bindings-cache.wtf");
+    WriteText(ka, "old keys");
+    WriteText(kb, "old keys");
+    WriteText(kc, "new keys");
+    MakeNewer(kc, ka);
+    MakeNewer(kc, kb);
+
+    tp::AccountSyncConfig cfg;
+    cfg.accounts = {L"BETA", L"ALPHA", L"GAMMA", L"DELTA", L"EPSILON"};
+    cfg.macros = cfg.keybindings = true;
+    tp::AccountSyncTileProjection model;
+    std::wstring error;
+    Check(tp::InspectAccountSyncTiles(root, cfg, model, error),
+          "multi-account tile inspection should succeed");
+    Check(model.accounts.size() == 5 &&
+          model.accounts[0].account == L"BETA" &&
+          model.accounts[1].account == L"ALPHA",
+          "tiles must preserve the configured account order");
+
+    using R = tp::AccountSyncTileRow;
+    using S = tp::AccountSyncTileState;
+    using K = tp::AccountSyncTileOperationKind;
+    const auto m = static_cast<std::size_t>(R::Macros);
+    const auto k = static_cast<std::size_t>(R::Keybindings);
+    Check(model.accounts[0].rows[m].matchingGroup != 0 &&
+          model.accounts[0].rows[m].matchingGroup ==
+              model.accounts[1].rows[m].matchingGroup,
+          "older byte-identical macro source must share a content group");
+    Check(model.accounts[0].rows[m].state == S::RuleSatisfied &&
+          model.accounts[1].rows[m].state == S::Default &&
+          model.accounts[2].rows[m].state == S::Older &&
+          model.accounts[3].rows[m].state == S::Older &&
+          model.accounts[4].rows[m].state == S::Default,
+          "macro statuses distinguish matching, unresolved equal-time conflicts, older and missing");
+    Check(model.accounts[2].rows[k].state == S::Newer &&
+          model.accounts[0].rows[k].state == S::Older &&
+          model.accounts[1].rows[k].state == S::Older,
+          "source is selected per row, not from an account's position");
+
+    int macroWrites = 0, bindingWrites = 0;
+    std::vector<std::wstring> macroTargets, bindingTargets;
+    for (const auto& op : model.operations) {
+        Check(op.kind == K::CopyWholeFile && op.requiresConfirmation,
+              "macro/keybinding plans must be confirmed file copies");
+        if (op.row == R::Macros) {
+            ++macroWrites;
+            macroTargets.push_back(op.targetAccount);
+            Check(op.selectedSourceAccount == L"ALPHA" &&
+                  op.sourceAccounts == std::vector<std::wstring>({L"BETA", L"ALPHA"}),
+                  "matching sources must be grouped without cascading copies");
+        }
+        if (op.row == R::Keybindings) {
+            ++bindingWrites;
+            bindingTargets.push_back(op.targetAccount);
+            Check(op.selectedSourceAccount == L"GAMMA",
+                  "keybinding copy source must follow its own newest file");
+        }
+    }
+    Check(macroWrites == 2 && macroTargets ==
+              std::vector<std::wstring>({L"GAMMA", L"DELTA"}) &&
+          bindingWrites == 4,
+          "only differing older/missing files should be planned once per target");
+
+    std::array<tp::AccountSyncItemResult, tp::kAccountSyncItemCount> preview{};
+    Check(tp::InspectAccountSync(root, cfg, preview, error),
+          "authoritative summary preview should succeed");
+    Check(preview[static_cast<std::size_t>(tp::AccountSyncItem::Macros)]
+              .confirmationTargets == macroTargets &&
+          preview[static_cast<std::size_t>(tp::AccountSyncItem::Keybindings)]
+              .confirmationTargets == bindingTargets,
+          "tile actions must exactly match authoritative confirmation targets");
+    Check(ReadText(a) == "winner" &&
+          ReadText(c) == "different" &&
+          BackupRunFolders(root).empty(),
+          "read-only inspection must not write files or backups");
+    std::filesystem::remove_all(root, ec);
+}
+
+void TestTileProjectionPfUiSeparateRows() {
+    const auto root = TestRoot(L"tile-pfui-merge");
+    ResetRoot(root);
+    const auto a = AccountFile(root, L"ALPHA", L"SavedVariables/pfUI.lua");
+    const auto b = AccountFile(root, L"BETA", L"SavedVariables/pfUI.lua");
+    const auto c = AccountFile(root, L"GAMMA", L"SavedVariables/pfUI.lua");
+    auto first = PfUiText("100", "10", "local alpha");
+    auto second = PfUiText("200", "20", "local beta");
+    const auto firstKey = first.find("[\"value\"]");
+    const auto secondKey = second.find("[\"value\"]");
+    Check(firstKey != std::string::npos && secondKey != std::string::npos,
+          "pfUI fixture should have replaceable cache keys");
+    if (firstKey == std::string::npos || secondKey == std::string::npos) return;
+    first.replace(firstKey, std::string("[\"value\"]").size(), "[\"alpha\"]");
+    second.replace(secondKey, std::string("[\"value\"]").size(), "[\"beta\"]");
+    WriteText(a, first);
+    WriteText(b, second);
+    MakeNewer(a, b);
+
+    tp::AccountSyncConfig cfg;
+    cfg.accounts = {L"ALPHA", L"BETA", L"GAMMA"};
+    cfg.pfUi = true;
+    tp::AccountSyncTileProjection model;
+    std::wstring error;
+    Check(tp::InspectAccountSyncTiles(root, cfg, model, error),
+          "pfUI tile projection should inspect");
+    using R = tp::AccountSyncTileRow;
+    using K = tp::AccountSyncTileOperationKind;
+    using S = tp::AccountSyncTileState;
+    const auto settings = static_cast<std::size_t>(R::PfUiSettings);
+    const auto cache = static_cast<std::size_t>(R::PfUiCache);
+    Check(model.accounts[0].rows[settings].state == S::Newer &&
+          model.accounts[1].rows[settings].state == S::Older &&
+          model.accounts[2].rows[settings].state == S::Older,
+          "profile Settings status must track the chosen profile source");
+    Check(model.accounts[0].rows[cache].state == S::Default &&
+          model.accounts[1].rows[cache].state == S::Older &&
+          model.accounts[2].rows[cache].state == S::Older,
+          "newest pfUI file can itself require merged cache data");
+
+    int profiles = 0, caches = 0;
+    for (const auto& op : model.operations) {
+        if (op.kind == K::ReplaceProfiles) {
+            ++profiles;
+            Check(op.requiresConfirmation &&
+                  op.selectedSourceAccount == L"ALPHA",
+                  "profiles require source-specific confirmation");
+        } else if (op.kind == K::MergeSupportedCache) {
+            ++caches;
+            Check(op.sourceAccounts ==
+                      std::vector<std::wstring>({L"ALPHA", L"BETA"}),
+                  "cache merge uses inputs from all supported group members");
+            Check(op.requiresConfirmation == (op.targetAccount == L"GAMMA"),
+                  "cache merge is automatic for existing files, but creation needs approval");
+        }
+    }
+    Check(profiles == 2 && caches == 3,
+          "missing account needs one profile-creation action plus conditional cache merge");
+    std::array<tp::AccountSyncItemResult, tp::kAccountSyncItemCount> preview{};
+    Check(tp::InspectAccountSync(root, cfg, preview, error),
+          "pfUI summary inspection should succeed");
+    const auto& row = preview[static_cast<std::size_t>(tp::AccountSyncItem::PfUi)];
+    Check(row.confirmationTargets ==
+              std::vector<std::wstring>({L"BETA", L"GAMMA"}) &&
+          row.automaticTargets ==
+              std::vector<std::wstring>({L"ALPHA", L"BETA"}),
+          "four-row projection must preserve pfUI summary's existing-file merge decisions");
+
+    int prompts = 0;
+    tp::AccountSyncRunResult result;
+    Check(tp::RunAccountSync(root, cfg,
+          [&](tp::AccountSyncItem, std::wstring_view,
+              const std::vector<std::wstring>&, bool) {
+              ++prompts;
+              return false;
+          }, result, error),
+          "declined profile sync should execute automatic existing cache merges");
+    Check(prompts == 1 && !result.fatal && !std::filesystem::exists(c),
+          "decline must block missing-file creation without blocking cache-only merges");
+    Check(Contains(ReadText(a), "[\"beta\"]") &&
+          Contains(ReadText(b), "[\"alpha\"]") &&
+          Contains(ReadText(b), "[\"width\"] = \"200\""),
+          "cache keys should merge both directions while declined settings stay local");
+    std::error_code ec;
+    std::filesystem::remove_all(root, ec);
+}
+
+void TestTileProjectionNoopAndMissing() {
+    const auto root = TestRoot(L"tile-noops");
+    ResetRoot(root);
+    tp::AccountSyncConfig cfg;
+    cfg.accounts = {L"ONE", L"TWO"};
+    cfg.macros = cfg.keybindings = cfg.pfUi = true;
+    std::wstring error;
+    tp::AccountSyncTileProjection model;
+    Check(tp::InspectAccountSyncTiles(root, cfg, model, error) &&
+          model.operations.empty(), "all-missing sources have no tile operations");
+    for (const auto& account : model.accounts) {
+        for (const auto& row : account.rows) {
+            Check(row.enabled && row.state == tp::AccountSyncTileState::Default &&
+                  !row.exists && row.matchingGroup == 0,
+                  "absent source rows remain neutral and ungrouped");
+        }
+    }
+
+    for (const auto* relative : {L"macros-cache.txt", L"bindings-cache.wtf"}) {
+        WriteText(AccountFile(root, L"ONE", relative), "identical bytes");
+        WriteText(AccountFile(root, L"TWO", relative), "identical bytes");
+    }
+    WriteText(AccountFile(root, L"ONE", L"SavedVariables/pfUI.lua"),
+              PfUiText("100", "10", "local one"));
+    WriteText(AccountFile(root, L"TWO", L"SavedVariables/pfUI.lua"),
+              PfUiText("100", "10", "local two"));
+    MakeNewer(AccountFile(root, L"ONE", L"macros-cache.txt"),
+              AccountFile(root, L"TWO", L"macros-cache.txt"));
+    Check(tp::InspectAccountSyncTiles(root, cfg, model, error) &&
+          model.operations.empty(),
+          "identical macro bytes and semantic pfUI content are no-ops");
+    for (const auto& account : model.accounts) {
+        for (const auto& row : account.rows) {
+            Check(row.state == tp::AccountSyncTileState::RuleSatisfied &&
+                  row.matchingGroup != 0,
+                  "healthy four-row content groups must be green, regardless of timestamps/local junk");
+        }
+    }
+    cfg.pfUi = cfg.macros = cfg.keybindings = false;
+    Check(tp::InspectAccountSyncTiles(root, cfg, model, error) &&
+          model.operations.empty() &&
+          model.accounts[0].rows[0].state == tp::AccountSyncTileState::Default &&
+          !model.accounts[0].rows[0].enabled,
+          "disabled rows never imply operations or healthy status");
+    std::error_code ec;
+    std::filesystem::remove_all(root, ec);
+}
+
 } // namespace
 
 int main() {
+    TestTileProjectionGroupsAndTransfers();
+    TestTileProjectionPfUiSeparateRows();
+    TestTileProjectionNoopAndMissing();
     TestPfUiComparison();
     TestConfirmedCopyAndBackup();
     TestPfUiTargetedMergeAndPreservation();
