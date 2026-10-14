@@ -7732,16 +7732,15 @@ bool ConfirmAccountSyncTargets(
     std::wstring_view sourceAccount,
     const std::vector<std::wstring>& targets,
     bool comparerFallback) {
+    // The pfUI confirmation approves profile/settings replacement only.
+    // Supported cache data is merged independently, including for existing
+    // accounts that need no confirmation; it is never a whole-file copy.
     std::wstring prompt =
-        L"Copy " +
-        std::wstring(
-            tp::AccountSyncItemLabel(
-                item)) +
-        L" from " +
-        std::wstring(sourceAccount) +
-        L" to " +
-        std::to_wstring(
-            targets.size()) +
+        (item == tp::AccountSyncItem::PfUi
+            ? L"Replace pfUI profiles/settings"
+            : L"Copy " + std::wstring(tp::AccountSyncItemLabel(item))) +
+        L" from " + std::wstring(sourceAccount) +
+        L" to " + std::to_wstring(targets.size()) +
         L" confirmation-required target";
 
     if (targets.size() != 1) {
@@ -7760,6 +7759,13 @@ bool ConfirmAccountSyncTargets(
             target + L" (" +
             tp::AccountSyncFileTime(g_root, target, item) +
             L")\r\n";
+    }
+
+    if (item == tp::AccountSyncItem::PfUi) {
+        prompt += L"\\r\\nThis confirmation controls pfUI profiles/settings replacement. "
+                  L"Supported pfUI cache entries are merged independently "
+                  L"for existing account files; creating a missing pfUI file "
+                  L"requires this approval.";
     }
 
     if (comparerFallback) {
