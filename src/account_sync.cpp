@@ -3012,16 +3012,24 @@ bool InspectAccountSyncTiles(
         if (analysis.noSource) continue;
 
         const auto sourceGroup = cell(analysis.source.index, row).matchingGroup;
+        const bool unresolvedTie = std::any_of(
+            analysis.observedCopies.begin(), analysis.observedCopies.end(),
+            [&](const AccountCopy& copy) {
+                return copy.exists && copy.modified == analysis.source.modified &&
+                       copy.bytes != analysis.source.bytes;
+            });
         projection.matchingGroups[sourceGroup - 1].selectedSourceGroup = true;
         for (const auto& copy : analysis.observedCopies) {
             auto& value = cell(copy.index, row);
             if (!copy.exists) {
                 value.state = AccountSyncTileState::Older;
             } else if (value.matchingGroup == sourceGroup) {
-                value.state = (copy.index == analysis.source.index &&
-                               !analysis.confirmationTargets.empty())
-                    ? AccountSyncTileState::Newer
-                    : AccountSyncTileState::RuleSatisfied;
+                value.state = copy.index == analysis.source.index && unresolvedTie
+                    ? AccountSyncTileState::Default
+                    : (copy.index == analysis.source.index &&
+                       !analysis.confirmationTargets.empty())
+                        ? AccountSyncTileState::Newer
+                        : AccountSyncTileState::RuleSatisfied;
             } else if (copy.modified < analysis.source.modified) {
                 value.state = AccountSyncTileState::Older;
             } // Differing, equal-time contents have no authorised transfer.
@@ -3089,6 +3097,15 @@ bool InspectAccountSyncTiles(
     const bool settingsTransfers = std::any_of(
         plan.files.begin(), plan.files.end(),
         [](const PfUiFilePlan& file) { return !file.copy.exists || file.profileSync; });
+    const std::string sourceProfiles = PfUiRootSignature(
+        FindPfUiRoot(plan.files[plan.sourceFile].document, "pfUI_profiles"));
+    const bool settingsTie = std::any_of(
+        plan.files.begin(), plan.files.end(),
+        [&](const PfUiFilePlan& file) {
+            return file.copy.exists && file.copy.modified == plan.source.modified &&
+                PfUiRootSignature(FindPfUiRoot(file.document, "pfUI_profiles")) !=
+                    sourceProfiles;
+        });
 
     for (const auto& file : plan.files) {
         const std::size_t i = file.copy.index;
@@ -3107,9 +3124,11 @@ bool InspectAccountSyncTiles(
             op.createsFile = !file.copy.exists;
             projection.operations.push_back(std::move(op));
         } else if (settings.matchingGroup == sourceGroup) {
-            settings.state = i == plan.sourceFile && settingsTransfers
-                ? AccountSyncTileState::Newer
-                : AccountSyncTileState::RuleSatisfied;
+            settings.state = i == plan.sourceFile && settingsTie
+                ? AccountSyncTileState::Default
+                : i == plan.sourceFile && settingsTransfers
+                    ? AccountSyncTileState::Newer
+                    : AccountSyncTileState::RuleSatisfied;
         } // Newest-timestamp ties with divergent profiles remain neutral.
 
         const bool cacheWrite = file.copy.exists
