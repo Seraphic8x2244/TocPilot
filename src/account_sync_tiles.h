@@ -212,10 +212,16 @@ inline std::wstring SelectionDetails(const View& view,
         } else if (cell.matchingGroup != 0 &&
                    cell.matchingGroup == otherCell.matchingGroup) {
             details += L"matching content group";
+        } else if (row == AccountSyncTileRow::Keybindings ||
+                   row == AccountSyncTileRow::Macros) {
+            details += L"file bytes differ";
+        } else if (row == AccountSyncTileRow::PfUiSettings) {
+            details += L"pfUI profile/settings comparison differs";
         } else {
-            details += L"content or applicable sync criteria differ";
+            details += L"supported pfUI cache comparison differs";
         }
-        details += L"\r\n";
+        details += L"; observed: " + SnapshotTime(otherCell) +
+            L" (local time)\r\n";
     }
     bool planned = false;
     for (const auto& op : view.projection.operations) {
