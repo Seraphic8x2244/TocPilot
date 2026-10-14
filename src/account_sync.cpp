@@ -2931,6 +2931,214 @@ bool InspectAccountSync(
     return true;
 }
 
+
+bool InspectAccountSyncTiles(
+    const std::filesystem::path& wowRoot,
+    const AccountSyncConfig& config,
+    AccountSyncTileProjection& projection,
+    std::wstring& error) {
+    projection = {};
+    error.clear();
+
+    std::vector<std::wstring> accounts;
+    if (!NormalizeAccounts(config.accounts, accounts, error)) {
+        return false;
+    }
+
+    constexpr std::array<AccountSyncTileRow, kAccountSyncTileRowCount> rows{
+        AccountSyncTileRow::Keybindings, AccountSyncTileRow::Macros,
+        AccountSyncTileRow::PfUiSettings, AccountSyncTileRow::PfUiCache
+    };
+    for (const auto& name : accounts) {
+        AccountSyncTileAccount tile;
+        tile.account = name;
+        for (std::size_t r = 0; r < rows.size(); ++r) {
+            tile.rows[r].row = rows[r];
+        }
+        projection.accounts.push_back(std::move(tile));
+    }
+
+    const auto indexOf = [](AccountSyncTileRow row) {
+        return static_cast<std::size_t>(row);
+    };
+    const auto cell = [&](std::size_t index, AccountSyncTileRow row)
+        -> AccountSyncTileCell& {
+        return projection.accounts[index].rows[indexOf(row)];
+    };
+    // Signature material is private to this inspection. No persisted hashes,
+    // file snapshots, write authority or second comparison policy is created.
+    std::array<std::vector<std::pair<std::string, std::size_t>>,
+               kAccountSyncTileRowCount> signatures;
+    const auto addGroup = [&](std::size_t index, AccountSyncTileRow row,
+                              const std::string& signature) {
+        auto& found = signatures[indexOf(row)];
+        for (const auto& entry : found) {
+            if (entry.first == signature) {
+                cell(index, row).matchingGroup = entry.second;
+                projection.matchingGroups[entry.second - 1].accounts.push_back(accounts[index]);
+                return;
+            }
+        }
+        const std::size_t id = projection.matchingGroups.size() + 1;
+        found.emplace_back(signature, id);
+        AccountSyncTileGroup group;
+        group.row = row;
+        group.accounts.push_back(accounts[index]);
+        projection.matchingGroups.push_back(std::move(group));
+        cell(index, row).matchingGroup = id;
+    };
+    const auto setObserved = [&](std::size_t index, AccountSyncTileRow row,
+                                 const AccountCopy& copy) {
+        auto& value = cell(index, row);
+        value.exists = copy.exists;
+        if (copy.exists) value.modified = copy.modified;
+    };
+    const bool configured = accounts.size() >= 2;
+
+    for (const auto& pair : {
+             std::pair{AccountSyncItem::Keybindings, AccountSyncTileRow::Keybindings},
+             std::pair{AccountSyncItem::Macros, AccountSyncTileRow::Macros}}) {
+        const auto [item, row] = pair;
+        if (!configured || !AccountSyncItemEnabled(config, item)) continue;
+        for (std::size_t i = 0; i < accounts.size(); ++i) {
+            cell(i, row).enabled = true;
+        }
+        ItemAnalysis analysis;
+        if (!AnalyzeItem(wowRoot, accounts, item, analysis, error)) return false;
+        for (const auto& copy : analysis.observedCopies) {
+            setObserved(copy.index, row, copy);
+            if (copy.exists) addGroup(copy.index, row, copy.bytes);
+        }
+        if (analysis.noSource) continue;
+
+        const auto sourceGroup = cell(analysis.source.index, row).matchingGroup;
+        projection.matchingGroups[sourceGroup - 1].selectedSourceGroup = true;
+        for (const auto& copy : analysis.observedCopies) {
+            auto& value = cell(copy.index, row);
+            if (!copy.exists) {
+                value.state = AccountSyncTileState::Older;
+            } else if (value.matchingGroup == sourceGroup) {
+                value.state = (copy.index == analysis.source.index &&
+                               !analysis.confirmationTargets.empty())
+                    ? AccountSyncTileState::Newer
+                    : AccountSyncTileState::RuleSatisfied;
+            } else if (copy.modified < analysis.source.modified) {
+                value.state = AccountSyncTileState::Older;
+            } // Differing, equal-time contents have no authorised transfer.
+        }
+        for (const auto& target : analysis.confirmationTargets) {
+            AccountSyncTileOperation op;
+            op.row = row;
+            op.kind = AccountSyncTileOperationKind::CopyFile;
+            op.targetAccount = target.account;
+            op.selectedSourceAccount = analysis.source.account;
+            op.sourceAccounts = projection.matchingGroups[sourceGroup - 1].accounts;
+            op.requiresConfirmation = true;
+            op.createsFile = !target.exists;
+            projection.operations.push_back(std::move(op));
+        }
+    }
+
+    if (!configured || !config.pfUi) return true;
+    for (std::size_t i = 0; i < accounts.size(); ++i) {
+        cell(i, AccountSyncTileRow::PfUiSettings).enabled = true;
+        cell(i, AccountSyncTileRow::PfUiCache).enabled = true;
+    }
+
+    // Share the *same* authoritative plan builder as preview and execution.
+    // In particular, cache is not "copy from newest": it unions supported
+    // libhealth/gold/prediction data with the engine's conflict precedence.
+    PfUiSyncPlan plan;
+    if (!BuildPfUiSyncPlan(wowRoot, accounts, plan, error)) return false;
+    if (plan.noSource) return true;
+
+    bool anyMergedCache = false;
+    for (bool present : plan.mergedCachePresent) {
+        anyMergedCache = anyMergedCache || present;
+    }
+    std::vector<std::wstring> cacheInputs;
+    for (const auto& file : plan.files) {
+        const std::size_t i = file.copy.index;
+        setObserved(i, AccountSyncTileRow::PfUiSettings, file.copy);
+        setObserved(i, AccountSyncTileRow::PfUiCache, file.copy);
+        if (!file.copy.exists) continue;
+
+        addGroup(i, AccountSyncTileRow::PfUiSettings,
+                 PfUiRootSignature(FindPfUiRoot(file.document, "pfUI_profiles")));
+        std::string cacheSignature;
+        if (!PfUiCacheSignature(file.document, cacheSignature, error)) return false;
+        addGroup(i, AccountSyncTileRow::PfUiCache, cacheSignature);
+
+        for (std::size_t key = 0; key < kPfUiMergeCacheKeys.size(); ++key) {
+            std::wstring cacheError;
+            const auto* input = SupportedPfUiCacheNode(file.document, key, cacheError);
+            if (!cacheError.empty()) {
+                error = cacheError;
+                return false;
+            }
+            if (input) {
+                cacheInputs.push_back(file.copy.account);
+                break;
+            }
+        }
+    }
+
+    const auto sourceGroup =
+        cell(plan.sourceFile, AccountSyncTileRow::PfUiSettings).matchingGroup;
+    projection.matchingGroups[sourceGroup - 1].selectedSourceGroup = true;
+    const bool settingsTransfers = std::any_of(
+        plan.files.begin(), plan.files.end(),
+        [](const PfUiFilePlan& file) { return !file.copy.exists || file.profileSync; });
+
+    for (const auto& file : plan.files) {
+        const std::size_t i = file.copy.index;
+        auto& settings = cell(i, AccountSyncTileRow::PfUiSettings);
+        auto& cache = cell(i, AccountSyncTileRow::PfUiCache);
+
+        if (!file.copy.exists || file.profileSync) {
+            settings.state = AccountSyncTileState::Older;
+            AccountSyncTileOperation op;
+            op.row = AccountSyncTileRow::PfUiSettings;
+            op.kind = AccountSyncTileOperationKind::ReplaceProfiles;
+            op.targetAccount = file.copy.account;
+            op.selectedSourceAccount = plan.source.account;
+            op.sourceAccounts = projection.matchingGroups[sourceGroup - 1].accounts;
+            op.requiresConfirmation = true;
+            op.createsFile = !file.copy.exists;
+            projection.operations.push_back(std::move(op));
+        } else if (settings.matchingGroup == sourceGroup) {
+            settings.state = i == plan.sourceFile && settingsTransfers
+                ? AccountSyncTileState::Newer
+                : AccountSyncTileState::RuleSatisfied;
+        } // Newest-timestamp ties with divergent profiles remain neutral.
+
+        const bool cacheWrite = file.copy.exists
+            ? file.cacheMerge
+            : anyMergedCache; // Missing target: only after profile approval.
+        if (!file.copy.exists) {
+            cache.state = cacheWrite ? AccountSyncTileState::Older
+                                     : AccountSyncTileState::Default;
+        } else if (!file.cacheMerge) {
+            cache.state = AccountSyncTileState::RuleSatisfied;
+        } else if (file.copy.modified < plan.source.modified) {
+            cache.state = AccountSyncTileState::Older;
+        } // A newest file can itself need contributions from older files;
+          // that is not evidence that its file timestamp is "older".
+
+        if (cacheWrite) {
+            AccountSyncTileOperation op;
+            op.row = AccountSyncTileRow::PfUiCache;
+            op.kind = AccountSyncTileOperationKind::MergeSupportedCache;
+            op.targetAccount = file.copy.account;
+            op.sourceAccounts = cacheInputs;
+            op.requiresConfirmation = !file.copy.exists;
+            op.createsFile = !file.copy.exists;
+            projection.operations.push_back(std::move(op));
+        }
+    }
+    return true;
+}
+
 bool RunAccountSync(
     const std::filesystem::path& wowRoot,
     const AccountSyncConfig& config,
