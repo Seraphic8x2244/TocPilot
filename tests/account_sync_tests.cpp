@@ -502,6 +502,18 @@ void TestConfirmedCopyAndBackup() {
     Check(
         confirmations == 1,
         "macro sync should prompt once per item");
+    const auto& macroOutcomes =
+        result.items[static_cast<std::size_t>(tp::AccountSyncItem::Macros)].targetOutcomes;
+    Check(macroOutcomes.size() == 2,
+          "one real outcome should be recorded per macro destination");
+    for (const auto& outcome : macroOutcomes) {
+        Check(outcome.row == tp::AccountSyncTileRow::Macros &&
+              outcome.succeeded && !outcome.declined && outcome.error.empty(),
+              "confirmed macro destinations should report actual successful writes");
+        Check(outcome.account == L"BETA" || outcome.account == L"GAMMA",
+              "macro outcome must name an actual destination account");
+    }
+
     Check(
         ReadText(older) ==
             "new macros",
@@ -1844,6 +1856,9 @@ void TestIdenticalSyncFilesAndStaleApproval() {
               }, result, error), "identical sync should run");
         Check(prompts == 0 && !result.fatal && BackupRunFolders(root).empty(),
               "identical content must not prompt, back up or overwrite");
+        Check(result.items[static_cast<std::size_t>(item)].targetOutcomes.empty(),
+              "content-identical no-op must never report a completed destination");
+
         Check(ReadText(target) == "same bytes", "identical destination should stay unchanged");
 
         WriteText(target, "different bytes");
