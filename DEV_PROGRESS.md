@@ -32,7 +32,48 @@ pfUI                 <- neutral, inactive section heading
 - Preview and confirmation must re-inspect and revalidate relevant files immediately before approval/commit; any changed source, target, direction or planned changes requires fresh confirmation, with backup-before-overwrite retained.
 - Keep account selection, Sync Now, Sync-before-Launch and existing configuration persistence; redesign only the presentation/interaction and the minimum required plan-to-UI projection.
 
-**Status / next work:** UI design accepted, **not implemented**. Implement in a focused `dev` slice with aligned row/arrow placement, multiple-account (2/3+) cases, scrolling and narrow-window checks, colour semantics, pfUI split-row consistency, and preservation of content-aware sync/freshness checks. Build/CTest then publish a real development prerelease for user runtime testing; no `main` changes until accepted.
+**Status / next work:** UI design accepted, **not implemented**. Execute the following bounded slices, each in a **separate ordinary ChatGPT chat (Chat mode, NOT Work mode)**. Do not automatically begin the next slice in the current chat. All slices start by reading `dev_rulebook.md` and `DEV_PROGRESS.md`, verifying the actual remote `dev` HEAD, and checking the most recent commit/state. Preserve existing Account Sync safeguards and never modify `main` without explicit direction.
+
+### Account Sync tile redesign — multi-chat slice plan
+
+**Slice 1 — UI comparison/operation projection only (Chat 1)**
+
+- Expose a read-only, per-account/per-row presentation model from the existing authoritative Account Sync analysis; **no parallel synchronisation engine** or changed file-write logic.
+- Rows: Keybinds, Macros, pfUI Settings, pfUI Cache; pfUI itself is a neutral heading. Include per-account rule-satisfied/newer/older/default status and explicit intended transfer or merge actions.
+- Model multi-account cases (2, 3, and more), including matching-source groups, single necessary target writes, missing files, and pfUI's independently merged cache surfaces.
+- Add focused automated tests confirming the model matches actual planned operations, timestamp/content-based decisions, profile-vs-cache semantics and no-op cases.
+- Do not replace the existing table or publish a prerelease in this slice.
+- Finish with static checks/CI where accessible, coherent `dev` commit, `DEV_PROGRESS.md` update stating exact results and outstanding debt, and a **copy-ready handoff prompt** for Chat 2.
+- **Next-chat prompt template:** “Continue `Seraphic8x2244/TocPilot` on `dev` in ordinary Chat mode (not Work mode). Read `dev_rulebook.md` and `DEV_PROGRESS.md` first; verify remote HEAD and the Slice 1 commit. Implement Account Sync tile redesign Slice 2 only: the native Win32 fixed-width, aligned account tiles and horizontal scrolling, with neutral pfUI heading and four actionable rows, colour semantics and arrows/ticks/warnings strictly representing operations. Consume Slice 1's projection; preserve the existing sync engine, account selection and configuration. Add layout checks, run available static/CI checks, commit to `dev`, update `DEV_PROGRESS.md` with exact state, and give a copy-ready Slice 3 handoff prompt. Do not publish or start Slice 3.”
+
+**Slice 2 — Native account tile UI only (Chat 2)**
+
+- Replace the existing Account Sync summary/table presentation with fixed-width horizontal account tiles in the agreed window, using horizontal scrolling rather than forcing window resizing. Keep tile widths and row baselines aligned at 2, 3 and larger account counts.
+- Neutral, inactive parent `pfUI`; indented and individually styled Settings/Cache subrows; Keybinds/ Macros as top-level rows.
+- Use green/blue/amber/black **text** statuses; arrows between tiles, with ticks/exclamations only for actual operations/outcomes; no redundant “No changes” text. Maintain usability on the existing white background.
+- Consume Slice 1's model. Preserve account selection, Sync Now, Sync-before-Launch, persistence, existing preview and confirmation safety.
+- Layout/static/Windows CI checks with explicit note that visual Windows runtime checks remain pending. No prerelease until Slice 3.
+- Finish with a coherent `dev` commit, updated `DEV_PROGRESS.md` with exact verification results, and a **copy-ready handoff prompt** for Chat 3.
+- **Next-chat prompt template:** “Continue `Seraphic8x2244/TocPilot` on `dev` in ordinary Chat mode (not Work mode). Read `dev_rulebook.md` and `DEV_PROGRESS.md`, verify remote HEAD and Slices 1–2. Implement Account Sync tile redesign Slice 3 only: selectable per-row details with account-labelled second-resolution local timestamps, confirmation dialogue consistent with the transfer arrows, refresh after sync, stale-plan revalidation and backup-before-overwrite regression coverage. Do not change actual pfUI cache/profile semantics or replace the sync engine. Run full Windows Release build and CTest; fix proven defects; bump development-prerelease version correctly, publish through the real development-release workflow, verify executable/checksum, release metadata and updater E2E. Commit/update `DEV_PROGRESS.md`; give a copy-ready Chat 4 runtime handoff. Do not touch `main`.”
+
+**Slice 3 — Interaction, safety regression and prerelease (Chat 3)**
+
+- Selected item shows details with actual source/destination accounts, timestamps to seconds, differences and planned writes/merges (never infer source merely from left/right position).
+- Synchronisation confirmation reflects the visual operation plan; refresh account tiles after outcomes; stale changes require new confirmation, never reversed silently.
+- Preserve existing content comparison, native-precision ordering, pfUI profile/cache merge rules, confirmations and backup-before-overwrite; extend tests where needed.
+- Run Windows x64 Release and complete CTest, correct defects, bump the `-dev.N` candidate/version consistently, **publish a real prerelease via the GitHub Development Release workflow** and verify `TocPilot.exe`, `TocPilot.exe.sha256`, metadata and self-update validation. Do not present a CI artifact as a release.
+- End with exact release tag/commit, CI results, outstanding runtime debt in `DEV_PROGRESS.md`, plus a **copy-ready handoff prompt** for Chat 4.
+- **Next-chat prompt template:** “Continue `Seraphic8x2244/TocPilot` Account Sync tile redesign in ordinary Chat mode (not Work mode). Read `dev_rulebook.md` and `DEV_PROGRESS.md`, verify `dev` HEAD and the published prerelease/CI evidence. Guide runtime tests one at a time on the installed TocPilot development release using `blackwaves` and `blackwavestwo`, optionally a third account: all-matching no-op, macro/keybinding older/newer cases, missing files, multi-target arrows, pfUI Settings vs Cache, confirmations and backups, changed files while confirmation is open, and horizontal scrolling/alignment. Distinguish passed, failed and untested; only fix demonstrated defects in focused commits, publish updated prereleases for retesting as needed, update `DEV_PROGRESS.md`, and do not promote to `main` without explicit approval.”
+
+**Chat 4 — user-led Windows runtime validation (separate chat)**
+
+- Begin from the **published** prerelease, not an ordinary CI artifact; verify actual installed version and dev-channel updater behaviour.
+- Test with real accounts and an optional third account, one short step at a time. Record precise pass/fail/untested outcomes, especially 3+ account arrows, cache semantics, coloured text, confirmation safety and horizontal scroll positioning.
+- Patch only demonstrated defects; publish subsequent prereleases where necessary before asking for retests. No silent promotion to `main`.
+- Finish with a clear accepted/remaining-debt checkpoint in `DEV_PROGRESS.md` and a fresh-chat resume prompt if further work remains.
+
+**Scope guard:** This is three implementation chats **plus one runtime-testing chat**, not four implementation slices. A chat is complete only after a committed `DEV_PROGRESS.md` checkpoint and a copy-ready next-chat prompt; handoffs must stay in Chat mode and must not invoke Work mode.
+
 
 ## Current
 
