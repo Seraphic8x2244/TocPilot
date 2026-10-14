@@ -7721,7 +7721,7 @@ void RefreshAccountSyncPreview() {
     // Display only. The authoritative engine independently re-inspects,
     // confirms, revalidates freshness and performs protected writes.
     tp::SetAccountSyncTilePreview(
-        g_accountSyncTilesView, std::move(projection), std::move(error));
+        g_accountSyncTilesView, std::move(projection), std::move(error), g_root);
 }
 
 bool ConfirmAccountSyncTargets(
