@@ -68,7 +68,7 @@ enum class AccountSyncTileState {
 };
 
 enum class AccountSyncTileOperationKind {
-    CopyFile,
+    CopyWholeFile,
     ReplaceProfiles,
     MergeSupportedCache
 };
@@ -97,7 +97,7 @@ struct AccountSyncTileGroup {
 
 struct AccountSyncTileOperation {
     AccountSyncTileRow row = AccountSyncTileRow::Keybindings;
-    AccountSyncTileOperationKind kind = AccountSyncTileOperationKind::CopyFile;
+    AccountSyncTileOperationKind kind = AccountSyncTileOperationKind::CopyWholeFile;
     std::wstring targetAccount;
     // Copy/profile operation: the exact engine-selected account.
     // Cache merge: empty; contributors are independent group-wide inputs.
