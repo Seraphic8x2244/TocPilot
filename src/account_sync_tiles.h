@@ -174,6 +174,24 @@ inline std::wstring SelectionDetails(const View& view,
     if (cell.matchingGroup) {
         details += L"Content group: " + std::to_wstring(cell.matchingGroup) + L"\r\n";
     }
+    details += L"Comparison with selected peers:\r\n";
+    for (std::size_t peer = 0; peer < view.projection.accounts.size(); ++peer) {
+        if (peer == index) continue;
+        const auto& other = view.projection.accounts[peer];
+        const auto& otherCell = other.rows[static_cast<std::size_t>(row)];
+        details += L"  " + other.account + L": ";
+        if (!otherCell.exists && !cell.exists) {
+            details += L"both missing";
+        } else if (!otherCell.exists || !cell.exists) {
+            details += L"file presence differs";
+        } else if (cell.matchingGroup != 0 &&
+                   cell.matchingGroup == otherCell.matchingGroup) {
+            details += L"matching content group";
+        } else {
+            details += L"content or applicable sync criteria differ";
+        }
+        details += L"\r\n";
+    }
     bool planned = false;
     for (const auto& op : view.projection.operations) {
         if (op.row != row || op.targetAccount != account.account) continue;
