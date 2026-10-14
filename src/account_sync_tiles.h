@@ -4,6 +4,7 @@
 #include "account_sync_tile_layout.h"
 
 #include <windows.h>
+#include <windowsx.h>
 
 #include <algorithm>
 #include <cstdlib>
