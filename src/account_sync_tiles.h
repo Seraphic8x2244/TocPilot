@@ -256,6 +256,20 @@ inline std::wstring SelectionDetails(const View& view,
                                   : L"Existing destination will be updated.\r\n";
         if (op.requiresConfirmation) details += L"Confirmation required.\r\n";
     }
+    for (const auto& outcome : view.outcomes) {
+        if (outcome.account != account.account || outcome.row != row) continue;
+        details += L"\r\nLast synchronization attempt: ";
+        if (outcome.declined) {
+            details += L"confirmation declined; no write attempted.";
+        } else if (outcome.succeeded) {
+            details += L"write completed.";
+        } else {
+            details += L"write failed.";
+            if (!outcome.error.empty()) details += L" Reason: " + outcome.error;
+        }
+        details += L"\r\nThe comparison above reflects the latest separate filesystem inspection, not proof of this write.";
+        break;
+    }
     if (!planned) {
         details += L"\r\nNo planned write to this account for this row.\r\n";
         details += cell.state == AccountSyncTileState::RuleSatisfied
@@ -382,7 +396,7 @@ inline void PaintTiles(HWND hwnd, HDC dc, const View& view) {
             for (const auto& outcome : view.outcomes) {
                 if (outcome.account != tile.account || outcome.row != row) continue;
                 if (outcome.succeeded) statusText = L"\u2713 " + statusText;
-                else if (!outcome.declined) statusText = L"! " + statusText;
+                else statusText = L"! " + statusText;
                 break;
             }
             DrawTextIn(dc, statusText, status, color, DT_RIGHT);
