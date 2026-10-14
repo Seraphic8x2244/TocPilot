@@ -219,9 +219,9 @@ inline std::wstring SelectionDetails(const View& view,
                    row == AccountSyncTileRow::Macros) {
             details += L"file bytes differ";
         } else if (row == AccountSyncTileRow::PfUiSettings) {
-            details += L"pfUI profile/settings comparison differs";
+            details += L"pfUI profile/settings values differ (local-only keys excluded)";
         } else {
-            details += L"supported pfUI cache comparison differs";
+            details += L"supported pfUI cache values differ (merge inputs, not newest-file copying)";
         }
         details += L"; observed: " + SnapshotTime(otherCell) +
             L" (local time)\r\n";
@@ -256,7 +256,13 @@ inline std::wstring SelectionDetails(const View& view,
         }
         details += op.createsFile ? L"Destination will be created.\r\n"
                                   : L"Existing destination will be updated.\r\n";
-        if (op.requiresConfirmation) details += L"Confirmation required.\r\n";
+        if (op.requiresConfirmation) {
+            details += op.kind == AccountSyncTileOperationKind::MergeSupportedCache
+                ? L"Creation requires the pfUI Settings/profile approval; existing-file cache merges do not.\r\n"
+                : L"Confirmation required before this replacement.\r\n";
+        } else if (op.kind == AccountSyncTileOperationKind::MergeSupportedCache) {
+            details += L"Existing-file supported Cache merge is automatic; Settings approval is separate.\r\n";
+        }
     }
     for (const auto& outcome : view.outcomes) {
         if (outcome.account != account.account || outcome.row != row) continue;
