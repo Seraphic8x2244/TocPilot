@@ -123,35 +123,12 @@ inline const AccountSyncTileOperation* TargetOperation(
 }
 
 inline std::wstring DetailText(
-    const AccountSyncTileProjection& projection,
+    const AccountSyncTileProjection&,
     const AccountSyncTileCell& cell,
-    const AccountSyncTileOperation* operation) {
+    const AccountSyncTileOperation*) {
     if (!cell.enabled) return L"Off";
-    if (operation) {
-        if (operation->kind == AccountSyncTileOperationKind::MergeSupportedCache) {
-            return L"Merge " +
-                std::to_wstring(operation->sourceAccounts.size()) +
-                L" input(s)";
-        }
-        std::wstring text = L"From " + operation->selectedSourceAccount;
-        if (operation->sourceAccounts.size() > 1) {
-            text += L" +" +
-                std::to_wstring(operation->sourceAccounts.size() - 1);
-        }
-        return text;
-    }
-    if (!cell.exists) return L"Missing";
-    if (cell.matchingGroup != 0 &&
-        cell.matchingGroup <= projection.matchingGroups.size()) {
-        const auto& group =
-            projection.matchingGroups[cell.matchingGroup - 1];
-        if (group.row == cell.row && group.accounts.size() > 1) {
-            return L"Match " + std::to_wstring(group.accounts.size());
-        }
-    }
-    return L"";
+    return cell.exists ? L"" : L"Missing";
 }
-
 
 inline AccountSyncItem ItemForRow(AccountSyncTileRow row) {
     switch (row) {
