@@ -103,6 +103,8 @@ constexpr int IDC_ACCOUNT_SYNC_BEFORE_LAUNCH = 1032;
 constexpr int IDC_ACCOUNT_SYNC_NOW = 1033;
 constexpr int IDC_ACCOUNT_SYNC_TILES = 1034;
 constexpr int IDC_RECEIVE_DEVELOPMENT_BUILDS = 1035;
+constexpr int IDC_ACCOUNT_SYNC_TILE_REFRESH = 1036;
+constexpr int IDC_ACCOUNT_SYNC_TILE_SYNC = 1037;
 
 constexpr int kCompactWindowWidth = 590;
 constexpr int kDefaultWindowHeight = 480;
@@ -180,6 +182,8 @@ HWND g_accountSyncPfUiCheck = nullptr;
 HWND g_accountSyncBeforeLaunchCheck = nullptr;
 HWND g_accountSyncNowButton = nullptr;
 HWND g_accountSyncTilesView = nullptr;
+HWND g_accountSyncTileRefreshButton = nullptr;
+HWND g_accountSyncTileSyncButton = nullptr;
 HWND g_tocPilotUpdateStatus = nullptr;
 HWND g_launchWowButton = nullptr;
 HWND g_launchVanillaFixesButton = nullptr;
@@ -1612,12 +1616,24 @@ void LayoutControls(HWND hwnd) {
     if (g_accountSyncTilesView) {
         if (showAccountSyncPanel) {
             ShowWindow(g_accountSyncTilesView, SW_SHOW);
-            MoveWindow(
-                g_accountSyncTilesView, margin,
-                listTop + listHeight + accountSyncPanelGap,
-                contentWidth, accountSyncPanelHeight, TRUE);
+            const int actionWidth = ScaleUi(hwnd, 84);
+            const int actionGap = ScaleUi(hwnd, 8);
+            const int panelY = listTop + listHeight + accountSyncPanelGap;
+            MoveWindow(g_accountSyncTilesView, margin + actionWidth + actionGap,
+                       panelY, std::max(1, contentWidth - actionWidth - actionGap),
+                       accountSyncPanelHeight, TRUE);
+            for (const auto button : {g_accountSyncTileRefreshButton,
+                                      g_accountSyncTileSyncButton}) {
+                if (!button) continue;
+                ShowWindow(button, SW_SHOW);
+                MoveWindow(button, margin,
+                    panelY + ScaleUi(hwnd, button == g_accountSyncTileRefreshButton ? 35 : 75),
+                    actionWidth, ScaleUi(hwnd, 30), TRUE);
+            }
         } else {
             ShowWindow(g_accountSyncTilesView, SW_HIDE);
+            if (g_accountSyncTileRefreshButton) ShowWindow(g_accountSyncTileRefreshButton, SW_HIDE);
+            if (g_accountSyncTileSyncButton) ShowWindow(g_accountSyncTileSyncButton, SW_HIDE);
         }
     }
 
@@ -9665,6 +9681,16 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
         g_accountSyncTilesView =
             tp::CreateAccountSyncTileViewport(
                 hwnd, IDC_ACCOUNT_SYNC_TILES);
+        g_accountSyncTileRefreshButton = CreateWindowExW(
+            0, L"BUTTON", L"Refresh", WS_CHILD | WS_TABSTOP | BS_PUSHBUTTON,
+            0, 0, 0, 0, hwnd,
+            reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_ACCOUNT_SYNC_TILE_REFRESH)),
+            GetModuleHandleW(nullptr), nullptr);
+        g_accountSyncTileSyncButton = CreateWindowExW(
+            0, L"BUTTON", L"Sync", WS_CHILD | WS_TABSTOP | BS_PUSHBUTTON,
+            0, 0, 0, 0, hwnd,
+            reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_ACCOUNT_SYNC_TILE_SYNC)),
+            GetModuleHandleW(nullptr), nullptr);
 
         UpdatePackageColumnEditingUi();
 
@@ -10049,6 +10075,16 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
     }
 
     case WM_COMMAND:
+        if (HIWORD(wParam) == BN_CLICKED &&
+            LOWORD(wParam) == IDC_ACCOUNT_SYNC_TILE_REFRESH) {
+            RefreshAccountSyncPreview();
+            return 0;
+        }
+        if (HIWORD(wParam) == BN_CLICKED &&
+            LOWORD(wParam) == IDC_ACCOUNT_SYNC_TILE_SYNC) {
+            RunAccountSyncFromUi(hwnd, false);
+            return 0;
+        }
         if (LOWORD(wParam) == IDC_ADVANCED &&
             HIWORD(wParam) == BN_CLICKED) {
             ToggleAdvanced(hwnd);
