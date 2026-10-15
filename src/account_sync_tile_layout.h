@@ -9,8 +9,8 @@ namespace tp {
 // Logical pixels (96 DPI) shared by the renderer and layout regression tests.
 inline constexpr int kSyncTilePanelHeight = 164;
 inline constexpr int kSyncTileMinimumPackageListHeight = 120;
-inline constexpr int kSyncTileWidth = 212;
-inline constexpr int kSyncTileGap = 56;
+inline constexpr int kSyncTileWidth = 150;
+inline constexpr int kSyncTileGap = 44;
 inline constexpr int kSyncTileMargin = 12;
 inline constexpr int kSyncTileHeight = 139;
 inline constexpr int kSyncTileHeaderY = 9;
