@@ -1,5 +1,19 @@
 # TocPilot Development Progress
 
+## Agreed v0.5.1 closeout / v0.6.0 roadmap — 2026-10-20
+
+**Decision:** Ship `v0.5.1` as a functional, reliability-focused update. The user has runtime-accepted the compact Account Sync interface as usable even though the application's overall styling is dated. **Do not start a piecemeal Account Sync visual redesign or hold this release for cosmetic polish.** Focus on validating existing functionality and fixing only proven regressions. Retain native Win32, the existing authoritative Account Sync engine, freshness rechecks, confirmations, account selection, pfUI Settings-vs-Cache semantics, backup-before-write and outcome status rules.
+
+**Verified development release evidence:** `v0.5.1-dev.5` is published as a non-draft prerelease at source/tag commit `a2ac05662c955d84305be8172b56a22578d82fc1` (2026-10-15). Development Release workflow run `38662846493` completed successfully, including source-version check, Windows x64 Release build and tests, checksum asset publication, published-channel metadata verification and **real development-channel self-update**. Concurrent Build workflow `38662846527` passed. Published assets: `TocPilot.exe` (3,320,320 bytes, SHA-256 `3c4e437082f6624c776183237bfa0aa9cc252159b96892d78f7646fd0cf37015`) and `TocPilot.exe.sha256`; last stable remains `v0.5.0` at `1173a91918db134939b65c0a37891abce35dfb37`. The user's 2026-10-19 two-account pfUI sync, post-sync green/tick outcomes and Refresh runtime successes are documented below. A documentation-only subsequent Build run `39421597011` also passed; this does not itself constitute a new released runtime version.
+
+**v0.5.1 remaining verification before requesting stable approval:** Review which safety/multi-account cases are already exercised by automated Account Sync tests (including 3+/identical source groups, independent pfUI cache merge contributions, stale-source/changed-target rejection and backup/write failure), and add/fix tests only for demonstrated gaps. Check feasible Windows runtime paths together: Sync-before-Launch and representative multi-account scenarios where real accounts are available, plus any previously deferred direct DLL `dlls.txt`, MPQ lifecycle/mixed-repository and repository-library/multi-content paths the user can reasonably exercise. Preserve the explicit not-yet-validated status of unadvertised MPQ/library paths; do not silently call them tested or impose artificial live-account creation. Triage any failure before patching. Recheck exact final CI/release version, published assets and updater gate before proposing promotion; **never modify `main` or publish stable without the user's explicit go-ahead**.
+
+**v0.6.0 is the agreed coherent Win32 UI/UX modernisation milestone:** Consolidate a visual design system (toolbar icon consistency, icon sizing, typography, spacing, borders/panels, button/control states, selection and semantic status colours); revisit the large-toolbar and floating Account Sync presentation across the *whole app* instead of isolated patches; review labels, commands, workflow discoverability, dialog/error language and the historical Phase 7A/7B wording backlog. Prefer lightweight native Win32 styling; do not replace the UI stack with a heavyweight framework without a separate case and approval. Maintain useful Account Sync green/blue/amber semantics and arrows. All visual/wording overhaul work is **deferred to v0.6.0** unless a wording issue makes v0.5.1 objectively incorrect or unsafe.
+
+**Next joint action:** Audit existing tests against the v0.5.1 closeout list, then guide the user through one small, safe Windows test at a time, marking each result here. When the remaining critical gates are resolved or explicitly deferred, request approval to promote `v0.5.1` to `main` and publish stable. Do not automatically begin v0.6.0 implementation.
+
+---
+
 ## Current checkpoint — 2026-10-20
 
 **Account Sync v0.5.1-dev.5 — 2026-10-19 Windows runtime gate (EXERCISED PATHS PASSED):** The user exercised the actual Windows app after updating pfUI and reported success. On the tested account pair, a changed pfUI source was detected; per-account Settings and Cache states, intended directional arrows and necessary confirmation were displayed as expected; the safeguarded Sync action completed, and the post-sync view showed all relevant rows green with completion ticks and no further planned changes. Refresh re-inspected read-only, cleared the transient success ticks, and retained green satisfied statuses. The compact 150-logical-px tiles no longer carry the redundant `Match N` / `Merge N input(s)` labels; the permanent left-column Refresh and Sync controls were available and used. These findings supersede the 2026-10-15 notes below claiming this UI has no release or runtime testing. This is user-observed **success for the exercised Windows paths**, not proof of every multi-account or induced-error edge case.
@@ -1228,9 +1242,9 @@ Status: **implemented / CI-checked / published; runtime validation partially pas
 
 The user intentionally removed the wording pass, MPQ runtime validation and repository-library runtime validation from the v0.5.0 stable gate on 2026-10-10 so already-demonstrated stable-user bug fixes are not held back.
 
-Carry into v0.5.1:
+Historical v0.5.0 deferral list (the **2026-10-20 roadmap above supersedes its wording schedule**):
 
-- Phase 7A/7B wording cleanup across main workflows, dialogs, errors and advanced surfaces;
+- Phase 7A/7B wording cleanup across main workflows, dialogs, errors and advanced surfaces **now assigned to v0.6.0**;
 - real MPQ lifecycle/collision/mixed-repository runtime validation;
 - real repository-library and multi-content branch-switch runtime validation;
 - runtime validation of the v0.5.0-dev.3 non-destructive `dlls.txt` registration behavior if not exercised before the next cycle;
@@ -1271,4 +1285,4 @@ Known validation debt intentionally deferred to v0.5.1:
 
 ## Exact Next Step
 
-Begin **Account Sync tile redesign Slice 3 only** in a fresh ordinary Chat-mode conversation from `dev`, verifying the live remote HEAD after Slice 2 source `21d12c4b237dd4e68a7d30ca6619eb208cd56d19` and this documentation checkpoint. Read `dev_rulebook.md` and `DEV_PROGRESS.md` first. Add native selectable per-row details (account-labelled local timestamps to seconds; actual source/destination, planned writes and merges), align confirmation with displayed arrows, show genuine sync results and refresh, and regression-test stale-plan revalidation and backup-before-overwrite without replacing the existing sync engine or changing pfUI profile/cache semantics. Run full Windows x64 Release/CTest, fix only demonstrated defects, then bump/publish the next genuine development prerelease via the Development Release workflow and verify EXE, SHA-256, metadata and self-update E2E. Update this document with the exact release/CI evidence and provide the separate Chat 4 runtime prompt. **No `main` modification and no user runtime testing until Slice 3 is complete.**
+Complete `v0.5.1` functional closeout under the 2026-10-20 roadmap above. Begin by auditing test coverage and user-feasible outstanding Windows runtime gates, not by reimplementing the sync engine or restyling Account Sync. The latest **tested** development release is `v0.5.1-dev.5` and the last **stable** is `v0.5.0`. Record new observations and defects as they arise; allow no `main` change until explicit user approval. Reserve a coherent Win32 visual/wording overhaul for `v0.6.0`.
