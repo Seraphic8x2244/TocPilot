@@ -502,6 +502,18 @@ void TestConfirmedCopyAndBackup() {
     Check(
         confirmations == 1,
         "macro sync should prompt once per item");
+    const auto& macroOutcomes =
+        result.items[static_cast<std::size_t>(tp::AccountSyncItem::Macros)].targetOutcomes;
+    Check(macroOutcomes.size() == 2,
+          "one real outcome should be recorded per macro destination");
+    for (const auto& outcome : macroOutcomes) {
+        Check(outcome.row == tp::AccountSyncTileRow::Macros &&
+              outcome.succeeded && !outcome.declined && outcome.error.empty(),
+              "confirmed macro destinations should report actual successful writes");
+        Check(outcome.account == L"BETA" || outcome.account == L"GAMMA",
+              "macro outcome must name an actual destination account");
+    }
+
     Check(
         ReadText(older) ==
             "new macros",
@@ -1050,6 +1062,13 @@ void TestPfUiProfileDecline() {
     Check(
         !result.fatal,
         "declining profile sync should not be fatal");
+    const auto& pfOutcomes =
+        result.items[static_cast<std::size_t>(tp::AccountSyncItem::PfUi)].targetOutcomes;
+    Check(pfOutcomes.size() == 1 &&
+          pfOutcomes[0].account == L"BETA" &&
+          pfOutcomes[0].row == tp::AccountSyncTileRow::PfUiSettings &&
+          !pfOutcomes[0].succeeded && pfOutcomes[0].declined,
+          "declined pfUI profile confirmation must record only Settings, not Cache");
     Check(
         ReadText(target) ==
             targetText,
@@ -1347,6 +1366,13 @@ void TestEqualTimestampAndDecline() {
     Check(
         !result.fatal,
         "declined confirmation must not be fatal");
+    const auto& bindingOutcomes =
+        result.items[static_cast<std::size_t>(tp::AccountSyncItem::Keybindings)].targetOutcomes;
+    Check(bindingOutcomes.size() == 1 &&
+          bindingOutcomes[0].account == L"BETA" &&
+          bindingOutcomes[0].row == tp::AccountSyncTileRow::Keybindings &&
+          !bindingOutcomes[0].succeeded && bindingOutcomes[0].declined,
+          "declined keybinding write must be recorded for its exact destination");
     Check(
         ReadText(target) == "beta",
         "declined target must remain unchanged");
@@ -1411,6 +1437,11 @@ void TestBackupFailureBlocksOverwrite() {
     Check(
         ReadText(target) == "old",
         "backup failure must prevent destination overwrite");
+    const auto& failed = result.items[static_cast<std::size_t>(tp::AccountSyncItem::Macros)].targetOutcomes;
+    Check(failed.size() == 1 && failed[0].account == L"BETA" &&
+          failed[0].row == tp::AccountSyncTileRow::Macros &&
+          !failed[0].succeeded && !failed[0].declined,
+          "backup failure must record a failed target outcome, never a success tick");
 
     std::error_code ec;
     std::filesystem::remove_all(
@@ -1418,7 +1449,7 @@ void TestBackupFailureBlocksOverwrite() {
         ec);
 }
 
-void TestCopyFailureKeepsBackup() {
+void TestSourceRemovalDuringApprovalIsRejected() {
     const auto root =
         TestRoot(L"copy-failure");
     ResetRoot(root);
@@ -1470,34 +1501,21 @@ void TestCopyFailureKeepsBackup() {
             },
             result,
             error),
-        "copy failure should be reported through run result");
+        "stale source should be reported through run result");
     Check(
         result.fatal,
-        "copy failure after backup must be fatal");
+        "source disappearance must invalidate confirmation");
     Check(
         ReadText(target) == "old",
         "failed source copy must leave destination content unchanged");
 
-    bool foundBackup = false;
-    for (const auto& folder :
-         BackupRunFolders(root)) {
-        const auto backup =
-            folder /
-            L"BETA" /
-            L"macros-cache.txt";
-
-        if (std::filesystem::is_regular_file(
-                backup)) {
-            foundBackup = true;
-            Check(
-                ReadText(backup) == "old",
-                "copy failure must leave the successful backup intact");
-        }
-    }
-
     Check(
-        foundBackup,
-        "copy failure after successful backup should retain a backup file");
+        BackupRunFolders(root).empty(),
+        "source disappearance during confirmation must stop before any backup");
+    for (const auto& outcome : result.items[static_cast<std::size_t>(tp::AccountSyncItem::Macros)].targetOutcomes) {
+        Check(!outcome.succeeded,
+              "stale source must not produce a successful destination outcome");
+    }
 
     std::error_code ec;
     std::filesystem::remove_all(
@@ -1825,6 +1843,88 @@ void TestPfUiMissingTargetTargetedCreation() {
         ec);
 }
 
+void TestIdenticalSyncFilesAndStaleApproval() {
+    for (const auto item : {tp::AccountSyncItem::Macros,
+                            tp::AccountSyncItem::Keybindings}) {
+        const auto root = TestRoot(item == tp::AccountSyncItem::Macros
+            ? L"identical-macros" : L"identical-bindings");
+        ResetRoot(root);
+        const auto fileName = item == tp::AccountSyncItem::Macros
+            ? L"macros-cache.txt" : L"bindings-cache.wtf";
+        const auto source = AccountFile(root, L"ALPHA", fileName);
+        const auto target = AccountFile(root, L"BETA", fileName);
+        WriteText(source, "same bytes");
+        WriteText(target, "same bytes");
+        MakeNewer(source, target);
+        tp::AccountSyncConfig config;
+        config.accounts = {L"ALPHA", L"BETA"};
+        config.macros = item == tp::AccountSyncItem::Macros;
+        config.keybindings = item == tp::AccountSyncItem::Keybindings;
+        std::array<tp::AccountSyncItemResult, tp::kAccountSyncItemCount> preview{};
+        std::wstring error;
+        Check(tp::InspectAccountSync(root, config, preview, error),
+              "identical files should inspect");
+        const auto& row = preview[static_cast<std::size_t>(item)];
+        Check(row.status == L"Already synced" && !row.confirmationRequired,
+              "identical bytes must be already synced irrespective of modified time");
+        Check(row.timestampDetails.find(L"ALPHA") != std::wstring::npos &&
+              row.timestampDetails.find(L":") != std::wstring::npos,
+              "preview should include source account and seconds-resolution time");
+        int prompts = 0;
+        tp::AccountSyncRunResult result;
+        Check(tp::RunAccountSync(root, config,
+              [&](tp::AccountSyncItem, std::wstring_view,
+                  const std::vector<std::wstring>&, bool) {
+                  ++prompts; return true;
+              }, result, error), "identical sync should run");
+        Check(prompts == 0 && !result.fatal && BackupRunFolders(root).empty(),
+              "identical content must not prompt, back up or overwrite");
+        Check(result.items[static_cast<std::size_t>(item)].targetOutcomes.empty(),
+              "content-identical no-op must never report a completed destination");
+
+        Check(ReadText(target) == "same bytes", "identical destination should stay unchanged");
+
+        WriteText(target, "different bytes");
+        MakeNewer(source, target);
+        result = {};
+        prompts = 0;
+        Check(tp::RunAccountSync(root, config,
+              [&](tp::AccountSyncItem, std::wstring_view,
+                  const std::vector<std::wstring>&, bool) {
+                  ++prompts;
+                  WriteText(target, "changed while dialog shown");
+                  return true;
+              }, result, error), "stale sync should report result");
+        Check(prompts == 1 && result.fatal &&
+              ReadText(target) == "changed while dialog shown" &&
+              BackupRunFolders(root).empty(),
+              "changed destination during approval must cancel before backup/write");
+        // A source edited during approval must invalidate the plan even when
+        // its native filesystem modified time is restored exactly.
+        WriteText(target, "older target again");
+        MakeNewer(source, target);
+        const auto sourceTime = std::filesystem::last_write_time(source);
+        const auto targetBefore = ReadText(target);
+        result = {};
+        prompts = 0;
+        Check(tp::RunAccountSync(root, config,
+              [&](tp::AccountSyncItem, std::wstring_view,
+                  const std::vector<std::wstring>&, bool) {
+                  ++prompts;
+                  WriteText(source, "source changed while approving");
+                  std::filesystem::last_write_time(source, sourceTime);
+                  return true;
+              }, result, error), "changed source should report result");
+        Check(prompts == 1 && result.fatal &&
+              ReadText(target) == targetBefore &&
+              BackupRunFolders(root).empty(),
+              "same-timestamp source content change must block overwrite and backup");
+
+        std::error_code ec;
+        std::filesystem::remove_all(root, ec);
+    }
+}
+
 void TestPreAccountSyncStateLoad() {
     const auto root =
         TestRoot(L"pre-account-sync-state");
@@ -1979,9 +2079,271 @@ void TestStatePersistence() {
         ec);
 }
 
+
+void TestTileProjectionGroupsAndTransfers() {
+    const auto root = TestRoot(L"tile-multi-account");
+    ResetRoot(root);
+    const auto a = AccountFile(root, L"ALPHA", L"macros-cache.txt");
+    const auto b = AccountFile(root, L"BETA", L"macros-cache.txt");
+    const auto c = AccountFile(root, L"GAMMA", L"macros-cache.txt");
+    const auto e = AccountFile(root, L"EPSILON", L"macros-cache.txt");
+    WriteText(a, "winner");
+    WriteText(b, "winner");
+    WriteText(c, "different");
+    WriteText(e, "equal-time-conflict");
+    MakeNewer(a, b);
+    MakeNewer(a, c);
+    std::error_code ec;
+    std::filesystem::last_write_time(
+        e, std::filesystem::last_write_time(a), ec);
+    Check(!ec, "equal-time tile fixture should set timestamps");
+
+    const auto ka = AccountFile(root, L"ALPHA", L"bindings-cache.wtf");
+    const auto kb = AccountFile(root, L"BETA", L"bindings-cache.wtf");
+    const auto kc = AccountFile(root, L"GAMMA", L"bindings-cache.wtf");
+    WriteText(ka, "old keys");
+    WriteText(kb, "old keys");
+    WriteText(kc, "new keys");
+    MakeNewer(kc, ka);
+    MakeNewer(kc, kb);
+
+    tp::AccountSyncConfig cfg;
+    cfg.accounts = {L"BETA", L"ALPHA", L"GAMMA", L"DELTA", L"EPSILON"};
+    cfg.macros = cfg.keybindings = true;
+    tp::AccountSyncTileProjection model;
+    std::wstring error;
+    Check(tp::InspectAccountSyncTiles(root, cfg, model, error),
+          "multi-account tile inspection should succeed");
+    Check(model.accounts.size() == 5 &&
+          model.accounts[0].account == L"BETA" &&
+          model.accounts[1].account == L"ALPHA",
+          "tiles must preserve the configured account order");
+
+    using R = tp::AccountSyncTileRow;
+    using S = tp::AccountSyncTileState;
+    using K = tp::AccountSyncTileOperationKind;
+    const auto m = static_cast<std::size_t>(R::Macros);
+    const auto k = static_cast<std::size_t>(R::Keybindings);
+    Check(model.accounts[0].rows[m].matchingGroup != 0 &&
+          model.accounts[0].rows[m].matchingGroup ==
+              model.accounts[1].rows[m].matchingGroup,
+          "older byte-identical macro source must share a content group");
+    Check(model.accounts[0].rows[m].state == S::RuleSatisfied &&
+          model.accounts[1].rows[m].state == S::Default &&
+          model.accounts[2].rows[m].state == S::Older &&
+          model.accounts[3].rows[m].state == S::Older &&
+          model.accounts[4].rows[m].state == S::Default,
+          "macro statuses distinguish matching, unresolved equal-time conflicts, older and missing");
+    Check(model.accounts[2].rows[k].state == S::Newer &&
+          model.accounts[0].rows[k].state == S::Older &&
+          model.accounts[1].rows[k].state == S::Older,
+          "source is selected per row, not from an account's position");
+
+    int macroWrites = 0, bindingWrites = 0;
+    std::vector<std::wstring> macroTargets, bindingTargets;
+    for (const auto& op : model.operations) {
+        Check(op.kind == K::CopyWholeFile && op.requiresConfirmation,
+              "macro/keybinding plans must be confirmed file copies");
+        if (op.row == R::Macros) {
+            ++macroWrites;
+            macroTargets.push_back(op.targetAccount);
+            Check(op.selectedSourceAccount == L"ALPHA" &&
+                  op.sourceAccounts == std::vector<std::wstring>({L"BETA", L"ALPHA"}),
+                  "matching sources must be grouped without cascading copies");
+        }
+        if (op.row == R::Keybindings) {
+            ++bindingWrites;
+            bindingTargets.push_back(op.targetAccount);
+            Check(op.selectedSourceAccount == L"GAMMA",
+                  "keybinding copy source must follow its own newest file");
+        }
+    }
+    Check(macroWrites == 2 && macroTargets ==
+              std::vector<std::wstring>({L"GAMMA", L"DELTA"}) &&
+          bindingWrites == 4,
+          "only differing older/missing files should be planned once per target");
+
+    std::array<tp::AccountSyncItemResult, tp::kAccountSyncItemCount> preview{};
+    Check(tp::InspectAccountSync(root, cfg, preview, error),
+          "authoritative summary preview should succeed");
+    Check(preview[static_cast<std::size_t>(tp::AccountSyncItem::Macros)]
+              .confirmationTargets == macroTargets &&
+          preview[static_cast<std::size_t>(tp::AccountSyncItem::Keybindings)]
+              .confirmationTargets == bindingTargets,
+          "tile actions must exactly match authoritative confirmation targets");
+    Check(ReadText(a) == "winner" &&
+          ReadText(c) == "different" &&
+          BackupRunFolders(root).empty(),
+          "read-only inspection must not write files or backups");
+    std::filesystem::remove_all(root, ec);
+}
+
+void TestTileProjectionPfUiSeparateRows() {
+    const auto root = TestRoot(L"tile-pfui-merge");
+    ResetRoot(root);
+    const auto a = AccountFile(root, L"ALPHA", L"SavedVariables/pfUI.lua");
+    const auto b = AccountFile(root, L"BETA", L"SavedVariables/pfUI.lua");
+    const auto c = AccountFile(root, L"GAMMA", L"SavedVariables/pfUI.lua");
+    auto first = PfUiText("100", "10", "local alpha");
+    auto second = PfUiText("200", "20", "local beta");
+    const auto firstKey = first.find("[\"value\"]");
+    const auto secondKey = second.find("[\"value\"]");
+    Check(firstKey != std::string::npos && secondKey != std::string::npos,
+          "pfUI fixture should have replaceable cache keys");
+    if (firstKey == std::string::npos || secondKey == std::string::npos) return;
+    first.replace(firstKey, std::string("[\"value\"]").size(), "[\"alpha\"]");
+    second.replace(secondKey, std::string("[\"value\"]").size(), "[\"beta\"]");
+    WriteText(a, first);
+    WriteText(b, second);
+    MakeNewer(a, b);
+
+    tp::AccountSyncConfig cfg;
+    cfg.accounts = {L"ALPHA", L"BETA", L"GAMMA"};
+    cfg.pfUi = true;
+    tp::AccountSyncTileProjection model;
+    std::wstring error;
+    Check(tp::InspectAccountSyncTiles(root, cfg, model, error),
+          "pfUI tile projection should inspect");
+    using R = tp::AccountSyncTileRow;
+    using K = tp::AccountSyncTileOperationKind;
+    using S = tp::AccountSyncTileState;
+    const auto settings = static_cast<std::size_t>(R::PfUiSettings);
+    const auto cache = static_cast<std::size_t>(R::PfUiCache);
+    Check(model.accounts[0].rows[settings].state == S::Newer &&
+          model.accounts[1].rows[settings].state == S::Older &&
+          model.accounts[2].rows[settings].state == S::Older,
+          "profile Settings status must track the chosen profile source");
+    Check(model.accounts[0].rows[cache].state == S::Default &&
+          model.accounts[1].rows[cache].state == S::Older &&
+          model.accounts[2].rows[cache].state == S::Older,
+          "newest pfUI file can itself require merged cache data");
+
+    const auto& aSettings = model.accounts[0].rows[settings].semanticEntries;
+    const auto& bSettings = model.accounts[1].rows[settings].semanticEntries;
+    Check(!aSettings.empty() && !bSettings.empty() && aSettings != bSettings,
+          "pfUI Settings tiles must retain account-specific inspected profile entry signatures");
+    const auto& aCache = model.accounts[0].rows[cache].semanticEntries;
+    const auto& bCache = model.accounts[1].rows[cache].semanticEntries;
+    Check(aCache.size() == 3 && bCache.size() == 3 && aCache != bCache &&
+          aCache[0].first == "libhealth" && aCache[1].first == "gold" &&
+          aCache[2].first == "prediction",
+          "Cache detail must expose the three supported merge sections per account");
+    Check(model.accounts[2].rows[settings].semanticEntries.empty() &&
+          model.accounts[2].rows[cache].semanticEntries.empty(),
+          "missing pfUI files must not invent semantic detail entries");
+    int profiles = 0, caches = 0;
+    for (const auto& op : model.operations) {
+        if (op.kind == K::ReplaceProfiles) {
+            ++profiles;
+            Check(op.requiresConfirmation &&
+                  op.selectedSourceAccount == L"ALPHA",
+                  "profiles require source-specific confirmation");
+        } else if (op.kind == K::MergeSupportedCache) {
+            ++caches;
+            Check(op.sourceAccounts ==
+                      std::vector<std::wstring>({L"ALPHA", L"BETA"}),
+                  "cache merge uses inputs from all supported group members");
+            Check(op.requiresConfirmation == (op.targetAccount == L"GAMMA"),
+                  "cache merge is automatic for existing files, but creation needs approval");
+        }
+    }
+    Check(profiles == 2 && caches == 3,
+          "missing account needs one profile-creation action plus conditional cache merge");
+    for (const auto& op : model.operations) {
+        if (op.kind == K::ReplaceProfiles) {
+            Check(op.requiresConfirmation && !op.selectedSourceAccount.empty(),
+                  "every displayed Settings replacement must be an approved source-to-target write");
+        } else if (op.kind == K::MergeSupportedCache) {
+            Check(op.selectedSourceAccount.empty() && !op.sourceAccounts.empty(),
+                  "Cache merge must never display a spurious single-file copy source");
+            Check(op.requiresConfirmation == op.createsFile,
+                  "only Cache file creation may inherit Settings confirmation");
+        }
+    }
+
+    std::array<tp::AccountSyncItemResult, tp::kAccountSyncItemCount> preview{};
+    Check(tp::InspectAccountSync(root, cfg, preview, error),
+          "pfUI summary inspection should succeed");
+    const auto& row = preview[static_cast<std::size_t>(tp::AccountSyncItem::PfUi)];
+    Check(row.confirmationTargets ==
+              std::vector<std::wstring>({L"BETA", L"GAMMA"}) &&
+          row.automaticTargets ==
+              std::vector<std::wstring>({L"ALPHA", L"BETA"}),
+          "four-row projection must preserve pfUI summary's existing-file merge decisions");
+
+    int prompts = 0;
+    tp::AccountSyncRunResult result;
+    Check(tp::RunAccountSync(root, cfg,
+          [&](tp::AccountSyncItem, std::wstring_view,
+              const std::vector<std::wstring>&, bool) {
+              ++prompts;
+              return false;
+          }, result, error),
+          "declined profile sync should execute automatic existing cache merges");
+    Check(prompts == 1 && !result.fatal && !std::filesystem::exists(c),
+          "decline must block missing-file creation without blocking cache-only merges");
+    Check(Contains(ReadText(a), "[\"beta\"]") &&
+          Contains(ReadText(b), "[\"alpha\"]") &&
+          Contains(ReadText(b), "[\"width\"] = \"200\""),
+          "cache keys should merge both directions while declined settings stay local");
+    std::error_code ec;
+    std::filesystem::remove_all(root, ec);
+}
+
+void TestTileProjectionNoopAndMissing() {
+    const auto root = TestRoot(L"tile-noops");
+    ResetRoot(root);
+    tp::AccountSyncConfig cfg;
+    cfg.accounts = {L"ONE", L"TWO"};
+    cfg.macros = cfg.keybindings = cfg.pfUi = true;
+    std::wstring error;
+    tp::AccountSyncTileProjection model;
+    Check(tp::InspectAccountSyncTiles(root, cfg, model, error) &&
+          model.operations.empty(), "all-missing sources have no tile operations");
+    for (const auto& account : model.accounts) {
+        for (const auto& row : account.rows) {
+            Check(row.enabled && row.state == tp::AccountSyncTileState::Default &&
+                  !row.exists && row.matchingGroup == 0,
+                  "absent source rows remain neutral and ungrouped");
+        }
+    }
+
+    for (const auto* relative : {L"macros-cache.txt", L"bindings-cache.wtf"}) {
+        WriteText(AccountFile(root, L"ONE", relative), "identical bytes");
+        WriteText(AccountFile(root, L"TWO", relative), "identical bytes");
+    }
+    WriteText(AccountFile(root, L"ONE", L"SavedVariables/pfUI.lua"),
+              PfUiText("100", "10", "local one"));
+    WriteText(AccountFile(root, L"TWO", L"SavedVariables/pfUI.lua"),
+              PfUiText("100", "10", "local two"));
+    MakeNewer(AccountFile(root, L"ONE", L"macros-cache.txt"),
+              AccountFile(root, L"TWO", L"macros-cache.txt"));
+    Check(tp::InspectAccountSyncTiles(root, cfg, model, error) &&
+          model.operations.empty(),
+          "identical macro bytes and semantic pfUI content are no-ops");
+    for (const auto& account : model.accounts) {
+        for (const auto& row : account.rows) {
+            Check(row.state == tp::AccountSyncTileState::RuleSatisfied &&
+                  row.matchingGroup != 0,
+                  "healthy four-row content groups must be green, regardless of timestamps/local junk");
+        }
+    }
+    cfg.pfUi = cfg.macros = cfg.keybindings = false;
+    Check(tp::InspectAccountSyncTiles(root, cfg, model, error) &&
+          model.operations.empty() &&
+          model.accounts[0].rows[0].state == tp::AccountSyncTileState::Default &&
+          !model.accounts[0].rows[0].enabled,
+          "disabled rows never imply operations or healthy status");
+    std::error_code ec;
+    std::filesystem::remove_all(root, ec);
+}
+
 } // namespace
 
 int main() {
+    TestTileProjectionGroupsAndTransfers();
+    TestTileProjectionPfUiSeparateRows();
+    TestTileProjectionNoopAndMissing();
     TestPfUiComparison();
     TestConfirmedCopyAndBackup();
     TestPfUiTargetedMergeAndPreservation();
@@ -1991,10 +2353,11 @@ int main() {
     TestPfUiEqualTimestampConflictTieBreak();
     TestEqualTimestampAndDecline();
     TestBackupFailureBlocksOverwrite();
-    TestCopyFailureKeepsBackup();
+    TestSourceRemovalDuringApprovalIsRejected();
     TestBackupRunFolderCollision();
     TestNoSourceItem();
     TestPfUiMissingTargetTargetedCreation();
+    TestIdenticalSyncFilesAndStaleApproval();
     TestPreAccountSyncStateLoad();
     TestLaunchFlowPreservesConsoleIntent();
     TestStatePersistence();

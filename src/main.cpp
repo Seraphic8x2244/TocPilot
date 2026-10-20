@@ -1,4 +1,5 @@
 #include "account_sync.h"
+#include "account_sync_tiles.h"
 #include "addon_scan.h"
 #include "adoption.h"
 #include "add_package_dialog.h"
@@ -100,8 +101,10 @@ constexpr int IDC_ACCOUNT_SYNC_KEYBINDINGS = 1030;
 constexpr int IDC_ACCOUNT_SYNC_PFUI = 1031;
 constexpr int IDC_ACCOUNT_SYNC_BEFORE_LAUNCH = 1032;
 constexpr int IDC_ACCOUNT_SYNC_NOW = 1033;
-constexpr int IDC_ACCOUNT_SYNC_STATUS = 1034;
+constexpr int IDC_ACCOUNT_SYNC_TILES = 1034;
 constexpr int IDC_RECEIVE_DEVELOPMENT_BUILDS = 1035;
+constexpr int IDC_ACCOUNT_SYNC_TILE_REFRESH = 1036;
+constexpr int IDC_ACCOUNT_SYNC_TILE_SYNC = 1037;
 
 constexpr int kCompactWindowWidth = 590;
 constexpr int kDefaultWindowHeight = 480;
@@ -178,7 +181,9 @@ HWND g_accountSyncKeybindingsCheck = nullptr;
 HWND g_accountSyncPfUiCheck = nullptr;
 HWND g_accountSyncBeforeLaunchCheck = nullptr;
 HWND g_accountSyncNowButton = nullptr;
-HWND g_accountSyncStatusList = nullptr;
+HWND g_accountSyncTilesView = nullptr;
+HWND g_accountSyncTileRefreshButton = nullptr;
+HWND g_accountSyncTileSyncButton = nullptr;
 HWND g_tocPilotUpdateStatus = nullptr;
 HWND g_launchWowButton = nullptr;
 HWND g_launchVanillaFixesButton = nullptr;
@@ -1574,7 +1579,7 @@ void LayoutControls(HWND hwnd) {
              .accountSyncPfUi);
 
     const int accountSyncPanelHeight =
-        ScaleUi(hwnd, 104);
+        ScaleUi(hwnd, tp::kSyncTilePanelHeight);
     const int accountSyncPanelGap =
         ScaleUi(hwnd, 10);
 
@@ -1589,7 +1594,7 @@ void LayoutControls(HWND hwnd) {
             ScaleUi(
                 hwnd,
                 showAccountSyncPanel
-                    ? 160
+                    ? tp::kSyncTileMinimumPackageListHeight
                     : 220),
             height -
                 listTop -
@@ -1608,50 +1613,27 @@ void LayoutControls(HWND hwnd) {
         ResizeListColumns();
     }
 
-    if (g_accountSyncStatusList) {
+    if (g_accountSyncTilesView) {
         if (showAccountSyncPanel) {
-            ShowWindow(
-                g_accountSyncStatusList,
-                SW_SHOW);
-
-            MoveWindow(
-                g_accountSyncStatusList,
-                margin,
-                listTop +
-                    listHeight +
-                    accountSyncPanelGap,
-                contentWidth,
-                accountSyncPanelHeight,
-                TRUE);
-
-            const int itemWidth =
-                ScaleUi(hwnd, 110);
-            const int statusWidth =
-                ScaleUi(hwnd, 170);
-            const int actionWidth =
-                std::max(
-                    ScaleUi(hwnd, 170),
-                    contentWidth -
-                        itemWidth -
-                        statusWidth -
-                        ScaleUi(hwnd, 6));
-
-            ListView_SetColumnWidth(
-                g_accountSyncStatusList,
-                0,
-                itemWidth);
-            ListView_SetColumnWidth(
-                g_accountSyncStatusList,
-                1,
-                statusWidth);
-            ListView_SetColumnWidth(
-                g_accountSyncStatusList,
-                2,
-                actionWidth);
+            ShowWindow(g_accountSyncTilesView, SW_SHOW);
+            const int actionWidth = ScaleUi(hwnd, 84);
+            const int actionGap = ScaleUi(hwnd, 8);
+            const int panelY = listTop + listHeight + accountSyncPanelGap;
+            MoveWindow(g_accountSyncTilesView, margin + actionWidth + actionGap,
+                       panelY, std::max(1, contentWidth - actionWidth - actionGap),
+                       accountSyncPanelHeight, TRUE);
+            for (const auto button : {g_accountSyncTileRefreshButton,
+                                      g_accountSyncTileSyncButton}) {
+                if (!button) continue;
+                ShowWindow(button, SW_SHOW);
+                MoveWindow(button, margin,
+                    panelY + ScaleUi(hwnd, button == g_accountSyncTileRefreshButton ? 35 : 75),
+                    actionWidth, ScaleUi(hwnd, 30), TRUE);
+            }
         } else {
-            ShowWindow(
-                g_accountSyncStatusList,
-                SW_HIDE);
+            ShowWindow(g_accountSyncTilesView, SW_HIDE);
+            if (g_accountSyncTileRefreshButton) ShowWindow(g_accountSyncTileRefreshButton, SW_HIDE);
+            if (g_accountSyncTileSyncButton) ShowWindow(g_accountSyncTileSyncButton, SW_HIDE);
         }
     }
 
@@ -7738,100 +7720,26 @@ tp::AccountSyncConfig CurrentAccountSyncConfig() {
     return config;
 }
 
-void SetAccountSyncStatusRows(
-    const std::array<
-        tp::AccountSyncItemResult,
-        tp::kAccountSyncItemCount>& rows) {
-    if (!g_accountSyncStatusList) {
-        return;
-    }
+void RefreshAccountSyncPreview(
+    std::vector<tp::AccountSyncTargetOutcome> outcomes = {}) {
+    if (!g_accountSyncTilesView) return;
 
-    const std::array<
-        tp::AccountSyncItem,
-        tp::kAccountSyncItemCount>
-        order{
-            tp::AccountSyncItem::Macros,
-            tp::AccountSyncItem::Keybindings,
-            tp::AccountSyncItem::PfUi
-        };
-
-    for (std::size_t i = 0;
-         i < order.size();
-         ++i) {
-        const auto item =
-            order[i];
-        const auto& row =
-            rows[
-                static_cast<std::size_t>(
-                    item)];
-        const int index =
-            static_cast<int>(i);
-
-        ListView_SetItemText(
-            g_accountSyncStatusList,
-            index,
-            0,
-            const_cast<LPWSTR>(
-                tp::AccountSyncItemLabel(
-                    item)));
-        ListView_SetItemText(
-            g_accountSyncStatusList,
-            index,
-            1,
-            const_cast<LPWSTR>(
-                row.status.c_str()));
-        ListView_SetItemText(
-            g_accountSyncStatusList,
-            index,
-            2,
-            const_cast<LPWSTR>(
-                row.action.c_str()));
-    }
-}
-
-void RefreshAccountSyncPreview() {
-    std::array<
-        tp::AccountSyncItemResult,
-        tp::kAccountSyncItemCount>
-        rows{};
-
+    tp::AccountSyncTileProjection projection;
     std::wstring error;
-
-    if (!g_stateReady ||
-        !tp::InspectAccountSync(
-            g_root,
-            CurrentAccountSyncConfig(),
-            rows,
-            error)) {
-        const std::array<
-            tp::AccountSyncItem,
-            tp::kAccountSyncItemCount>
-            order{
-                tp::AccountSyncItem::Macros,
-                tp::AccountSyncItem::Keybindings,
-                tp::AccountSyncItem::PfUi
-            };
-
-        for (const auto item :
-             order) {
-            auto& row =
-                rows[
-                    static_cast<std::size_t>(
-                        item)];
-            row.item = item;
-            row.status =
-                g_stateReady
-                    ? L"Error"
-                    : L"Unavailable";
-            row.action =
-                g_stateReady
-                    ? L"Inspection failed"
-                    : L"State unavailable";
-        }
+    if (!g_stateReady) {
+        error = L"Account Sync state unavailable.";
+    } else if (!tp::InspectAccountSyncTiles(
+                   g_root, CurrentAccountSyncConfig(),
+                   projection, error)) {
+        projection = {};
+        if (error.empty()) error = L"Account Sync inspection failed.";
     }
 
-    SetAccountSyncStatusRows(
-        rows);
+    // Display only. The authoritative engine independently re-inspects,
+    // confirms, revalidates freshness and performs protected writes.
+    tp::SetAccountSyncTilePreview(
+        g_accountSyncTilesView, std::move(projection), std::move(error),
+        g_root, std::move(outcomes));
 }
 
 bool ConfirmAccountSyncTargets(
@@ -7840,16 +7748,15 @@ bool ConfirmAccountSyncTargets(
     std::wstring_view sourceAccount,
     const std::vector<std::wstring>& targets,
     bool comparerFallback) {
+    // The pfUI confirmation approves profile/settings replacement only.
+    // Supported cache data is merged independently, including for existing
+    // accounts that need no confirmation; it is never a whole-file copy.
     std::wstring prompt =
-        L"Copy " +
-        std::wstring(
-            tp::AccountSyncItemLabel(
-                item)) +
-        L" from " +
-        std::wstring(sourceAccount) +
-        L" to " +
-        std::to_wstring(
-            targets.size()) +
+        (item == tp::AccountSyncItem::PfUi
+            ? L"Replace pfUI profiles/settings"
+            : L"Copy " + std::wstring(tp::AccountSyncItemLabel(item))) +
+        L" from " + std::wstring(sourceAccount) +
+        L" to " + std::to_wstring(targets.size()) +
         L" confirmation-required target";
 
     if (targets.size() != 1) {
@@ -7857,13 +7764,24 @@ bool ConfirmAccountSyncTargets(
     }
 
     prompt += L"?\r\n\r\n";
+    prompt += L"Source: " + std::wstring(sourceAccount) +
+        L" (" + tp::AccountSyncFileTime(g_root, sourceAccount, item) +
+        L")\r\nDestinations:\r\n";
 
     for (const auto& target :
          targets) {
         prompt +=
             L"• " +
-            target +
-            L"\r\n";
+            target + L" (" +
+            tp::AccountSyncFileTime(g_root, target, item) +
+            L")\r\n";
+    }
+
+    if (item == tp::AccountSyncItem::PfUi) {
+        prompt += L"\r\nThis confirmation controls pfUI profiles/settings replacement. "
+                  L"Supported pfUI cache entries are merged independently "
+                  L"for existing account files; creating a missing pfUI file "
+                  L"requires this approval.";
     }
 
     if (comparerFallback) {
@@ -7948,10 +7866,13 @@ bool RunAccountSyncFromUi(
             result,
             error);
 
-    if (ran) {
-        SetAccountSyncStatusRows(
-            result.items);
-    }
+    // The refreshed projection is independently inspected; outcome markers
+    // derive only from actual engine write attempts, not green tile states.
+    std::vector<tp::AccountSyncTargetOutcome> outcomes;
+    for (const auto& item : result.items)
+        outcomes.insert(outcomes.end(), item.targetOutcomes.begin(),
+                        item.targetOutcomes.end());
+    RefreshAccountSyncPreview(std::move(outcomes));
 
     if (!ran ||
         result.fatal) {
@@ -7982,6 +7903,34 @@ bool RunAccountSyncFromUi(
         return false;
     }
 
+    if (!beforeLaunch) {
+        std::wstring summary = L"Account Sync completed.\r\n\r\n";
+        for (const auto& item : result.items) {
+            if (!tp::AccountSyncItemEnabled(config, item.item)) continue;
+            summary += tp::AccountSyncItemLabel(item.item);
+            summary += L": ";
+            summary += item.status.empty() ? L"No reported result" : item.status;
+            summary += L" (";
+            summary += std::to_wstring(item.copiedTargets);
+            summary += L" destination(s) updated)";
+            if (item.confirmationDeclined) summary += L" - confirmation declined";
+            summary += L"\r\n";
+            for (const auto& outcome : item.targetOutcomes) {
+                const wchar_t* row = outcome.row == tp::AccountSyncTileRow::Macros
+                    ? L"Macros" : outcome.row == tp::AccountSyncTileRow::Keybindings
+                    ? L"Keybinds" : outcome.row == tp::AccountSyncTileRow::PfUiSettings
+                    ? L"pfUI Settings" : L"pfUI Cache";
+                summary += L"  " + outcome.account + L" / " + row + L": ";
+                summary += outcome.declined ? L"declined" :
+                    outcome.succeeded ? L"updated" : L"failed";
+                if (!outcome.error.empty()) summary += L" - " + outcome.error;
+                summary += L"\r\n";
+            }
+        }
+        summary += L"\r\nAccount tiles have been refreshed from disk.";
+        MessageBoxW(owner, summary.c_str(), L"TocPilot - Account Sync",
+                    MB_OK | MB_ICONINFORMATION);
+    }
     return true;
 }
 
@@ -9729,100 +9678,19 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                 LVS_EX_DOUBLEBUFFER |
                 LVS_EX_LABELTIP);
 
-        g_accountSyncStatusList =
-            CreateWindowExW(
-                WS_EX_CLIENTEDGE,
-                WC_LISTVIEWW,
-                L"",
-                WS_CHILD |
-                    LVS_REPORT |
-                    LVS_SINGLESEL |
-                    LVS_NOSORTHEADER,
-                20,
-                0,
-                820,
-                104,
-                hwnd,
-                reinterpret_cast<HMENU>(
-                    static_cast<INT_PTR>(
-                        IDC_ACCOUNT_SYNC_STATUS)),
-                GetModuleHandleW(nullptr),
-                nullptr);
-
-        ListView_SetExtendedListViewStyle(
-            g_accountSyncStatusList,
-            LVS_EX_FULLROWSELECT |
-                LVS_EX_DOUBLEBUFFER);
-
-        struct AccountSyncColumn {
-            const wchar_t* label;
-            int width;
-        };
-
-        constexpr std::array<
-            AccountSyncColumn,
-            3>
-            accountSyncColumns{{
-                {L"Item", 110},
-                {L"Status", 170},
-                {L"Action / confirmation", 300}
-            }};
-
-        for (int column = 0;
-             column <
-                static_cast<int>(
-                    accountSyncColumns.size());
-             ++column) {
-            LVCOLUMNW value{};
-            value.mask =
-                LVCF_TEXT |
-                LVCF_WIDTH |
-                LVCF_SUBITEM;
-            value.pszText =
-                const_cast<LPWSTR>(
-                    accountSyncColumns[
-                        static_cast<std::size_t>(
-                            column)].label);
-            value.cx =
-                ScaleUi(
-                    hwnd,
-                    accountSyncColumns[
-                        static_cast<std::size_t>(
-                            column)].width);
-            value.iSubItem =
-                column;
-
-            ListView_InsertColumn(
-                g_accountSyncStatusList,
-                column,
-                &value);
-        }
-
-        const std::array<
-            tp::AccountSyncItem,
-            tp::kAccountSyncItemCount>
-            accountSyncRows{
-                tp::AccountSyncItem::Macros,
-                tp::AccountSyncItem::Keybindings,
-                tp::AccountSyncItem::PfUi
-            };
-
-        for (std::size_t i = 0;
-             i < accountSyncRows.size();
-             ++i) {
-            LVITEMW item{};
-            item.mask = LVIF_TEXT;
-            item.iItem =
-                static_cast<int>(i);
-            item.pszText =
-                const_cast<LPWSTR>(
-                    tp::AccountSyncItemLabel(
-                        accountSyncRows[i]));
-
-            ListView_InsertItem(
-                g_accountSyncStatusList,
-                &item);
-        }
+        g_accountSyncTilesView =
+            tp::CreateAccountSyncTileViewport(
+                hwnd, IDC_ACCOUNT_SYNC_TILES);
+        g_accountSyncTileRefreshButton = CreateWindowExW(
+            0, L"BUTTON", L"Refresh", WS_CHILD | WS_TABSTOP | BS_PUSHBUTTON,
+            0, 0, 0, 0, hwnd,
+            reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_ACCOUNT_SYNC_TILE_REFRESH)),
+            GetModuleHandleW(nullptr), nullptr);
+        g_accountSyncTileSyncButton = CreateWindowExW(
+            0, L"BUTTON", L"Sync", WS_CHILD | WS_TABSTOP | BS_PUSHBUTTON,
+            0, 0, 0, 0, hwnd,
+            reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_ACCOUNT_SYNC_TILE_SYNC)),
+            GetModuleHandleW(nullptr), nullptr);
 
         UpdatePackageColumnEditingUi();
 
@@ -10207,6 +10075,16 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
     }
 
     case WM_COMMAND:
+        if (HIWORD(wParam) == BN_CLICKED &&
+            LOWORD(wParam) == IDC_ACCOUNT_SYNC_TILE_REFRESH) {
+            RefreshAccountSyncPreview();
+            return 0;
+        }
+        if (HIWORD(wParam) == BN_CLICKED &&
+            LOWORD(wParam) == IDC_ACCOUNT_SYNC_TILE_SYNC) {
+            RunAccountSyncFromUi(hwnd, false);
+            return 0;
+        }
         if (LOWORD(wParam) == IDC_ADVANCED &&
             HIWORD(wParam) == BN_CLICKED) {
             ToggleAdvanced(hwnd);

@@ -998,6 +998,29 @@ bool HttpGetRelease(
         return false;
     }
 
+    // A scoped token can avoid shared CI runner rate limits. Normal users
+    // continue unauthenticated when the environment variable is absent.
+    const DWORD tokenBufferLength = GetEnvironmentVariableW(
+        L"TOCPILOT_GITHUB_API_TOKEN", nullptr, 0);
+    if (tokenBufferLength > 1 && tokenBufferLength <= 4096) {
+        std::wstring token(tokenBufferLength, L'\0');
+        const DWORD tokenLength = GetEnvironmentVariableW(
+            L"TOCPILOT_GITHUB_API_TOKEN", token.data(), tokenBufferLength);
+        if (tokenLength > 0 && tokenLength < tokenBufferLength) {
+            token.resize(tokenLength);
+            if (token.find_first_of(L"\r\n") == std::wstring::npos) {
+                const std::wstring authorization =
+                    L"Authorization: Bearer " + token + L"\r\n";
+                if (!WinHttpAddRequestHeaders(handles.request,
+                        authorization.c_str(), static_cast<DWORD>(-1),
+                        WINHTTP_ADDREQ_FLAG_ADD)) {
+                    error = L"Could not add authenticated GitHub API header.";
+                    return false;
+                }
+            }
+        }
+    }
+
     if (!WinHttpSendRequest(
             handles.request,
             WINHTTP_NO_ADDITIONAL_HEADERS,

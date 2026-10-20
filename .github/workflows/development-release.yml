@@ -84,6 +84,8 @@ jobs:
 
       - name: Test Release
         run: ctest --test-dir build -C Release --output-on-failure
+        env:
+          TOCPILOT_GITHUB_API_TOKEN: ${{ github.token }}
 
       - name: Write SHA-256 sidecar
         shell: pwsh
@@ -160,11 +162,14 @@ jobs:
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
+          TOCPILOT_GITHUB_API_TOKEN: ${{ github.token }}
         run: |
           $tag = "${{ steps.release.outputs.tag }}"
-          $parent = (git rev-parse "$env:GITHUB_SHA^").Trim()
+          # The previous commit may already contain this release version.
+          # Bootstrap from the last stable release instead of assuming HEAD^ is older.
+          $bootstrapRef = "v0.5.0"
 
-          git worktree add --detach bootstrap-src $parent
+          git worktree add --detach bootstrap-src $bootstrapRef
           if ($LASTEXITCODE -ne 0) {
             exit $LASTEXITCODE
           }
@@ -237,4 +242,4 @@ jobs:
             throw "Development-channel self-update did not preserve the opted-in state."
           }
 
-          Write-Host "Development-channel self-update passed: parent $parent -> $tag"
+          Write-Host "Development-channel self-update passed: $bootstrapRef -> $tag"

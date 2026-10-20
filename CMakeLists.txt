@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.24)
 
-project(TocPilot VERSION 0.5.0 LANGUAGES C CXX)
+project(TocPilot VERSION 0.5.1 LANGUAGES C CXX)
 
 # miniz 3.1.2, pinned from richgel999/miniz commit
 # 77d0dce8627735138c51770d1799a1ef48f2117d.
@@ -522,5 +522,18 @@ if(BUILD_TESTING)
     endif()
 
     add_test(NAME account-sync-safety COMMAND TocPilotAccountSyncTests)
+
+    add_executable(TocPilotAccountSyncTileLayoutTests
+        tests/account_sync_tile_layout_tests.cpp
+    )
+    target_compile_features(TocPilotAccountSyncTileLayoutTests PRIVATE cxx_std_20)
+    target_include_directories(TocPilotAccountSyncTileLayoutTests PRIVATE src)
+
+    if(MSVC)
+        target_compile_options(TocPilotAccountSyncTileLayoutTests PRIVATE /W4 /permissive- /utf-8)
+    endif()
+
+    add_test(NAME account-sync-tile-layout COMMAND TocPilotAccountSyncTileLayoutTests)
+
 
 endif()

@@ -3,9 +3,11 @@
 #include <windows.h>
 
 #include <algorithm>
+#include <array>
 #include <cwchar>
 #include <cwctype>
 #include <fstream>
+#include <iterator>
 #include <regex>
 #include <system_error>
 #include <utility>
@@ -48,6 +50,7 @@ struct AccountCopy {
     std::filesystem::path path;
     bool exists = false;
     std::filesystem::file_time_type modified{};
+    std::string bytes;
 };
 
 struct PfUiFilePlan {
@@ -71,9 +74,28 @@ struct ItemAnalysis {
     bool noSource = false;
     bool comparerFallback = false;
     AccountCopy source;
+    std::vector<AccountCopy> observedCopies;
     std::vector<AccountCopy> automaticTargets;
     std::vector<AccountCopy> confirmationTargets;
 };
+
+std::wstring FormatSyncFileTime(const std::filesystem::path& path) {
+    WIN32_FILE_ATTRIBUTE_DATA data{};
+    if (!GetFileAttributesExW(path.c_str(), GetFileExInfoStandard, &data)) {
+        return L"missing";
+    }
+    FILETIME local{};
+    SYSTEMTIME clock{};
+    if (!FileTimeToLocalFileTime(&data.ftLastWriteTime, &local) ||
+        !FileTimeToSystemTime(&local, &clock)) {
+        return L"unavailable";
+    }
+    wchar_t output[32]{};
+    swprintf_s(output, L"%04u-%02u-%02u %02u:%02u:%02u",
+               clock.wYear, clock.wMonth, clock.wDay,
+               clock.wHour, clock.wMinute, clock.wSecond);
+    return output;
+}
 
 std::size_t ItemIndex(AccountSyncItem item) {
     return static_cast<std::size_t>(item);
@@ -1336,6 +1358,69 @@ bool InspectCopy(
 }
 
 
+bool ReadSyncBytes(AccountCopy& copy, std::wstring& error) {
+    if (!copy.exists) {
+        return true;
+    }
+
+    std::ifstream file(copy.path, std::ios::binary);
+    if (!file) {
+        error = L"Could not read Account Sync contents for '" + copy.path.wstring() + L"'.";
+        return false;
+    }
+    copy.bytes.assign(std::istreambuf_iterator<char>(file),
+                      std::istreambuf_iterator<char>());
+    if (file.bad()) {
+        error = L"Account Sync file read failed for '" + copy.path.wstring() + L"'.";
+        return false;
+    }
+    return true;
+}
+
+bool CopiesStillCurrent(const std::vector<AccountCopy>& expected,
+                        std::wstring& error) {
+    for (const auto& original : expected) {
+        AccountCopy live = original;
+        live.bytes.clear();
+        if (!InspectCopy(live.path, live.exists, live.modified, error) ||
+            !ReadSyncBytes(live, error)) return false;
+        if (live.exists != original.exists ||
+            (live.exists && (live.modified != original.modified ||
+                             live.bytes != original.bytes))) {
+            error = L"Account Sync files changed after confirmation; review the new plan.";
+            return false;
+        }
+    }
+    return true;
+}
+
+bool SameSyncPlan(const ItemAnalysis& a, const ItemAnalysis& b) {
+    if (a.item != b.item || a.noSource != b.noSource ||
+        a.source.account != b.source.account ||
+        a.source.exists != b.source.exists ||
+        a.source.modified != b.source.modified ||
+        a.source.bytes != b.source.bytes ||
+        a.observedCopies.size() != b.observedCopies.size() ||
+        a.confirmationTargets.size() != b.confirmationTargets.size() ||
+        a.automaticTargets.size() != b.automaticTargets.size()) {
+        return false;
+    }
+    const auto equalCopy = [](const AccountCopy& x, const AccountCopy& y) {
+        return x.account == y.account && x.exists == y.exists &&
+               x.modified == y.modified && x.bytes == y.bytes;
+    };
+    for (std::size_t i = 0; i < a.observedCopies.size(); ++i) {
+        if (!equalCopy(a.observedCopies[i], b.observedCopies[i])) return false;
+    }
+    for (std::size_t i = 0; i < a.confirmationTargets.size(); ++i) {
+        if (!equalCopy(a.confirmationTargets[i], b.confirmationTargets[i])) return false;
+    }
+    for (std::size_t i = 0; i < a.automaticTargets.size(); ++i) {
+        if (!equalCopy(a.automaticTargets[i], b.automaticTargets[i])) return false;
+    }
+    return true;
+}
+
 bool BuildPfUiSyncPlan(
     const std::filesystem::path& wowRoot,
     const std::vector<std::wstring>& accounts,
@@ -1694,9 +1779,15 @@ bool AnalyzeItem(
             return false;
         }
 
+        if (!ReadSyncBytes(copy, error)) {
+            return false;
+        }
+
         copies.push_back(
             std::move(copy));
     }
+
+    analysis.observedCopies = copies;
 
     std::vector<AccountCopy> existing;
 
@@ -1739,7 +1830,8 @@ bool AnalyzeItem(
             existing[i];
 
         if (!(candidate.modified <
-              analysis.source.modified)) {
+              analysis.source.modified) ||
+            candidate.bytes == analysis.source.bytes) {
             continue;
         }
 
@@ -1772,6 +1864,12 @@ void FillPreviewResult(
 
     result.sourceAccount =
         analysis.source.account;
+    result.timestampDetails = analysis.source.account + L" " +
+        FormatSyncFileTime(analysis.source.path);
+    for (const auto& target : analysis.confirmationTargets) {
+        result.timestampDetails += L"  >  " + target.account + L" " +
+            FormatSyncFileTime(target.path);
+    }
     result.comparerFallback =
         analysis.comparerFallback;
 
@@ -1831,7 +1929,8 @@ void FillPreviewResult(
         return;
     }
 
-    result.status = L"Up to date";
+    result.status = analysis.item == AccountSyncItem::PfUi
+        ? L"Up to date" : L"Already synced";
     result.action = L"No changes";
 }
 
@@ -2360,6 +2459,20 @@ void RunPfUiSyncItem(
         return;
     }
 
+    std::vector<AccountCopy> expectedCopies;
+    for (const auto& entry : plan.files) {
+        AccountCopy snapshot = entry.copy;
+        if (!ReadSyncBytes(snapshot, planError)) {
+            itemResult.fatal = true;
+            itemResult.status = L"Error";
+            itemResult.error = planError;
+            runResult.fatal = true;
+            if (error.empty()) error = planError;
+            return;
+        }
+        expectedCopies.push_back(std::move(snapshot));
+    }
+
     ItemAnalysis analysis;
     FillPfUiAnalysis(
         plan,
@@ -2388,6 +2501,14 @@ void RunPfUiSyncItem(
     bool accepted = true;
 
     if (!confirmationAccounts.empty()) {
+        if (!CopiesStillCurrent(expectedCopies, planError)) {
+            itemResult.fatal = true;
+            itemResult.status = L"Changed before confirmation";
+            itemResult.error = planError;
+            runResult.fatal = true;
+            if (error.empty()) error = planError;
+            return;
+        }
         accepted =
             confirm &&
             confirm(
@@ -2397,6 +2518,14 @@ void RunPfUiSyncItem(
                 false);
         confirmationDeclined =
             !accepted;
+        if (!CopiesStillCurrent(expectedCopies, planError)) {
+            itemResult.fatal = true;
+            itemResult.status = L"Changed during confirmation";
+            itemResult.error = planError;
+            runResult.fatal = true;
+            if (error.empty()) error = planError;
+            return;
+        }
     }
 
     bool anyMergedCache = false;
@@ -2466,6 +2595,19 @@ void RunPfUiSyncItem(
             std::move(write));
     }
 
+    if (!accepted) {
+        for (const auto& file : plan.files) {
+            if (!file.copy.exists || file.profileSync)
+                itemResult.targetOutcomes.push_back(
+                    {file.copy.account, AccountSyncTileRow::PfUiSettings,
+                     false, true, {}});
+            if (!file.copy.exists && anyMergedCache)
+                itemResult.targetOutcomes.push_back(
+                    {file.copy.account, AccountSyncTileRow::PfUiCache,
+                     false, true, {}});
+        }
+    }
+
     std::size_t automaticCopied = 0;
     std::size_t confirmedCopied = 0;
     std::size_t modifiedTargets = 0;
@@ -2477,12 +2619,26 @@ void RunPfUiSyncItem(
                 write.fileIndex];
         std::wstring writeError;
 
+        if (!CopiesStillCurrent(expectedCopies, writeError)) {
+            itemResult.fatal = true;
+            runResult.fatal = true;
+            itemResult.error = writeError;
+            if (error.empty()) error = writeError;
+            return;
+        }
+
         if (!WritePfUiTarget(
                 wowRoot,
                 file,
                 write.content,
                 backupRunFolder,
                 writeError)) {
+            if (write.profiles) itemResult.targetOutcomes.push_back(
+                {file.copy.account, AccountSyncTileRow::PfUiSettings,
+                 false, false, writeError});
+            if (write.cache) itemResult.targetOutcomes.push_back(
+                {file.copy.account, AccountSyncTileRow::PfUiCache,
+                 false, false, writeError});
             itemResult.fatal = true;
             runResult.fatal = true;
 
@@ -2498,7 +2654,24 @@ void RunPfUiSyncItem(
             continue;
         }
 
+        if (write.profiles) itemResult.targetOutcomes.push_back(
+            {file.copy.account, AccountSyncTileRow::PfUiSettings, true, false, {}});
+        if (write.cache) itemResult.targetOutcomes.push_back(
+            {file.copy.account, AccountSyncTileRow::PfUiCache, true, false, {}});
         ++modifiedTargets;
+        {
+            auto& snapshot = expectedCopies[write.fileIndex];
+            snapshot.bytes.clear();
+            std::wstring refreshError;
+            if (!InspectCopy(snapshot.path, snapshot.exists, snapshot.modified, refreshError) ||
+                !ReadSyncBytes(snapshot, refreshError)) {
+                itemResult.fatal = true;
+                runResult.fatal = true;
+                itemResult.error = refreshError;
+                if (error.empty()) error = refreshError;
+                return;
+            }
+        }
 
         if (write.cache) {
             ++automaticCopied;
@@ -2710,6 +2883,13 @@ bool ComparePfUiFiles(
     return true;
 }
 
+std::wstring AccountSyncFileTime(
+    const std::filesystem::path& wowRoot,
+    std::wstring_view account,
+    AccountSyncItem item) {
+    return FormatSyncFileTime(AccountItemPath(wowRoot, account, item));
+}
+
 bool InspectAccountSync(
     const std::filesystem::path& wowRoot,
     const AccountSyncConfig& config,
@@ -2772,6 +2952,251 @@ bool InspectAccountSync(
             result);
     }
 
+    return true;
+}
+
+
+bool InspectAccountSyncTiles(
+    const std::filesystem::path& wowRoot,
+    const AccountSyncConfig& config,
+    AccountSyncTileProjection& projection,
+    std::wstring& error) {
+    projection = {};
+    error.clear();
+
+    std::vector<std::wstring> accounts;
+    if (!NormalizeAccounts(config.accounts, accounts, error)) {
+        return false;
+    }
+
+    constexpr std::array<AccountSyncTileRow, kAccountSyncTileRowCount> rows{
+        AccountSyncTileRow::Keybindings, AccountSyncTileRow::Macros,
+        AccountSyncTileRow::PfUiSettings, AccountSyncTileRow::PfUiCache
+    };
+    for (const auto& name : accounts) {
+        AccountSyncTileAccount tile;
+        tile.account = name;
+        for (std::size_t r = 0; r < rows.size(); ++r) {
+            tile.rows[r].row = rows[r];
+        }
+        projection.accounts.push_back(std::move(tile));
+    }
+
+    const auto indexOf = [](AccountSyncTileRow row) {
+        return static_cast<std::size_t>(row);
+    };
+    const auto cell = [&](std::size_t index, AccountSyncTileRow row)
+        -> AccountSyncTileCell& {
+        return projection.accounts[index].rows[indexOf(row)];
+    };
+    // Signature material is private to this inspection. No persisted hashes,
+    // file snapshots, write authority or second comparison policy is created.
+    std::array<std::vector<std::pair<std::string, std::size_t>>,
+               kAccountSyncTileRowCount> signatures;
+    const auto addGroup = [&](std::size_t index, AccountSyncTileRow row,
+                              const std::string& signature) {
+        auto& found = signatures[indexOf(row)];
+        for (const auto& entry : found) {
+            if (entry.first == signature) {
+                cell(index, row).matchingGroup = entry.second;
+                projection.matchingGroups[entry.second - 1].accounts.push_back(accounts[index]);
+                return;
+            }
+        }
+        const std::size_t id = projection.matchingGroups.size() + 1;
+        found.emplace_back(signature, id);
+        AccountSyncTileGroup group;
+        group.row = row;
+        group.accounts.push_back(accounts[index]);
+        projection.matchingGroups.push_back(std::move(group));
+        cell(index, row).matchingGroup = id;
+    };
+    const auto setObserved = [&](std::size_t index, AccountSyncTileRow row,
+                                 const AccountCopy& copy) {
+        auto& value = cell(index, row);
+        value.exists = copy.exists;
+        if (copy.exists) value.modified = copy.modified;
+    };
+    const bool configured = accounts.size() >= 2;
+
+    for (const auto& pair : {
+             std::pair{AccountSyncItem::Keybindings, AccountSyncTileRow::Keybindings},
+             std::pair{AccountSyncItem::Macros, AccountSyncTileRow::Macros}}) {
+        const auto [item, row] = pair;
+        if (!configured || !AccountSyncItemEnabled(config, item)) continue;
+        for (std::size_t i = 0; i < accounts.size(); ++i) {
+            cell(i, row).enabled = true;
+        }
+        ItemAnalysis analysis;
+        if (!AnalyzeItem(wowRoot, accounts, item, analysis, error)) return false;
+        for (const auto& copy : analysis.observedCopies) {
+            setObserved(copy.index, row, copy);
+            if (copy.exists) addGroup(copy.index, row, copy.bytes);
+        }
+        if (analysis.noSource) continue;
+
+        const auto sourceGroup = cell(analysis.source.index, row).matchingGroup;
+        const bool unresolvedTie = std::any_of(
+            analysis.observedCopies.begin(), analysis.observedCopies.end(),
+            [&](const AccountCopy& copy) {
+                return copy.exists && copy.modified == analysis.source.modified &&
+                       copy.bytes != analysis.source.bytes;
+            });
+        projection.matchingGroups[sourceGroup - 1].selectedSourceGroup = true;
+        for (const auto& copy : analysis.observedCopies) {
+            auto& value = cell(copy.index, row);
+            if (!copy.exists) {
+                value.state = AccountSyncTileState::Older;
+            } else if (value.matchingGroup == sourceGroup) {
+                value.state = copy.index == analysis.source.index && unresolvedTie
+                    ? AccountSyncTileState::Default
+                    : (copy.index == analysis.source.index &&
+                       !analysis.confirmationTargets.empty())
+                        ? AccountSyncTileState::Newer
+                        : AccountSyncTileState::RuleSatisfied;
+            } else if (copy.modified < analysis.source.modified) {
+                value.state = AccountSyncTileState::Older;
+            } // Differing, equal-time contents have no authorised transfer.
+        }
+        for (const auto& target : analysis.confirmationTargets) {
+            AccountSyncTileOperation op;
+            op.row = row;
+            op.kind = AccountSyncTileOperationKind::CopyWholeFile;
+            op.targetAccount = target.account;
+            op.selectedSourceAccount = analysis.source.account;
+            op.sourceAccounts = projection.matchingGroups[sourceGroup - 1].accounts;
+            op.requiresConfirmation = true;
+            op.createsFile = !target.exists;
+            projection.operations.push_back(std::move(op));
+        }
+    }
+
+    if (!configured || !config.pfUi) return true;
+    for (std::size_t i = 0; i < accounts.size(); ++i) {
+        cell(i, AccountSyncTileRow::PfUiSettings).enabled = true;
+        cell(i, AccountSyncTileRow::PfUiCache).enabled = true;
+    }
+
+    // Share the *same* authoritative plan builder as preview and execution.
+    // In particular, cache is not "copy from newest": it unions supported
+    // libhealth/gold/prediction data with the engine's conflict precedence.
+    PfUiSyncPlan plan;
+    if (!BuildPfUiSyncPlan(wowRoot, accounts, plan, error)) return false;
+    if (plan.noSource) return true;
+
+    bool anyMergedCache = false;
+    for (bool present : plan.mergedCachePresent) {
+        anyMergedCache = anyMergedCache || present;
+    }
+    std::vector<std::wstring> cacheInputs;
+    for (const auto& file : plan.files) {
+        const std::size_t i = file.copy.index;
+        setObserved(i, AccountSyncTileRow::PfUiSettings, file.copy);
+        setObserved(i, AccountSyncTileRow::PfUiCache, file.copy);
+        if (!file.copy.exists) continue;
+
+        addGroup(i, AccountSyncTileRow::PfUiSettings,
+                 PfUiRootSignature(FindPfUiRoot(file.document, "pfUI_profiles")));
+        const auto* profileRoot = FindPfUiRoot(file.document, "pfUI_profiles");
+        if (profileRoot) {
+            for (const auto& entry : profileRoot->children) {
+                std::string signature;
+                AppendPfUiNodeSignature(entry, signature);
+                cell(i, AccountSyncTileRow::PfUiSettings).semanticEntries.emplace_back(
+                    entry.key, std::move(signature));
+            }
+        }
+        std::string cacheSignature;
+        if (!PfUiCacheSignature(file.document, cacheSignature, error)) return false;
+        addGroup(i, AccountSyncTileRow::PfUiCache, cacheSignature);
+        for (std::size_t key = 0; key < kPfUiMergeCacheKeys.size(); ++key) {
+            std::wstring cacheError;
+            const auto* node = SupportedPfUiCacheNode(file.document, key, cacheError);
+            if (!cacheError.empty()) { error = cacheError; return false; }
+            std::string signature = "<absent>";
+            if (node) { signature.clear(); AppendPfUiNodeSignature(*node, signature); }
+            cell(i, AccountSyncTileRow::PfUiCache).semanticEntries.emplace_back(
+                kPfUiMergeCacheKeys[key], std::move(signature));
+        }
+
+        for (std::size_t key = 0; key < kPfUiMergeCacheKeys.size(); ++key) {
+            std::wstring cacheError;
+            const auto* input = SupportedPfUiCacheNode(file.document, key, cacheError);
+            if (!cacheError.empty()) {
+                error = cacheError;
+                return false;
+            }
+            if (input) {
+                cacheInputs.push_back(file.copy.account);
+                break;
+            }
+        }
+    }
+
+    const auto sourceGroup =
+        cell(plan.sourceFile, AccountSyncTileRow::PfUiSettings).matchingGroup;
+    projection.matchingGroups[sourceGroup - 1].selectedSourceGroup = true;
+    const bool settingsTransfers = std::any_of(
+        plan.files.begin(), plan.files.end(),
+        [](const PfUiFilePlan& file) { return !file.copy.exists || file.profileSync; });
+    const std::string sourceProfiles = PfUiRootSignature(
+        FindPfUiRoot(plan.files[plan.sourceFile].document, "pfUI_profiles"));
+    const bool settingsTie = std::any_of(
+        plan.files.begin(), plan.files.end(),
+        [&](const PfUiFilePlan& file) {
+            return file.copy.exists && file.copy.modified == plan.source.modified &&
+                PfUiRootSignature(FindPfUiRoot(file.document, "pfUI_profiles")) !=
+                    sourceProfiles;
+        });
+
+    for (const auto& file : plan.files) {
+        const std::size_t i = file.copy.index;
+        auto& settings = cell(i, AccountSyncTileRow::PfUiSettings);
+        auto& cache = cell(i, AccountSyncTileRow::PfUiCache);
+
+        if (!file.copy.exists || file.profileSync) {
+            settings.state = AccountSyncTileState::Older;
+            AccountSyncTileOperation op;
+            op.row = AccountSyncTileRow::PfUiSettings;
+            op.kind = AccountSyncTileOperationKind::ReplaceProfiles;
+            op.targetAccount = file.copy.account;
+            op.selectedSourceAccount = plan.source.account;
+            op.sourceAccounts = projection.matchingGroups[sourceGroup - 1].accounts;
+            op.requiresConfirmation = true;
+            op.createsFile = !file.copy.exists;
+            projection.operations.push_back(std::move(op));
+        } else if (settings.matchingGroup == sourceGroup) {
+            settings.state = i == plan.sourceFile && settingsTie
+                ? AccountSyncTileState::Default
+                : i == plan.sourceFile && settingsTransfers
+                    ? AccountSyncTileState::Newer
+                    : AccountSyncTileState::RuleSatisfied;
+        } // Newest-timestamp ties with divergent profiles remain neutral.
+
+        const bool cacheWrite = file.copy.exists
+            ? file.cacheMerge
+            : anyMergedCache; // Missing target: only after profile approval.
+        if (!file.copy.exists) {
+            cache.state = cacheWrite ? AccountSyncTileState::Older
+                                     : AccountSyncTileState::Default;
+        } else if (!file.cacheMerge) {
+            cache.state = AccountSyncTileState::RuleSatisfied;
+        } else if (file.copy.modified < plan.source.modified) {
+            cache.state = AccountSyncTileState::Older;
+        } // A newest file can itself need contributions from older files;
+          // that is not evidence that its file timestamp is "older".
+
+        if (cacheWrite) {
+            AccountSyncTileOperation op;
+            op.row = AccountSyncTileRow::PfUiCache;
+            op.kind = AccountSyncTileOperationKind::MergeSupportedCache;
+            op.targetAccount = file.copy.account;
+            op.sourceAccounts = cacheInputs;
+            op.requiresConfirmation = !file.copy.exists;
+            op.createsFile = !file.copy.exists;
+            projection.operations.push_back(std::move(op));
+        }
+    }
     return true;
 }
 
@@ -2871,6 +3296,8 @@ bool RunAccountSync(
 
         std::size_t automaticCopied = 0;
         std::size_t confirmedCopied = 0;
+        const auto outcomeRow = item == AccountSyncItem::Macros
+            ? AccountSyncTileRow::Macros : AccountSyncTileRow::Keybindings;
 
         for (const auto& target :
              analysis.automaticTargets) {
@@ -2884,7 +3311,11 @@ bool RunAccountSync(
                     backupRunFolder,
                     copyError)) {
                 ++automaticCopied;
+                itemResult.targetOutcomes.push_back(
+                    {target.account, outcomeRow, true, false, {}});
             } else {
+                itemResult.targetOutcomes.push_back(
+                    {target.account, outcomeRow, false, false, copyError});
                 itemResult.fatal = true;
                 result.fatal = true;
 
@@ -2925,9 +3356,33 @@ bool RunAccountSync(
                     analysis.comparerFallback);
 
             if (accepted) {
+                std::vector<AccountCopy> expectedCopies = analysis.observedCopies;
+                ItemAnalysis fresh;
+                std::wstring freshnessError;
+                if (!AnalyzeItem(wowRoot, accounts, item, fresh, freshnessError) ||
+                    !SameSyncPlan(analysis, fresh)) {
+                    itemResult.fatal = true;
+                    result.fatal = true;
+                    itemResult.status = L"Changed during confirmation";
+                    itemResult.action = L"Sync cancelled; review and confirm again";
+                    itemResult.error = freshnessError.empty()
+                        ? L"Account Sync files or sync direction changed after approval."
+                        : freshnessError;
+                    if (error.empty()) error = itemResult.error;
+                    continue;
+                }
                 for (const auto& target :
                      analysis.confirmationTargets) {
                     std::wstring copyError;
+
+                    std::wstring latestError;
+                    if (!CopiesStillCurrent(expectedCopies, latestError)) {
+                        itemResult.fatal = true;
+                        result.fatal = true;
+                        itemResult.error = latestError;
+                        if (error.empty()) error = itemResult.error;
+                        break;
+                    }
 
                     if (CopyTarget(
                             wowRoot,
@@ -2937,7 +3392,26 @@ bool RunAccountSync(
                             backupRunFolder,
                             copyError)) {
                         ++confirmedCopied;
+                        itemResult.targetOutcomes.push_back(
+                            {target.account, outcomeRow, true, false, {}});
+                        for (auto& observed : expectedCopies) {
+                            if (observed.account == target.account) {
+                                observed.bytes.clear();
+                                std::wstring refreshError;
+                                if (!InspectCopy(observed.path, observed.exists,
+                                                 observed.modified, refreshError) ||
+                                    !ReadSyncBytes(observed, refreshError)) {
+                                    itemResult.fatal = true;
+                                    result.fatal = true;
+                                    itemResult.error = refreshError;
+                                    if (error.empty()) error = refreshError;
+                                }
+                                break;
+                            }
+                        }
                     } else {
+                        itemResult.targetOutcomes.push_back(
+                            {target.account, outcomeRow, false, false, copyError});
                         itemResult.fatal = true;
                         result.fatal = true;
 
@@ -2953,6 +3427,9 @@ bool RunAccountSync(
                 }
             } else {
                 confirmationDeclined = true;
+                for (const auto& target : analysis.confirmationTargets)
+                    itemResult.targetOutcomes.push_back(
+                        {target.account, outcomeRow, false, true, {}});
             }
         }
 
