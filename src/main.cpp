@@ -7138,59 +7138,45 @@ void StartUpdate(
     }).detach();
 }
 
+HBRUSH MainSurfaceBrush(bool toolbar) {
+    static HBRUSH mainBrush = CreateSolidBrush(tp::ui::Palette::window);
+    static HBRUSH toolbarBrush = CreateSolidBrush(tp::ui::Palette::toolbar);
+    return toolbar ? toolbarBrush : mainBrush;
+}
+
 LRESULT HandleStatusColour(WPARAM wParam, LPARAM lParam) {
-    const HWND control = reinterpret_cast<HWND>(lParam);
+    HWND control = reinterpret_cast<HWND>(lParam);
     const int id = GetDlgCtrlID(control);
-    const std::wstring text = [&]() {
-        const int length = GetWindowTextLengthW(control);
-        std::wstring value(static_cast<size_t>(length) + 1, L'\0');
-        if (length > 0) {
-            GetWindowTextW(control, value.data(), length + 1);
-        }
-        value.resize(static_cast<size_t>(length));
-        return value;
-    }();
+    const int length = GetWindowTextLengthW(control);
+    std::wstring text(static_cast<size_t>(length) + 1, L'\\0');
+    if (length > 0) GetWindowTextW(control, text.data(), length + 1);
+    text.resize(static_cast<size_t>(length));
 
-    COLORREF colour = GetSysColor(COLOR_WINDOWTEXT);
-
+    if (tp::ui::HighContrast()) return 0;
+    COLORREF colour = tp::ui::Palette::primaryText;
     if (id == IDC_WOW_STATUS) {
-        colour = RGB(0, 128, 0);
-    } else if (id == IDC_GITHUB_STATUS) {
-        if (text.find(L"Good") != std::wstring::npos) {
-            colour = RGB(0, 128, 0);
-        } else if (text.find(L"Failed") != std::wstring::npos) {
-            colour = RGB(180, 0, 0);
+        colour = tp::ui::Palette::goodNow;
+    } else if (id == IDC_GITHUB_STATUS || id == IDC_RELEASE_STATUS ||
+               id == IDC_STATE_STATUS) {
+        if (text.find(L"Failed") != std::wstring::npos ||
+            text.find(L"failed") != std::wstring::npos ||
+            text.find(L"Unavailable") != std::wstring::npos) {
+            colour = tp::ui::Palette::error;
+        } else if (text.find(L"Update available") != std::wstring::npos ||
+                   text.find(L"Not found") != std::wstring::npos) {
+            colour = tp::ui::Palette::attention;
+        } else if (text.find(L"Good") != std::wstring::npos ||
+                   text.find(L"Current") != std::wstring::npos ||
+                   text.find(L"ready") != std::wstring::npos) {
+            colour = tp::ui::Palette::goodNow;
         } else {
-            colour = GetSysColor(COLOR_GRAYTEXT);
+            colour = tp::ui::Palette::secondaryText;
         }
-    } else if (id == IDC_RELEASE_STATUS) {
-        if (text.find(L"Update available") != std::wstring::npos) {
-            colour = RGB(0, 110, 180);
-        } else if (text.find(L"Current") != std::wstring::npos) {
-            colour = RGB(0, 128, 0);
-        } else if (text.find(L"Not found") != std::wstring::npos) {
-            colour = RGB(180, 100, 0);
-        } else if (text.find(L"failed") != std::wstring::npos ||
-                   text.find(L"Failed") != std::wstring::npos ||
-                   text.find(L"Unavailable") != std::wstring::npos) {
-            colour = RGB(180, 0, 0);
-        } else {
-            colour = GetSysColor(COLOR_GRAYTEXT);
-        }
-    } else if (id == IDC_STATE_STATUS) {
-        if (text.find(L"ready") != std::wstring::npos) {
-            colour = RGB(0, 128, 0);
-        } else {
-            colour = RGB(180, 0, 0);
-        }
-    } else {
-        return 0;
     }
-
     HDC dc = reinterpret_cast<HDC>(wParam);
     SetTextColor(dc, colour);
-    SetBkColor(dc, GetSysColor(COLOR_WINDOW));
-    return reinterpret_cast<LRESULT>(GetSysColorBrush(COLOR_WINDOW));
+    SetBkColor(dc, tp::ui::Palette::window);
+    return reinterpret_cast<LRESULT>(MainSurfaceBrush(false));
 }
 
 void HandleTextScaleChange(HWND hwnd) {
@@ -9913,11 +9899,16 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
         return 0;
     }
 
-    case WM_CTLCOLORSTATIC: {
-        const LRESULT colourResult = HandleStatusColour(wParam, lParam);
-        if (colourResult != 0) {
-            return colourResult;
+    case WM_ERASEBKGND:
+        if (!tp::ui::HighContrast()) {
+            RECT client{}; GetClientRect(hwnd, &client);
+            FillRect(reinterpret_cast<HDC>(wParam), &client, MainSurfaceBrush(false));
+            return TRUE;
         }
+        break;
+    case WM_CTLCOLORSTATIC: {
+        const LRESULT result = HandleStatusColour(wParam, lParam);
+        if (result) return result;
         break;
     }
 
