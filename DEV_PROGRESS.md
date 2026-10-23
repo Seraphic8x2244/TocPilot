@@ -1,5 +1,13 @@
 # TocPilot Development Progress
 
+## Runtime-test release requirement — 2026-10-23
+
+**User standing instruction:** Whenever Windows runtime testing is requested, first prepare and trigger a real installable development prerelease on `dev` through TocPilot's existing development Release workflow, with a version increment, published EXE and SHA-256 checksum, and updater visibility. A plain Build workflow artifact is not sufficient. Do not ask the user to test source changes that lack an updater-eligible release. This requirement applies to all future development testing milestones. Stable `main` remains untouched unless separately approved.
+
+**Current release preparation:** `v0.6.0-dev.2` packages the single-selection-border fix from `fd95ebd` / `9c16c49`. This note precedes the release trigger; success, exact CI run, assets, and automatic updater installation must be checked independently. No runtime success is inferred in advance.
+
+---
+
 ## v0.6.0-A selection-border follow-up — 2026-10-23
 
 **User runtime evidence:** The selected `AuctionQueryThrottle.dll` row in v0.6.0-dev.1 showed two stacked outlines. The item custom-draw handler explicitly called `DrawFocusRect` inside the already outlined row while native ListView focus handling remained available.
