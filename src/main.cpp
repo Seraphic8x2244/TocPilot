@@ -7420,11 +7420,18 @@ bool DrawToolbarButton(
             DFCS_HOT;
     }
 
-    DrawFrameControl(
-        draw->hDC,
-        &rect,
-        DFC_BUTTON,
-        frameState);
+    const COLORREF surface = (draw->itemState & ODS_SELECTED)
+        ? tp::ui::Palette::buttonPressed
+        : (draw->itemState & ODS_HOTLIGHT)
+            ? tp::ui::Palette::buttonHover : tp::ui::Palette::button;
+    HBRUSH fill = CreateSolidBrush(tp::ui::HighContrast()
+        ? GetSysColor(COLOR_BTNFACE) : surface);
+    FillRect(draw->hDC, &rect, fill);
+    DeleteObject(fill);
+    HBRUSH outline = CreateSolidBrush(tp::ui::HighContrast()
+        ? GetSysColor(COLOR_BTNSHADOW) : tp::ui::Palette::divider);
+    FrameRect(draw->hDC, &rect, outline);
+    DeleteObject(outline);
 
     const bool disabled =
         (draw->itemState &
