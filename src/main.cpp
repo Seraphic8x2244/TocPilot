@@ -1341,8 +1341,6 @@ void LayoutControls(HWND hwnd) {
             g_removePackageButton,
             g_inspectPackageButton,
             g_adoptGitButton,
-            g_accountSyncButton,
-            g_tocPilotButton,
             g_advancedButton
         };
 
@@ -1480,8 +1478,29 @@ void LayoutControls(HWND hwnd) {
     constexpr std::array<int, 0> launchGaps{};
     placeStrip(launchControls, launchGaps, buttonY);
 
-    const int packageToolbarY =
+    // Navigation row: the Packages view remains active while the existing
+    // Account Sync and TocPilot entry points still open their legacy dialogs.
+    // Follow-up slices will migrate the dialog contents into these views.
+    const int navigationY =
         buttonY + toolbarRowHeight + ScaleUi(hwnd, 10);
+    const int navigationWidth = ScaleUi(hwnd, 124);
+    const int navigationGap = ScaleUi(hwnd, 8);
+    if (g_accountSyncButton) {
+        ShowWindow(g_accountSyncButton, SW_SHOW);
+        MoveWindow(g_accountSyncButton,
+                   margin + navigationWidth + navigationGap,
+                   navigationY,
+                   navigationWidth, toolbarRowHeight, TRUE);
+    }
+    if (g_tocPilotButton) {
+        ShowWindow(g_tocPilotButton, SW_SHOW);
+        MoveWindow(g_tocPilotButton,
+                   margin + 2 * (navigationWidth + navigationGap),
+                   navigationY,
+                   navigationWidth, toolbarRowHeight, TRUE);
+    }
+    const int packageToolbarY =
+        navigationY + toolbarRowHeight + ScaleUi(hwnd, 10);
     if (!g_advancedVisible) {
         if (ToolbarUsesIcons()) {
             const std::array<HWND, 5> controls{
@@ -1511,7 +1530,7 @@ void LayoutControls(HWND hwnd) {
             placeStrip(controls, gaps, packageToolbarY);
         }
     } else {
-        const std::array<HWND, 10> controls{
+        const std::array<HWND, 8> controls{
             g_updateAllButton,
             g_refreshPackagesButton,
             g_addPackageButton,
@@ -1523,12 +1542,10 @@ void LayoutControls(HWND hwnd) {
             g_tocPilotButton,
             g_advancedButton
         };
-        constexpr std::array<int, 9> gaps{
+        constexpr std::array<int, 7> gaps{
             kToolbarButtonGap,
             kToolbarButtonGap + kToolbarGroupExtraGap,
             kToolbarButtonGap,
-            kToolbarButtonGap,
-            kToolbarButtonGap + kToolbarGroupExtraGap,
             kToolbarButtonGap,
             kToolbarButtonGap + kToolbarGroupExtraGap,
             kToolbarButtonGap,
@@ -9589,7 +9606,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                 IDC_ACCOUNT_SYNC);
         g_tocPilotButton =
             createToolbarButton(
-                L"Info",
+                L"TocPilot",
                 IDC_TOCPILOT);
         g_advancedButton =
             createToolbarButton(
