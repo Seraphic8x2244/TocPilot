@@ -1,5 +1,26 @@
 # TocPilot Development Progress
 
+## v0.6.0-A shared-theme implementation checkpoint — 2026-10-23
+
+**Active branch:** `dev`; starting head `a5204a64ac17589ad11da36fbeacd09c49da7ca5`. **Stable `main` / published `v0.5.1` remain untouched.** This is a **partial implementation awaiting Windows build, CI and runtime validation**, not a completed/accepted 0.6.0-A slice, and no new version/release has been published.
+
+**Source changes:** `src/ui_theme.h` is the new central token source for the exact agreed neutral and five row status colours; hover is calculated by a single RGB lift function; selection/focus is modelled separately from fill; high contrast detects the OS override. `src/main.cpp` now consumes status colours in the existing ListView, retains the `g_packageViewOrder` / package data model, paints name/link/branch and other cells, adds a full-row 2px inset selection outline plus keyboard focus, tracks hover by a list subclass, draws neutral native GDI cube/chip/archive package glyphs, and draws icon-toolbar plus main/toolbar/Account-Sync-region backgrounds with shared greys. Existing semantic text-status rules now use theme tokens. No popup, installer, sorting, branch-selector, update or Account Sync engine changes were intended.
+
+**Provenance:** `c7831e0` theme model; `1e59e85` ListView colours; `160803b` theme tests; `d05da70` CTest registration; `f8b9e9e` toolbar buttons; `5326115` hover; `3076c5d` package glyphs; `73dcaa6` full-row selection and other cells; `d67f38d` null-character fix; `4771c56` surfaces. No stable-branch edits.
+
+**Validation truth:** A deterministic `ui-theme-visual-policy` CTest target was added for exact colours, precedence (error > persisted ignore > attention > actual-session change > already-good), hover derivation and unchanged selected fill. **Not executed** in this session: Windows CMake/MSVC compile, CTest (historical 26/26 applies to v0.5.1, not this delta), Windows DPI, Compact/Advanced, text/icon toolbar, high-contrast visual, keyboard or Account Sync runtime tests. GitHub connector `fetch_commit_workflow_runs` exposes only PR-triggered runs; its empty result for `dev` cannot establish whether a push-triggered build ran or passed. Combined statuses likewise empty; do not mark CI green without real run evidence. The newly registered test would make the suite 27 tests if baseline tests remain unchanged.
+
+**Open first-slice defects/debt to address before claiming completion:**
+- `Ignored` and `Error` row colours exist in the central model, but the current `PackageRecord` exposes no safe persisted ignore flag or per-package error outcome. The present adapter wires actual attention and confirmed session updates only; do **not** manufacture error/ignore flags or label a read-only refresh green. Connect these two states to authoritative operation/persistence events when available, without changing package semantics.
+- Some legacy literal RGB/GDI colours outside the touched paths remain (other dialogs, Account Sync tiles, text toolbar controls, headers, non-client title bar, etc.). Central theme adoption for these is migration debt. High-contrast fallback must be visually verified; any incorrect selected-row, default control, hover repaint or branch overlay must be fixed before publication.
+- Drawn glyphs use package `target` (`addons`, `dll`/`dlls`, `mpq`/`mpqs`) without mutating records. Verify actual durable target spellings and test package-kind mapping; inspect glyph legibility at scaled DPI.
+- Toolbar surface and Account Sync area are painted using existing layout geometry; word-mode/system controls still require consistency and contrast validation. No title-bar theming or popup replacement has been attempted.
+
+**Exact next actions:** (1) Verify the latest `dev` head and the corresponding **push-triggered** GitHub Actions Build run (not just PR-filtered runs). (2) Run Windows x64 Release configure/build and CTest, inspect failures and fix them, especially the new Win32 theme header and full-row custom draw. (3) Add package-kind and state-adapter tests with truth-backed ignore/error inputs only, inspect high-contrast/hover/selected/focus interactions and grey toolbar/Account Sync/word-mode surfaces. (4) Repeat the Compact/Advanced, 100/125/150%-DPI, scaling, link/branch, keyboard, resize/sort, and Account Sync no-regression matrix. (5) Once the foundation passes compile/CI and real Windows visual validation, move to row-first routine status/results. **Do not begin popup replacement or publish to `main` yet.**
+
+---
+
+
 ## v0.6.0 Win32 interface audit and visual/feedback design — 2026-10-23
 
 ### Agreed fixed colour and interaction specification — 2026-10-23
