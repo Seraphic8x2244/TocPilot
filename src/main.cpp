@@ -2376,9 +2376,31 @@ LRESULT HandlePackageListCustomDraw(
         return CDRF_NOTIFYITEMDRAW;
     }
 
-    if (draw->nmcd.dwDrawStage ==
-        CDDS_ITEMPREPAINT) {
-        return CDRF_NOTIFYSUBITEMDRAW;
+    if (draw->nmcd.dwDrawStage == CDDS_ITEMPREPAINT) {
+        return CDRF_NOTIFYSUBITEMDRAW | CDRF_NOTIFYPOSTPAINT;
+    }
+    if (draw->nmcd.dwDrawStage == CDDS_ITEMPOSTPAINT && g_packageList) {
+        const int index = static_cast<int>(draw->nmcd.dwItemSpec);
+        if (index >= 0 && (ListView_GetItemState(g_packageList, index, LVIS_SELECTED) & LVIS_SELECTED)) {
+            RECT row{};
+            if (ListView_GetItemRect(g_packageList, index, &row, LVIR_BOUNDS)) {
+                RECT client{}; GetClientRect(g_packageList, &client);
+                row.right = std::min(row.right, client.right);
+                if (!tp::ui::HighContrast()) {
+                    HBRUSH border = CreateSolidBrush(tp::ui::Palette::selection);
+                    for (int offset = 0; offset < 2; ++offset) {
+                        RECT inset = row; InflateRect(&inset, -offset, -offset);
+                        FrameRect(draw->nmcd.hdc, &inset, border);
+                    }
+                    DeleteObject(border);
+                }
+                if (GetFocus() == g_packageList) {
+                    RECT focus = row; InflateRect(&focus, -3, -3);
+                    DrawFocusRect(draw->nmcd.hdc, &focus);
+                }
+            }
+        }
+        return CDRF_DODEFAULT;
     }
 
     if (draw->nmcd.dwDrawStage !=
@@ -2445,11 +2467,8 @@ LRESULT HandlePackageListCustomDraw(
         PackageBranchMode(
             package);
 
-    if (!drawName &&
-        !drawWebsite &&
-        !drawBranch) {
-        draw->clrText =
-            rowTextColour;
+    if (!drawName && !drawWebsite && !drawBranch && highContrast) {
+        draw->clrText = rowTextColour;
         return CDRF_DODEFAULT;
     }
 
@@ -2472,12 +2491,8 @@ LRESULT HandlePackageListCustomDraw(
             return CDRF_DODEFAULT;
         }
     } else {
-        if (!ListView_GetSubItemRect(
-                g_packageList,
-                displayRow,
-                kPackageColumnBranch,
-                LVIR_BOUNDS,
-                &rect)) {
+        if (!ListView_GetSubItemRect(g_packageList, displayRow,
+                                     draw->iSubItem, LVIR_BOUNDS, &rect)) {
             return CDRF_DODEFAULT;
         }
     }
@@ -2489,13 +2504,6 @@ LRESULT HandlePackageListCustomDraw(
         HBRUSH fill = CreateSolidBrush(visual.fill);
         FillRect(draw->nmcd.hdc, &rect, fill);
         DeleteObject(fill);
-        if (selected) {
-            RECT inset = rect;
-            InflateRect(&inset, -2, -2);
-            HBRUSH border = CreateSolidBrush(visual.border);
-            FrameRect(draw->nmcd.hdc, &inset, border);
-            DeleteObject(border);
-        }
     }
 
     SetBkMode(
@@ -2519,6 +2527,15 @@ LRESULT HandlePackageListCustomDraw(
         g_linkUiFont
             ? g_linkUiFont
             : normal;
+
+    if (!drawName && !drawWebsite && !drawBranch) {
+        wchar_t cellText[2048]{};
+        ListView_GetItemText(g_packageList, displayRow, draw->iSubItem, cellText, 2048);
+        RECT text = rect; text.left += 6; text.right -= 5;
+        DrawTextW(draw->nmcd.hdc, cellText, -1, &text,
+                  DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS | DT_NOPREFIX);
+        return CDRF_SKIPDEFAULT;
+    }
 
     if (drawWebsite) {
         SetTextColor(
