@@ -80,6 +80,15 @@ set_target_properties(TocPilot PROPERTIES
 include(CTest)
 
 if(BUILD_TESTING)
+    add_executable(TocPilotUiThemeTests tests/ui_theme_tests.cpp)
+    target_compile_features(TocPilotUiThemeTests PRIVATE cxx_std_20)
+    target_compile_definitions(TocPilotUiThemeTests PRIVATE
+        UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
+    target_include_directories(TocPilotUiThemeTests PRIVATE src)
+    if(MSVC)
+        target_compile_options(TocPilotUiThemeTests PRIVATE /W4 /permissive- /utf-8)
+    endif()
+    add_test(NAME ui-theme-visual-policy COMMAND TocPilotUiThemeTests)
     add_executable(TocPilotProviderTests
         tests/provider_tests.cpp
         src/provider.cpp
