@@ -174,6 +174,7 @@ HWND g_adoptGitButton = nullptr;
 HWND g_advancedButton = nullptr;
 HWND g_tocPilotButton = nullptr;
 HWND g_accountSyncButton = nullptr;
+HWND g_packagesNavLabel = nullptr;
 HWND g_tocPilotWindow = nullptr;
 HWND g_accountSyncWindow = nullptr;
 HWND g_accountSyncAccountsList = nullptr;
@@ -1485,6 +1486,10 @@ void LayoutControls(HWND hwnd) {
         buttonY + toolbarRowHeight + ScaleUi(hwnd, 10);
     const int navigationWidth = ScaleUi(hwnd, 124);
     const int navigationGap = ScaleUi(hwnd, 8);
+    if (g_packagesNavLabel) {
+        MoveWindow(g_packagesNavLabel, margin, navigationY,
+                   navigationWidth, toolbarRowHeight, TRUE);
+    }
     if (g_accountSyncButton) {
         ShowWindow(g_accountSyncButton, SW_SHOW);
         MoveWindow(g_accountSyncButton,
@@ -9600,6 +9605,11 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             createToolbarButton(
                 L"Scan",
                 IDC_ADOPT_GIT);
+        g_packagesNavLabel = CreateWindowExW(
+            0, L"STATIC", L"Packages",
+            WS_CHILD | WS_VISIBLE | SS_CENTER | SS_CENTERIMAGE,
+            0, 0, 124, 32, hwnd, nullptr,
+            GetModuleHandleW(nullptr), nullptr);
         g_accountSyncButton =
             createToolbarButton(
                 L"Account Sync",
