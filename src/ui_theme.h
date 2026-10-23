@@ -1,6 +1,7 @@
 #pragma once
 // One palette for TocPilot native UI. Use semantic names rather than local RGB literals.
 #include <windows.h>
+#include <string_view>
 namespace tp::ui {
 constexpr COLORREF Hex(unsigned rgb) {
     return RGB((rgb >> 16) & 255, (rgb >> 8) & 255, rgb & 255);
@@ -51,6 +52,11 @@ constexpr RowState Classify(bool error, bool needsAttention, bool changedThisSes
     if (needsAttention) return RowState::NeedsAttention;
     if (changedThisSession) return RowState::GoodNow;
     return RowState::AlreadyGood;
+}
+constexpr PackageKind KindFromTarget(std::wstring_view target) {
+    if (target == L"dll" || target == L"dlls") return PackageKind::Dll;
+    if (target == L"mpq" || target == L"mpqs") return PackageKind::Mpq;
+    return PackageKind::Addon;
 }
 struct RowVisual {
     COLORREF fill;
