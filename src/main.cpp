@@ -9901,8 +9901,22 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
 
     case WM_ERASEBKGND:
         if (!tp::ui::HighContrast()) {
+            HDC dc = reinterpret_cast<HDC>(wParam);
             RECT client{}; GetClientRect(hwnd, &client);
-            FillRect(reinterpret_cast<HDC>(wParam), &client, MainSurfaceBrush(false));
+            FillRect(dc, &client, MainSurfaceBrush(false));
+            // Use existing child positions so Compact/Advanced and DPI layouts stay authoritative.
+            if (g_packageList && IsWindowVisible(g_packageList)) {
+                RECT list{}; GetWindowRect(g_packageList, &list);
+                MapWindowPoints(nullptr, hwnd, reinterpret_cast<POINT*>(&list), 2);
+                RECT toolbar = client; toolbar.bottom = std::max(client.top, list.top - ScaleUi(hwnd, 6));
+                FillRect(dc, &toolbar, MainSurfaceBrush(true));
+            }
+            if (g_accountSyncTilesView && IsWindowVisible(g_accountSyncTilesView)) {
+                RECT sync{}; GetWindowRect(g_accountSyncTilesView, &sync);
+                MapWindowPoints(nullptr, hwnd, reinterpret_cast<POINT*>(&sync), 2);
+                RECT panel = client; panel.top = std::max(client.top, sync.top - ScaleUi(hwnd, 6));
+                FillRect(dc, &panel, MainSurfaceBrush(true));
+            }
             return TRUE;
         }
         break;
