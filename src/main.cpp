@@ -2384,7 +2384,10 @@ LRESULT HandlePackageListCustomDraw(
                 RECT client{}; GetClientRect(g_packageList, &client);
                 row.right = std::min(row.right, client.right);
                 if (!tp::ui::HighContrast()) {
-                    HBRUSH border = CreateSolidBrush(tp::ui::Palette::selection);
+                    HBRUSH border = CreateSolidBrush(
+                        GetFocus() == g_packageList
+                            ? tp::ui::Palette::primaryText
+                            : tp::ui::Palette::selection);
                     for (int offset = 0; offset < 2; ++offset) {
                         RECT inset = row; InflateRect(&inset, -offset, -offset);
                         FrameRect(draw->nmcd.hdc, &inset, border);
