@@ -1,5 +1,15 @@
 # TocPilot Development Progress
 
+## v0.6.0 Gale-style layout implementation — slice 1 (2026-10-23)
+
+**Source commit:** `33c7232` — `src/main.cpp` begins the approved structural migration by separating the Launch WoW control onto an independent top toolbar row, while moving existing package actions to the row beneath. The package-action order begins Update All → Refresh → Add Git in Advanced and icon-based Compact layouts; other existing legacy actions remain temporarily reachable during the transition. Package list top is moved down to account for the second row. The same underlying Win32 controls and command handlers are reused; no package/update/sync logic was intentionally changed.
+
+**Not yet delivered:** The full Packages / Account Sync / TocPilot tab architecture, flat Preferences/Scan/About sections, package summary, removal of legacy Inspect, dark Account Sync interior and refined list styling. These are still required under the approved UI target. This is an incremental layout foundation, not a claim that the new design is complete.
+
+**Validation:** Source committed only. Windows Build/CTest and actual DPI/compact layout checks are **not verified** for this commit; user runtime testing must not be requested until the next updater-installable development prerelease has been built and published. Stable `main` unchanged.
+
+---
+
 ## Approved v0.6.0 UI target — Gale-inspired layout (2026-10-23)
 
 **Status:** User approved the inline layout prototype, with the final navigation correction below. This supersedes plans to merely reskin the crowded legacy layout. Gale is a loose layout reference, **not** a pixel-perfect copy. Preserve TocPilot's already approved dark-grey palette and full-row five semantic state colours (Already Good blue, Good Now green, Ignored grey, Needs Attention amber, Error red), including the single inset selection border and hover treatment. Implement with native C++20/Win32, retaining DPI, accessibility, keyboard and high-contrast support and the existing package/update/sync logic.
