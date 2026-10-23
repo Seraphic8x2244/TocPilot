@@ -7148,7 +7148,7 @@ LRESULT HandleStatusColour(WPARAM wParam, LPARAM lParam) {
     HWND control = reinterpret_cast<HWND>(lParam);
     const int id = GetDlgCtrlID(control);
     const int length = GetWindowTextLengthW(control);
-    std::wstring text(static_cast<size_t>(length) + 1, L'\\0');
+    std::wstring text(static_cast<size_t>(length) + 1, L'\0');
     if (length > 0) GetWindowTextW(control, text.data(), length + 1);
     text.resize(static_cast<size_t>(length));
 
