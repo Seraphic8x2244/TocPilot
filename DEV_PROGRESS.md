@@ -1,5 +1,15 @@
 # TocPilot Development Progress
 
+## v0.6.0-dev.1 real Windows visual observation — 2026-10-23
+
+**User screenshot — running titlebar `TocPilot v0.6.0-dev.1`:** Development release is running on the user's Windows machine. Native ListView shows multiple blue `Up To Date` rows, white row text and cube-like package glyphs (including .dll-named packages), and the grey toolbar/outer surface is visible. This is **partial visual runtime evidence**, not end-to-end feature acceptance or proof of updater transition (how the EXE was installed is not established).
+
+**Visible unfinished visual integration:** Account Sync contents and tiles remain bright white with legacy coloured labels, while the surrounding bottom chrome is grey; the ListView column header, exposed scroll region, and unused right area remain system white; icons in grey toolbar buttons appear black rather than centrally tinted. This mismatches the approved coherent dark native palette. Two accounts (BLACKWAVES, BLACKWAVESTWO) and Refresh/Sync controls remain present; no evidence of broken Sync, and do not infer a successful Sync transaction from the screenshot. The package list is vertically shallow because the existing Account Sync panel reserves height; do not alter that accepted layout contract purely from the screenshot without studying the existing Compact/Advanced/minimum-height behaviour. The `Up To Date` labels are visible and indicate no write; they must remain blue, not green.
+
+**Next focused visual work:** determine native header/list blank-region theming and toolbar icon source/colour without changing icon/word options, Windows high contrast, accessibility, branch-selector overlay, clipping or DPI; migrate Account Sync tile and outer chrome to central neutrals while preserving its existing comparison colours/arrows/ticks and all engine semantics. Test selected/hover/focus and green/amber/error states separately; screenshot does not establish those states. Add regression checks, pass Windows CI, and issue a new development prerelease via normal release-first route for user runtime validation. No popup replacement.
+
+---
+
 ## v0.6.0-dev.1 development release preparation — 2026-10-23
 
 **Purpose:** deliver the existing v0.6.0-A theme work through the real development self-updater for Windows acceptance, without promoting stable `main`. User reported green Build CI for the prior development source but did not provide run ID/logs. Source version bumped from `0.5.1` to `0.6.0-dev.1` in CMake and `src/version.h`; development release trigger marker `.github/development-release-version` is the final commit of preparation. **This paragraph does not assert the release has succeeded:** after trigger, verify exact run result, published prerelease `v0.6.0-dev.1`, EXE and SHA256, and updater visibility. The 0.6.0-A runtime UI still needs acceptance; do not remove dialogs or change Account Sync policy.
