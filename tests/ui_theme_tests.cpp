@@ -22,6 +22,14 @@ int main() {
     assert(selected.showSelectionBorder && selected.showFocus);
     assert(selectedHover.showSelectionBorder);
     assert(!base.showSelectionBorder && !base.showFocus);
+    assert(KindFromTarget(L"addons") == PackageKind::Addon);
+    assert(KindFromTarget(L"dll") == PackageKind::Dll);
+    assert(KindFromTarget(L"dlls") == PackageKind::Dll);
+    assert(KindFromTarget(L"mpq") == PackageKind::Mpq);
+    assert(KindFromTarget(L"mpqs") == PackageKind::Mpq);
+    assert(Lift(Palette::goodNow) != Palette::goodNow);
+    assert(ResolveRow(RowState::Error, false, true, false).fill ==
+           StatusFill(RowState::Error));
     assert(Palette::accountSync == Palette::toolbar);
     return 0;
 }
