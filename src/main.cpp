@@ -22,6 +22,7 @@
 #include "state.h"
 #include "splash.h"
 #include "toolbar_icons.h"
+#include "ui_theme.h"
 #include "update.h"
 #include "update_all.h"
 #include "ui_dialog.h"
@@ -2244,20 +2245,17 @@ void ClearSessionUpdatedPackages() {
     g_sessionUpdatedPackageIds.clear();
 }
 
+tp::ui::RowState PackageVisualState(const tp::PackageRecord& package) {
+    const bool attention = PackageIsActiveUpdateAllItem(package.id) ||
+        PackageHasUpdateAvailable(package) || PackageNeedsAttention(package.id) ||
+        package.installedRevision.empty() || package.latestRevision.empty();
+    return tp::ui::Classify(false, attention, PackageUpdatedThisSession(package.id), false);
+}
+
 COLORREF PackageRowTextColour(
     const tp::PackageRecord& package) {
-    if (PackageIsActiveUpdateAllItem(
-            package.id) ||
-        PackageHasUpdateAvailable(package)) {
-        return RGB(205, 105, 0);
-    }
-
-    if (PackageUpdatedThisSession(
-            package.id)) {
-        return RGB(0, 128, 0);
-    }
-
-    return GetSysColor(COLOR_WINDOWTEXT);
+    return tp::ui::HighContrast() ? GetSysColor(COLOR_WINDOWTEXT)
+                                  : tp::ui::Palette::primaryText;
 }
 
 bool PackageColumnCellRect(
@@ -2364,25 +2362,14 @@ LRESULT HandlePackageListCustomDraw(
     const bool focused =
         GetFocus() ==
         g_packageList;
-    const bool hasSemanticColour =
-        PackageIsActiveUpdateAllItem(
-            package.id) ||
-        PackageHasUpdateAvailable(
-            package) ||
-        PackageUpdatedThisSession(
-            package.id);
-    const COLORREF semanticTextColour =
-        PackageRowTextColour(
-            package);
-    const COLORREF rowTextColour =
-        hasSemanticColour
-            ? semanticTextColour
-            : (selected
-                ? GetSysColor(
-                    focused
-                        ? COLOR_HIGHLIGHTTEXT
-                        : COLOR_WINDOWTEXT)
-                : semanticTextColour);
+    const bool highContrast = tp::ui::HighContrast();
+    const auto visual = tp::ui::ResolveRow(PackageVisualState(package), false, selected, focused);
+    const COLORREF rowTextColour = highContrast
+        ? GetSysColor(selected && focused ? COLOR_HIGHLIGHTTEXT : COLOR_WINDOWTEXT)
+        : visual.text;
+    if (!highContrast) {
+        draw->clrTextBk = visual.fill;
+    }
 
     const bool drawName =
         draw->iSubItem == 0;
@@ -2434,18 +2421,21 @@ LRESULT HandlePackageListCustomDraw(
         }
     }
 
-    const int backgroundIndex =
-        selected
-            ? (focused
-                ? COLOR_HIGHLIGHT
-                : COLOR_BTNFACE)
-            : COLOR_WINDOW;
-
-    FillRect(
-        draw->nmcd.hdc,
-        &rect,
-        GetSysColorBrush(
-            backgroundIndex));
+    if (highContrast) {
+        FillRect(draw->nmcd.hdc, &rect,
+                 GetSysColorBrush(selected && focused ? COLOR_HIGHLIGHT : COLOR_WINDOW));
+    } else {
+        HBRUSH fill = CreateSolidBrush(visual.fill);
+        FillRect(draw->nmcd.hdc, &rect, fill);
+        DeleteObject(fill);
+        if (selected) {
+            RECT inset = rect;
+            InflateRect(&inset, -2, -2);
+            HBRUSH border = CreateSolidBrush(visual.border);
+            FrameRect(draw->nmcd.hdc, &inset, border);
+            DeleteObject(border);
+        }
+    }
 
     SetBkMode(
         draw->nmcd.hdc,
@@ -2472,7 +2462,7 @@ LRESULT HandlePackageListCustomDraw(
     if (drawWebsite) {
         SetTextColor(
             draw->nmcd.hdc,
-            RGB(0, 0, 255));
+            highContrast ? GetSysColor(COLOR_HOTLIGHT) : tp::ui::Palette::primaryText);
 
         const HGDIOBJ oldFont =
             SelectObject(
@@ -9671,6 +9661,13 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_PACKAGE_LIST)),
             GetModuleHandleW(nullptr),
             nullptr);
+
+        ListView_SetBkColor(g_packageList, tp::ui::HighContrast()
+            ? GetSysColor(COLOR_WINDOW) : tp::ui::Palette::list);
+        ListView_SetTextBkColor(g_packageList, tp::ui::HighContrast()
+            ? GetSysColor(COLOR_WINDOW) : tp::ui::Palette::list);
+        ListView_SetTextColor(g_packageList, tp::ui::HighContrast()
+            ? GetSysColor(COLOR_WINDOWTEXT) : tp::ui::Palette::primaryText);
 
         ListView_SetExtendedListViewStyle(
             g_packageList,
