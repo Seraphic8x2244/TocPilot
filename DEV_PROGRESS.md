@@ -1,5 +1,16 @@
 # TocPilot Development Progress
 
+## v0.6.0 Gale-style layout implementation — slice 2 (2026-10-23)
+
+**Source commits:** `57e819b` and `52c2688`. The main Win32 window now has three distinct vertical bands: Launch WoW on top, a new navigation row with a static active **Packages** label followed by the existing **Account Sync** and **TocPilot** buttons, and then a package-action row. In Advanced layout the package toolbar still starts Update All → Refresh → Add Git. The package ListView is moved below these bands. Existing Account Sync and TocPilot buttons deliberately **still open legacy dialogs** rather than pretending that those dialogs have already been replaced by full tab content. Existing command IDs/behaviours are unchanged.
+
+**Outstanding acceptance:** Replace these interim navigation entry points with genuine in-window views, relocate Account Sync panel from beneath Packages, build selected-package summary/details and contextual actions, and flatten Preferences/Scan/About directly into TocPilot view. Remove Inspect and old Scan from Packages **only after** their intended replacement is accessible; preserve package/sync safeguards, Compact/Advanced, DPI and keyboard navigation. The extra vertical band currently reduces list height and requires Windows runtime review.
+
+**Validation:** Source only at time of writing. Windows Build/CTest, runtime responsive layout, and real updater visibility are not yet confirmed. User confirmed preceding `v0.6.0-dev.3` CI green. Trigger a fresh versioned updater-installable prerelease for this slice; do not ask user to test before publication. Stable `main` untouched.
+
+---
+
+
 ## v0.6.0 Gale-style layout implementation — slice 1 (2026-10-23)
 
 **Source commit:** `33c7232` — `src/main.cpp` begins the approved structural migration by separating the Launch WoW control onto an independent top toolbar row, while moving existing package actions to the row beneath. The package-action order begins Update All → Refresh → Add Git in Advanced and icon-based Compact layouts; other existing legacy actions remain temporarily reachable during the transition. Package list top is moved down to account for the second row. The same underlying Win32 controls and command handlers are reused; no package/update/sync logic was intentionally changed.
