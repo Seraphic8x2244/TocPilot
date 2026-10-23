@@ -1,5 +1,15 @@
 # TocPilot Development Progress
 
+## v0.6.0-A selection-border follow-up — 2026-10-23
+
+**User runtime evidence:** The selected `AuctionQueryThrottle.dll` row in v0.6.0-dev.1 showed two stacked outlines. The item custom-draw handler explicitly called `DrawFocusRect` inside the already outlined row while native ListView focus handling remained available.
+
+**Source fix on `dev`:** `fd95ebd` removed the extra `DrawFocusRect` and masked `CDIS_FOCUS` from the ListView custom-draw item state outside Windows high-contrast mode; `9c16c49` makes the single 2px selection outline slightly brighter when the ListView itself has keyboard focus (`Palette::primaryText`), using `Palette::selection` otherwise. High-contrast native focus path remains enabled; row data, keyboard selection, hover, branch controls and painting geometry were not deliberately changed. **This fixes the known duplicated custom focus rectangle in source, but Windows runtime confirmation is still pending.** No new prerelease published; prior `v0.6.0-dev.1` executable is unchanged.
+
+**Next:** verify Windows Build/CTest on the exact new `dev` commit, then validate actual focused/unfocused selection, mouse hover, keyboard focus and high-contrast modes in the next dev prerelease along with the other unfinished neutral chrome work. Keep `main` untouched, no popup replacement.
+
+---
+
 ## v0.6.0-dev.1 real Windows visual observation — 2026-10-23
 
 **User screenshot — running titlebar `TocPilot v0.6.0-dev.1`:** Development release is running on the user's Windows machine. Native ListView shows multiple blue `Up To Date` rows, white row text and cube-like package glyphs (including .dll-named packages), and the grey toolbar/outer surface is visible. This is **partial visual runtime evidence**, not end-to-end feature acceptance or proof of updater transition (how the EXE was installed is not established).
