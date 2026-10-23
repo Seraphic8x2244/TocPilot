@@ -1357,7 +1357,8 @@ void LayoutControls(HWND hwnd) {
 
     const auto placeStrip =
         [&](const auto& controls,
-            const auto& gaps) {
+            const auto& gaps,
+            int rowY) {
             int gapTotal = 0;
             for (const int gap :
                  gaps) {
@@ -1441,7 +1442,7 @@ void LayoutControls(HWND hwnd) {
                             : kToolbarWordButtonHeight);
 
                 const int controlY =
-                    buttonY +
+                    rowY +
                     (toolbarRowHeight -
                      controlHeight) /
                         2;
@@ -1471,97 +1472,73 @@ void LayoutControls(HWND hwnd) {
             }
         };
 
+    // v0.6.0 layout migration, slice 1: keep the game launcher in a
+    // separate top row instead of mixing it with package operations.
+    // The remaining legacy controls stay reachable until the dedicated
+    // Packages / Account Sync / TocPilot views replace this strip.
+    const std::array<HWND, 1> launchControls{g_launchWowButton};
+    constexpr std::array<int, 0> launchGaps{};
+    placeStrip(launchControls, launchGaps, buttonY);
+
+    const int packageToolbarY =
+        buttonY + toolbarRowHeight + ScaleUi(hwnd, 10);
     if (!g_advancedVisible) {
         if (ToolbarUsesIcons()) {
-            const std::array<HWND, 6>
-                controls{
-                    g_updateAllButton,
-                    g_refreshPackagesButton,
-                    g_addPackageButton,
-                    g_removePackageButton,
-                    g_advancedButton,
-                    g_launchWowButton
-                };
-
-            constexpr std::array<int, 5>
-                gaps{
-                    kToolbarButtonGap,
-                    kToolbarButtonGap +
-                        kToolbarGroupExtraGap,
-                    kToolbarButtonGap,
-                    kToolbarButtonGap +
-                        kToolbarGroupExtraGap,
-                    kToolbarButtonGap +
-                        kToolbarGroupExtraGap
-                };
-
-            placeStrip(
-                controls,
-                gaps);
-        } else {
-            const std::array<HWND, 4>
-                controls{
-                    g_updateAllButton,
-                    g_refreshPackagesButton,
-                    g_advancedButton,
-                    g_launchWowButton
-                };
-
-            constexpr std::array<int, 3>
-                gaps{
-                    kToolbarButtonGap,
-                    kToolbarButtonGap +
-                        kToolbarGroupExtraGap,
-                    kToolbarButtonGap +
-                        kToolbarGroupExtraGap
-                };
-
-            placeStrip(
-                controls,
-                gaps);
-        }
-    } else {
-        const std::array<HWND, 11>
-            controls{
+            const std::array<HWND, 5> controls{
                 g_updateAllButton,
                 g_refreshPackagesButton,
                 g_addPackageButton,
-                g_installPackageButton,
                 g_removePackageButton,
-                g_inspectPackageButton,
-                g_adoptGitButton,
-                g_accountSyncButton,
-                g_tocPilotButton,
-                g_advancedButton,
-                g_launchWowButton
+                g_advancedButton
             };
-
-        constexpr std::array<int, 10>
-            gaps{
-                kToolbarButtonGap,
-                kToolbarButtonGap +
-                    kToolbarGroupExtraGap,
+            constexpr std::array<int, 4> gaps{
                 kToolbarButtonGap,
                 kToolbarButtonGap,
-                kToolbarButtonGap +
-                    kToolbarGroupExtraGap,
-                kToolbarButtonGap,
-                kToolbarButtonGap +
-                    kToolbarGroupExtraGap,
-                kToolbarButtonGap,
-                kToolbarButtonGap +
-                    kToolbarGroupExtraGap,
-                kToolbarButtonGap +
-                    kToolbarGroupExtraGap
+                kToolbarButtonGap + kToolbarGroupExtraGap,
+                kToolbarButtonGap + kToolbarGroupExtraGap
             };
-
-        placeStrip(
-            controls,
-            gaps);
+            placeStrip(controls, gaps, packageToolbarY);
+        } else {
+            const std::array<HWND, 3> controls{
+                g_updateAllButton,
+                g_refreshPackagesButton,
+                g_advancedButton
+            };
+            constexpr std::array<int, 2> gaps{
+                kToolbarButtonGap,
+                kToolbarButtonGap + kToolbarGroupExtraGap
+            };
+            placeStrip(controls, gaps, packageToolbarY);
+        }
+    } else {
+        const std::array<HWND, 10> controls{
+            g_updateAllButton,
+            g_refreshPackagesButton,
+            g_addPackageButton,
+            g_installPackageButton,
+            g_removePackageButton,
+            g_inspectPackageButton,
+            g_adoptGitButton,
+            g_accountSyncButton,
+            g_tocPilotButton,
+            g_advancedButton
+        };
+        constexpr std::array<int, 9> gaps{
+            kToolbarButtonGap,
+            kToolbarButtonGap + kToolbarGroupExtraGap,
+            kToolbarButtonGap,
+            kToolbarButtonGap,
+            kToolbarButtonGap + kToolbarGroupExtraGap,
+            kToolbarButtonGap,
+            kToolbarButtonGap + kToolbarGroupExtraGap,
+            kToolbarButtonGap,
+            kToolbarButtonGap + kToolbarGroupExtraGap
+        };
+        placeStrip(controls, gaps, packageToolbarY);
     }
 
     const int listTop =
-        buttonY +
+        packageToolbarY +
         toolbarRowHeight +
         ScaleUi(hwnd, 14);
 
