@@ -2302,6 +2302,43 @@ bool PackageColumnCellRect(
     return true;
 }
 
+tp::ui::PackageKind VisualPackageKind(const tp::PackageRecord& package) {
+    if (package.target == L"dll" || package.target == L"dlls")
+        return tp::ui::PackageKind::Dll;
+    if (package.target == L"mpq" || package.target == L"mpqs")
+        return tp::ui::PackageKind::Mpq;
+    return tp::ui::PackageKind::Addon;
+}
+
+// Shape-based, deliberately neutral GDI glyphs; no dependency on installed icon fonts.
+void PaintPackageGlyph(HDC dc, const RECT& cell, tp::ui::PackageKind kind) {
+    const int n = 12, x = cell.left + 10;
+    const int y = cell.top + (cell.bottom - cell.top - n) / 2;
+    HPEN pen = CreatePen(PS_SOLID, 1, tp::ui::Palette::primaryText);
+    HGDIOBJ oldPen = SelectObject(dc, pen);
+    HGDIOBJ oldBrush = SelectObject(dc, GetStockObject(NULL_BRUSH));
+    if (kind == tp::ui::PackageKind::Dll) {
+        Rectangle(dc, x+2, y+2, x+10, y+10);
+        for (int i = 4; i <= 8; i += 4) {
+            MoveToEx(dc,x+i,y,nullptr); LineTo(dc,x+i,y+2);
+            MoveToEx(dc,x+i,y+10,nullptr); LineTo(dc,x+i,y+12);
+            MoveToEx(dc,x,y+i,nullptr); LineTo(dc,x+2,y+i);
+            MoveToEx(dc,x+10,y+i,nullptr); LineTo(dc,x+12,y+i);
+        }
+    } else if (kind == tp::ui::PackageKind::Mpq) {
+        Rectangle(dc,x,y+2,x+12,y+12);
+        MoveToEx(dc,x,y+5,nullptr); LineTo(dc,x+12,y+5);
+        MoveToEx(dc,x+4,y+8,nullptr); LineTo(dc,x+8,y+8);
+    } else {
+        POINT outline[6] = {{x+6,y},{x+12,y+3},{x+12,y+9},
+                            {x+6,y+12},{x,y+9},{x,y+3}};
+        Polygon(dc,outline,6);
+        MoveToEx(dc,x,y+3,nullptr); LineTo(dc,x+6,y+6); LineTo(dc,x+12,y+3);
+        MoveToEx(dc,x+6,y+6,nullptr); LineTo(dc,x+6,y+12);
+    }
+    SelectObject(dc,oldBrush); SelectObject(dc,oldPen); DeleteObject(pen);
+}
+
 LRESULT CALLBACK PackageListHoverSubclass(HWND hwnd, UINT message,
                                             WPARAM wParam, LPARAM lParam,
                                             UINT_PTR id, DWORD_PTR) {
@@ -2589,8 +2626,9 @@ LRESULT HandlePackageListCustomDraw(
     }
 
     RECT textRect = rect;
-    textRect.left += 8;
+    textRect.left += highContrast ? 8 : 30;
     textRect.right -= 5;
+    if (!highContrast) PaintPackageGlyph(draw->nmcd.hdc, rect, VisualPackageKind(package));
 
     const std::wstring suffix =
         PackageBranchSuffix(
