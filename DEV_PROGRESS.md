@@ -1,5 +1,15 @@
 # TocPilot Development Progress
 
+## v0.6.0-dev.2 Windows visual feedback — 2026-10-23
+
+**User runtime confirmation:** Screenshot from running `TocPilot v0.6.0-dev.2` shows the selected AutoPickLockbox row with a single inset outline; user explicitly says "working". This validates the visible double-selection-border fix in that runtime environment, not a complete keyboard/high-contrast matrix or automatic-updater provenance.
+
+**Visual acceptance remains open:** User describes the app as a patchy, dated Windows interface. The dark row fills and main/window surfaces contrast with legacy white Account Sync tiles, white header/scrollbar, rectangular system-style Refresh/Sync controls, and black toolbar icons. Windows 11 supplies rounded outer-window corners, not a complete internal design system. User expects coherent modern native Win32 styling across toolbar, list/header, Account Sync and other windows while preserving accepted workflows and theme semantics. Do not close v0.6.0 after the border fix.
+
+**Next focused work:** continue shared central palette usage, modernise these visible controls with DPI/high-contrast/keyboard support and retain Account Sync semantics. Validate Windows Build/CTest and deliver an updater-installable development prerelease **before** asking the user to test again, per standing requirement. Popup replacement remains a later slice; stable `main` unchanged.
+
+---
+
 ## Runtime-test release requirement — 2026-10-23
 
 **User standing instruction:** Whenever Windows runtime testing is requested, first prepare and trigger a real installable development prerelease on `dev` through TocPilot's existing development Release workflow, with a version increment, published EXE and SHA-256 checksum, and updater visibility. A plain Build workflow artifact is not sufficient. Do not ask the user to test source changes that lack an updater-eligible release. This requirement applies to all future development testing milestones. Stable `main` remains untouched unless separately approved.
