@@ -1,5 +1,24 @@
 # TocPilot Development Progress
 
+## Approved v0.6.0 UI target — Gale-inspired layout (2026-10-23)
+
+**Status:** User approved the inline layout prototype, with the final navigation correction below. This supersedes plans to merely reskin the crowded legacy layout. Gale is a loose layout reference, **not** a pixel-perfect copy. Preserve TocPilot's already approved dark-grey palette and full-row five semantic state colours (Already Good blue, Good Now green, Ignored grey, Needs Attention amber, Error red), including the single inset selection border and hover treatment. Implement with native C++20/Win32, retaining DPI, accessibility, keyboard and high-contrast support and the existing package/update/sync logic.
+
+**Primary structure:**
+- Top horizontal area: TocPilot application branding and **Launch WoW**, prominently arranged in the top row; no separate TocPilot-information button here.
+- Primary navigation: **Packages | Account Sync | TocPilot**. Rename the proposed `Settings` tab to **TocPilot**; **do not add an Add Git navigation tab**.
+- Packages toolbar: exactly **Update All → Refresh → Add Git** in that left-to-right order; Update All visually primary, others neutral. **No search box and no filter dropdown.** Sorting and existing package behaviours must remain available without introducing requested-removed toolbar clutter.
+- Packages main content: well-aligned, spacious package list with existing semantic state colourway, and persistent/contextual **package summary** panel for the selected package. Summary includes status, branch, type, repository/source, installed/latest revisions, relevant file/path details where actually available. Package contextual actions include **Reinstall and Remove adjacent**, plus **Open Folder** where supported. Preserve distinct remove-tracking vs delete-files semantics and any confirmation/safety protections. **Remove Inspect as a separate UI action.** Keep compact display option (may conceal summary).
+- Account Sync: **its own dedicated tab**, not a miniature panel on the Packages screen. Keep existing source/target accounts, comparison arrows, Refresh/Sync, approvals, conflict/safety behaviour and layout semantics. Do not fabricate statuses or replace actual comparison with decorative checks.
+- **TocPilot tab:** use the available full content area to display **Preferences, Scan and About directly as three flat sections**, without opening another panel/dialog merely to reach them. Move Scan here from the package toolbar, and move TocPilot/about/updater information here from the top navigation. Preserve actual operational settings and scan/update behaviour.
+
+**Design execution:** coherent aligned spacing, modern native control appearance (icons, headings, column headers, scrollbars, buttons and dark surfaces), sensible resizable layout, and consistent styling beyond the main view. No new heavyweight framework or hidden functional rewrites. No AI-generated image references; use the user's Gale reference and the accepted in-chat prototype and written corrections. **Do not start implementation of popup replacement automatically.**
+
+**Acceptance/release:** Design direction approved; implementation and Windows tests pending. Before **every** requested runtime-testing milestone, build/publish an actual updater-installable `dev` prerelease with assets/checksum and verify the GitHub release workflow as far as tools allow. Never ask the user to test an unbuilt change. Keep stable `main` untouched.
+
+---
+
+
 ## v0.6.0-dev.2 Windows visual feedback — 2026-10-23
 
 **User runtime confirmation:** Screenshot from running `TocPilot v0.6.0-dev.2` shows the selected AutoPickLockbox row with a single inset outline; user explicitly says "working". This validates the visible double-selection-border fix in that runtime environment, not a complete keyboard/high-contrast matrix or automatic-updater provenance.
