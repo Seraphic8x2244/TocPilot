@@ -2369,6 +2369,11 @@ LRESULT HandlePackageListCustomDraw(
     }
 
     if (draw->nmcd.dwDrawStage == CDDS_ITEMPREPAINT) {
+        // Native ListView focus outline would duplicate our inset selection outline.
+        // Keep the native path in Windows high-contrast mode.
+        if (!tp::ui::HighContrast()) {
+            draw->nmcd.uItemState &= ~CDIS_FOCUS;
+        }
         return CDRF_NOTIFYSUBITEMDRAW | CDRF_NOTIFYPOSTPAINT;
     }
     if (draw->nmcd.dwDrawStage == CDDS_ITEMPOSTPAINT && g_packageList) {
@@ -2386,10 +2391,8 @@ LRESULT HandlePackageListCustomDraw(
                     }
                     DeleteObject(border);
                 }
-                if (GetFocus() == g_packageList) {
-                    RECT focus = row; InflateRect(&focus, -3, -3);
-                    DrawFocusRect(draw->nmcd.hdc, &focus);
-                }
+                // Focus is conveyed by the single inset selection outline,
+                // not a second dotted rectangle. High-contrast retains native focus.
             }
         }
         return CDRF_DODEFAULT;
