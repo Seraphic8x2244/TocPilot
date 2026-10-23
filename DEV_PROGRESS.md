@@ -1,5 +1,11 @@
 # TocPilot Development Progress
 
+## v0.6.0-dev.1 development release preparation — 2026-10-23
+
+**Purpose:** deliver the existing v0.6.0-A theme work through the real development self-updater for Windows acceptance, without promoting stable `main`. User reported green Build CI for the prior development source but did not provide run ID/logs. Source version bumped from `0.5.1` to `0.6.0-dev.1` in CMake and `src/version.h`; development release trigger marker `.github/development-release-version` is the final commit of preparation. **This paragraph does not assert the release has succeeded:** after trigger, verify exact run result, published prerelease `v0.6.0-dev.1`, EXE and SHA256, and updater visibility. The 0.6.0-A runtime UI still needs acceptance; do not remove dialogs or change Account Sync policy.
+
+---
+
 ## v0.6.0-A shared-theme implementation checkpoint — 2026-10-23
 
 **Active branch:** `dev`; starting head `a5204a64ac17589ad11da36fbeacd09c49da7ca5`. **Stable `main` / published `v0.5.1` remain untouched.** This is a **partial implementation awaiting Windows build, CI and runtime validation**, not a completed/accepted 0.6.0-A slice, and no new version/release has been published.
