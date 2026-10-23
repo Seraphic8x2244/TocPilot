@@ -2302,14 +2302,6 @@ bool PackageColumnCellRect(
     return true;
 }
 
-tp::ui::PackageKind VisualPackageKind(const tp::PackageRecord& package) {
-    if (package.target == L"dll" || package.target == L"dlls")
-        return tp::ui::PackageKind::Dll;
-    if (package.target == L"mpq" || package.target == L"mpqs")
-        return tp::ui::PackageKind::Mpq;
-    return tp::ui::PackageKind::Addon;
-}
-
 // Shape-based, deliberately neutral GDI glyphs; no dependency on installed icon fonts.
 void PaintPackageGlyph(HDC dc, const RECT& cell, tp::ui::PackageKind kind) {
     const int n = 12, x = cell.left + 10;
@@ -2645,7 +2637,7 @@ LRESULT HandlePackageListCustomDraw(
     RECT textRect = rect;
     textRect.left += highContrast ? 8 : 30;
     textRect.right -= 5;
-    if (!highContrast) PaintPackageGlyph(draw->nmcd.hdc, rect, VisualPackageKind(package));
+    if (!highContrast) PaintPackageGlyph(draw->nmcd.hdc, rect, tp::ui::KindFromTarget(package.target));
 
     const std::wstring suffix =
         PackageBranchSuffix(
