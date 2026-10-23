@@ -189,6 +189,7 @@ HWND g_tocPilotUpdateStatus = nullptr;
 HWND g_launchWowButton = nullptr;
 HWND g_launchVanillaFixesButton = nullptr;
 HWND g_packageList = nullptr;
+int g_hoverPackageRow = -1;
 HWND g_branchSelector = nullptr;
 HWND g_packageHint = nullptr;
 HWND g_textScaleLabel = nullptr;
@@ -2301,6 +2302,28 @@ bool PackageColumnCellRect(
     return true;
 }
 
+LRESULT CALLBACK PackageListHoverSubclass(HWND hwnd, UINT message,
+                                            WPARAM wParam, LPARAM lParam,
+                                            UINT_PTR id, DWORD_PTR) {
+    if (message == WM_MOUSEMOVE) {
+        TRACKMOUSEEVENT tracking{sizeof(tracking), TME_LEAVE, hwnd, 0};
+        TrackMouseEvent(&tracking);
+        LVHITTESTINFO hit{};
+        hit.pt = {GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
+        const int next = ListView_HitTest(hwnd, &hit);
+        if (next != g_hoverPackageRow) {
+            g_hoverPackageRow = next;
+            InvalidateRect(hwnd, nullptr, FALSE);
+        }
+    } else if (message == WM_MOUSELEAVE) {
+        g_hoverPackageRow = -1;
+        InvalidateRect(hwnd, nullptr, FALSE);
+    } else if (message == WM_NCDESTROY) {
+        RemoveWindowSubclass(hwnd, PackageListHoverSubclass, id);
+    }
+    return DefSubclassProc(hwnd, message, wParam, lParam);
+}
+
 LRESULT HandlePackageListCustomDraw(
     LPARAM lParam) {
     auto* draw =
@@ -2363,7 +2386,8 @@ LRESULT HandlePackageListCustomDraw(
         GetFocus() ==
         g_packageList;
     const bool highContrast = tp::ui::HighContrast();
-    const auto visual = tp::ui::ResolveRow(PackageVisualState(package), false, selected, focused);
+    const auto visual = tp::ui::ResolveRow(PackageVisualState(package),
+        displayRow == g_hoverPackageRow, selected, focused);
     const COLORREF rowTextColour = highContrast
         ? GetSysColor(selected && focused ? COLOR_HIGHLIGHTTEXT : COLOR_WINDOWTEXT)
         : visual.text;
@@ -9669,6 +9693,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             GetModuleHandleW(nullptr),
             nullptr);
 
+        SetWindowSubclass(g_packageList, PackageListHoverSubclass, 1, 0);
         ListView_SetBkColor(g_packageList, tp::ui::HighContrast()
             ? GetSysColor(COLOR_WINDOW) : tp::ui::Palette::list);
         ListView_SetTextBkColor(g_packageList, tp::ui::HighContrast()
