@@ -1,5 +1,20 @@
 # TocPilot Development Progress
 
+## v0.6.0 Gale navigation slice 3 — source checkpoint (2026-10-24)
+
+**Branch:** `dev` only. Starting remote HEAD `1e2b704425ab196c148668e9b7bf007875155e98` verified. Both push-triggered Build run `40045548344` and Development Release run `40045548356` succeeded for `v0.6.0-dev.5`. User confirmed development release passed. Stable `main` has not been touched.
+
+**Implementation:** Introduced mutually exclusive in-main-window Packages, Account Sync and TocPilot views using the existing navigation controls. Packages is now a keyboard-focusable button. Switching tabs hides package-specific controls/list outside Packages. The existing Account Sync tile viewport, Refresh and Sync actions are displayed only on the Account Sync view, with a Configure Account Sync entry point to the unchanged legacy editor (whose safety boundaries are preserved). TocPilot view offers Preferences, Scan and About entry points, still delegating to existing handlers/windows. The package-area bottom sync reservation is removed. No package or synchronisation operation implementation changed. New `src/main_view.h` isolates the view visibility policy; `tests/main_view_tests.cpp` and CTest `main-view-navigation` check mutually exclusive visibility. Implementation commits: `6033d6c`, `a7e6df1`, `03311ab`, `fbf7d35`, `bd16a70`, `e47b167`.
+
+**Incomplete:** This is a navigation-content foundation, **not** completion of the approved redesign. Existing Configure Account Sync and Preferences/About still open legacy windows. The full account editor must be embedded and Preferences/Scan/About flattened without dialogs. Package toolbar cleanup and contextual summary/Reinstall/Remove/Open Folder also remain. Account Sync tiles are only present when previously configured; editor entry is available otherwise. Compact/Advanced, keyboard focus, high contrast and DPI need real Windows confirmation.
+
+**Validation:** Source committed, Windows CI pending exact-result verification; `dev.5` is the last successful updater-installable release, *not* a build of this slice. No Windows runtime testing performed and no new prerelease claimed. Confirm push-triggered Build on latest commit and fix any failures before further UI migration. Publish a **new version-bumped updater-installable development prerelease** before asking for Windows runtime testing; verify workflow and assets.
+
+**Exact next step:** Verify CI for latest dev SHA. Then replace legacy in-window Account Sync configuration dialog with embedded controls while retaining all current approval/conflict guardrails; separately flatten TocPilot settings. Follow with contextual package summary/actions. Do not modify `main`.
+
+---
+
+
 ## v0.6.0-dev.4 failed Windows release / targeted compile fix (2026-10-24)
 
 **Verified:** Development Release run [#16](https://github.com/Seraphic8x2244/TocPilot/actions/runs/39989298412), run ID `39989298412`, failed at **Build Release**, `src/main.cpp(1547,13): error C2078: too many initializers`. This was caused by leaving ten entries inside the newly resized `std::array<HWND, 8>` when separating navigation from the Advanced toolbar.
