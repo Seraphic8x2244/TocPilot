@@ -1,5 +1,7 @@
 # TocPilot Development Progress
 
+**Contextual folder affordance (commit `0e75bd5`):** Open Folder is disabled if the selected package has no recorded installed file or target path; actual canonical root confinement remains enforced at execution.
+
 **TocPilot text-scale preference follow-up (commit `f8024f3`):** Existing text-scale label/ComboBox are now visible and keyboard-reachable within TocPilot Preferences, preserving the original scaling persistence and handler rather than duplicating settings logic. DPI/Compact/Advanced runtime checks and new CI gate remain outstanding.
 
 **Embedded Account Sync DPI/theme follow-up (commits `99a3e18`, `e10e0a2`, `69a8baa`):** Retain native editor group handles; relayout editor controls and ListView account column on size/DPI notifications; reuse shared dark Account Sync surface/text colours with high-contrast OS fallback. Windows CI and real runtime confirmation pending; check groupbox/checkbox/text contrast and nested focus order at 100/125/150%.
