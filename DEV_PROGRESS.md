@@ -1,5 +1,7 @@
 # TocPilot Development Progress
 
+**dev.7 MSVC compile fix (2026-10-24):** Push Build runs `40101250559` and `40101337507` failed C2672/C2737 at the new minimum-height calculation: `RECT::bottom/top` are Win32 LONG, incompatible with the `int` template argument deduced by `std::max(0,...)` on MSVC. Commit `3f2a678` casts the client-height difference to `int` before `std::max`. The first `v0.6.0-dev.7` release trigger at `593c7f0` predates this fix; do not treat it as validated or runnable if its build fails. Retrigger a new exact-SHA development release after correcting all observed CI errors, then verify the workflow end-to-end. Stable `main` unchanged.
+
 **Top-row branding (commit `bcba0d4`):** Adds native TocPilot wordmark text to the left of the separate centered Launch WoW control, with DPI-aware positioning and existing bold UI font. The titlebar brand remains unchanged. Windows CI/runtime layout review pending; included only in subsequent versioned release.
 
 **Three-button toolbar minimum-width correction (commit `f59bd62`):** The old 6/11-control toolbar width estimation was still constraining the redesigned window despite only three real Packages toolbar actions. The active width policy now measures exactly Update All, Refresh and Add Git in icon/word presentation. Requires subsequent exact CI and the next development prerelease, not part of published `dev.6`.
