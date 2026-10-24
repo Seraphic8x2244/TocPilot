@@ -8969,6 +8969,24 @@ LRESULT CALLBACK AccountSyncWindowProc(
     WPARAM wParam,
     LPARAM lParam) {
     switch (message) {
+    case WM_ERASEBKGND:
+        if (!tp::ui::HighContrast()) {
+            HDC dc = reinterpret_cast<HDC>(wParam);
+            RECT bounds{};
+            GetClientRect(hwnd, &bounds);
+            FillRect(dc, &bounds, MainSurfaceBrush(true));
+            return TRUE;
+        }
+        break;
+    case WM_CTLCOLORSTATIC:
+    case WM_CTLCOLORBTN:
+        if (!tp::ui::HighContrast()) {
+            HDC dc = reinterpret_cast<HDC>(wParam);
+            SetTextColor(dc, tp::ui::Palette::primaryText);
+            SetBkColor(dc, tp::ui::Palette::toolbar);
+            return reinterpret_cast<LRESULT>(MainSurfaceBrush(true));
+        }
+        break;
     case WM_CREATE: {
         const auto px =
             [&](int value) {
