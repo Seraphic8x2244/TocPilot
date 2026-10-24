@@ -1764,6 +1764,18 @@ void LayoutControls(HWND hwnd) {
         SendMessageW(g_tocPilotWordsInline, BM_SETCHECK,
                      ToolbarUsesIcons() ? BST_UNCHECKED : BST_CHECKED, 0);
     }
+    if (g_textScaleLabel) {
+        ShowWindow(g_textScaleLabel, tocView ? SW_SHOW : SW_HIDE);
+        MoveWindow(g_textScaleLabel, margin + ScaleUi(hwnd, 240),
+                   listTop + ScaleUi(hwnd, 202), ScaleUi(hwnd, 112),
+                   ScaleUi(hwnd, 30), TRUE);
+    }
+    if (g_textScaleCombo) {
+        ShowWindow(g_textScaleCombo, tocView ? SW_SHOW : SW_HIDE);
+        MoveWindow(g_textScaleCombo, margin + ScaleUi(hwnd, 354),
+                   listTop + ScaleUi(hwnd, 202), ScaleUi(hwnd, 120),
+                   ScaleUi(hwnd, 180), TRUE);
+    }
     if (g_advancedButton) {
         ShowWindow(g_advancedButton, tocView ? SW_SHOW : SW_HIDE);
         MoveWindow(g_advancedButton, margin + ScaleUi(hwnd, 240),
