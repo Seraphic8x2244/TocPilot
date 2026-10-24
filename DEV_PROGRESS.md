@@ -1,5 +1,7 @@
 # TocPilot Development Progress
 
+**TocPilot text-scale preference follow-up (commit `f8024f3`):** Existing text-scale label/ComboBox are now visible and keyboard-reachable within TocPilot Preferences, preserving the original scaling persistence and handler rather than duplicating settings logic. DPI/Compact/Advanced runtime checks and new CI gate remain outstanding.
+
 **Embedded Account Sync DPI/theme follow-up (commits `99a3e18`, `e10e0a2`, `69a8baa`):** Retain native editor group handles; relayout editor controls and ListView account column on size/DPI notifications; reuse shared dark Account Sync surface/text colours with high-contrast OS fallback. Windows CI and real runtime confirmation pending; check groupbox/checkbox/text contrast and nested focus order at 100/125/150%.
 
 **Toolbar/contextual-action follow-up (commit `4a8a57b`):** Both Compact and Advanced Packages top toolbar now contains exactly Update All → Refresh → Add Git. Existing Reinstall/Remove/Open Folder handlers are contextually presented at the bottom of Packages in both modes (with full selected-package summary in Advanced); Scan remains accessible from TocPilot, and the original Advanced/Compact toggle moves into TocPilot Preferences. No changes to operation semantics or removal confirmations. Verify Windows Build/CTest and actual compact word/icon widths, focus order and resize/DPI before acceptance; no version bump/release yet.
