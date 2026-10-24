@@ -4192,8 +4192,11 @@ void UpdatePackageButtons() {
     const bool packageBusy =
         PackageOperationBusy();
 
+    const bool hasPackageFolder = selectedPackage &&
+        (!selectedPackage->installedFiles.empty() ||
+         !selectedPackage->targetPath.empty());
     if (g_packageOpenFolder) EnableWindow(
-        g_packageOpenFolder, validSelection && !packageBusy ? TRUE : FALSE);
+        g_packageOpenFolder, hasPackageFolder && !packageBusy ? TRUE : FALSE);
 
     if (g_updateAllButton) {
         EnableWindow(
