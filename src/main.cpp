@@ -106,6 +106,11 @@ constexpr int IDC_ACCOUNT_SYNC_TILES = 1034;
 constexpr int IDC_RECEIVE_DEVELOPMENT_BUILDS = 1035;
 constexpr int IDC_ACCOUNT_SYNC_TILE_REFRESH = 1036;
 constexpr int IDC_ACCOUNT_SYNC_TILE_SYNC = 1037;
+constexpr int IDC_NAV_PACKAGES = 1038;
+constexpr int IDC_SYNC_CONFIGURE = 1039;
+constexpr int IDC_TOCPILOT_PREFERENCES = 1040;
+constexpr int IDC_TOCPILOT_SCAN = 1041;
+constexpr int IDC_TOCPILOT_ABOUT = 1042;
 
 constexpr int kCompactWindowWidth = 590;
 constexpr int kDefaultWindowHeight = 480;
@@ -175,6 +180,12 @@ HWND g_advancedButton = nullptr;
 HWND g_tocPilotButton = nullptr;
 HWND g_accountSyncButton = nullptr;
 HWND g_packagesNavLabel = nullptr;
+HWND g_syncConfigureButton = nullptr;
+HWND g_tocPilotPreferencesButton = nullptr;
+HWND g_tocPilotScanButton = nullptr;
+HWND g_tocPilotAboutButton = nullptr;
+enum class MainView { Packages, AccountSync, TocPilot };
+MainView g_mainView = MainView::Packages;
 HWND g_tocPilotWindow = nullptr;
 HWND g_accountSyncWindow = nullptr;
 HWND g_accountSyncAccountsList = nullptr;
@@ -1487,6 +1498,7 @@ void LayoutControls(HWND hwnd) {
     const int navigationWidth = ScaleUi(hwnd, 124);
     const int navigationGap = ScaleUi(hwnd, 8);
     if (g_packagesNavLabel) {
+        ShowWindow(g_packagesNavLabel, SW_SHOW);
         MoveWindow(g_packagesNavLabel, margin, navigationY,
                    navigationWidth, toolbarRowHeight, TRUE);
     }
@@ -1557,6 +1569,14 @@ void LayoutControls(HWND hwnd) {
         placeStrip(controls, gaps, packageToolbarY);
     }
 
+    const bool packagesView = g_mainView == MainView::Packages;
+    const bool syncView = g_mainView == MainView::AccountSync;
+    for (HWND control : {g_updateAllButton, g_refreshPackagesButton,
+                         g_addPackageButton, g_installPackageButton,
+                         g_removePackageButton, g_inspectPackageButton,
+                         g_adoptGitButton, g_advancedButton}) {
+        if (control && !packagesView) ShowWindow(control, SW_HIDE);
+    }
     const int listTop =
         packageToolbarY +
         toolbarRowHeight +
@@ -1583,7 +1603,7 @@ void LayoutControls(HWND hwnd) {
         ScaleUi(hwnd, 10);
 
     const int reservedForAccountSync =
-        showAccountSyncPanel
+        false && showAccountSyncPanel
             ? accountSyncPanelHeight +
                 accountSyncPanelGap
             : 0;
@@ -1601,6 +1621,7 @@ void LayoutControls(HWND hwnd) {
                 reservedForAccountSync);
 
     if (g_packageList) {
+        ShowWindow(g_packageList, packagesView ? SW_SHOW : SW_HIDE);
         MoveWindow(
             g_packageList,
             margin,
@@ -1613,11 +1634,11 @@ void LayoutControls(HWND hwnd) {
     }
 
     if (g_accountSyncTilesView) {
-        if (showAccountSyncPanel) {
+        if (syncView && showAccountSyncPanel) {
             ShowWindow(g_accountSyncTilesView, SW_SHOW);
             const int actionWidth = ScaleUi(hwnd, 84);
             const int actionGap = ScaleUi(hwnd, 8);
-            const int panelY = listTop + listHeight + accountSyncPanelGap;
+            const int panelY = listTop + ScaleUi(hwnd, 48);
             MoveWindow(g_accountSyncTilesView, margin + actionWidth + actionGap,
                        panelY, std::max(1, contentWidth - actionWidth - actionGap),
                        accountSyncPanelHeight, TRUE);
@@ -1636,7 +1657,24 @@ void LayoutControls(HWND hwnd) {
         }
     }
 
-    PositionBranchSelector();
+    if (g_syncConfigureButton) {
+        ShowWindow(g_syncConfigureButton, syncView ? SW_SHOW : SW_HIDE);
+        MoveWindow(g_syncConfigureButton, margin, listTop,
+                   ScaleUi(hwnd, 220), ScaleUi(hwnd, 32), TRUE);
+    }
+    const std::array<HWND, 3> tocPilotViewButtons{
+        g_tocPilotPreferencesButton, g_tocPilotScanButton,
+        g_tocPilotAboutButton};
+    int tocY = listTop;
+    for (HWND control : tocPilotViewButtons) {
+        if (!control) continue;
+        ShowWindow(control, g_mainView == MainView::TocPilot ? SW_SHOW : SW_HIDE);
+        MoveWindow(control, margin, tocY, ScaleUi(hwnd, 220),
+                   ScaleUi(hwnd, 34), TRUE);
+        tocY += ScaleUi(hwnd, 46);
+    }
+    if (!packagesView && g_branchSelector) ShowWindow(g_branchSelector, SW_HIDE);
+    if (packagesView) PositionBranchSelector();
 }
 
 void AddPackageListColumns() {
@@ -9604,9 +9642,10 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                 L"Scan",
                 IDC_ADOPT_GIT);
         g_packagesNavLabel = CreateWindowExW(
-            0, L"STATIC", L"Packages",
-            WS_CHILD | WS_VISIBLE | SS_CENTER | SS_CENTERIMAGE,
-            0, 0, 124, 32, hwnd, nullptr,
+            0, L"BUTTON", L"Packages",
+            WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON,
+            0, 0, 124, 32, hwnd,
+            reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_NAV_PACKAGES)),
             GetModuleHandleW(nullptr), nullptr);
         g_accountSyncButton =
             createToolbarButton(
@@ -9616,6 +9655,10 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             createToolbarButton(
                 L"TocPilot",
                 IDC_TOCPILOT);
+        g_syncConfigureButton = createToolbarButton(L"Configure Account Sync", IDC_SYNC_CONFIGURE);
+        g_tocPilotPreferencesButton = createToolbarButton(L"Preferences", IDC_TOCPILOT_PREFERENCES);
+        g_tocPilotScanButton = createToolbarButton(L"Scan", IDC_TOCPILOT_SCAN);
+        g_tocPilotAboutButton = createToolbarButton(L"About", IDC_TOCPILOT_ABOUT);
         g_advancedButton =
             createToolbarButton(
                 L"Advanced",
@@ -10180,16 +10223,24 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             return 0;
         }
 
-        if (LOWORD(wParam) == IDC_TOCPILOT &&
-            HIWORD(wParam) == BN_CLICKED) {
-            ShowTocPilotWindow(hwnd);
-            return 0;
-        }
-
-        if (LOWORD(wParam) == IDC_ACCOUNT_SYNC &&
-            HIWORD(wParam) == BN_CLICKED) {
-            ShowAccountSyncWindow(hwnd);
-            return 0;
+        if (HIWORD(wParam) == BN_CLICKED) {
+            switch (LOWORD(wParam)) {
+            case IDC_NAV_PACKAGES: g_mainView = MainView::Packages; break;
+            case IDC_ACCOUNT_SYNC: g_mainView = MainView::AccountSync; break;
+            case IDC_TOCPILOT: g_mainView = MainView::TocPilot; break;
+            case IDC_SYNC_CONFIGURE: ShowAccountSyncWindow(hwnd); return 0;
+            case IDC_TOCPILOT_PREFERENCES:
+            case IDC_TOCPILOT_ABOUT: ShowTocPilotWindow(hwnd); return 0;
+            case IDC_TOCPILOT_SCAN: AdoptGitAddons(hwnd); return 0;
+            default: break;
+            }
+            if (LOWORD(wParam) == IDC_NAV_PACKAGES ||
+                LOWORD(wParam) == IDC_ACCOUNT_SYNC ||
+                LOWORD(wParam) == IDC_TOCPILOT) {
+                LayoutControls(hwnd);
+                InvalidateRect(hwnd, nullptr, TRUE);
+                return 0;
+            }
         }
 
         if (LOWORD(wParam) == IDC_LAUNCH_WOW &&
