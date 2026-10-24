@@ -1,10 +1,14 @@
 # TocPilot Development Progress
 
+**Top-row branding (commit `bcba0d4`):** Adds native TocPilot wordmark text to the left of the separate centered Launch WoW control, with DPI-aware positioning and existing bold UI font. The titlebar brand remains unchanged. Windows CI/runtime layout review pending; included only in subsequent versioned release.
+
 **Three-button toolbar minimum-width correction (commit `f59bd62`):** The old 6/11-control toolbar width estimation was still constraining the redesigned window despite only three real Packages toolbar actions. The active width policy now measures exactly Update All, Refresh and Add Git in icon/word presentation. Requires subsequent exact CI and the next development prerelease, not part of published `dev.6`.
 
 **Post-trigger in-window updater feedback (commit `a948181`):** TocPilot view now displays the updater's authoritative status, action text and enabled state directly, including checking/error/update-available/up-to-date results. Inline development channel checkbox is restored to actual saved preference after cancellation or SaveState failure. This fixes gaps identified after `v0.6.0-dev.6` release trigger; requires a subsequent version-bumped development prerelease and separate CI verification.
 
 **Post-trigger layout correction (commit `b96a29e`):** The first v0.6.0-dev.6 release trigger at `a71a63d` is immutable for that workflow; later `dev` commits are **not included** in that release. Static layout audit found the three-row header plus reserved contextual package summary could clip below the old 480px default window (220px minimum package list + 105px summary reserve). Increase initial height and apply view-specific minimum client heights (Packages Compact 500, Advanced 560, Account Sync 680, TocPilot 520 logical pixels), including Advanced switching. This correction requires a newer versioned prerelease before user runtime validation; do not claim dev.6 contains it. Verify its CI and release separately.
+
+**Further release preparation (commit `f7a295f`):** Version source advanced to `v0.6.0-dev.7` for changes after the immutable `dev.6` release commit. Do not trigger dev.7 until dev.6's self-update E2E finishes, to avoid channel latest-prerelease interference.
 
 **Release preparation (commit `1d264c5`):** Source display/tag macros bumped to `v0.6.0-dev.6` on `dev`; CMake base remains `0.6.0`. This is a preparation commit only, not proof of publication. Trigger `.github/development-release-version` after the targeted Windows build gate, verify Release workflow full build/CTest, SHA sidecar, tag/assets and updater e2e before requesting runtime test.
 
