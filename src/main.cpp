@@ -4150,9 +4150,6 @@ void UpdatePackageButtons() {
         SetWindowTextW(g_packageSummary, L"Select a package to view its source, branch and revisions.");
     }
 
-    if (g_packageOpenFolder) EnableWindow(
-        g_packageOpenFolder, validSelection && !packageBusy ? TRUE : FALSE);
-
     if (g_stateReady) {
         for (const auto& package : g_state.packages) {
             if (tp::IsUpdateAllCandidate(package)) {
@@ -4164,6 +4161,9 @@ void UpdatePackageButtons() {
 
     const bool packageBusy =
         PackageOperationBusy();
+
+    if (g_packageOpenFolder) EnableWindow(
+        g_packageOpenFolder, validSelection && !packageBusy ? TRUE : FALSE);
 
     if (g_updateAllButton) {
         EnableWindow(
