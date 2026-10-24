@@ -544,5 +544,15 @@ if(BUILD_TESTING)
 
     add_test(NAME account-sync-tile-layout COMMAND TocPilotAccountSyncTileLayoutTests)
 
+    add_executable(TocPilotMainViewTests
+        tests/main_view_tests.cpp
+    )
+    target_compile_features(TocPilotMainViewTests PRIVATE cxx_std_20)
+    target_include_directories(TocPilotMainViewTests PRIVATE src)
+    if(MSVC)
+        target_compile_options(TocPilotMainViewTests PRIVATE /W4 /permissive- /utf-8)
+    endif()
+    add_test(NAME main-view-navigation COMMAND TocPilotMainViewTests)
+
 
 endif()
