@@ -122,7 +122,7 @@ constexpr int IDC_TOCPILOT_UPDATE_INLINE = 1048;
 constexpr int IDC_PACKAGE_OPEN_FOLDER = 1049;
 
 constexpr int kCompactWindowWidth = 590;
-constexpr int kDefaultWindowHeight = 480;
+constexpr int kDefaultWindowHeight = 550;
 constexpr int kToolbarButtonSize = 48;
 constexpr int kToolbarIconSize = 36;
 constexpr int kToolbarButtonGap = 6;
@@ -9453,13 +9453,22 @@ void ToggleAdvanced(HWND hwnd) {
                 advancedMinimum);
     }
 
+    RECT client{};
+    GetClientRect(hwnd, &client);
+    const int minimumClientHeight = ScaleUi(hwnd,
+        g_mainView == MainView::AccountSync ? 680 :
+        g_mainView == MainView::TocPilot ? 520 :
+        g_advancedVisible ? 560 : 500);
+    const int adjustedHeight = currentHeight +
+        std::max(0, minimumClientHeight - (client.bottom - client.top));
+
     SetWindowPos(
         hwnd,
         nullptr,
         0,
         0,
         newWidth,
-        currentHeight,
+        adjustedHeight,
         SWP_NOMOVE |
             SWP_NOZORDER |
             SWP_NOACTIVATE);
@@ -10051,15 +10060,15 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             reinterpret_cast<MINMAXINFO*>(
                 lParam);
 
+        const int minimumClientHeight =
+            g_mainView == MainView::AccountSync ? 680 :
+            g_mainView == MainView::TocPilot ? 520 :
+            g_advancedVisible ? 560 : 500;
         RECT minimum{
             0,
             0,
-            RequiredClientWidth(
-                hwnd,
-                g_advancedVisible),
-            ScaleUi(
-                hwnd,
-                400)};
+            RequiredClientWidth(hwnd, g_advancedVisible),
+            ScaleUi(hwnd, minimumClientHeight)};
 
         AdjustWindowRectForDpi(
             &minimum,
