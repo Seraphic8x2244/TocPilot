@@ -218,6 +218,7 @@ HWND g_packageList = nullptr;
 int g_hoverPackageRow = -1;
 HWND g_branchSelector = nullptr;
 HWND g_packageHint = nullptr;
+HWND g_packageSummary = nullptr;
 HWND g_textScaleLabel = nullptr;
 HWND g_textScaleCombo = nullptr;
 HWND g_rootLabel = nullptr;
@@ -1596,8 +1597,10 @@ void LayoutControls(HWND hwnd) {
         toolbarRowHeight +
         ScaleUi(hwnd, 14);
 
+    const bool showSummary = packagesView && g_advancedVisible;
+    const int summaryHeight = showSummary ? ScaleUi(hwnd, 105) : 0;
     const int listBottomPadding =
-        ScaleUi(hwnd, 20);
+        ScaleUi(hwnd, 20) + summaryHeight;
 
     const bool showAccountSyncPanel =
         g_stateReady &&
@@ -1668,6 +1671,14 @@ void LayoutControls(HWND hwnd) {
         }
     }
 
+    if (g_packageSummary) {
+        ShowWindow(g_packageSummary, showSummary ? SW_SHOW : SW_HIDE);
+        if (showSummary) {
+            MoveWindow(g_packageSummary, margin,
+                       listTop + listHeight + ScaleUi(hwnd, 8),
+                       contentWidth, ScaleUi(hwnd, 95), TRUE);
+        }
+    }
     if (g_syncConfigureButton) {
         ShowWindow(g_syncConfigureButton, syncView ? SW_SHOW : SW_HIDE);
         MoveWindow(g_syncConfigureButton, margin, listTop,
@@ -4063,6 +4074,16 @@ void UpdatePackageButtons() {
         selectedPackage =
             &g_state.packages[
                 static_cast<std::size_t>(row)];
+        if (g_packageSummary) {
+            const auto& p = *selectedPackage;
+            std::wstring detail = p.name + L"  |  " + PackageStatusText(p)
+                + L"\r\nSource: " + ProviderLabel(p.provider) + L" / " + p.repository
+                + L"  |  Branch: " + PackageSourceText(p)
+                + L"\r\nInstalled: " + PackageRevisionText(p.installedRevision)
+                + L"  |  Latest: " + PackageRevisionText(p.latestRevision)
+                + L"  |  Type: " + p.target;
+            SetWindowTextW(g_packageSummary, detail.c_str());
+        }
 
         canSetBranch =
             SupportedBranchProvider(
@@ -4103,6 +4124,10 @@ void UpdatePackageButtons() {
             selectedPackage->target == L"addons" &&
             !selectedPackage->installedRevision.empty() &&
             !selectedPackage->installedFiles.empty();
+    }
+
+    if (!validSelection && g_packageSummary) {
+        SetWindowTextW(g_packageSummary, L"Select a package to view its source, branch and revisions.");
     }
 
     if (g_stateReady) {
@@ -9839,6 +9864,10 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             GetModuleHandleW(nullptr),
             nullptr);
 
+        g_packageSummary = CreateWindowExW(
+            0, L"STATIC", L"Select a package to view its details.",
+            WS_CHILD | SS_LEFT | SS_NOPREFIX,
+            0, 0, 200, 95, hwnd, nullptr, GetModuleHandleW(nullptr), nullptr);
         g_packageList = CreateWindowExW(
             WS_EX_CLIENTEDGE,
             WC_LISTVIEWW,
