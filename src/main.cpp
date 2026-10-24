@@ -9454,7 +9454,7 @@ void ToggleAdvanced(HWND hwnd) {
         g_mainView == MainView::TocPilot ? 520 :
         g_advancedVisible ? 560 : 500);
     const int adjustedHeight = currentHeight +
-        std::max(0, minimumClientHeight - (client.bottom - client.top));
+        std::max(0, minimumClientHeight - static_cast<int>(client.bottom - client.top));
 
     SetWindowPos(
         hwnd,
