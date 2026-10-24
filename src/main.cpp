@@ -10294,10 +10294,25 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
         if (HIWORD(wParam) == BN_CLICKED) {
             switch (LOWORD(wParam)) {
             case IDC_NAV_PACKAGES: g_mainView = MainView::Packages; break;
-            case IDC_ACCOUNT_SYNC:
+            case IDC_ACCOUNT_SYNC: {
                 g_mainView = MainView::AccountSync;
                 ShowAccountSyncWindow(hwnd);
+                // Account Sync has a full editor and preview, not the former
+                // miniature Packages footer. Ensure neither is clipped.
+                RECT client{};
+                GetClientRect(hwnd, &client);
+                const int minimumHeight = ScaleUi(hwnd, 680);
+                if (client.bottom - client.top < minimumHeight) {
+                    RECT outer{};
+                    GetWindowRect(hwnd, &outer);
+                    SetWindowPos(hwnd, nullptr, 0, 0,
+                        outer.right - outer.left,
+                        outer.bottom - outer.top +
+                            minimumHeight - (client.bottom - client.top),
+                        SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+                }
                 break;
+            }
             case IDC_TOCPILOT: g_mainView = MainView::TocPilot; break;
             case IDC_SYNC_CONFIGURE: ShowAccountSyncWindow(hwnd); return 0;
             case IDC_TOCPILOT_PREFERENCES:
