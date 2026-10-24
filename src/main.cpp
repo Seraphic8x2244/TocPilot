@@ -8946,6 +8946,23 @@ bool SaveAccountSyncConfiguration(
     return true;
 }
 
+void LayoutAccountSyncEditor(HWND hwnd) {
+    const auto px = [&](int value) { return ScaleUi(hwnd, value); };
+    const auto move = [&](HWND control, int x, int y, int width, int height) {
+        if (control) MoveWindow(control, px(x), px(y), px(width), px(height), TRUE);
+    };
+    move(g_accountSyncAccountsGroup, 14, 14, 258, 226);
+    move(g_accountSyncAccountsList, 28, 42, 230, 182);
+    if (g_accountSyncAccountsList)
+        ListView_SetColumnWidth(g_accountSyncAccountsList, 0, px(210));
+    move(g_accountSyncSyncGroup, 286, 14, 270, 226);
+    move(g_accountSyncMacrosCheck, 304, 44, 220, 26);
+    move(g_accountSyncKeybindingsCheck, 304, 76, 220, 26);
+    move(g_accountSyncPfUiCheck, 304, 108, 220, 26);
+    move(g_accountSyncBeforeLaunchCheck, 304, 146, 220, 26);
+    move(g_accountSyncNowButton, 304, 190, 220, 30);
+}
+
 LRESULT CALLBACK AccountSyncWindowProc(
     HWND hwnd,
     UINT message,
@@ -9137,8 +9154,13 @@ LRESULT CALLBACK AccountSyncWindowProc(
         }
 
         ApplyUiFont(hwnd);
+        LayoutAccountSyncEditor(hwnd);
         return 0;
     }
+
+    case WM_SIZE:
+        LayoutAccountSyncEditor(hwnd);
+        return 0;
 
     case WM_NOTIFY: {
         const auto* header =
@@ -9968,6 +9990,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
         ApplyUiFont(hwnd);
         ReloadToolbarImages(hwnd);
         ApplyToolbarPresentation(hwnd);
+        if (g_accountSyncWindow) LayoutAccountSyncEditor(g_accountSyncWindow);
         LayoutControls(hwnd);
         return 0;
     }
