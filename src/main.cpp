@@ -765,46 +765,14 @@ void SetTextScaleSelection() {
 }
 
 int ToolbarStripWidthDesign(
-    bool advanced) {
-    if (ToolbarUsesIcons()) {
-        const int count =
-            advanced
-                ? kAdvancedButtonCount
-                : kCompactPrimaryButtonCount;
-
-        const int groupBreaks =
-            advanced
-                ? 5
-                : 3;
-
-        return
-            count *
-                kToolbarButtonSize +
-            (count - 1) *
-                kToolbarButtonGap +
-            groupBreaks *
-                kToolbarGroupExtraGap;
-    }
-
-    const int wordButtonCount =
-        advanced
-            ? 10
-            : 3;
-    const int totalButtonCount =
-        wordButtonCount + 1;
-    const int groupBreaks =
-        advanced
-            ? 5
-            : 2;
-
-    return
-        wordButtonCount *
-            kToolbarWordButtonWidth +
-        kToolbarButtonSize +
-        (totalButtonCount - 1) *
-            kToolbarButtonGap +
-        groupBreaks *
-            kToolbarGroupExtraGap;
+    bool /*advanced*/) {
+    // Both views share the approved Packages toolbar:
+    // Update All -> Refresh -> Add Git.
+    constexpr int actionCount = 3;
+    const int actionWidth = ToolbarUsesIcons()
+        ? kToolbarButtonSize : kToolbarWordButtonWidth;
+    return actionCount * actionWidth +
+        (actionCount - 1) * kToolbarButtonGap;
 }
 
 int RequiredClientWidth(
