@@ -112,6 +112,8 @@ constexpr int IDC_SYNC_CONFIGURE = 1039;
 constexpr int IDC_TOCPILOT_PREFERENCES = 1040;
 constexpr int IDC_TOCPILOT_SCAN = 1041;
 constexpr int IDC_TOCPILOT_ABOUT = 1042;
+constexpr int IDC_TOCPILOT_REPO_INLINE = 1043;
+constexpr int IDC_TOCPILOT_RELEASES_INLINE = 1044;
 
 constexpr int kCompactWindowWidth = 590;
 constexpr int kDefaultWindowHeight = 480;
@@ -185,6 +187,9 @@ HWND g_syncConfigureButton = nullptr;
 HWND g_tocPilotPreferencesButton = nullptr;
 HWND g_tocPilotScanButton = nullptr;
 HWND g_tocPilotAboutButton = nullptr;
+HWND g_tocPilotVersionLabel = nullptr;
+HWND g_tocPilotRepositoryButton = nullptr;
+HWND g_tocPilotReleasesButton = nullptr;
 using tp::ui::MainView;
 MainView g_mainView = MainView::Packages;
 HWND g_tocPilotWindow = nullptr;
@@ -1671,6 +1676,16 @@ void LayoutControls(HWND hwnd) {
                    ScaleUi(hwnd, 34), TRUE);
         tocY += ScaleUi(hwnd, 46);
     }
+    for (HWND control : {g_tocPilotVersionLabel, g_tocPilotRepositoryButton,
+                         g_tocPilotReleasesButton}) {
+        if (control) ShowWindow(control, tp::ui::ShowsTocPilot(g_mainView) ? SW_SHOW : SW_HIDE);
+    }
+    if (g_tocPilotVersionLabel) MoveWindow(g_tocPilotVersionLabel, margin, tocY + ScaleUi(hwnd, 10),
+                                          contentWidth, ScaleUi(hwnd, 28), TRUE);
+    if (g_tocPilotRepositoryButton) MoveWindow(g_tocPilotRepositoryButton, margin, tocY + ScaleUi(hwnd, 46),
+                                               ScaleUi(hwnd, 220), ScaleUi(hwnd, 34), TRUE);
+    if (g_tocPilotReleasesButton) MoveWindow(g_tocPilotReleasesButton, margin, tocY + ScaleUi(hwnd, 88),
+                                             ScaleUi(hwnd, 220), ScaleUi(hwnd, 34), TRUE);
     if (!packagesView && g_branchSelector) ShowWindow(g_branchSelector, SW_HIDE);
     if (packagesView) PositionBranchSelector();
 }
@@ -9657,6 +9672,12 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
         g_tocPilotPreferencesButton = createToolbarButton(L"Preferences", IDC_TOCPILOT_PREFERENCES);
         g_tocPilotScanButton = createToolbarButton(L"Scan", IDC_TOCPILOT_SCAN);
         g_tocPilotAboutButton = createToolbarButton(L"About", IDC_TOCPILOT_ABOUT);
+        const std::wstring aboutVersion = std::wstring(L"TocPilot ") + TOCPILOT_VERSION_TAG_W;
+        g_tocPilotVersionLabel = CreateWindowExW(
+            0, L"STATIC", aboutVersion.c_str(), WS_CHILD | SS_LEFT,
+            0, 0, 220, 28, hwnd, nullptr, GetModuleHandleW(nullptr), nullptr);
+        g_tocPilotRepositoryButton = createToolbarButton(L"GitHub repository", IDC_TOCPILOT_REPO_INLINE);
+        g_tocPilotReleasesButton = createToolbarButton(L"Releases", IDC_TOCPILOT_RELEASES_INLINE);
         g_advancedButton =
             createToolbarButton(
                 L"Advanced",
@@ -10227,8 +10248,14 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             case IDC_ACCOUNT_SYNC: g_mainView = MainView::AccountSync; break;
             case IDC_TOCPILOT: g_mainView = MainView::TocPilot; break;
             case IDC_SYNC_CONFIGURE: ShowAccountSyncWindow(hwnd); return 0;
-            case IDC_TOCPILOT_PREFERENCES:
-            case IDC_TOCPILOT_ABOUT: ShowTocPilotWindow(hwnd); return 0;
+            case IDC_TOCPILOT_PREFERENCES: ShowTocPilotWindow(hwnd); return 0;
+            case IDC_TOCPILOT_ABOUT:
+                if (g_tocPilotVersionLabel) SetFocus(g_tocPilotRepositoryButton);
+                return 0;
+            case IDC_TOCPILOT_REPO_INLINE:
+                OpenWebLink(hwnd, kTocPilotGitHubUrl); return 0;
+            case IDC_TOCPILOT_RELEASES_INLINE:
+                OpenWebLink(hwnd, kTocPilotReleasesUrl); return 0;
             case IDC_TOCPILOT_SCAN: AdoptGitAddons(hwnd); return 0;
             default: break;
             }
