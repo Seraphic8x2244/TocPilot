@@ -1538,45 +1538,37 @@ void LayoutControls(HWND hwnd) {
         navigationY + toolbarRowHeight + ScaleUi(hwnd, 10);
     if (!g_advancedVisible) {
         if (ToolbarUsesIcons()) {
-            const std::array<HWND, 5> controls{
+            const std::array<HWND, 3> controls{
                 g_updateAllButton,
                 g_refreshPackagesButton,
-                g_addPackageButton,
-                g_removePackageButton,
-                g_advancedButton
+                g_addPackageButton
             };
-            constexpr std::array<int, 4> gaps{
+            constexpr std::array<int, 2> gaps{
                 kToolbarButtonGap,
-                kToolbarButtonGap,
-                kToolbarButtonGap + kToolbarGroupExtraGap,
-                kToolbarButtonGap + kToolbarGroupExtraGap
+                kToolbarButtonGap
             };
             placeStrip(controls, gaps, packageToolbarY);
         } else {
             const std::array<HWND, 3> controls{
                 g_updateAllButton,
                 g_refreshPackagesButton,
-                g_advancedButton
+                g_addPackageButton
             };
             constexpr std::array<int, 2> gaps{
                 kToolbarButtonGap,
-                kToolbarButtonGap + kToolbarGroupExtraGap
+                kToolbarButtonGap
             };
             placeStrip(controls, gaps, packageToolbarY);
         }
     } else {
-        const std::array<HWND, 5> controls{
+        const std::array<HWND, 3> controls{
             g_updateAllButton,
             g_refreshPackagesButton,
-            g_addPackageButton,
-            g_adoptGitButton,
-            g_advancedButton
+            g_addPackageButton
         };
-        constexpr std::array<int, 4> gaps{
+        constexpr std::array<int, 2> gaps{
             kToolbarButtonGap,
-            kToolbarButtonGap,
-            kToolbarButtonGap + kToolbarGroupExtraGap,
-            kToolbarButtonGap + kToolbarGroupExtraGap
+            kToolbarButtonGap
         };
         placeStrip(controls, gaps, packageToolbarY);
     }
@@ -1595,7 +1587,8 @@ void LayoutControls(HWND hwnd) {
         ScaleUi(hwnd, 14);
 
     const bool showSummary = packagesView && g_advancedVisible;
-    const int summaryHeight = showSummary ? ScaleUi(hwnd, 105) : 0;
+    const int summaryHeight = packagesView
+        ? ScaleUi(hwnd, showSummary ? 105 : 54) : 0;
     const int listBottomPadding =
         ScaleUi(hwnd, 20) + summaryHeight;
 
@@ -1679,25 +1672,39 @@ void LayoutControls(HWND hwnd) {
     }
     // Keep existing command handlers and their remove/install confirmations;
     // only relocate their visible Advanced affordances beside the summary.
-    if (g_packageOpenFolder) {
-        ShowWindow(g_packageOpenFolder, showSummary ? SW_SHOW : SW_HIDE);
+    if (packagesView) {
+        const int contextualY = listTop + listHeight + ScaleUi(hwnd, 8);
         if (showSummary) {
-            MoveWindow(g_packageOpenFolder,
-                       margin + contentWidth - ScaleUi(hwnd, 220),
-                       listTop + listHeight + ScaleUi(hwnd, 56),
-                       ScaleUi(hwnd, 214), ScaleUi(hwnd, 32), TRUE);
+            if (g_packageOpenFolder) {
+                ShowWindow(g_packageOpenFolder, SW_SHOW);
+                MoveWindow(g_packageOpenFolder,
+                           margin + contentWidth - ScaleUi(hwnd, 220),
+                           contextualY + ScaleUi(hwnd, 48),
+                           ScaleUi(hwnd, 214), ScaleUi(hwnd, 32), TRUE);
+            }
+            for (HWND control : {g_installPackageButton, g_removePackageButton}) {
+                if (!control) continue;
+                ShowWindow(control, SW_SHOW);
+                MoveWindow(control,
+                           margin + contentWidth - ScaleUi(hwnd, 220) +
+                               (control == g_removePackageButton ? ScaleUi(hwnd, 110) : 0),
+                           contextualY + ScaleUi(hwnd, 6),
+                           ScaleUi(hwnd, 104), ScaleUi(hwnd, 34), TRUE);
+            }
+        } else {
+            const int gap = ScaleUi(hwnd, 8);
+            const int actionWidth = std::max(1, (contentWidth - 2 * gap) / 3);
+            const std::array<HWND, 3> actions{
+                g_installPackageButton, g_removePackageButton, g_packageOpenFolder};
+            for (std::size_t index = 0; index < actions.size(); ++index) {
+                if (!actions[index]) continue;
+                ShowWindow(actions[index], SW_SHOW);
+                MoveWindow(actions[index], margin + static_cast<int>(index) * (actionWidth + gap),
+                           contextualY, actionWidth, ScaleUi(hwnd, 34), TRUE);
+            }
         }
-    }
-    for (HWND control : {g_installPackageButton, g_removePackageButton}) {
-        if (!control) continue;
-        if (showSummary) {
-            ShowWindow(control, SW_SHOW);
-            MoveWindow(control,
-                       margin + contentWidth - ScaleUi(hwnd, 220)
-                           + (control == g_removePackageButton ? ScaleUi(hwnd, 110) : 0),
-                       listTop + listHeight + ScaleUi(hwnd, 14),
-                       ScaleUi(hwnd, 104), ScaleUi(hwnd, 34), TRUE);
-        }
+    } else if (g_packageOpenFolder) {
+        ShowWindow(g_packageOpenFolder, SW_HIDE);
     }
     // The original Account Sync control/editor window is now an
     // embedded child rather than a separate popup.
@@ -1754,6 +1761,12 @@ void LayoutControls(HWND hwnd) {
                    ScaleUi(hwnd, 32), TRUE);
         SendMessageW(g_tocPilotWordsInline, BM_SETCHECK,
                      ToolbarUsesIcons() ? BST_UNCHECKED : BST_CHECKED, 0);
+    }
+    if (g_advancedButton) {
+        ShowWindow(g_advancedButton, tocView ? SW_SHOW : SW_HIDE);
+        MoveWindow(g_advancedButton, margin + ScaleUi(hwnd, 240),
+                   listTop + ScaleUi(hwnd, 152), ScaleUi(hwnd, 220),
+                   ScaleUi(hwnd, 34), TRUE);
     }
     if (g_tocPilotUpdateInline) {
         MoveWindow(g_tocPilotUpdateInline, margin + ScaleUi(hwnd, 240),
