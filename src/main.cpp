@@ -10385,9 +10385,18 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                 for (const auto& part : relative) {
                     if (part == L"..") return 0;
                 }
-                const auto folder = g_root / relative;
                 std::error_code folderError;
-                if (std::filesystem::is_directory(folder, folderError)) {
+                const auto root = std::filesystem::weakly_canonical(g_root, folderError);
+                if (folderError) return 0;
+                const auto folder = std::filesystem::weakly_canonical(g_root / relative, folderError);
+                if (folderError) return 0;
+                auto parentPart = root.begin();
+                auto childPart = folder.begin();
+                for (; parentPart != root.end(); ++parentPart, ++childPart) {
+                    if (childPart == folder.end() ||
+                        CompareInsensitive(parentPart->wstring(), childPart->wstring()) != 0) return 0;
+                }
+                if (std::filesystem::is_directory(folder, folderError) && !folderError) {
                     ShellExecuteW(hwnd, L"open", folder.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
                 }
                 return 0;
