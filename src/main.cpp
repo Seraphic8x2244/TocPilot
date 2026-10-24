@@ -189,6 +189,7 @@ HWND g_advancedButton = nullptr;
 HWND g_tocPilotButton = nullptr;
 HWND g_accountSyncButton = nullptr;
 HWND g_packagesNavLabel = nullptr;
+HWND g_brandLabel = nullptr;
 HWND g_syncConfigureButton = nullptr;
 HWND g_tocPilotPreferencesButton = nullptr;
 HWND g_tocPilotScanButton = nullptr;
@@ -1478,6 +1479,13 @@ void LayoutControls(HWND hwnd) {
     const std::array<HWND, 1> launchControls{g_launchWowButton};
     constexpr std::array<int, 0> launchGaps{};
     placeStrip(launchControls, launchGaps, buttonY);
+    if (g_brandLabel) {
+        ShowWindow(g_brandLabel, SW_SHOW);
+        MoveWindow(g_brandLabel, margin, buttonY,
+                   ScaleUi(hwnd, 140), toolbarRowHeight, TRUE);
+        if (g_boldUiFont) SendMessageW(g_brandLabel, WM_SETFONT,
+            reinterpret_cast<WPARAM>(g_boldUiFont), TRUE);
+    }
 
     // Navigation row: the Packages view remains active while the existing
     // Account Sync and TocPilot entry points still open their legacy dialogs.
@@ -9749,6 +9757,10 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             createToolbarButton(
                 L"Scan",
                 IDC_ADOPT_GIT);
+        g_brandLabel = CreateWindowExW(
+            0, L"STATIC", L"TocPilot",
+            WS_CHILD | WS_VISIBLE | SS_LEFT | SS_CENTERIMAGE,
+            0, 0, 140, 48, hwnd, nullptr, GetModuleHandleW(nullptr), nullptr);
         g_packagesNavLabel = CreateWindowExW(
             0, L"BUTTON", L"Packages",
             WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON,
