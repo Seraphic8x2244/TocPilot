@@ -1,5 +1,14 @@
 # TocPilot Development Progress
 
+## v0.6.0-dev.4 failed Windows release / targeted compile fix (2026-10-24)
+
+**Verified:** Development Release run [#16](https://github.com/Seraphic8x2244/TocPilot/actions/runs/39989298412), run ID `39989298412`, failed at **Build Release**, `src/main.cpp(1547,13): error C2078: too many initializers`. This was caused by leaving ten entries inside the newly resized `std::array<HWND, 8>` when separating navigation from the Advanced toolbar.
+
+**Fix:** `9ca0bb9` removes the duplicate Account Sync and TocPilot controls from the Advanced toolbar initializer, retaining them only in the navigation row. Eight HWND entries now match the eight-element declaration, with seven gaps. No product logic changed. Previous `dev.4` did **not** publish a runnable release; verification of a corrected build is still pending. Trigger a fresh versioned development prerelease, do not claim CI green before checking its result. Main remains untouched.
+
+---
+
+
 ## v0.6.0 Gale-style layout implementation — slice 2 (2026-10-23)
 
 **Source commits:** `57e819b` and `52c2688`. The main Win32 window now has three distinct vertical bands: Launch WoW on top, a new navigation row with a static active **Packages** label followed by the existing **Account Sync** and **TocPilot** buttons, and then a package-action row. In Advanced layout the package toolbar still starts Update All → Refresh → Add Git. The package ListView is moved below these bands. Existing Account Sync and TocPilot buttons deliberately **still open legacy dialogs** rather than pretending that those dialogs have already been replaced by full tab content. Existing command IDs/behaviours are unchanged.
