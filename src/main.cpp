@@ -117,6 +117,7 @@ constexpr int IDC_TOCPILOT_RELEASES_INLINE = 1044;
 constexpr int IDC_TOCPILOT_DEVBUILDS_INLINE = 1045;
 constexpr int IDC_TOCPILOT_TOOLBAR_ICONS_INLINE = 1046;
 constexpr int IDC_TOCPILOT_TOOLBAR_WORDS_INLINE = 1047;
+constexpr int IDC_TOCPILOT_UPDATE_INLINE = 1048;
 
 constexpr int kCompactWindowWidth = 590;
 constexpr int kDefaultWindowHeight = 480;
@@ -196,6 +197,7 @@ HWND g_tocPilotReleasesButton = nullptr;
 HWND g_tocPilotDevBuildsInline = nullptr;
 HWND g_tocPilotIconsInline = nullptr;
 HWND g_tocPilotWordsInline = nullptr;
+HWND g_tocPilotUpdateInline = nullptr;
 using tp::ui::MainView;
 MainView g_mainView = MainView::Packages;
 HWND g_tocPilotWindow = nullptr;
@@ -1694,7 +1696,7 @@ void LayoutControls(HWND hwnd) {
                                              ScaleUi(hwnd, 220), ScaleUi(hwnd, 34), TRUE);
     const bool tocView = tp::ui::ShowsTocPilot(g_mainView);
     for (HWND control : {g_tocPilotDevBuildsInline, g_tocPilotIconsInline,
-                         g_tocPilotWordsInline}) {
+                         g_tocPilotWordsInline, g_tocPilotUpdateInline}) {
         if (control) ShowWindow(control, tocView ? SW_SHOW : SW_HIDE);
     }
     if (g_tocPilotDevBuildsInline) {
@@ -1718,6 +1720,13 @@ void LayoutControls(HWND hwnd) {
                    ScaleUi(hwnd, 32), TRUE);
         SendMessageW(g_tocPilotWordsInline, BM_SETCHECK,
                      ToolbarUsesIcons() ? BST_UNCHECKED : BST_CHECKED, 0);
+    }
+    if (g_tocPilotUpdateInline) {
+        MoveWindow(g_tocPilotUpdateInline, margin + ScaleUi(hwnd, 240),
+                   listTop + ScaleUi(hwnd, 102), ScaleUi(hwnd, 220),
+                   ScaleUi(hwnd, 34), TRUE);
+        SetWindowTextW(g_tocPilotUpdateInline,
+            g_release.assetUrl.empty() ? L"Check for Updates" : L"Install Available Update");
     }
     if (!packagesView && g_branchSelector) ShowWindow(g_branchSelector, SW_HIDE);
     if (packagesView) PositionBranchSelector();
@@ -9721,6 +9730,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             0, 0, 115, 32, hwnd,
             reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_TOCPILOT_TOOLBAR_ICONS_INLINE)),
             GetModuleHandleW(nullptr), nullptr);
+        g_tocPilotUpdateInline = createToolbarButton(L"Check for Updates", IDC_TOCPILOT_UPDATE_INLINE);
         g_tocPilotWordsInline = CreateWindowExW(
             0, L"BUTTON", L"Words", WS_CHILD | WS_TABSTOP | BS_AUTORADIOBUTTON,
             0, 0, 115, 32, hwnd,
@@ -10306,6 +10316,10 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                 OpenWebLink(hwnd, kTocPilotGitHubUrl); return 0;
             case IDC_TOCPILOT_RELEASES_INLINE:
                 OpenWebLink(hwnd, kTocPilotReleasesUrl); return 0;
+            case IDC_TOCPILOT_UPDATE_INLINE:
+                if (!g_release.assetUrl.empty()) StartUpdate(hwnd);
+                else StartUpdateCheck(hwnd);
+                return 0;
             case IDC_TOCPILOT_DEVBUILDS_INLINE:
                 SetReceiveDevelopmentBuilds(
                     hwnd, SendMessageW(g_tocPilotDevBuildsInline, BM_GETCHECK, 0, 0) == BST_CHECKED);
