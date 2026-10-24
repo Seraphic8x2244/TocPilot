@@ -1602,11 +1602,8 @@ void LayoutControls(HWND hwnd) {
     const int accountSyncPanelGap =
         ScaleUi(hwnd, 10);
 
-    const int reservedForAccountSync =
-        false && showAccountSyncPanel
-            ? accountSyncPanelHeight +
-                accountSyncPanelGap
-            : 0;
+    // Account Sync has its own view; no room is reserved beneath Packages.
+    const int reservedForAccountSync = 0;
 
     const int listHeight =
         std::max(
