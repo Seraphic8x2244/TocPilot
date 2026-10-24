@@ -1,5 +1,7 @@
 # TocPilot Development Progress
 
+**Post-trigger layout correction (commit `b96a29e`):** The first v0.6.0-dev.6 release trigger at `a71a63d` is immutable for that workflow; later `dev` commits are **not included** in that release. Static layout audit found the three-row header plus reserved contextual package summary could clip below the old 480px default window (220px minimum package list + 105px summary reserve). Increase initial height and apply view-specific minimum client heights (Packages Compact 500, Advanced 560, Account Sync 680, TocPilot 520 logical pixels), including Advanced switching. This correction requires a newer versioned prerelease before user runtime validation; do not claim dev.6 contains it. Verify its CI and release separately.
+
 **Release preparation (commit `1d264c5`):** Source display/tag macros bumped to `v0.6.0-dev.6` on `dev`; CMake base remains `0.6.0`. This is a preparation commit only, not proof of publication. Trigger `.github/development-release-version` after the targeted Windows build gate, verify Release workflow full build/CTest, SHA sidecar, tag/assets and updater e2e before requesting runtime test.
 
 **Contextual folder affordance (commit `0e75bd5`):** Open Folder is disabled if the selected package has no recorded installed file or target path; actual canonical root confinement remains enforced at execution.
