@@ -1,5 +1,7 @@
 # TocPilot Development Progress
 
+**Release preparation (commit `1d264c5`):** Source display/tag macros bumped to `v0.6.0-dev.6` on `dev`; CMake base remains `0.6.0`. This is a preparation commit only, not proof of publication. Trigger `.github/development-release-version` after the targeted Windows build gate, verify Release workflow full build/CTest, SHA sidecar, tag/assets and updater e2e before requesting runtime test.
+
 **Contextual folder affordance (commit `0e75bd5`):** Open Folder is disabled if the selected package has no recorded installed file or target path; actual canonical root confinement remains enforced at execution.
 
 **TocPilot text-scale preference follow-up (commit `f8024f3`):** Existing text-scale label/ComboBox are now visible and keyboard-reachable within TocPilot Preferences, preserving the original scaling persistence and handler rather than duplicating settings logic. DPI/Compact/Advanced runtime checks and new CI gate remain outstanding.
