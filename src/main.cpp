@@ -205,6 +205,8 @@ MainView g_mainView = MainView::Packages;
 HWND g_tocPilotWindow = nullptr;
 HWND g_accountSyncWindow = nullptr;
 HWND g_accountSyncAccountsList = nullptr;
+HWND g_accountSyncAccountsGroup = nullptr;
+HWND g_accountSyncSyncGroup = nullptr;
 HWND g_accountSyncMacrosCheck = nullptr;
 HWND g_accountSyncKeybindingsCheck = nullptr;
 HWND g_accountSyncPfUiCheck = nullptr;
@@ -8959,7 +8961,7 @@ LRESULT CALLBACK AccountSyncWindowProc(
                         value);
             };
 
-        CreateWindowExW(
+        g_accountSyncAccountsGroup = CreateWindowExW(
             0,
             L"BUTTON",
             L"Accounts",
@@ -9018,7 +9020,7 @@ LRESULT CALLBACK AccountSyncWindowProc(
             0,
             &accountColumn);
 
-        CreateWindowExW(
+        g_accountSyncSyncGroup = CreateWindowExW(
             0,
             L"BUTTON",
             L"Sync",
@@ -9213,6 +9215,8 @@ LRESULT CALLBACK AccountSyncWindowProc(
     case WM_DESTROY:
         g_accountSyncWindow = nullptr;
         g_accountSyncAccountsList = nullptr;
+        g_accountSyncAccountsGroup = nullptr;
+        g_accountSyncSyncGroup = nullptr;
         g_accountSyncMacrosCheck = nullptr;
         g_accountSyncKeybindingsCheck = nullptr;
         g_accountSyncPfUiCheck = nullptr;
