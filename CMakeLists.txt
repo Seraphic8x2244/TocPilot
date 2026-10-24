@@ -554,5 +554,15 @@ if(BUILD_TESTING)
     endif()
     add_test(NAME main-view-navigation COMMAND TocPilotMainViewTests)
 
+    add_executable(TocPilotPackageFolderTests
+        tests/package_folder_tests.cpp
+    )
+    target_compile_features(TocPilotPackageFolderTests PRIVATE cxx_std_20)
+    target_include_directories(TocPilotPackageFolderTests PRIVATE src)
+    if(MSVC)
+        target_compile_options(TocPilotPackageFolderTests PRIVATE /W4 /permissive- /utf-8)
+    endif()
+    add_test(NAME package-folder-confinement COMMAND TocPilotPackageFolderTests)
+
 
 endif()
