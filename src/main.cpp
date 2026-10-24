@@ -24,6 +24,7 @@
 #include "toolbar_icons.h"
 #include "ui_theme.h"
 #include "main_view.h"
+#include "package_folder.h"
 #include "update.h"
 #include "update_all.h"
 #include "ui_dialog.h"
@@ -10379,25 +10380,9 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                 } else if (!p.targetPath.empty()) {
                     relative = std::filesystem::path(p.targetPath).parent_path();
                 }
-                relative = relative.lexically_normal();
-                // Never open a path outside the configured WoW root.
-                if (relative.empty() || relative.is_absolute() || relative.has_root_name()) return 0;
-                for (const auto& part : relative) {
-                    if (part == L"..") return 0;
-                }
-                std::error_code folderError;
-                const auto root = std::filesystem::weakly_canonical(g_root, folderError);
-                if (folderError) return 0;
-                const auto folder = std::filesystem::weakly_canonical(g_root / relative, folderError);
-                if (folderError) return 0;
-                auto parentPart = root.begin();
-                auto childPart = folder.begin();
-                for (; parentPart != root.end(); ++parentPart, ++childPart) {
-                    if (childPart == folder.end() ||
-                        CompareInsensitive(parentPart->wstring(), childPart->wstring()) != 0) return 0;
-                }
-                if (std::filesystem::is_directory(folder, folderError) && !folderError) {
-                    ShellExecuteW(hwnd, L"open", folder.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+                const auto folder = tp::ui::ResolvePackageFolder(g_root, relative);
+                if (folder) {
+                    ShellExecuteW(hwnd, L"open", folder->c_str(), nullptr, nullptr, SW_SHOWNORMAL);
                 }
                 return 0;
             }
