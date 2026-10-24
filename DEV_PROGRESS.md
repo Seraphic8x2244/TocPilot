@@ -1,5 +1,7 @@
 # TocPilot Development Progress
 
+**Windows CI failure and correction (2026-10-24):** Build run `40099941525` for `269bc6e` failed MSVC C2065 (`packageBusy` undeclared) because new contextual Open Folder enablement was inserted above the existing busy-state declaration. Commit `be711d1` moves that enablement after the declaration; verify its exact push-triggered Build/CTest before declaring green. Older CI passes predate Open Folder and do not validate this delta. No runtime build/release published.
+
 ## v0.6.0 Gale navigation slice 3 — source checkpoint (2026-10-24)
 
 **Branch:** `dev` only. Starting remote HEAD `1e2b704425ab196c148668e9b7bf007875155e98` verified. Both push-triggered Build run `40045548344` and Development Release run `40045548356` succeeded for `v0.6.0-dev.5`. User confirmed development release passed. Stable `main` has not been touched.
