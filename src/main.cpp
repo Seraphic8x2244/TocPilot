@@ -1562,23 +1562,17 @@ void LayoutControls(HWND hwnd) {
             placeStrip(controls, gaps, packageToolbarY);
         }
     } else {
-        const std::array<HWND, 8> controls{
+        const std::array<HWND, 5> controls{
             g_updateAllButton,
             g_refreshPackagesButton,
             g_addPackageButton,
-            g_installPackageButton,
-            g_removePackageButton,
-            g_inspectPackageButton,
             g_adoptGitButton,
             g_advancedButton
         };
-        constexpr std::array<int, 7> gaps{
-            kToolbarButtonGap,
-            kToolbarButtonGap + kToolbarGroupExtraGap,
+        constexpr std::array<int, 4> gaps{
             kToolbarButtonGap,
             kToolbarButtonGap,
             kToolbarButtonGap + kToolbarGroupExtraGap,
-            kToolbarButtonGap,
             kToolbarButtonGap + kToolbarGroupExtraGap
         };
         placeStrip(controls, gaps, packageToolbarY);
@@ -1676,7 +1670,21 @@ void LayoutControls(HWND hwnd) {
         if (showSummary) {
             MoveWindow(g_packageSummary, margin,
                        listTop + listHeight + ScaleUi(hwnd, 8),
-                       contentWidth, ScaleUi(hwnd, 95), TRUE);
+                       std::max(1, contentWidth - ScaleUi(hwnd, 228)),
+                       ScaleUi(hwnd, 95), TRUE);
+        }
+    }
+    // Keep existing command handlers and their remove/install confirmations;
+    // only relocate their visible Advanced affordances beside the summary.
+    for (HWND control : {g_installPackageButton, g_removePackageButton}) {
+        if (!control) continue;
+        if (showSummary) {
+            ShowWindow(control, SW_SHOW);
+            MoveWindow(control,
+                       margin + contentWidth - ScaleUi(hwnd, 220)
+                           + (control == g_removePackageButton ? ScaleUi(hwnd, 110) : 0),
+                       listTop + listHeight + ScaleUi(hwnd, 14),
+                       ScaleUi(hwnd, 104), ScaleUi(hwnd, 34), TRUE);
         }
     }
     if (g_syncConfigureButton) {
