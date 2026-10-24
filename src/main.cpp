@@ -118,6 +118,7 @@ constexpr int IDC_TOCPILOT_DEVBUILDS_INLINE = 1045;
 constexpr int IDC_TOCPILOT_TOOLBAR_ICONS_INLINE = 1046;
 constexpr int IDC_TOCPILOT_TOOLBAR_WORDS_INLINE = 1047;
 constexpr int IDC_TOCPILOT_UPDATE_INLINE = 1048;
+constexpr int IDC_PACKAGE_OPEN_FOLDER = 1049;
 
 constexpr int kCompactWindowWidth = 590;
 constexpr int kDefaultWindowHeight = 480;
@@ -219,6 +220,7 @@ int g_hoverPackageRow = -1;
 HWND g_branchSelector = nullptr;
 HWND g_packageHint = nullptr;
 HWND g_packageSummary = nullptr;
+HWND g_packageOpenFolder = nullptr;
 HWND g_textScaleLabel = nullptr;
 HWND g_textScaleCombo = nullptr;
 HWND g_rootLabel = nullptr;
@@ -1676,6 +1678,15 @@ void LayoutControls(HWND hwnd) {
     }
     // Keep existing command handlers and their remove/install confirmations;
     // only relocate their visible Advanced affordances beside the summary.
+    if (g_packageOpenFolder) {
+        ShowWindow(g_packageOpenFolder, showSummary ? SW_SHOW : SW_HIDE);
+        if (showSummary) {
+            MoveWindow(g_packageOpenFolder,
+                       margin + contentWidth - ScaleUi(hwnd, 220),
+                       listTop + listHeight + ScaleUi(hwnd, 56),
+                       ScaleUi(hwnd, 214), ScaleUi(hwnd, 32), TRUE);
+        }
+    }
     for (HWND control : {g_installPackageButton, g_removePackageButton}) {
         if (!control) continue;
         if (showSummary) {
@@ -4137,6 +4148,9 @@ void UpdatePackageButtons() {
     if (!validSelection && g_packageSummary) {
         SetWindowTextW(g_packageSummary, L"Select a package to view its source, branch and revisions.");
     }
+
+    if (g_packageOpenFolder) EnableWindow(
+        g_packageOpenFolder, validSelection && !packageBusy ? TRUE : FALSE);
 
     if (g_stateReady) {
         for (const auto& package : g_state.packages) {
@@ -9872,6 +9886,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             GetModuleHandleW(nullptr),
             nullptr);
 
+        g_packageOpenFolder = createToolbarButton(L"Open Folder", IDC_PACKAGE_OPEN_FOLDER);
         g_packageSummary = CreateWindowExW(
             0, L"STATIC", L"Select a package to view its details.",
             WS_CHILD | SS_LEFT | SS_NOPREFIX,
@@ -10353,6 +10368,30 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                 OpenWebLink(hwnd, kTocPilotGitHubUrl); return 0;
             case IDC_TOCPILOT_RELEASES_INLINE:
                 OpenWebLink(hwnd, kTocPilotReleasesUrl); return 0;
+            case IDC_PACKAGE_OPEN_FOLDER: {
+                const int selected = SelectedPackageRow();
+                if (!g_stateReady || selected < 0 ||
+                    selected >= static_cast<int>(g_state.packages.size())) return 0;
+                const auto& p = g_state.packages[static_cast<std::size_t>(selected)];
+                std::filesystem::path relative;
+                if (!p.installedFiles.empty()) {
+                    relative = std::filesystem::path(p.installedFiles.front()).parent_path();
+                } else if (!p.targetPath.empty()) {
+                    relative = std::filesystem::path(p.targetPath).parent_path();
+                }
+                relative = relative.lexically_normal();
+                // Never open a path outside the configured WoW root.
+                if (relative.empty() || relative.is_absolute() || relative.has_root_name()) return 0;
+                for (const auto& part : relative) {
+                    if (part == L"..") return 0;
+                }
+                const auto folder = g_root / relative;
+                std::error_code folderError;
+                if (std::filesystem::is_directory(folder, folderError)) {
+                    ShellExecuteW(hwnd, L"open", folder.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+                }
+                return 0;
+            }
             case IDC_TOCPILOT_UPDATE_INLINE:
                 if (!g_release.assetUrl.empty()) StartUpdate(hwnd);
                 else StartUpdateCheck(hwnd);
