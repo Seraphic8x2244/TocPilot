@@ -114,6 +114,9 @@ constexpr int IDC_TOCPILOT_SCAN = 1041;
 constexpr int IDC_TOCPILOT_ABOUT = 1042;
 constexpr int IDC_TOCPILOT_REPO_INLINE = 1043;
 constexpr int IDC_TOCPILOT_RELEASES_INLINE = 1044;
+constexpr int IDC_TOCPILOT_DEVBUILDS_INLINE = 1045;
+constexpr int IDC_TOCPILOT_TOOLBAR_ICONS_INLINE = 1046;
+constexpr int IDC_TOCPILOT_TOOLBAR_WORDS_INLINE = 1047;
 
 constexpr int kCompactWindowWidth = 590;
 constexpr int kDefaultWindowHeight = 480;
@@ -190,6 +193,9 @@ HWND g_tocPilotAboutButton = nullptr;
 HWND g_tocPilotVersionLabel = nullptr;
 HWND g_tocPilotRepositoryButton = nullptr;
 HWND g_tocPilotReleasesButton = nullptr;
+HWND g_tocPilotDevBuildsInline = nullptr;
+HWND g_tocPilotIconsInline = nullptr;
+HWND g_tocPilotWordsInline = nullptr;
 using tp::ui::MainView;
 MainView g_mainView = MainView::Packages;
 HWND g_tocPilotWindow = nullptr;
@@ -1686,6 +1692,33 @@ void LayoutControls(HWND hwnd) {
                                                ScaleUi(hwnd, 220), ScaleUi(hwnd, 34), TRUE);
     if (g_tocPilotReleasesButton) MoveWindow(g_tocPilotReleasesButton, margin, tocY + ScaleUi(hwnd, 88),
                                              ScaleUi(hwnd, 220), ScaleUi(hwnd, 34), TRUE);
+    const bool tocView = tp::ui::ShowsTocPilot(g_mainView);
+    for (HWND control : {g_tocPilotDevBuildsInline, g_tocPilotIconsInline,
+                         g_tocPilotWordsInline}) {
+        if (control) ShowWindow(control, tocView ? SW_SHOW : SW_HIDE);
+    }
+    if (g_tocPilotDevBuildsInline) {
+        MoveWindow(g_tocPilotDevBuildsInline, margin + ScaleUi(hwnd, 240), listTop,
+                   ScaleUi(hwnd, 260), ScaleUi(hwnd, 34), TRUE);
+        SendMessageW(g_tocPilotDevBuildsInline, BM_SETCHECK,
+                     g_stateReady && g_state.settings.receiveDevelopmentBuilds
+                         ? BST_CHECKED : BST_UNCHECKED, 0);
+        EnableWindow(g_tocPilotDevBuildsInline, g_stateReady);
+    }
+    if (g_tocPilotIconsInline) {
+        MoveWindow(g_tocPilotIconsInline, margin + ScaleUi(hwnd, 240),
+                   listTop + ScaleUi(hwnd, 50), ScaleUi(hwnd, 115),
+                   ScaleUi(hwnd, 32), TRUE);
+        SendMessageW(g_tocPilotIconsInline, BM_SETCHECK,
+                     ToolbarUsesIcons() ? BST_CHECKED : BST_UNCHECKED, 0);
+    }
+    if (g_tocPilotWordsInline) {
+        MoveWindow(g_tocPilotWordsInline, margin + ScaleUi(hwnd, 360),
+                   listTop + ScaleUi(hwnd, 50), ScaleUi(hwnd, 115),
+                   ScaleUi(hwnd, 32), TRUE);
+        SendMessageW(g_tocPilotWordsInline, BM_SETCHECK,
+                     ToolbarUsesIcons() ? BST_UNCHECKED : BST_CHECKED, 0);
+    }
     if (!packagesView && g_branchSelector) ShowWindow(g_branchSelector, SW_HIDE);
     if (packagesView) PositionBranchSelector();
 }
@@ -9678,6 +9711,21 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             0, 0, 220, 28, hwnd, nullptr, GetModuleHandleW(nullptr), nullptr);
         g_tocPilotRepositoryButton = createToolbarButton(L"GitHub repository", IDC_TOCPILOT_REPO_INLINE);
         g_tocPilotReleasesButton = createToolbarButton(L"Releases", IDC_TOCPILOT_RELEASES_INLINE);
+        g_tocPilotDevBuildsInline = CreateWindowExW(
+            0, L"BUTTON", L"Receive development builds",
+            WS_CHILD | WS_TABSTOP | BS_AUTOCHECKBOX, 0, 0, 260, 34,
+            hwnd, reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_TOCPILOT_DEVBUILDS_INLINE)),
+            GetModuleHandleW(nullptr), nullptr);
+        g_tocPilotIconsInline = CreateWindowExW(
+            0, L"BUTTON", L"Icons", WS_CHILD | WS_TABSTOP | BS_AUTORADIOBUTTON | WS_GROUP,
+            0, 0, 115, 32, hwnd,
+            reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_TOCPILOT_TOOLBAR_ICONS_INLINE)),
+            GetModuleHandleW(nullptr), nullptr);
+        g_tocPilotWordsInline = CreateWindowExW(
+            0, L"BUTTON", L"Words", WS_CHILD | WS_TABSTOP | BS_AUTORADIOBUTTON,
+            0, 0, 115, 32, hwnd,
+            reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_TOCPILOT_TOOLBAR_WORDS_INLINE)),
+            GetModuleHandleW(nullptr), nullptr);
         g_advancedButton =
             createToolbarButton(
                 L"Advanced",
@@ -10248,7 +10296,9 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             case IDC_ACCOUNT_SYNC: g_mainView = MainView::AccountSync; break;
             case IDC_TOCPILOT: g_mainView = MainView::TocPilot; break;
             case IDC_SYNC_CONFIGURE: ShowAccountSyncWindow(hwnd); return 0;
-            case IDC_TOCPILOT_PREFERENCES: ShowTocPilotWindow(hwnd); return 0;
+            case IDC_TOCPILOT_PREFERENCES:
+                if (g_tocPilotDevBuildsInline) SetFocus(g_tocPilotDevBuildsInline);
+                return 0;
             case IDC_TOCPILOT_ABOUT:
                 if (g_tocPilotVersionLabel) SetFocus(g_tocPilotRepositoryButton);
                 return 0;
@@ -10256,6 +10306,15 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                 OpenWebLink(hwnd, kTocPilotGitHubUrl); return 0;
             case IDC_TOCPILOT_RELEASES_INLINE:
                 OpenWebLink(hwnd, kTocPilotReleasesUrl); return 0;
+            case IDC_TOCPILOT_DEVBUILDS_INLINE:
+                SetReceiveDevelopmentBuilds(
+                    hwnd, SendMessageW(g_tocPilotDevBuildsInline, BM_GETCHECK, 0, 0) == BST_CHECKED);
+                return 0;
+            case IDC_TOCPILOT_TOOLBAR_ICONS_INLINE:
+            case IDC_TOCPILOT_TOOLBAR_WORDS_INLINE:
+                SetToolbarPresentation(hwnd, LOWORD(wParam) == IDC_TOCPILOT_TOOLBAR_ICONS_INLINE);
+                LayoutControls(hwnd);
+                return 0;
             case IDC_TOCPILOT_SCAN: AdoptGitAddons(hwnd); return 0;
             default: break;
             }
