@@ -1,5 +1,7 @@
 # TocPilot Development Progress
 
+**Account Sync in-window editor follow-up (commits `4b0a923`, `8b2a68a`):** Reuses the original Account Sync window procedure and all its checkbox, account-list, SaveState, sync, and approval handlers in a native child of the main window, shown only on Account Sync. No parallel state/policy code was introduced. Original popup construction is removed from this entry path. The main window increases height on entering Account Sync if needed to fit the editor plus comparison preview. Requires Windows CI compile/CTest and runtime review of 100/125/150% DPI, Compact/Advanced, account selection, SaveState failures, preview, Sync Now and focus/Tab order. This is not yet runtime-accepted and is not a published release. On smaller windows, confirm layout at minimum dimensions; refine if necessary.
+
 **Windows CI failure and correction (2026-10-24):** Build run `40099941525` for `269bc6e` failed MSVC C2065 (`packageBusy` undeclared) because new contextual Open Folder enablement was inserted above the existing busy-state declaration. Commit `be711d1` moves that enablement after the declaration; verify its exact push-triggered Build/CTest before declaring green. Older CI passes predate Open Folder and do not validate this delta. No runtime build/release published.
 
 ## v0.6.0 Gale navigation slice 3 — source checkpoint (2026-10-24)
