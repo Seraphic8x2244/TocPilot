@@ -1649,7 +1649,7 @@ void LayoutControls(HWND hwnd) {
             ShowWindow(g_accountSyncTilesView, SW_SHOW);
             const int actionWidth = ScaleUi(hwnd, 84);
             const int actionGap = ScaleUi(hwnd, 8);
-            const int panelY = listTop + ScaleUi(hwnd, 48);
+            const int panelY = listTop + ScaleUi(hwnd, 260);
             MoveWindow(g_accountSyncTilesView, margin + actionWidth + actionGap,
                        panelY, std::max(1, contentWidth - actionWidth - actionGap),
                        accountSyncPanelHeight, TRUE);
@@ -1699,10 +1699,13 @@ void LayoutControls(HWND hwnd) {
                        ScaleUi(hwnd, 104), ScaleUi(hwnd, 34), TRUE);
         }
     }
-    if (g_syncConfigureButton) {
-        ShowWindow(g_syncConfigureButton, syncView ? SW_SHOW : SW_HIDE);
-        MoveWindow(g_syncConfigureButton, margin, listTop,
-                   ScaleUi(hwnd, 220), ScaleUi(hwnd, 32), TRUE);
+    // The original Account Sync control/editor window is now an
+    // embedded child rather than a separate popup.
+    if (g_syncConfigureButton) ShowWindow(g_syncConfigureButton, SW_HIDE);
+    if (g_accountSyncWindow) {
+        ShowWindow(g_accountSyncWindow, syncView ? SW_SHOW : SW_HIDE);
+        if (syncView) MoveWindow(g_accountSyncWindow, margin, listTop,
+                                 contentWidth, ScaleUi(hwnd, 244), TRUE);
     }
     const std::array<HWND, 3> tocPilotViewButtons{
         g_tocPilotPreferencesButton, g_tocPilotScanButton,
@@ -8919,14 +8922,9 @@ bool SaveAccountSyncConfiguration(
 
     RefreshAccountSyncPreview();
 
-    HWND mainWindow =
-        GetWindow(
-            owner,
-            GW_OWNER);
-
-    if (!mainWindow) {
-        mainWindow = owner;
-    }
+    HWND mainWindow = GetParent(owner);
+    if (!mainWindow) mainWindow = GetWindow(owner, GW_OWNER);
+    if (!mainWindow) mainWindow = owner;
 
     LayoutControls(
         mainWindow);
@@ -9219,84 +9217,24 @@ LRESULT CALLBACK AccountSyncWindowProc(
         lParam);
 }
 
-void ShowAccountSyncWindow(
-    HWND owner) {
-    if (g_accountSyncWindow &&
-        IsWindow(
-            g_accountSyncWindow)) {
-        PopulateAccountSyncAccounts(
-            g_accountSyncWindow);
+void ShowAccountSyncWindow(HWND owner) {
+    if (g_accountSyncWindow && IsWindow(g_accountSyncWindow)) {
+        PopulateAccountSyncAccounts(g_accountSyncWindow);
         LoadAccountSyncControls();
-        ShowWindow(
-            g_accountSyncWindow,
-            SW_RESTORE);
-        SetForegroundWindow(
-            g_accountSyncWindow);
         return;
     }
 
-    RECT ownerRect{};
-    GetWindowRect(
-        owner,
-        &ownerRect);
-
-    const int windowWidth =
-        ScaleUi(owner, 585);
-    const int windowHeight =
-        ScaleUi(owner, 295);
-
-    const int x =
-        static_cast<int>(
-            ownerRect.left) +
-        std::max(
-            0,
-            static_cast<int>(
-                ownerRect.right -
-                ownerRect.left) -
-                windowWidth) /
-                2;
-    const int y =
-        static_cast<int>(
-            ownerRect.top) +
-        std::max(
-            0,
-            static_cast<int>(
-                ownerRect.bottom -
-                ownerRect.top) -
-                windowHeight) /
-                2;
-
-    g_accountSyncWindow =
-        CreateWindowExW(
-            WS_EX_TOOLWINDOW,
-            kAccountSyncWindowClass,
-            L"TocPilot - Account Sync",
-            WS_OVERLAPPED |
-                WS_CAPTION |
-                WS_SYSMENU,
-            x,
-            y,
-            windowWidth,
-            windowHeight,
-            owner,
-            nullptr,
-            GetModuleHandleW(nullptr),
-            nullptr);
-
+    // Reuse the established Account Sync editor, command handling, and
+    // save/approval lifecycle as a child of the main window.
+    g_accountSyncWindow = CreateWindowExW(
+        0, kAccountSyncWindowClass, L"",
+        WS_CHILD | WS_CLIPCHILDREN,
+        0, 0, 1, 1, owner, nullptr,
+        GetModuleHandleW(nullptr), nullptr);
     if (!g_accountSyncWindow) {
-        MessageBoxW(
-            owner,
-            L"Could not open Account Sync configuration.",
-            L"TocPilot",
-            MB_OK | MB_ICONERROR);
-        return;
+        MessageBoxW(owner, L"Could not open Account Sync configuration.",
+                    L"TocPilot", MB_OK | MB_ICONERROR);
     }
-
-    ShowWindow(
-        g_accountSyncWindow,
-        SW_SHOW);
-    UpdateWindow(
-        g_accountSyncWindow);
 }
 
 void RememberAdvancedWindowWidth(
@@ -10356,7 +10294,10 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
         if (HIWORD(wParam) == BN_CLICKED) {
             switch (LOWORD(wParam)) {
             case IDC_NAV_PACKAGES: g_mainView = MainView::Packages; break;
-            case IDC_ACCOUNT_SYNC: g_mainView = MainView::AccountSync; break;
+            case IDC_ACCOUNT_SYNC:
+                g_mainView = MainView::AccountSync;
+                ShowAccountSyncWindow(hwnd);
+                break;
             case IDC_TOCPILOT: g_mainView = MainView::TocPilot; break;
             case IDC_SYNC_CONFIGURE: ShowAccountSyncWindow(hwnd); return 0;
             case IDC_TOCPILOT_PREFERENCES:
