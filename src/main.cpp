@@ -200,6 +200,7 @@ HWND g_tocPilotDevBuildsInline = nullptr;
 HWND g_tocPilotIconsInline = nullptr;
 HWND g_tocPilotWordsInline = nullptr;
 HWND g_tocPilotUpdateInline = nullptr;
+HWND g_tocPilotInlineUpdateStatus = nullptr;
 using tp::ui::MainView;
 MainView g_mainView = MainView::Packages;
 HWND g_tocPilotWindow = nullptr;
@@ -1786,8 +1787,12 @@ void LayoutControls(HWND hwnd) {
         MoveWindow(g_tocPilotUpdateInline, margin + ScaleUi(hwnd, 240),
                    listTop + ScaleUi(hwnd, 102), ScaleUi(hwnd, 220),
                    ScaleUi(hwnd, 34), TRUE);
-        SetWindowTextW(g_tocPilotUpdateInline,
-            g_release.assetUrl.empty() ? L"Check for Updates" : L"Install Available Update");
+    }
+    if (g_tocPilotInlineUpdateStatus) {
+        ShowWindow(g_tocPilotInlineUpdateStatus, tocView ? SW_SHOW : SW_HIDE);
+        MoveWindow(g_tocPilotInlineUpdateStatus, margin,
+                   listTop + ScaleUi(hwnd, 270),
+                   contentWidth, ScaleUi(hwnd, 48), TRUE);
     }
     if (!packagesView && g_branchSelector) ShowWindow(g_branchSelector, SW_HIDE);
     if (packagesView) PositionBranchSelector();
@@ -7201,6 +7206,12 @@ void StartUpdateCheck(
     }
 
     g_appUpdateCheckInProgress = true;
+    if (g_tocPilotInlineUpdateStatus)
+        SetWindowTextW(g_tocPilotInlineUpdateStatus, L"Checking GitHub for the latest TocPilot release...");
+    if (g_tocPilotUpdateInline) {
+        SetWindowTextW(g_tocPilotUpdateInline, L"Checking...");
+        EnableWindow(g_tocPilotUpdateInline, FALSE);
+    }
     g_refreshAddonsAfterAppCheck =
         refreshAddonsAfter;
     if (refreshAddonsAfter) {
@@ -8232,6 +8243,13 @@ void SetTocPilotUpdateUi(
     const std::wstring& status,
     const wchar_t* buttonText,
     bool buttonEnabled) {
+    if (g_tocPilotInlineUpdateStatus)
+        SetWindowTextW(g_tocPilotInlineUpdateStatus, status.c_str());
+    if (g_tocPilotUpdateInline) {
+        SetWindowTextW(g_tocPilotUpdateInline, buttonText);
+        EnableWindow(g_tocPilotUpdateInline, buttonEnabled ? TRUE : FALSE);
+    }
+
     if (g_tocPilotUpdateStatus) {
         SetWindowTextW(
             g_tocPilotUpdateStatus,
@@ -9798,6 +9816,10 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_TOCPILOT_TOOLBAR_ICONS_INLINE)),
             GetModuleHandleW(nullptr), nullptr);
         g_tocPilotUpdateInline = createToolbarButton(L"Check for Updates", IDC_TOCPILOT_UPDATE_INLINE);
+        g_tocPilotInlineUpdateStatus = CreateWindowExW(
+            0, L"STATIC", L"Ready to check for updates.",
+            WS_CHILD | SS_LEFT | SS_NOPREFIX,
+            0, 0, 220, 48, hwnd, nullptr, GetModuleHandleW(nullptr), nullptr);
         g_tocPilotWordsInline = CreateWindowExW(
             0, L"BUTTON", L"Words", WS_CHILD | WS_TABSTOP | BS_AUTORADIOBUTTON,
             0, 0, 115, 32, hwnd,
@@ -10431,6 +10453,11 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             case IDC_TOCPILOT_DEVBUILDS_INLINE:
                 SetReceiveDevelopmentBuilds(
                     hwnd, SendMessageW(g_tocPilotDevBuildsInline, BM_GETCHECK, 0, 0) == BST_CHECKED);
+                // The confirmation or SaveState may reject the requested change.
+                // Restore the checkbox to the authoritative persisted setting.
+                SendMessageW(g_tocPilotDevBuildsInline, BM_SETCHECK,
+                    g_stateReady && g_state.settings.receiveDevelopmentBuilds
+                        ? BST_CHECKED : BST_UNCHECKED, 0);
                 return 0;
             case IDC_TOCPILOT_TOOLBAR_ICONS_INLINE:
             case IDC_TOCPILOT_TOOLBAR_WORDS_INLINE:
