@@ -23,6 +23,7 @@
 #include "splash.h"
 #include "toolbar_icons.h"
 #include "ui_theme.h"
+#include "main_view.h"
 #include "update.h"
 #include "update_all.h"
 #include "ui_dialog.h"
@@ -184,7 +185,7 @@ HWND g_syncConfigureButton = nullptr;
 HWND g_tocPilotPreferencesButton = nullptr;
 HWND g_tocPilotScanButton = nullptr;
 HWND g_tocPilotAboutButton = nullptr;
-enum class MainView { Packages, AccountSync, TocPilot };
+using tp::ui::MainView;
 MainView g_mainView = MainView::Packages;
 HWND g_tocPilotWindow = nullptr;
 HWND g_accountSyncWindow = nullptr;
@@ -1569,8 +1570,8 @@ void LayoutControls(HWND hwnd) {
         placeStrip(controls, gaps, packageToolbarY);
     }
 
-    const bool packagesView = g_mainView == MainView::Packages;
-    const bool syncView = g_mainView == MainView::AccountSync;
+    const bool packagesView = tp::ui::ShowsPackages(g_mainView);
+    const bool syncView = tp::ui::ShowsSync(g_mainView);
     for (HWND control : {g_updateAllButton, g_refreshPackagesButton,
                          g_addPackageButton, g_installPackageButton,
                          g_removePackageButton, g_inspectPackageButton,
@@ -1665,7 +1666,7 @@ void LayoutControls(HWND hwnd) {
     int tocY = listTop;
     for (HWND control : tocPilotViewButtons) {
         if (!control) continue;
-        ShowWindow(control, g_mainView == MainView::TocPilot ? SW_SHOW : SW_HIDE);
+        ShowWindow(control, tp::ui::ShowsTocPilot(g_mainView) ? SW_SHOW : SW_HIDE);
         MoveWindow(control, margin, tocY, ScaleUi(hwnd, 220),
                    ScaleUi(hwnd, 34), TRUE);
         tocY += ScaleUi(hwnd, 46);
