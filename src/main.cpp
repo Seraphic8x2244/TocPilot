@@ -1543,8 +1543,6 @@ void LayoutControls(HWND hwnd) {
             g_removePackageButton,
             g_inspectPackageButton,
             g_adoptGitButton,
-            g_accountSyncButton,
-            g_tocPilotButton,
             g_advancedButton
         };
         constexpr std::array<int, 7> gaps{
