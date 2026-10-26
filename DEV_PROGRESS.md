@@ -15,7 +15,21 @@
 
 **Anti-patterns explicitly prohibited:** tiny commit → automatic Build → another tiny commit while first Build runs; multiple overlapping development releases; repeated unchanged workflow status checks; releasing before the final candidate passes CI; silently testing a published tag against later `dev` code; claiming a green previous SHA validates a new SHA; treating “don't stop” as a reason to run forever.
 
-## Current Handoff — v0.6.0 Gale UI (2026-10-24)
+## Current Handoff — Gale visual shell slice (2026-10-26)
+
+**Branch/provenance:** `dev` only. Base remote SHA `4bf46cb5a0007c3dd897d9802916b951e21bd91c`; the authoritative new HEAD is the commit containing this handoff (verify via GitHub ref). Source remains `v0.6.0-dev.7`. Latest *published and updater-verified* prerelease remains `v0.6.0-dev.7` at `fe66c5971a9b2984293d653a954eda5b0285484b`; user-supplied Windows screenshots documented below are the visual evidence, **not visual acceptance**. `main` untouched.
+
+**Cohesive visual target — applies across all three views:** One dark graphite surface and restrained blue primary accent; TocPilot wordmark and consistently labelled Launch WoW in a compact branded header; persistent Packages / Account Sync / TocPilot text navigation with active underline; left-aligned toolbar with small (20 logical pixel) *light* icons only for the optional package-action Icons mode, prominent Update All, legible words otherwise; consistent rounded action buttons, Segoe UI type, clear disabled/hover/pressed/focus states and DPI/high-contrast fallbacks. Retain five semantically coloured package rows and single inset selection border; keep existing native ListView/column sorting. Compact should fit without horizontally bloated controls. On Account Sync, preserve actual editor/preview/approval state; on TocPilot, preserve inline settings, scan, updater and links. Later slices should remove remaining native white group-box/list/header mismatch and reorganise the three flat TocPilot sections into coherent panels, without inventing sync statuses or new functionality. This is a visual language specification, not a claim of pixel-perfect Gale reproduction.
+
+**This slice — cohesive shell, not just control rearrangement:** `src/main.cpp` applies a shared Win32 GDI owner-drawn treatment to navigation, the three package actions, the main Launch button and existing primary/secondary actions on Account Sync and TocPilot. Navigation is labelled regardless of Icons/Words mode, has persistent active underline and distinct selected surface, and keeps original button handles/commands. Icon mode retains accessible tooltips with smaller light glyphs. Hover state is tracked through button subclassing, while native focus and keyboard dispatch remain. Palette-resolved visual state lives in `src/ui_theme.h` with regression coverage in `tests/ui_theme_tests.cpp`. App launcher no longer relies on an unlabeled icon. Header/toolbar density is reduced and package-list outer white client edge removed outside high-contrast. No operation/transaction, configuration, removal, account sync, updater or permissions logic is changed.
+
+**Validation gates:** Implemented source and tests are bundled with this single change. Exact-SHA push Build/MSVC x64 Release and CTest must be recorded separately once its status is available; until then **CI pending, Windows runtime untested**. Do **not** trigger a development release until a meaningful integrated Windows visual runtime milestone; `v0.6.0-dev.7` does not include this slice. High-contrast/DPI, styling of owner-drawn controls, hover/focus, Icons/Words and small-window layout require actual Windows evidence.
+
+**Single next action after exact-SHA CI:** Inspect integrated dark header and list-group contrast and undertake the next high-impact native-surface consolidation (not an unrelated micro-slice) before one consolidated updater-installed Windows visual test. The remaining white Account Sync tiles/group boxes and ListView header, and the scattered TocPilot content, are the principal visual debts. Follow Mandatory Development Execution Guardrails; no polling loops or intermediate releases.
+
+---
+
+## Prior Handoff — v0.6.0 Gale UI (2026-10-24)
 
 **Branch:** `dev` exclusively. Last verified code/release commit `fe66c5971a9b2984293d653a954eda5b0285484b`; subsequent `dev` handoff commit before this update: `038b8ef08d9df597d1d4e52ec0dcd46b63654eb5` (documentation only). Version `v0.6.0-dev.7`. Stable `main` stays untouched.
 

@@ -1,4 +1,5 @@
 #include "toolbar_icons.h"
+#include "ui_theme.h"
 
 #include "resource.h"
 
@@ -312,7 +313,7 @@ ToolbarIcon CreatePair(
             iconFont,
             glyph,
             iconSize,
-            RGB(0, 0, 0),
+            tp::ui::Palette::primaryText,
             cutoutFont,
             cutoutGlyph);
 

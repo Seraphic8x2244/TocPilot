@@ -123,12 +123,12 @@ constexpr int IDC_PACKAGE_OPEN_FOLDER = 1049;
 
 constexpr int kCompactWindowWidth = 590;
 constexpr int kDefaultWindowHeight = 550;
-constexpr int kToolbarButtonSize = 48;
-constexpr int kToolbarIconSize = 36;
-constexpr int kToolbarButtonGap = 6;
+constexpr int kToolbarButtonSize = 42;
+constexpr int kToolbarIconSize = 20;
+constexpr int kToolbarButtonGap = 10;
 constexpr int kToolbarGroupExtraGap = 16;
 constexpr int kToolbarWordButtonWidth = 125;
-constexpr int kToolbarWordButtonHeight = 32;
+constexpr int kToolbarWordButtonHeight = 36;
 constexpr int kCompactPrimaryButtonCount = 6;
 constexpr int kAdvancedButtonCount = 11;
 constexpr int kCompactNameColumnMinWidth = 220;
@@ -621,10 +621,13 @@ bool ToolbarUsesIcons() {
 
 bool ToolbarControlUsesIcon(
     HWND control) {
-    return
-        ToolbarUsesIcons() ||
-        control ==
-            g_launchWowButton;
+    // Navigation and the main launch action remain labelled in both modes.
+    // The Icons preference changes package-action buttons only.
+    return ToolbarUsesIcons() &&
+        control != g_launchWowButton &&
+        control != g_packagesNavLabel &&
+        control != g_accountSyncButton &&
+        control != g_tocPilotButton;
 }
 
 BOOL CALLBACK ApplyFontToChild(HWND child, LPARAM fontValue) {
@@ -1395,11 +1398,12 @@ void LayoutControls(HWND hwnd) {
                     gapTotal -
                     fixedIconWidth;
 
-                wordButtonWidth =
-                    std::max(
-                        wordButtonWidth,
-                        availableForWords /
-                            wordButtonCount);
+                // A compact left-aligned action strip, not three
+                // stretched legacy buttons spanning the entire view.
+                wordButtonWidth = std::min(
+                    wordButtonWidth,
+                    std::max(ScaleUi(hwnd, 110),
+                             availableForWords / wordButtonCount));
             }
 
             int stripWidth =
@@ -1408,13 +1412,7 @@ void LayoutControls(HWND hwnd) {
                 wordButtonCount *
                     wordButtonWidth;
 
-            int x =
-                margin +
-                std::max(
-                    0,
-                    (contentWidth -
-                     stripWidth) /
-                        2);
+            int x = margin;
 
             for (std::size_t index = 0;
                  index <
@@ -1472,13 +1470,14 @@ void LayoutControls(HWND hwnd) {
             }
         };
 
-    // v0.6.0 layout migration, slice 1: keep the game launcher in a
-    // separate top row instead of mixing it with package operations.
-    // The remaining legacy controls stay reachable until the dedicated
-    // Packages / Account Sync / TocPilot views replace this strip.
-    const std::array<HWND, 1> launchControls{g_launchWowButton};
-    constexpr std::array<int, 0> launchGaps{};
-    placeStrip(launchControls, launchGaps, buttonY);
+    // Permanent branded header: a labelled game-launch action on the
+    // right, not a lone oversized black glyph floating above the views.
+    if (g_launchWowButton) {
+        ShowWindow(g_launchWowButton, SW_SHOW);
+        MoveWindow(g_launchWowButton,
+                   width - margin - ScaleUi(hwnd, 160), buttonY,
+                   ScaleUi(hwnd, 160), toolbarRowHeight, TRUE);
+    }
     if (g_brandLabel) {
         ShowWindow(g_brandLabel, SW_SHOW);
         MoveWindow(g_brandLabel, margin, buttonY,
@@ -1487,11 +1486,10 @@ void LayoutControls(HWND hwnd) {
             reinterpret_cast<WPARAM>(g_boldUiFont), TRUE);
     }
 
-    // Navigation row: the Packages view remains active while the existing
-    // Account Sync and TocPilot entry points still open their legacy dialogs.
-    // Follow-up slices will migrate the dialog contents into these views.
+    // Persistent labelled navigation; the active view is distinguished
+    // by the common owner-drawn underline and surface, not by an icon.
     const int navigationY =
-        buttonY + toolbarRowHeight + ScaleUi(hwnd, 10);
+        buttonY + toolbarRowHeight + ScaleUi(hwnd, 6);
     const int navigationWidth = ScaleUi(hwnd, 124);
     const int navigationGap = ScaleUi(hwnd, 8);
     if (g_packagesNavLabel) {
@@ -1514,7 +1512,7 @@ void LayoutControls(HWND hwnd) {
                    navigationWidth, toolbarRowHeight, TRUE);
     }
     const int packageToolbarY =
-        navigationY + toolbarRowHeight + ScaleUi(hwnd, 10);
+        navigationY + toolbarRowHeight + ScaleUi(hwnd, 6);
     if (!g_advancedVisible) {
         if (ToolbarUsesIcons()) {
             const std::array<HWND, 3> controls{
@@ -7394,7 +7392,10 @@ const wchar_t* ToolbarButtonName(
         return L"Refresh";
     }
     if (control == g_launchWowButton) {
-        return L"Launch";
+        return L"Launch WoW";
+    }
+    if (control == g_packagesNavLabel) {
+        return L"Packages";
     }
     if (control == g_addPackageButton) {
         return L"Add Repository";
@@ -7415,7 +7416,7 @@ const wchar_t* ToolbarButtonName(
         return L"Account Sync";
     }
     if (control == g_tocPilotButton) {
-        return L"Info";
+        return L"TocPilot";
     }
     if (control == g_advancedButton) {
         return L"Advanced";
@@ -7523,9 +7524,55 @@ void ReloadToolbarImages(
     }
 }
 
+
+bool IsMainChromeButton(HWND control) {
+    for (HWND candidate : {
+        g_updateAllButton, g_refreshPackagesButton, g_launchWowButton,
+        g_addPackageButton, g_installPackageButton, g_removePackageButton,
+        g_inspectPackageButton, g_adoptGitButton, g_advancedButton,
+        g_packagesNavLabel, g_accountSyncButton, g_tocPilotButton,
+        g_syncConfigureButton, g_tocPilotPreferencesButton,
+        g_tocPilotScanButton, g_tocPilotAboutButton,
+        g_tocPilotRepositoryButton, g_tocPilotReleasesButton,
+        g_tocPilotUpdateInline, g_packageOpenFolder,
+        g_accountSyncTileRefreshButton, g_accountSyncTileSyncButton
+    }) {
+        if (control && control == candidate) return true;
+    }
+    return false;
+}
+
+LRESULT CALLBACK MainChromeButtonSubclass(HWND hwnd, UINT message,
+    WPARAM wParam, LPARAM lParam, UINT_PTR id, DWORD_PTR hovered) {
+    if (message == WM_MOUSEMOVE && !hovered) {
+        TRACKMOUSEEVENT tracking{sizeof(tracking), TME_LEAVE, hwnd, 0};
+        TrackMouseEvent(&tracking);
+        SetWindowSubclass(hwnd, MainChromeButtonSubclass, id, 1);
+        InvalidateRect(hwnd, nullptr, FALSE);
+    } else if (message == WM_MOUSELEAVE) {
+        SetWindowSubclass(hwnd, MainChromeButtonSubclass, id, 0);
+        InvalidateRect(hwnd, nullptr, FALSE);
+    } else if (message == WM_NCDESTROY) {
+        RemoveWindowSubclass(hwnd, MainChromeButtonSubclass, id);
+    }
+    return DefSubclassProc(hwnd, message, wParam, lParam);
+}
+
+void StyleMainChromeButton(HWND control) {
+    if (!control) return;
+    LONG_PTR style = GetWindowLongPtrW(control, GWL_STYLE);
+    style = (style & ~BS_TYPEMASK) | BS_OWNERDRAW;
+    SetWindowLongPtrW(control, GWL_STYLE, style);
+    SetWindowSubclass(control, MainChromeButtonSubclass, 2, 0);
+    SetWindowPos(control, nullptr, 0, 0, 0, 0,
+        SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER |
+        SWP_NOACTIVATE | SWP_FRAMECHANGED);
+    InvalidateRect(control, nullptr, TRUE);
+}
+
 void ApplyToolbarPresentation(
     HWND hwnd) {
-    const std::array<HWND, 11>
+    const std::array<HWND, 12>
         controls{
             g_updateAllButton,
             g_refreshPackagesButton,
@@ -7537,7 +7584,8 @@ void ApplyToolbarPresentation(
             g_adoptGitButton,
             g_accountSyncButton,
             g_tocPilotButton,
-            g_advancedButton
+            g_advancedButton,
+            g_packagesNavLabel
         };
 
     for (HWND control :
@@ -7552,11 +7600,7 @@ void ApplyToolbarPresentation(
                 GWL_STYLE);
 
         style &= ~BS_TYPEMASK;
-        style |=
-            ToolbarControlUsesIcon(
-                control)
-                ? BS_OWNERDRAW
-                : BS_PUSHBUTTON;
+        style |= BS_OWNERDRAW;
 
         SetWindowLongPtrW(
             control,
@@ -7587,154 +7631,113 @@ void ApplyToolbarPresentation(
                 SWP_NOACTIVATE |
                 SWP_FRAMECHANGED);
 
-        InvalidateRect(
-            control,
-            nullptr,
-            TRUE);
+        SetWindowSubclass(control, MainChromeButtonSubclass, 2, 0);
+        InvalidateRect(control, nullptr, TRUE);
     }
+
+    for (HWND control : {
+        g_syncConfigureButton, g_tocPilotPreferencesButton,
+        g_tocPilotScanButton, g_tocPilotAboutButton,
+        g_tocPilotRepositoryButton, g_tocPilotReleasesButton,
+        g_tocPilotUpdateInline, g_packageOpenFolder,
+        g_accountSyncTileRefreshButton, g_accountSyncTileSyncButton
+    }) StyleMainChromeButton(control);
 
     LayoutControls(hwnd);
 }
 
-bool DrawToolbarButton(
-    const DRAWITEMSTRUCT* draw) {
-    if (!draw) {
-        return false;
+bool DrawToolbarButton(const DRAWITEMSTRUCT* draw) {
+    if (!draw || !IsMainChromeButton(draw->hwndItem)) return false;
+    HWND control = draw->hwndItem;
+    const bool navigation = control == g_packagesNavLabel ||
+        control == g_accountSyncButton || control == g_tocPilotButton;
+    const bool active = (control == g_packagesNavLabel &&
+        g_mainView == MainView::Packages) ||
+        (control == g_accountSyncButton &&
+         g_mainView == MainView::AccountSync) ||
+        (control == g_tocPilotButton &&
+         g_mainView == MainView::TocPilot);
+    const bool primary = control == g_updateAllButton ||
+        control == g_launchWowButton || control == g_accountSyncTileSyncButton ||
+        control == g_tocPilotUpdateInline;
+    const auto role = navigation ? tp::ui::ChromeRole::Navigation :
+        primary ? tp::ui::ChromeRole::Primary : tp::ui::ChromeRole::Secondary;
+    const bool disabled = (draw->itemState & ODS_DISABLED) != 0;
+    const bool pressed = (draw->itemState & ODS_SELECTED) != 0;
+    DWORD_PTR hovered = 0;
+    GetWindowSubclass(control, MainChromeButtonSubclass, 2, &hovered);
+    const bool hot = hovered != 0 || (draw->itemState & ODS_HOTLIGHT) != 0;
+    const bool contrast = tp::ui::HighContrast();
+    const auto visual = tp::ui::ResolveChrome(role, active, hot, pressed, disabled);
+    HDC dc = draw->hDC;
+    const RECT rect = draw->rcItem;
+    const COLORREF backdrop = contrast ? GetSysColor(COLOR_BTNFACE) :
+        navigation || control == g_updateAllButton ||
+        control == g_refreshPackagesButton || control == g_addPackageButton ||
+        control == g_launchWowButton
+            ? tp::ui::Palette::toolbar : tp::ui::Palette::window;
+    HBRUSH backing = CreateSolidBrush(backdrop);
+    FillRect(dc, &rect, backing);
+    DeleteObject(backing);
+
+    const COLORREF surface = contrast
+        ? (active ? GetSysColor(COLOR_HIGHLIGHT) : GetSysColor(COLOR_BTNFACE))
+        : visual.fill;
+    const COLORREF edge = contrast ? GetSysColor(COLOR_BTNTEXT) : visual.border;
+    HPEN pen = CreatePen(PS_SOLID, 1, edge);
+    HBRUSH brush = CreateSolidBrush(surface);
+    const HGDIOBJ oldPen = SelectObject(dc, pen);
+    const HGDIOBJ oldBrush = SelectObject(dc, brush);
+    const int radius = ScaleUi(control, navigation ? 8 : 12);
+    RoundRect(dc, rect.left + 1, rect.top + 1,
+              rect.right - 1, rect.bottom - 1, radius, radius);
+    SelectObject(dc, oldPen);
+    SelectObject(dc, oldBrush);
+    DeleteObject(pen);
+    DeleteObject(brush);
+
+    if (visual.activeUnderline && !contrast) {
+        RECT underline{rect.left + ScaleUi(control, 12),
+                       rect.bottom - ScaleUi(control, 4),
+                       rect.right - ScaleUi(control, 12),
+                       rect.bottom - ScaleUi(control, 1)};
+        HBRUSH accent = CreateSolidBrush(tp::ui::Palette::alreadyGood);
+        FillRect(dc, &underline, accent);
+        DeleteObject(accent);
     }
 
-    HWND control =
-        draw->hwndItem;
-
-    if (!ToolbarControlUsesIcon(
-            control)) {
-        return false;
+    const bool useIcon = ToolbarControlUsesIcon(control) &&
+        !navigation && ToolbarButtonIcon(control, disabled) != nullptr;
+    if (useIcon) {
+        const int side = ScaleUi(control, kToolbarIconSize);
+        DrawIconEx(dc, rect.left + (rect.right - rect.left - side) / 2,
+            rect.top + (rect.bottom - rect.top - side) / 2,
+            ToolbarButtonIcon(control, disabled), side, side, 0, nullptr, DI_NORMAL);
+    } else {
+        const int length = GetWindowTextLengthW(control);
+        std::wstring label(static_cast<std::size_t>(length) + 1, L'\\0');
+        if (length) GetWindowTextW(control, label.data(), length + 1);
+        label.resize(static_cast<std::size_t>(length));
+        RECT textRect = rect;
+        InflateRect(&textRect, -ScaleUi(control, 7), -ScaleUi(control, 2));
+        SetBkMode(dc, TRANSPARENT);
+        SetTextColor(dc, contrast
+            ? (active ? GetSysColor(COLOR_HIGHLIGHTTEXT) :
+               GetSysColor(disabled ? COLOR_GRAYTEXT : COLOR_BTNTEXT))
+            : visual.text);
+        HFONT emphasis = (active || primary) ? g_boldUiFont : g_uiFont;
+        HGDIOBJ previousFont = emphasis ? SelectObject(dc, emphasis) : nullptr;
+        DrawTextW(dc, label.c_str(), static_cast<int>(label.size()),
+            &textRect, DT_CENTER | DT_VCENTER | DT_SINGLELINE |
+            DT_END_ELLIPSIS | DT_NOPREFIX);
+        if (previousFont) SelectObject(dc, previousFont);
     }
 
-    if (!control ||
-        !ToolbarButtonIcon(
-            control,
-            false)) {
-        return false;
+    if ((draw->itemState & ODS_FOCUS) != 0) {
+        RECT focus = rect;
+        InflateRect(&focus, -ScaleUi(control, 4), -ScaleUi(control, 4));
+        DrawFocusRect(dc, &focus);
     }
-
-    RECT rect =
-        draw->rcItem;
-
-    UINT frameState =
-        DFCS_BUTTONPUSH;
-
-    if ((draw->itemState &
-         ODS_DISABLED) != 0) {
-        frameState |=
-            DFCS_INACTIVE;
-    }
-
-    if ((draw->itemState &
-         ODS_SELECTED) != 0) {
-        frameState |=
-            DFCS_PUSHED;
-    }
-
-    if ((draw->itemState &
-         ODS_HOTLIGHT) != 0) {
-        frameState |=
-            DFCS_HOT;
-    }
-
-    const COLORREF surface = (draw->itemState & ODS_SELECTED)
-        ? tp::ui::Palette::buttonPressed
-        : (draw->itemState & ODS_HOTLIGHT)
-            ? tp::ui::Palette::buttonHover : tp::ui::Palette::button;
-    HBRUSH fill = CreateSolidBrush(tp::ui::HighContrast()
-        ? GetSysColor(COLOR_BTNFACE) : surface);
-    FillRect(draw->hDC, &rect, fill);
-    DeleteObject(fill);
-    HBRUSH outline = CreateSolidBrush(tp::ui::HighContrast()
-        ? GetSysColor(COLOR_BTNSHADOW) : tp::ui::Palette::divider);
-    FrameRect(draw->hDC, &rect, outline);
-    DeleteObject(outline);
-
-    const bool disabled =
-        (draw->itemState &
-         ODS_DISABLED) != 0;
-
-    HICON icon =
-        ToolbarButtonIcon(
-            control,
-            disabled);
-
-    if (!icon) {
-        icon =
-            ToolbarButtonIcon(
-                control,
-                false);
-    }
-
-    const int iconSize =
-        ScaleUi(
-            control,
-            kToolbarIconSize);
-
-    int x =
-        rect.left +
-        (rect.right -
-         rect.left -
-         iconSize) /
-            2;
-
-    int y =
-        rect.top +
-        (rect.bottom -
-         rect.top -
-         iconSize) /
-            2;
-
-    if ((draw->itemState &
-         ODS_SELECTED) != 0) {
-        const int offset =
-            std::max(
-                1,
-                ScaleUi(
-                    control,
-                    1));
-
-        x += offset;
-        y += offset;
-    }
-
-    if (icon) {
-        DrawIconEx(
-            draw->hDC,
-            x,
-            y,
-            icon,
-            iconSize,
-            iconSize,
-            0,
-            nullptr,
-            DI_NORMAL);
-    }
-
-    if ((draw->itemState &
-         ODS_FOCUS) != 0) {
-        RECT focus =
-            rect;
-
-        const int inset =
-            ScaleUi(
-                control,
-                3);
-
-        InflateRect(
-            &focus,
-            -inset,
-            -inset);
-
-        DrawFocusRect(
-            draw->hDC,
-            &focus);
-    }
-
     return true;
 }
 
@@ -9914,7 +9917,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             WS_CHILD | SS_LEFT | SS_NOPREFIX,
             0, 0, 200, 95, hwnd, nullptr, GetModuleHandleW(nullptr), nullptr);
         g_packageList = CreateWindowExW(
-            WS_EX_CLIENTEDGE,
+            tp::ui::HighContrast() ? WS_EX_CLIENTEDGE : 0,
             WC_LISTVIEWW,
             L"",
             WS_CHILD | WS_VISIBLE | WS_TABSTOP |
@@ -10451,6 +10454,10 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                 LOWORD(wParam) == IDC_ACCOUNT_SYNC ||
                 LOWORD(wParam) == IDC_TOCPILOT) {
                 LayoutControls(hwnd);
+                for (HWND tab : {g_packagesNavLabel, g_accountSyncButton,
+                                 g_tocPilotButton}) {
+                    if (tab) InvalidateRect(tab, nullptr, TRUE);
+                }
                 InvalidateRect(hwnd, nullptr, TRUE);
                 return 0;
             }

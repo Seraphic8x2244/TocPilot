@@ -34,6 +34,34 @@ constexpr COLORREF Lift(COLORREF colour) {
     };
     return RGB(channel(GetRValue(colour)), channel(GetGValue(colour)), channel(GetBValue(colour)));
 }
+
+enum class ChromeRole { Navigation, Primary, Secondary };
+struct ChromeVisual {
+    COLORREF fill;
+    COLORREF border;
+    COLORREF text;
+    bool activeUnderline;
+};
+// Colour and emphasis belong to the presentation layer; the underlying
+// Win32 button retains focus, keyboard activation, enabled state and commands.
+constexpr ChromeVisual ResolveChrome(ChromeRole role, bool active, bool hovered,
+                                      bool pressed, bool disabled) {
+    const bool navigation = role == ChromeRole::Navigation;
+    const COLORREF base = navigation
+        ? (active ? Palette::title : Palette::toolbar)
+        : role == ChromeRole::Primary ? Palette::alreadyGood : Palette::button;
+    const COLORREF surface = pressed ? Palette::buttonPressed :
+        hovered && !disabled ? Lift(base) : base;
+    return {
+        disabled ? Palette::title : surface,
+        navigation ? (active ? Palette::alreadyGood : Palette::toolbar)
+                   : (role == ChromeRole::Primary ? Palette::alreadyGood : Palette::divider),
+        disabled ? Hex(0x858B93) :
+            navigation && !active ? Palette::secondaryText : Palette::primaryText,
+        navigation && active
+    };
+}
+
 constexpr COLORREF StatusFill(RowState state) {
     switch (state) {
     case RowState::AlreadyGood: return Palette::alreadyGood;
