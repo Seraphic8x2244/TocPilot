@@ -7715,7 +7715,7 @@ bool DrawToolbarButton(const DRAWITEMSTRUCT* draw) {
             ToolbarButtonIcon(control, disabled), side, side, 0, nullptr, DI_NORMAL);
     } else {
         const int length = GetWindowTextLengthW(control);
-        std::wstring label(static_cast<std::size_t>(length) + 1, L'\\0');
+        std::wstring label(static_cast<std::size_t>(length) + 1, L'\0');
         if (length) GetWindowTextW(control, label.data(), length + 1);
         label.resize(static_cast<std::size_t>(length));
         RECT textRect = rect;

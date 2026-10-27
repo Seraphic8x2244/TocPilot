@@ -1,5 +1,15 @@
 # TocPilot Development Progress
 
+## Runtime-validation release preparation — v0.6.0-dev.8 (2026-10-27)
+
+**User-requested correction:** The previous handoff made Windows visual testing the next dependency while withholding an updater-installable candidate. Release the completed Gale-shell UI slice for runtime visual review now, rather than requiring visual evidence from an unavailable executable. This is a user-review milestone, not final Gale fidelity.
+
+**Source:** `dev`, based on the exact CI-passed Gale-shell commit `ce4a30e0c188b09b66fb03bc343820ef0431f387` (Windows Build run [40420279420](https://github.com/Seraphic8x2244/TocPilot/actions/runs/40420279420), MSVC x64 Release and CTest passed). This preparation commit bumps `src/version.h` and `.github/development-release-version` together to `v0.6.0-dev.8` and corrects one unintended wide-character initializer literal in owner-drawn button text rendering. The development-release workflow independently builds, tests, publishes the checksum/direct EXE and validates self-update. Verify its exact final release SHA before claiming publication. Keep stable `main` untouched.
+
+**Validation boundary:** Until Development Release run is green and the tag, EXE, SHA-256 and updater E2E are verified, last published release remains `v0.6.0-dev.7`. Do not invite a Windows visual test prematurely. Once confirmed, request consolidated review of Packages Icons/Words, Account Sync, TocPilot, focus, contrast and action responsiveness. Continue UI work from these observations.
+
+---
+
 ## Mandatory development execution guardrails — prevents CI/release churn (2026-10-24)
 
 **Authority:** These are binding instructions for every future TocPilot development session on `dev`. They implement the narrow-slice, exact-SHA and release discipline in `dev_rulebook.md`. Do not bypass them because the user says “continue”, “don't stop”, or requests rapid progress: those requests mean make useful progress, **not** unlimited commits or repeated polling. If the workflow or scope needs changing, explicitly agree it with the user first and update the relevant canonical document.
