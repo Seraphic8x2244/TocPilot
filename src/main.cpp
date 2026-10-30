@@ -1179,8 +1179,9 @@ void LayoutControls(HWND hwnd) {
     const auto shell = tp::UnifiedShellLayout(
         height, ScaleUi(hwnd, kShellTabTop), ScaleUi(hwnd, kShellTabHeight),
         ScaleUi(hwnd, kShellFooterHeight), ScaleUi(hwnd, kShellFooterGap));
-    const int pageLeft = margin + ScaleUi(hwnd, 12);
-    const int pageWidth = std::max(1, pageWidth - ScaleUi(hwnd, 24));
+    const int pageInset = ScaleUi(hwnd, 12);
+    const int pageLeft = margin + pageInset;
+    const int pageWidth = tp::UnifiedPageWidth(contentWidth, pageInset);
 
     const std::array<HWND, 11>
         toolbarControls{

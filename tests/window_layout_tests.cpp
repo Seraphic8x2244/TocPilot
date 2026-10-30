@@ -27,6 +27,14 @@ void ExpectEqual(
 } // namespace
 
 int main() {
+    ExpectEqual(tp::UnifiedPageWidth(750, 12), 726,
+                "Outer page width honours both insets");
+    ExpectEqual(tp::UnifiedPageWidth(650, 15), 620,
+                "Narrow page stays within viewport");
+    ExpectEqual(tp::UnifiedPageWidth(1125, 18), 1089,
+                "DPI-scaled page uses physical dimensions");
+    ExpectEqual(tp::UnifiedPageWidth(20, 12), 1,
+                "Pathological narrow window never has negative width");
     for (int h : {680, 760, 1024}) {
         const auto shell = tp::UnifiedShellLayout(h, 16, 42, 78, 12);
         if (shell.tabTop != 16 || shell.tabBottom != 58 ||

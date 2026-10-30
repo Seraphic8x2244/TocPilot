@@ -9,6 +9,12 @@ namespace tp {
 struct UnifiedShellBands {
     int tabTop, tabBottom, contentTop, contentBottom, footerTop;
 };
+// Compute the inner page from the actual viewport. Never use an uninitialised
+// page width or saved package-column width to size the outer page.
+inline int UnifiedPageWidth(int contentWidth, int inset) {
+    return std::max(1, contentWidth - 2 * std::max(0, inset));
+}
+
 inline UnifiedShellBands UnifiedShellLayout(
     int clientHeight, int tabTop, int tabHeight, int footerHeight, int footerGap) {
     const int tabBottom = tabTop + tabHeight;
