@@ -1,6 +1,22 @@
 # TocPilot Development Progress
 
-## Current Handoff — Unified Gale-inspired layout contract (2026-10-30)
+## Current Handoff — Unified Packages implementation (2026-10-30)
+
+**Branch / release provenance:** `dev` only; source changes are based on `017c3eec5a41ead3cf141d1355289fa199396f0b` and committed together with this handoff. Source version remains `v0.6.0-dev.8`; latest published updater-installable prerelease remains `v0.6.0-dev.8` at `c851f79efcad8430b749f79bba5fc1fff06c0b65`. The new changes are **not** in that release. `main` untouched.
+
+**Implemented in this coherent UI slice:** unified Words-only Packages presentation, a permanent selected-package details panel containing Name/status, provider/source, branch, installed and latest revisions and target type; adjacent Install/Reinstall, Remove, Open Folder, Change Branch and Open Source controls; and visible operation/progress feedback instead of a hidden status hint. Change Branch uses the existing branch discovery and selection lifecycle but anchors the menu to the new contextual control rather than a hidden Advanced column. The package toolbar is Update All / Refresh / Add Git. The local scan label is now **“Scan existing folder for addons”**, without pretending to support arbitrary non-Git adoption or a user-chosen folder. The semantic details colour is in `src/ui_theme.h`. The legacy Icons setting survives in configuration but no longer changes presentation or geometry; neither Icons/Words nor Compact/Advanced toggles are presented.
+
+**Name-width invariant:** only a manual Name-header drag updates the persisted logical Name width; Status fills the rest of the list client. Resizing, restarting or DPI changes do not persist a recomputed width. If the saved Name width plus minimum Status width exceed the available viewport, the native ListView can scroll horizontally rather than mutating the saved Name width. Existing hidden column/order metadata is preserved for compatibility, and source/branch/revision details remain accessible via the permanent panel. Tests added in `tests/window_layout_tests.cpp` for wide/narrow/restart/DPI-equivalent dimensions and minimum widths, plus `tests/ui_theme_tests.cpp` for the details palette.
+
+**Preserved:** existing handlers, type-specific ownership, transactional install/remove rollback, DLL/MPQ protections and confirmations; branch fetch/selection logic; Account Sync, updater/settings and Add Git discovery dialogs. The hidden legacy Uninstall/staged-record backend and Compact/Advanced transition code have **not** been deleted pending an explicit caller/state-compatibility audit; there is still only one user-facing **Remove** action. The local scan still adopts eligible Git-managed clones in configured WoW AddOns and can report non-Git folders. No new folder picker. Optional extra metadata columns are deferred, not removed from state.
+
+**Validation state:** Implementation and regression sources are staged in the same coherent commit; the exact commit's push-triggered MSVC x64 Release/CTest gate is **pending** until checked, and this slice is **not Windows runtime-tested, published or visually accepted**. Review on Windows must cover manual Name resize/save/restart, horizontal scrolling, DPI 100/125/150%, branch change, source/open folder, install/reinstall/remove, long progress/errors, high-contrast/focus, and Account Sync/TocPilot navigation. CI success will not prove those runtime behaviours.
+
+**Single next action:** Validate the push-triggered Build for the final commit's exact SHA, using at most one immediate and one follow-up status query. If green, the next useful dependency is one consolidated updater-installable Windows visual prerelease, only at a separately approved runtime gate; do not modify `main` or release now.
+
+---
+
+## Previous Handoff — Unified Gale-inspired layout contract (2026-10-30)
 
 **Branch:** `dev` only; documentation checkpoint based on `c851f79efcad8430b749f79bba5fc1fff06c0b65`. **Latest published release:** `v0.6.0-dev.8`, exact release SHA `c851f79efcad8430b749f79bba5fc1fff06c0b65`. Development Release workflow `40432700587` succeeded with published `TocPilot.exe` + `TocPilot.exe.sha256` and development-channel self-update validation; ordinary Build `40432700595` also succeeded. User installed `dev.8` and supplied a Packages screenshot: appreciable visual progress, not design acceptance. `main` untouched.
 
@@ -35,7 +51,7 @@
 
 **Anti-patterns explicitly prohibited:** tiny commit → automatic Build → another tiny commit while first Build runs; multiple overlapping development releases; repeated unchanged workflow status checks; releasing before the final candidate passes CI; silently testing a published tag against later `dev` code; claiming a green previous SHA validates a new SHA; treating “don't stop” as a reason to run forever.
 
-## Current Handoff — Gale visual shell slice (2026-10-26)
+## Previous Handoff — Gale visual shell slice (2026-10-26)
 
 **Branch/provenance:** `dev` only. Base remote SHA `4bf46cb5a0007c3dd897d9802916b951e21bd91c`; the authoritative new HEAD is the commit containing this handoff (verify via GitHub ref). Source remains `v0.6.0-dev.7`. Latest *published and updater-verified* prerelease remains `v0.6.0-dev.7` at `fe66c5971a9b2984293d653a954eda5b0285484b`; user-supplied Windows screenshots documented below are the visual evidence, **not visual acceptance**. `main` untouched.
 

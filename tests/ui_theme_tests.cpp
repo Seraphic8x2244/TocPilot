@@ -32,6 +32,7 @@ int main() {
            StatusFill(RowState::Error))) { std::fputs("UI theme regression failed\n", stderr); return 1; }
     if (!(Palette::accountSync == Palette::toolbar)) { std::fputs("UI theme regression failed\n", stderr); return 1; }
 
+    if (Palette::packageDetails == Palette::window) return 1;
     const auto navInactive = ResolveChrome(ChromeRole::Navigation, false, false, false, false);
     const auto navActive = ResolveChrome(ChromeRole::Navigation, true, false, false, false);
     const auto navHot = ResolveChrome(ChromeRole::Navigation, false, true, false, false);

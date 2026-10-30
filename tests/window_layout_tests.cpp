@@ -27,6 +27,21 @@ void ExpectEqual(
 } // namespace
 
 int main() {
+    const int saved = 340;
+    const auto wide = tp::UnifiedPackageColumnWidths(saved, 900, 220, 150);
+    const auto narrow = tp::UnifiedPackageColumnWidths(saved, 400, 220, 150);
+    const auto restarted = tp::UnifiedPackageColumnWidths(saved, 900, 220, 150);
+    ExpectEqual(wide[0], 340, "Name does not auto-expand");
+    ExpectEqual(wide[1], 560, "Status fills wide viewport");
+    ExpectEqual(narrow[0], 340, "Name survives narrow resize");
+    ExpectEqual(narrow[1], 150, "Status remains at minimum for horizontal scroll");
+    ExpectEqual(restarted[0], 340, "saved Name survives restart");
+    const auto scaled = tp::UnifiedPackageColumnWidths(425, 1125, 275, 188);
+    ExpectEqual(scaled[0], 425, "DPI-scaled Name remains authoritative");
+    ExpectEqual(scaled[1], 700, "DPI-scaled Status consumes remainder");
+    const auto small = tp::UnifiedPackageColumnWidths(80, 820, 220, 150);
+    ExpectEqual(small[0], 220, "legacy Name reaches minimum");
+    ExpectEqual(small[1], 600, "Status gets remainder after minimum");
 
     {
         const auto widths =

@@ -120,9 +120,11 @@ constexpr int IDC_TOCPILOT_TOOLBAR_ICONS_INLINE = 1046;
 constexpr int IDC_TOCPILOT_TOOLBAR_WORDS_INLINE = 1047;
 constexpr int IDC_TOCPILOT_UPDATE_INLINE = 1048;
 constexpr int IDC_PACKAGE_OPEN_FOLDER = 1049;
+constexpr int IDC_PACKAGE_SOURCE = 1050;
+constexpr int IDC_PACKAGE_CHANGE_BRANCH = 1051;
 
-constexpr int kCompactWindowWidth = 590;
-constexpr int kDefaultWindowHeight = 550;
+constexpr int kCompactWindowWidth = 790;
+constexpr int kDefaultWindowHeight = 690;
 constexpr int kToolbarButtonSize = 42;
 constexpr int kToolbarIconSize = 20;
 constexpr int kToolbarButtonGap = 10;
@@ -226,6 +228,8 @@ HWND g_branchSelector = nullptr;
 HWND g_packageHint = nullptr;
 HWND g_packageSummary = nullptr;
 HWND g_packageOpenFolder = nullptr;
+HWND g_packageSourceButton = nullptr;
+HWND g_packageChangeBranchButton = nullptr;
 HWND g_textScaleLabel = nullptr;
 HWND g_textScaleCombo = nullptr;
 HWND g_rootLabel = nullptr;
@@ -614,21 +618,11 @@ BOOL AdjustWindowRectForDpi(
 }
 
 bool ToolbarUsesIcons() {
-    return
-        !g_stateReady ||
-        g_state.settings.toolbarIcons;
+    // One visible Words presentation, independent of the legacy saved preference.
+    return false;
 }
 
-bool ToolbarControlUsesIcon(
-    HWND control) {
-    // Navigation and the main launch action remain labelled in both modes.
-    // The Icons preference changes package-action buttons only.
-    return ToolbarUsesIcons() &&
-        control != g_launchWowButton &&
-        control != g_packagesNavLabel &&
-        control != g_accountSyncButton &&
-        control != g_tocPilotButton;
-}
+bool ToolbarControlUsesIcon(HWND /*control*/) { return false; }
 
 BOOL CALLBACK ApplyFontToChild(HWND child, LPARAM fontValue) {
     SendMessageW(
@@ -779,31 +773,10 @@ int ToolbarStripWidthDesign(
         (actionCount - 1) * kToolbarButtonGap;
 }
 
-int RequiredClientWidth(
-    HWND hwnd,
-    bool advanced) {
-    const int toolbarWidth =
-        ToolbarStripWidthDesign(
-            advanced);
-
-    const int columnsWidth =
-        advanced
-            ? kAdvancedNameColumnMinWidth +
-                kAdvancedWwwColumnMinWidth +
-                kAdvancedBranchColumnMinWidth +
-                kAdvancedVersionColumnMinWidth +
-                kAdvancedInstalledColumnMinWidth +
-                kAdvancedLatestColumnMinWidth +
-                kAdvancedStatusColumnMinWidth
-            : kCompactNameColumnMinWidth +
-                kCompactStatusColumnMinWidth;
-
-    return ScaleUi(
-        hwnd,
-        40 +
-            std::max(
-                toolbarWidth,
-                columnsWidth));
+int RequiredClientWidth(HWND hwnd, bool /*advanced*/) {
+    // Room for five contextual actions; the list scrolls instead of changing
+    // the manually persisted Name column or forcing an Advanced window.
+    return ScaleUi(hwnd, 690);
 }
 
 int WindowWidthForClient(
@@ -905,19 +878,9 @@ CurrentPackageColumnOrder() {
 }
 
 void UpdatePackageColumnEditingUi() {
-    if (!g_packageList) {
-        return;
-    }
-
-    const bool editingEnabled =
-        g_stateReady;
-
-    ListView_SetExtendedListViewStyleEx(
-        g_packageList,
-        LVS_EX_HEADERDRAGDROP,
-        editingEnabled
-            ? LVS_EX_HEADERDRAGDROP
-            : 0);
+    if (!g_packageList) return;
+    // Allow native Name resizing but keep hidden metadata out of the header.
+    ListView_SetExtendedListViewStyleEx(g_packageList, LVS_EX_HEADERDRAGDROP, 0);
 }
 
 void ApplyPackageColumnOrder() {
@@ -939,166 +902,41 @@ void ApplyPackageColumnOrder() {
         order.data());
 }
 
+void ResizeListColumns();
+
 void SaveCurrentPackageColumnLayout() {
-    if (!g_packageList ||
-        !g_stateReady) {
-        return;
+    if (!g_packageList || !g_stateReady) return;
+    // Save only user-edited Name width. Never save viewport-induced Status fit.
+    const int width = std::clamp(
+        UnscaleUi(g_packageList, ListView_GetColumnWidth(g_packageList, kPackageColumnName)),
+        kCompactNameColumnMinWidth, 2000);
+    auto& saved = g_state.settings.packageColumnWidths[
+        static_cast<std::size_t>(kPackageColumnName)];
+    if (saved == width) return;
+    const int previous = saved;
+    saved = width;
+    std::wstring error;
+    if (!tp::SaveState(g_root, g_state, error)) {
+        saved = previous;
+        g_stateError = error;
     }
-
-    const auto order =
-        CurrentPackageColumnOrder();
-
-    std::array<int, tp::kPackageColumnCount> widths =
-        g_state.settings.packageColumnWidths;
-
-    if (g_advancedVisible) {
-        for (int column = 0;
-             column < static_cast<int>(widths.size());
-             ++column) {
-            widths[static_cast<std::size_t>(column)] =
-                std::clamp(
-                    UnscaleUi(
-                        g_packageList,
-                        ListView_GetColumnWidth(
-                            g_packageList,
-                            column)),
-                    kPackageColumnMinWidth,
-                    2000);
-        }
-    } else {
-        const int leftColumn =
-            order[0];
-        const int rightColumn =
-            order[1];
-        const auto split =
-            tp::CompactDividerWidths(
-                ListView_GetColumnWidth(
-                    g_packageList,
-                    leftColumn),
-                PackageListClientWidth(),
-                CompactColumnMinimumWidth(
-                    leftColumn),
-                CompactColumnMinimumWidth(
-                    rightColumn));
-
-        ListView_SetColumnWidth(
-            g_packageList,
-            leftColumn,
-            split[0]);
-        ListView_SetColumnWidth(
-            g_packageList,
-            rightColumn,
-            split[1]);
-
-        widths[static_cast<std::size_t>(
-            kPackageColumnName)] =
-            std::clamp(
-                UnscaleUi(
-                    g_packageList,
-                    ListView_GetColumnWidth(
-                        g_packageList,
-                        kPackageColumnName)),
-                kPackageColumnMinWidth,
-                2000);
-        widths[static_cast<std::size_t>(
-            kPackageColumnStatus)] =
-            std::clamp(
-                UnscaleUi(
-                    g_packageList,
-                    ListView_GetColumnWidth(
-                        g_packageList,
-                        kPackageColumnStatus)),
-                kPackageColumnMinWidth,
-                2000);
-    }
-
-    const bool changed =
-        widths !=
-            g_state.settings.packageColumnWidths ||
-        order !=
-            g_state.settings.packageColumnOrder;
-
-    if (!changed) {
-        return;
-    }
-
-    g_state.settings.packageColumnWidths =
-        widths;
-    g_state.settings.packageColumnOrder =
-        order;
-
-    std::wstring saveError;
-    if (!tp::SaveState(
-            g_root,
-            g_state,
-            saveError)) {
-        g_stateError = saveError;
-        return;
-    }
-
-    ApplyPackageColumnOrder();
     ResizeListColumns();
 }
 
 void ResizeListColumns() {
-    if (!g_packageList) {
-        return;
-    }
-
-    const auto widths =
-        g_stateReady
-            ? g_state.settings.packageColumnWidths
-            : tp::kDefaultPackageColumnWidths;
-
-    if (!g_advancedVisible) {
-        for (int column = kPackageColumnWww;
-             column < kPackageColumnStatus;
-             ++column) {
-            ListView_SetColumnWidth(
-                g_packageList,
-                column,
-                0);
-        }
-
-        const auto fitted =
-            tp::FitCompactColumnWidths(
-                ScaleUi(
-                    g_packageList,
-                    widths[static_cast<std::size_t>(
-                        kPackageColumnName)]),
-                ScaleUi(
-                    g_packageList,
-                    widths[static_cast<std::size_t>(
-                        kPackageColumnStatus)]),
-                PackageListClientWidth(),
-                CompactColumnMinimumWidth(
-                    kPackageColumnName),
-                CompactColumnMinimumWidth(
-                    kPackageColumnStatus));
-
-        ListView_SetColumnWidth(
-            g_packageList,
-            kPackageColumnName,
-            fitted[0]);
-        ListView_SetColumnWidth(
-            g_packageList,
-            kPackageColumnStatus,
-            fitted[1]);
-        return;
-    }
-
-    for (int column = 0;
-         column < static_cast<int>(widths.size());
-         ++column) {
-        ListView_SetColumnWidth(
-            g_packageList,
-            column,
-            ScaleUi(
-                g_packageList,
-                widths[
-                    static_cast<std::size_t>(
-                        column)]));
-    }
+    if (!g_packageList) return;
+    const auto& saved = g_stateReady
+        ? g_state.settings.packageColumnWidths : tp::kDefaultPackageColumnWidths;
+    const auto widths = tp::UnifiedPackageColumnWidths(
+        ScaleUi(g_packageList, saved[static_cast<std::size_t>(kPackageColumnName)]),
+        PackageListClientWidth(),
+        ScaleUi(g_packageList, kCompactNameColumnMinWidth),
+        ScaleUi(g_packageList, kCompactStatusColumnMinWidth));
+    // Preserve stored metadata for migration; show it in the details area.
+    for (int column = kPackageColumnWww; column < kPackageColumnStatus; ++column)
+        ListView_SetColumnWidth(g_packageList, column, 0);
+    ListView_SetColumnWidth(g_packageList, kPackageColumnName, widths[0]);
+    ListView_SetColumnWidth(g_packageList, kPackageColumnStatus, widths[1]);
 }
 
 // Legacy wide text-toolbar layout retained as reference for the
@@ -1563,9 +1401,8 @@ void LayoutControls(HWND hwnd) {
         toolbarRowHeight +
         ScaleUi(hwnd, 14);
 
-    const bool showSummary = packagesView && g_advancedVisible;
-    const int summaryHeight = packagesView
-        ? ScaleUi(hwnd, showSummary ? 105 : 54) : 0;
+    const bool showSummary = packagesView;
+    const int summaryHeight = packagesView ? ScaleUi(hwnd, 208) : 0;
     const int listBottomPadding =
         ScaleUi(hwnd, 20) + summaryHeight;
 
@@ -1638,50 +1475,32 @@ void LayoutControls(HWND hwnd) {
         }
     }
 
+    // Unified package details: metadata, contextual actions and status/progress.
+    const int detailsY = listTop + listHeight + ScaleUi(hwnd, 10);
     if (g_packageSummary) {
         ShowWindow(g_packageSummary, showSummary ? SW_SHOW : SW_HIDE);
-        if (showSummary) {
-            MoveWindow(g_packageSummary, margin,
-                       listTop + listHeight + ScaleUi(hwnd, 8),
-                       std::max(1, contentWidth - ScaleUi(hwnd, 228)),
-                       ScaleUi(hwnd, 95), TRUE);
-        }
+        if (showSummary) MoveWindow(g_packageSummary,
+            margin + ScaleUi(hwnd, 12), detailsY + ScaleUi(hwnd, 8),
+            std::max(1, contentWidth - ScaleUi(hwnd, 24)), ScaleUi(hwnd, 106), TRUE);
     }
-    // Keep existing command handlers and their remove/install confirmations;
-    // only relocate their visible Advanced affordances beside the summary.
-    if (packagesView) {
-        const int contextualY = listTop + listHeight + ScaleUi(hwnd, 8);
-        if (showSummary) {
-            if (g_packageOpenFolder) {
-                ShowWindow(g_packageOpenFolder, SW_SHOW);
-                MoveWindow(g_packageOpenFolder,
-                           margin + contentWidth - ScaleUi(hwnd, 220),
-                           contextualY + ScaleUi(hwnd, 48),
-                           ScaleUi(hwnd, 214), ScaleUi(hwnd, 32), TRUE);
-            }
-            for (HWND control : {g_installPackageButton, g_removePackageButton}) {
-                if (!control) continue;
-                ShowWindow(control, SW_SHOW);
-                MoveWindow(control,
-                           margin + contentWidth - ScaleUi(hwnd, 220) +
-                               (control == g_removePackageButton ? ScaleUi(hwnd, 110) : 0),
-                           contextualY + ScaleUi(hwnd, 6),
-                           ScaleUi(hwnd, 104), ScaleUi(hwnd, 34), TRUE);
-            }
-        } else {
-            const int gap = ScaleUi(hwnd, 8);
-            const int actionWidth = std::max(1, (contentWidth - 2 * gap) / 3);
-            const std::array<HWND, 3> actions{
-                g_installPackageButton, g_removePackageButton, g_packageOpenFolder};
-            for (std::size_t index = 0; index < actions.size(); ++index) {
-                if (!actions[index]) continue;
-                ShowWindow(actions[index], SW_SHOW);
-                MoveWindow(actions[index], margin + static_cast<int>(index) * (actionWidth + gap),
-                           contextualY, actionWidth, ScaleUi(hwnd, 34), TRUE);
-            }
-        }
-    } else if (g_packageOpenFolder) {
-        ShowWindow(g_packageOpenFolder, SW_HIDE);
+    const std::array<HWND, 5> actions{
+        g_installPackageButton, g_removePackageButton, g_packageOpenFolder,
+        g_packageChangeBranchButton, g_packageSourceButton};
+    const int gap = ScaleUi(hwnd, 8);
+    const int actionWidth = std::max(1, (contentWidth - ScaleUi(hwnd, 24) - 4*gap) / 5);
+    for (std::size_t i=0; i < actions.size(); ++i) {
+        HWND control = actions[i];
+        if (!control) continue;
+        ShowWindow(control, packagesView ? SW_SHOW : SW_HIDE);
+        if (packagesView) MoveWindow(control,
+            margin + ScaleUi(hwnd, 12) + static_cast<int>(i)*(actionWidth+gap),
+            detailsY + ScaleUi(hwnd, 120), actionWidth, ScaleUi(hwnd, 34), TRUE);
+    }
+    if (g_packageHint) {
+        ShowWindow(g_packageHint, packagesView ? SW_SHOW : SW_HIDE);
+        if (packagesView) MoveWindow(g_packageHint,
+            margin + ScaleUi(hwnd, 12), detailsY + ScaleUi(hwnd, 164),
+            std::max(1, contentWidth - ScaleUi(hwnd, 24)), ScaleUi(hwnd, 26), TRUE);
     }
     // The original Account Sync control/editor window is now an
     // embedded child rather than a separate popup.
@@ -1698,7 +1517,8 @@ void LayoutControls(HWND hwnd) {
     for (HWND control : tocPilotViewButtons) {
         if (!control) continue;
         ShowWindow(control, tp::ui::ShowsTocPilot(g_mainView) ? SW_SHOW : SW_HIDE);
-        MoveWindow(control, margin, tocY, ScaleUi(hwnd, 220),
+        MoveWindow(control, margin, tocY,
+                   ScaleUi(hwnd, control == g_tocPilotScanButton ? 320 : 220),
                    ScaleUi(hwnd, 34), TRUE);
         tocY += ScaleUi(hwnd, 46);
     }
@@ -1713,10 +1533,10 @@ void LayoutControls(HWND hwnd) {
     if (g_tocPilotReleasesButton) MoveWindow(g_tocPilotReleasesButton, margin, tocY + ScaleUi(hwnd, 88),
                                              ScaleUi(hwnd, 220), ScaleUi(hwnd, 34), TRUE);
     const bool tocView = tp::ui::ShowsTocPilot(g_mainView);
-    for (HWND control : {g_tocPilotDevBuildsInline, g_tocPilotIconsInline,
-                         g_tocPilotWordsInline, g_tocPilotUpdateInline}) {
+    for (HWND control : {g_tocPilotDevBuildsInline, g_tocPilotUpdateInline})
         if (control) ShowWindow(control, tocView ? SW_SHOW : SW_HIDE);
-    }
+    for (HWND control : {g_tocPilotIconsInline, g_tocPilotWordsInline})
+        if (control) ShowWindow(control, SW_HIDE);
     if (g_tocPilotDevBuildsInline) {
         MoveWindow(g_tocPilotDevBuildsInline, margin + ScaleUi(hwnd, 240), listTop,
                    ScaleUi(hwnd, 260), ScaleUi(hwnd, 34), TRUE);
@@ -1751,12 +1571,7 @@ void LayoutControls(HWND hwnd) {
                    listTop + ScaleUi(hwnd, 202), ScaleUi(hwnd, 120),
                    ScaleUi(hwnd, 180), TRUE);
     }
-    if (g_advancedButton) {
-        ShowWindow(g_advancedButton, tocView ? SW_SHOW : SW_HIDE);
-        MoveWindow(g_advancedButton, margin + ScaleUi(hwnd, 240),
-                   listTop + ScaleUi(hwnd, 152), ScaleUi(hwnd, 220),
-                   ScaleUi(hwnd, 34), TRUE);
-    }
+    // Unified layout: no Compact/Advanced view switch.
     if (g_tocPilotUpdateInline) {
         MoveWindow(g_tocPilotUpdateInline, margin + ScaleUi(hwnd, 240),
                    listTop + ScaleUi(hwnd, 102), ScaleUi(hwnd, 220),
@@ -3608,9 +3423,8 @@ void StartBranchSelectorLoad(
 
 void UpdateBranchSelector(
     HWND hwnd) {
-    if (!g_branchSelector ||
-        !g_advancedVisible ||
-        !g_stateReady) {
+    if (!g_branchSelector || !g_stateReady ||
+        g_mainView != MainView::Packages) {
         if (g_branchSelector) {
             ShowWindow(
                 g_branchSelector,
@@ -3755,26 +3569,11 @@ void OpenBranchSelectorIfReady(
         return;
     }
 
-    RECT cell{};
-    if (!ListView_GetSubItemRect(
-            g_packageList,
-            displayRow,
-            kPackageColumnBranch,
-            LVIR_BOUNDS,
-            &cell)) {
-        return;
-    }
-
-    POINT anchor{
-        cell.left,
-        cell.bottom
-    };
-
-    MapWindowPoints(
-        g_packageList,
-        nullptr,
-        &anchor,
-        1);
+    // Anchor branch selection to the always-accessible details action.
+    if (!g_packageChangeBranchButton) return;
+    RECT rect{};
+    if (!GetWindowRect(g_packageChangeBranchButton, &rect)) return;
+    const POINT anchor{rect.left, rect.bottom};
 
     HMENU menu =
         CreatePopupMenu();
@@ -3832,8 +3631,7 @@ void OpenBranchSelectorIfReady(
 void RequestBranchSelector(
     HWND hwnd,
     int displayRow) {
-    if (!g_advancedVisible ||
-        !g_packageList ||
+    if (!g_packageList ||
         displayRow < 0 ||
         displayRow >=
             static_cast<int>(
@@ -4176,6 +3974,12 @@ void UpdatePackageButtons() {
          !selectedPackage->targetPath.empty());
     if (g_packageOpenFolder) EnableWindow(
         g_packageOpenFolder, hasPackageFolder && !packageBusy ? TRUE : FALSE);
+    if (g_packageChangeBranchButton) EnableWindow(
+        g_packageChangeBranchButton, canSetBranch && !packageBusy ? TRUE : FALSE);
+    if (g_packageSourceButton) EnableWindow(
+        g_packageSourceButton,
+        selectedPackage && !PackageRepositoryUrl(*selectedPackage).empty() && !packageBusy
+            ? TRUE : FALSE);
 
     if (g_updateAllButton) {
         EnableWindow(
@@ -4204,7 +4008,8 @@ void UpdatePackageButtons() {
     if (g_installPackageButton) {
         SetWindowTextW(
             g_installPackageButton,
-            L"Reinstall Repository");
+            selectedPackage && selectedPackage->installedRevision.empty()
+                ? L"Install" : L"Reinstall");
         EnableWindow(
             g_installPackageButton,
             canInstall && !packageBusy
@@ -7300,6 +7105,15 @@ HBRUSH MainSurfaceBrush(bool toolbar) {
 
 LRESULT HandleStatusColour(WPARAM wParam, LPARAM lParam) {
     HWND control = reinterpret_cast<HWND>(lParam);
+    if (!tp::ui::HighContrast() &&
+        (control == g_packageSummary || control == g_packageHint)) {
+        static HBRUSH brush = CreateSolidBrush(tp::ui::Palette::packageDetails);
+        HDC dc = reinterpret_cast<HDC>(wParam);
+        SetTextColor(dc, control == g_packageHint
+            ? tp::ui::Palette::secondaryText : tp::ui::Palette::primaryText);
+        SetBkColor(dc, tp::ui::Palette::packageDetails);
+        return reinterpret_cast<LRESULT>(brush);
+    }
     const int id = GetDlgCtrlID(control);
     const int length = GetWindowTextLengthW(control);
     std::wstring text(static_cast<size_t>(length) + 1, L'\0');
@@ -7386,7 +7200,7 @@ HICON LoadExecutableIcon(
 const wchar_t* ToolbarButtonName(
     HWND control) {
     if (control == g_updateAllButton) {
-        return L"Update";
+        return L"Update All";
     }
     if (control == g_refreshPackagesButton) {
         return L"Refresh";
@@ -7398,19 +7212,19 @@ const wchar_t* ToolbarButtonName(
         return L"Packages";
     }
     if (control == g_addPackageButton) {
-        return L"Add Repository";
+        return L"Add Git";
     }
     if (control == g_installPackageButton) {
-        return L"Reinstall Repository";
+        return L"Reinstall";
     }
     if (control == g_removePackageButton) {
-        return L"Remove Repository";
+        return L"Remove";
     }
     if (control == g_inspectPackageButton) {
         return L"Inspect";
     }
     if (control == g_adoptGitButton) {
-        return L"Scan";
+        return L"Scan existing folder for addons";
     }
     if (control == g_accountSyncButton) {
         return L"Account Sync";
@@ -7418,9 +7232,9 @@ const wchar_t* ToolbarButtonName(
     if (control == g_tocPilotButton) {
         return L"TocPilot";
     }
-    if (control == g_advancedButton) {
-        return L"Advanced";
-    }
+    if (control == g_advancedButton) return L"Advanced";
+    if (control == g_packageSourceButton) return L"Open Source";
+    if (control == g_packageChangeBranchButton) return L"Change Branch";
     return L"";
 }
 
@@ -7535,6 +7349,7 @@ bool IsMainChromeButton(HWND control) {
         g_tocPilotScanButton, g_tocPilotAboutButton,
         g_tocPilotRepositoryButton, g_tocPilotReleasesButton,
         g_tocPilotUpdateInline, g_packageOpenFolder,
+        g_packageSourceButton, g_packageChangeBranchButton,
         g_accountSyncTileRefreshButton, g_accountSyncTileSyncButton
     }) {
         if (control && control == candidate) return true;
@@ -7640,6 +7455,7 @@ void ApplyToolbarPresentation(
         g_tocPilotScanButton, g_tocPilotAboutButton,
         g_tocPilotRepositoryButton, g_tocPilotReleasesButton,
         g_tocPilotUpdateInline, g_packageOpenFolder,
+        g_packageSourceButton, g_packageChangeBranchButton,
         g_accountSyncTileRefreshButton, g_accountSyncTileSyncButton
     }) StyleMainChromeButton(control);
 
@@ -9730,7 +9546,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
 
         g_updateAllButton =
             createToolbarButton(
-                L"Update",
+                L"Update All",
                 IDC_UPDATE_ALL);
         g_refreshPackagesButton =
             createToolbarButton(
@@ -9742,7 +9558,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                 IDC_LAUNCH_WOW);
         g_addPackageButton =
             createToolbarButton(
-                L"Add Repository",
+                L"Add Git",
                 IDC_ADD_PACKAGE);
         g_installPackageButton =
             createToolbarButton(
@@ -9780,7 +9596,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                 IDC_TOCPILOT);
         g_syncConfigureButton = createToolbarButton(L"Configure Account Sync", IDC_SYNC_CONFIGURE);
         g_tocPilotPreferencesButton = createToolbarButton(L"Preferences", IDC_TOCPILOT_PREFERENCES);
-        g_tocPilotScanButton = createToolbarButton(L"Scan", IDC_TOCPILOT_SCAN);
+        g_tocPilotScanButton = createToolbarButton(L"Scan existing folder for addons", IDC_TOCPILOT_SCAN);
         g_tocPilotAboutButton = createToolbarButton(L"About", IDC_TOCPILOT_ABOUT);
         const std::wstring aboutVersion = std::wstring(L"TocPilot ") + TOCPILOT_VERSION_TAG_W;
         g_tocPilotVersionLabel = CreateWindowExW(
@@ -9808,10 +9624,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             0, 0, 115, 32, hwnd,
             reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_TOCPILOT_TOOLBAR_WORDS_INLINE)),
             GetModuleHandleW(nullptr), nullptr);
-        g_advancedButton =
-            createToolbarButton(
-                L"Advanced",
-                IDC_ADVANCED);
+        // The legacy preference is kept in saved state, but has no mode switch.
 
         // Preserve the existing non-toolbar legacy control/state path.
         g_uninstallPackageButton = CreateWindowExW(
@@ -9844,7 +9657,8 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
         tp::AddToolbarTooltip(g_toolbarTooltip, hwnd, g_adoptGitButton, L"Scan");
         tp::AddToolbarTooltip(g_toolbarTooltip, hwnd, g_accountSyncButton, L"Account Sync");
         tp::AddToolbarTooltip(g_toolbarTooltip, hwnd, g_tocPilotButton, L"Info");
-        tp::AddToolbarTooltip(g_toolbarTooltip, hwnd, g_advancedButton, L"Advanced");
+        tp::AddToolbarTooltip(g_toolbarTooltip, hwnd, g_packageChangeBranchButton, L"Change tracked Git branch");
+        tp::AddToolbarTooltip(g_toolbarTooltip, hwnd, g_packageSourceButton, L"Open repository source");
 
         EnableWindow(g_updateAllButton, FALSE);
         EnableWindow(g_refreshPackagesButton, FALSE);
@@ -9900,8 +9714,8 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
         g_packageHint = CreateWindowExW(
             0,
             L"STATIC",
-            PackageHintText().c_str(),
-            WS_CHILD | WS_VISIBLE | SS_PATHELLIPSIS,
+            L"Select a package or use Add Git to manage a repository.",
+            WS_CHILD | SS_LEFT | SS_NOPREFIX | SS_ENDELLIPSIS,
             20,
             188,
             820,
@@ -9912,6 +9726,8 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             nullptr);
 
         g_packageOpenFolder = createToolbarButton(L"Open Folder", IDC_PACKAGE_OPEN_FOLDER);
+        g_packageChangeBranchButton = createToolbarButton(L"Change Branch", IDC_PACKAGE_CHANGE_BRANCH);
+        g_packageSourceButton = createToolbarButton(L"Open Source", IDC_PACKAGE_SOURCE);
         g_packageSummary = CreateWindowExW(
             0, L"STATIC", L"Select a package to view its details.",
             WS_CHILD | SS_LEFT | SS_NOPREFIX,
@@ -10067,12 +9883,11 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
 
         const int minimumClientHeight =
             g_mainView == MainView::AccountSync ? 680 :
-            g_mainView == MainView::TocPilot ? 520 :
-            g_advancedVisible ? 560 : 500;
+            g_mainView == MainView::TocPilot ? 520 : 680;
         RECT minimum{
             0,
             0,
-            RequiredClientWidth(hwnd, g_advancedVisible),
+            RequiredClientWidth(hwnd, false),
             ScaleUi(hwnd, minimumClientHeight)};
 
         AdjustWindowRectForDpi(
@@ -10102,6 +9917,18 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             HDC dc = reinterpret_cast<HDC>(wParam);
             RECT client{}; GetClientRect(hwnd, &client);
             FillRect(dc, &client, MainSurfaceBrush(false));
+            if (g_packageSummary && IsWindowVisible(g_packageSummary)) {
+                RECT panel{};
+                GetWindowRect(g_packageSummary, &panel);
+                MapWindowPoints(nullptr, hwnd, reinterpret_cast<POINT*>(&panel), 2);
+                panel.left = std::max(0, panel.left - ScaleUi(hwnd, 12));
+                panel.top = std::max(0, panel.top - ScaleUi(hwnd, 8));
+                panel.right = std::min(client.right, panel.right + ScaleUi(hwnd, 12));
+                panel.bottom = client.bottom - ScaleUi(hwnd, 8);
+                HBRUSH brush = CreateSolidBrush(tp::ui::Palette::packageDetails);
+                FillRect(dc, &panel, brush);
+                DeleteObject(brush);
+            }
             // Use existing child positions so Compact/Advanced and DPI layouts stay authoritative.
             if (g_packageList && IsWindowVisible(g_packageList)) {
                 RECT list{}; GetWindowRect(g_packageList, &list);
@@ -10140,106 +9967,12 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                 headerNotification
                     ? headerNotification->iItem
                     : -1;
-            const bool primaryColumn =
-                headerColumn ==
-                    kPackageColumnName ||
-                headerColumn ==
-                    kPackageColumnStatus;
-            const auto order =
-                CurrentPackageColumnOrder();
-            const int compactLeftColumn =
-                order[0];
-            const int compactRightColumn =
-                order[1];
-
-            if (!g_advancedVisible &&
-                ((!primaryColumn &&
-                  (header->code ==
-                       HDN_BEGINTRACKW ||
-                   header->code ==
-                       HDN_BEGINDRAG ||
-                   header->code ==
-                       HDN_DIVIDERDBLCLICKW)) ||
-                 (headerColumn ==
-                      compactRightColumn &&
-                  (header->code ==
-                       HDN_BEGINTRACKW ||
-                   header->code ==
-                       HDN_TRACKW ||
-                   header->code ==
-                       HDN_DIVIDERDBLCLICKW)))) {
-                return TRUE;
-            }
-
-            if (!g_advancedVisible &&
-                !g_compactColumnResizeInProgress &&
-                header->code ==
-                    HDN_ITEMCHANGINGW &&
-                headerColumn ==
-                    compactLeftColumn &&
-                headerNotification &&
-                headerNotification->pitem &&
-                (headerNotification
-                     ->pitem->mask &
-                 HDI_WIDTH) != 0) {
-                const int currentLeftWidth =
-                    ListView_GetColumnWidth(
-                        g_packageList,
-                        compactLeftColumn);
-                const int currentRightWidth =
-                    ListView_GetColumnWidth(
-                        g_packageList,
-                        compactRightColumn);
-                const auto split =
-                    tp::CompactDividerWidths(
-                        headerNotification
-                            ->pitem->cxy,
-                        PackageListClientWidth(),
-                        CompactColumnMinimumWidth(
-                            compactLeftColumn),
-                        CompactColumnMinimumWidth(
-                            compactRightColumn));
-                const auto first =
-                    tp::CompactResizeFirstColumn(
-                        currentLeftWidth,
-                        split[0],
-                        currentRightWidth,
-                        split[1]);
-
-                g_compactColumnResizeInProgress =
-                    true;
-
-                if (first ==
-                    tp::CompactResizeFirst::Left) {
-                    ListView_SetColumnWidth(
-                        g_packageList,
-                        compactLeftColumn,
-                        split[0]);
-                    ListView_SetColumnWidth(
-                        g_packageList,
-                        compactRightColumn,
-                        split[1]);
-                } else if (first ==
-                           tp::CompactResizeFirst::Right) {
-                    ListView_SetColumnWidth(
-                        g_packageList,
-                        compactRightColumn,
-                        split[1]);
-                    ListView_SetColumnWidth(
-                        g_packageList,
-                        compactLeftColumn,
-                        split[0]);
-                }
-
-                g_compactColumnResizeInProgress =
-                    false;
-
-                // We own the complete two-column change.
-                // Cancel the native one-column commit so
-                // neither drag direction can temporarily
-                // exceed the Compact client width.
-                return TRUE;
-            }
+            // Name is manually resizable. Status is the automatic remainder.
+            if (headerColumn != kPackageColumnName &&
+                (header->code == HDN_BEGINTRACKW ||
+                 header->code == HDN_BEGINDRAG ||
+                 header->code == HDN_DIVIDERDBLCLICKW ||
+                 header->code == HDN_TRACKW)) return TRUE;
 
             if (header->code ==
                     HDN_ENDDRAG &&
@@ -10372,12 +10105,6 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             RunAccountSyncFromUi(hwnd, false);
             return 0;
         }
-        if (LOWORD(wParam) == IDC_ADVANCED &&
-            HIWORD(wParam) == BN_CLICKED) {
-            ToggleAdvanced(hwnd);
-            return 0;
-        }
-
         if (HIWORD(wParam) == BN_CLICKED) {
             switch (LOWORD(wParam)) {
             case IDC_NAV_PACKAGES: g_mainView = MainView::Packages; break;
@@ -10412,6 +10139,24 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                 OpenWebLink(hwnd, kTocPilotGitHubUrl); return 0;
             case IDC_TOCPILOT_RELEASES_INLINE:
                 OpenWebLink(hwnd, kTocPilotReleasesUrl); return 0;
+            case IDC_PACKAGE_CHANGE_BRANCH: {
+                const int selected = SelectedPackageRow();
+                if (selected >= 0) {
+                    const int displayRow = PackageDisplayRow(static_cast<std::size_t>(selected));
+                    if (displayRow >= 0) RequestBranchSelector(hwnd, displayRow);
+                }
+                return 0;
+            }
+            case IDC_PACKAGE_SOURCE: {
+                const int selected = SelectedPackageRow();
+                if (g_stateReady && selected >= 0 &&
+                    selected < static_cast<int>(g_state.packages.size())) {
+                    const auto url = PackageRepositoryUrl(
+                        g_state.packages[static_cast<std::size_t>(selected)]);
+                    if (!url.empty()) OpenWebLink(hwnd, url.c_str());
+                }
+                return 0;
+            }
             case IDC_PACKAGE_OPEN_FOLDER: {
                 const int selected = SelectedPackageRow();
                 if (!g_stateReady || selected < 0 ||

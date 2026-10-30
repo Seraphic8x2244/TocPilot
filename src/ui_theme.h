@@ -14,6 +14,7 @@ struct Palette {
     static constexpr COLORREF toolbar = Hex(0x3A3D42);
     static constexpr COLORREF list = Hex(0x2A2D31);
     static constexpr COLORREF accountSync = toolbar;
+    static constexpr COLORREF packageDetails = Hex(0x30343A);
     static constexpr COLORREF button = Hex(0x4A4E54);
     static constexpr COLORREF buttonHover = Hex(0x5A5F66);
     static constexpr COLORREF buttonPressed = Hex(0x676D75);

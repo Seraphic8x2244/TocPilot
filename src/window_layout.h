@@ -5,6 +5,14 @@
 
 namespace tp {
 
+// Name width is authoritative. Status fills the spare viewport width;
+// a narrow ListView scrolls horizontally, never changing stored Name width.
+inline std::array<int, 2> UnifiedPackageColumnWidths(
+    int name, int viewport, int minimumName, int minimumStatus) {
+    const int first = std::max(std::max(0, minimumName), name);
+    return {first, std::max(std::max(0, minimumStatus), std::max(0, viewport) - first)};
+}
+
 
 inline std::array<int, 2> FitCompactColumnWidths(
     int firstWidth,
