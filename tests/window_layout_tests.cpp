@@ -34,9 +34,9 @@ int main() {
             shell.contentBottom != shell.footerTop - 12) return 1;
     }
     // DPI-equivalent physical dimensions retain the same structure.
-    const auto scaled = tp::UnifiedShellLayout(1020, 24, 63, 117, 18);
-    if (scaled.tabBottom != 87 || scaled.contentTop != 86 ||
-        scaled.footerTop != 903 || scaled.contentBottom != 885) return 1;
+    const auto scaledShell = tp::UnifiedShellLayout(1020, 24, 63, 117, 18);
+    if (scaledShell.tabBottom != 87 || scaledShell.contentTop != 86 ||
+        scaledShell.footerTop != 903 || scaledShell.contentBottom != 885) return 1;
     const int saved = 340;
     const auto wide = tp::UnifiedPackageColumnWidths(saved, 900, 220, 150);
     const auto narrow = tp::UnifiedPackageColumnWidths(saved, 400, 220, 150);
