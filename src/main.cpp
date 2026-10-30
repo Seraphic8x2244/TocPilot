@@ -9921,8 +9921,8 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                 RECT panel{};
                 GetWindowRect(g_packageSummary, &panel);
                 MapWindowPoints(nullptr, hwnd, reinterpret_cast<POINT*>(&panel), 2);
-                panel.left = std::max(0, panel.left - ScaleUi(hwnd, 12));
-                panel.top = std::max(0, panel.top - ScaleUi(hwnd, 8));
+                panel.left = std::max(0L, panel.left - ScaleUi(hwnd, 12));
+                panel.top = std::max(0L, panel.top - ScaleUi(hwnd, 8));
                 panel.right = std::min(client.right, panel.right + ScaleUi(hwnd, 12));
                 panel.bottom = client.bottom - ScaleUi(hwnd, 8);
                 HBRUSH brush = CreateSolidBrush(tp::ui::Palette::packageDetails);
