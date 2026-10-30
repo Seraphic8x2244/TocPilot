@@ -15,6 +15,10 @@ struct Palette {
     static constexpr COLORREF list = Hex(0x2A2D31);
     static constexpr COLORREF accountSync = toolbar;
     static constexpr COLORREF packageDetails = Hex(0x30343A);
+    // Connected tab-frame surfaces, independently adjustable from the row palette.
+    static constexpr COLORREF tabOutline = Hex(0x626A74);
+    static constexpr COLORREF tabActive = window;
+    static constexpr COLORREF tabInactive = title;
     static constexpr COLORREF button = Hex(0x4A4E54);
     static constexpr COLORREF buttonHover = Hex(0x5A5F66);
     static constexpr COLORREF buttonPressed = Hex(0x676D75);

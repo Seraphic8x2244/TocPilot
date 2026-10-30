@@ -124,6 +124,12 @@ constexpr int IDC_PACKAGE_SOURCE = 1050;
 constexpr int IDC_PACKAGE_CHANGE_BRANCH = 1051;
 
 constexpr int kCompactWindowWidth = 790;
+constexpr int kShellTabTop = 16;
+constexpr int kShellTabHeight = 42;
+constexpr int kShellTabWidth = 136;
+constexpr int kShellTabGap = 2;
+constexpr int kShellFooterHeight = 78;
+constexpr int kShellFooterGap = 12;
 constexpr int kDefaultWindowHeight = 690;
 constexpr int kToolbarButtonSize = 42;
 constexpr int kToolbarIconSize = 20;
@@ -191,7 +197,9 @@ HWND g_advancedButton = nullptr;
 HWND g_tocPilotButton = nullptr;
 HWND g_accountSyncButton = nullptr;
 HWND g_packagesNavLabel = nullptr;
-HWND g_brandLabel = nullptr;
+HWND g_launchTargetName = nullptr;
+HWND g_launchTargetPath = nullptr;
+std::wstring g_launchTargetFullPath;
 HWND g_syncConfigureButton = nullptr;
 HWND g_tocPilotPreferencesButton = nullptr;
 HWND g_tocPilotScanButton = nullptr;
@@ -1167,12 +1175,12 @@ void LayoutControls(HWND hwnd) {
         ShowWindow(g_textScaleCombo, SW_HIDE);
     }
 
-    const int buttonY =
-        ScaleUi(hwnd, 16);
-    const int toolbarRowHeight =
-        ScaleUi(
-            hwnd,
-            kToolbarButtonSize);
+    const int toolbarRowHeight = ScaleUi(hwnd, kToolbarButtonSize);
+    const auto shell = tp::UnifiedShellLayout(
+        height, ScaleUi(hwnd, kShellTabTop), ScaleUi(hwnd, kShellTabHeight),
+        ScaleUi(hwnd, kShellFooterHeight), ScaleUi(hwnd, kShellFooterGap));
+    const int pageLeft = margin + ScaleUi(hwnd, 12);
+    const int pageWidth = std::max(1, pageWidth - ScaleUi(hwnd, 24));
 
     const std::array<HWND, 11>
         toolbarControls{
@@ -1232,7 +1240,7 @@ void LayoutControls(HWND hwnd) {
 
             if (wordButtonCount > 0) {
                 const int availableForWords =
-                    contentWidth -
+                    pageWidth -
                     gapTotal -
                     fixedIconWidth;
 
@@ -1250,7 +1258,7 @@ void LayoutControls(HWND hwnd) {
                 wordButtonCount *
                     wordButtonWidth;
 
-            int x = margin;
+            int x = pageLeft;
 
             for (std::size_t index = 0;
                  index <
@@ -1308,49 +1316,44 @@ void LayoutControls(HWND hwnd) {
             }
         };
 
-    // Permanent branded header: a labelled game-launch action on the
-    // right, not a lone oversized black glyph floating above the views.
+    // Tabs are attached to the content frame; launch lives in a bottom footer.
+    const int tabWidth = ScaleUi(hwnd, kShellTabWidth);
+    const int tabGap = ScaleUi(hwnd, kShellTabGap);
+    const std::array<std::pair<HWND, MainView>, 3> tabs{{
+        {g_packagesNavLabel, MainView::Packages},
+        {g_accountSyncButton, MainView::AccountSync},
+        {g_tocPilotButton, MainView::TocPilot}
+    }};
+    for (std::size_t i = 0; i < tabs.size(); ++i) {
+        const auto [tab, view] = tabs[i];
+        if (!tab) continue;
+        const int inset = view == g_mainView ? 0 : ScaleUi(hwnd, 6);
+        ShowWindow(tab, SW_SHOW);
+        MoveWindow(tab, margin + static_cast<int>(i)*(tabWidth+tabGap),
+            shell.tabTop + inset, tabWidth,
+            shell.tabBottom - shell.tabTop - inset, TRUE);
+    }
+    const int launchWidth = ScaleUi(hwnd, 160);
+    const int labelWidth = std::max(1, contentWidth - launchWidth - ScaleUi(hwnd, 26));
     if (g_launchWowButton) {
         ShowWindow(g_launchWowButton, SW_SHOW);
-        MoveWindow(g_launchWowButton,
-                   width - margin - ScaleUi(hwnd, 160), buttonY,
-                   ScaleUi(hwnd, 160), toolbarRowHeight, TRUE);
+        MoveWindow(g_launchWowButton, width - margin - launchWidth,
+            shell.footerTop + ScaleUi(hwnd, 17),
+            launchWidth, toolbarRowHeight, TRUE);
     }
-    if (g_brandLabel) {
-        ShowWindow(g_brandLabel, SW_SHOW);
-        MoveWindow(g_brandLabel, margin, buttonY,
-                   ScaleUi(hwnd, 140), toolbarRowHeight, TRUE);
-        if (g_boldUiFont) SendMessageW(g_brandLabel, WM_SETFONT,
+    if (g_launchTargetName) {
+        ShowWindow(g_launchTargetName, SW_SHOW);
+        MoveWindow(g_launchTargetName, margin + ScaleUi(hwnd, 6),
+            shell.footerTop + ScaleUi(hwnd, 9), labelWidth, ScaleUi(hwnd, 25), TRUE);
+        if (g_boldUiFont) SendMessageW(g_launchTargetName, WM_SETFONT,
             reinterpret_cast<WPARAM>(g_boldUiFont), TRUE);
     }
-
-    // Persistent labelled navigation; the active view is distinguished
-    // by the common owner-drawn underline and surface, not by an icon.
-    const int navigationY =
-        buttonY + toolbarRowHeight + ScaleUi(hwnd, 6);
-    const int navigationWidth = ScaleUi(hwnd, 124);
-    const int navigationGap = ScaleUi(hwnd, 8);
-    if (g_packagesNavLabel) {
-        ShowWindow(g_packagesNavLabel, SW_SHOW);
-        MoveWindow(g_packagesNavLabel, margin, navigationY,
-                   navigationWidth, toolbarRowHeight, TRUE);
+    if (g_launchTargetPath) {
+        ShowWindow(g_launchTargetPath, SW_SHOW);
+        MoveWindow(g_launchTargetPath, margin + ScaleUi(hwnd, 6),
+            shell.footerTop + ScaleUi(hwnd, 36), labelWidth, ScaleUi(hwnd, 24), TRUE);
     }
-    if (g_accountSyncButton) {
-        ShowWindow(g_accountSyncButton, SW_SHOW);
-        MoveWindow(g_accountSyncButton,
-                   margin + navigationWidth + navigationGap,
-                   navigationY,
-                   navigationWidth, toolbarRowHeight, TRUE);
-    }
-    if (g_tocPilotButton) {
-        ShowWindow(g_tocPilotButton, SW_SHOW);
-        MoveWindow(g_tocPilotButton,
-                   margin + 2 * (navigationWidth + navigationGap),
-                   navigationY,
-                   navigationWidth, toolbarRowHeight, TRUE);
-    }
-    const int packageToolbarY =
-        navigationY + toolbarRowHeight + ScaleUi(hwnd, 6);
+    const int packageToolbarY = shell.contentTop + ScaleUi(hwnd, 14);
     if (!g_advancedVisible) {
         if (ToolbarUsesIcons()) {
             const std::array<HWND, 3> controls{
@@ -1396,15 +1399,11 @@ void LayoutControls(HWND hwnd) {
                          g_adoptGitButton, g_advancedButton}) {
         if (control && !packagesView) ShowWindow(control, SW_HIDE);
     }
-    const int listTop =
-        packageToolbarY +
-        toolbarRowHeight +
-        ScaleUi(hwnd, 14);
+    const int listTop = packageToolbarY + toolbarRowHeight + ScaleUi(hwnd, 10);
 
     const bool showSummary = packagesView;
     const int summaryHeight = packagesView ? ScaleUi(hwnd, 208) : 0;
-    const int listBottomPadding =
-        ScaleUi(hwnd, 20) + summaryHeight;
+    const int listBottomPadding = summaryHeight;
 
     const bool showAccountSyncPanel =
         g_stateReady &&
@@ -1433,7 +1432,7 @@ void LayoutControls(HWND hwnd) {
                 showAccountSyncPanel
                     ? tp::kSyncTileMinimumPackageListHeight
                     : 220),
-            height -
+            shell.contentBottom -
                 listTop -
                 listBottomPadding -
                 reservedForAccountSync);
@@ -1442,9 +1441,9 @@ void LayoutControls(HWND hwnd) {
         ShowWindow(g_packageList, packagesView ? SW_SHOW : SW_HIDE);
         MoveWindow(
             g_packageList,
-            margin,
+            pageLeft,
             listTop,
-            contentWidth,
+            pageWidth,
             listHeight,
             TRUE);
 
@@ -1457,14 +1456,14 @@ void LayoutControls(HWND hwnd) {
             const int actionWidth = ScaleUi(hwnd, 84);
             const int actionGap = ScaleUi(hwnd, 8);
             const int panelY = listTop + ScaleUi(hwnd, 260);
-            MoveWindow(g_accountSyncTilesView, margin + actionWidth + actionGap,
-                       panelY, std::max(1, contentWidth - actionWidth - actionGap),
+            MoveWindow(g_accountSyncTilesView, pageLeft + actionWidth + actionGap,
+                       panelY, std::max(1, pageWidth - actionWidth - actionGap),
                        accountSyncPanelHeight, TRUE);
             for (const auto button : {g_accountSyncTileRefreshButton,
                                       g_accountSyncTileSyncButton}) {
                 if (!button) continue;
                 ShowWindow(button, SW_SHOW);
-                MoveWindow(button, margin,
+                MoveWindow(button, pageLeft,
                     panelY + ScaleUi(hwnd, button == g_accountSyncTileRefreshButton ? 35 : 75),
                     actionWidth, ScaleUi(hwnd, 30), TRUE);
             }
@@ -1480,35 +1479,35 @@ void LayoutControls(HWND hwnd) {
     if (g_packageSummary) {
         ShowWindow(g_packageSummary, showSummary ? SW_SHOW : SW_HIDE);
         if (showSummary) MoveWindow(g_packageSummary,
-            margin + ScaleUi(hwnd, 12), detailsY + ScaleUi(hwnd, 8),
-            std::max(1, contentWidth - ScaleUi(hwnd, 24)), ScaleUi(hwnd, 106), TRUE);
+            pageLeft + ScaleUi(hwnd, 12), detailsY + ScaleUi(hwnd, 8),
+            std::max(1, pageWidth - ScaleUi(hwnd, 24)), ScaleUi(hwnd, 106), TRUE);
     }
     const std::array<HWND, 5> actions{
         g_installPackageButton, g_removePackageButton, g_packageOpenFolder,
         g_packageChangeBranchButton, g_packageSourceButton};
     const int gap = ScaleUi(hwnd, 8);
-    const int actionWidth = std::max(1, (contentWidth - ScaleUi(hwnd, 24) - 4*gap) / 5);
+    const int actionWidth = std::max(1, (pageWidth - ScaleUi(hwnd, 24) - 4*gap) / 5);
     for (std::size_t i=0; i < actions.size(); ++i) {
         HWND control = actions[i];
         if (!control) continue;
         ShowWindow(control, packagesView ? SW_SHOW : SW_HIDE);
         if (packagesView) MoveWindow(control,
-            margin + ScaleUi(hwnd, 12) + static_cast<int>(i)*(actionWidth+gap),
+            pageLeft + ScaleUi(hwnd, 12) + static_cast<int>(i)*(actionWidth+gap),
             detailsY + ScaleUi(hwnd, 120), actionWidth, ScaleUi(hwnd, 34), TRUE);
     }
     if (g_packageHint) {
         ShowWindow(g_packageHint, packagesView ? SW_SHOW : SW_HIDE);
         if (packagesView) MoveWindow(g_packageHint,
-            margin + ScaleUi(hwnd, 12), detailsY + ScaleUi(hwnd, 164),
-            std::max(1, contentWidth - ScaleUi(hwnd, 24)), ScaleUi(hwnd, 26), TRUE);
+            pageLeft + ScaleUi(hwnd, 12), detailsY + ScaleUi(hwnd, 164),
+            std::max(1, pageWidth - ScaleUi(hwnd, 24)), ScaleUi(hwnd, 26), TRUE);
     }
     // The original Account Sync control/editor window is now an
     // embedded child rather than a separate popup.
     if (g_syncConfigureButton) ShowWindow(g_syncConfigureButton, SW_HIDE);
     if (g_accountSyncWindow) {
         ShowWindow(g_accountSyncWindow, syncView ? SW_SHOW : SW_HIDE);
-        if (syncView) MoveWindow(g_accountSyncWindow, margin, listTop,
-                                 contentWidth, ScaleUi(hwnd, 244), TRUE);
+        if (syncView) MoveWindow(g_accountSyncWindow, pageLeft, listTop,
+                                 pageWidth, ScaleUi(hwnd, 244), TRUE);
     }
     const std::array<HWND, 3> tocPilotViewButtons{
         g_tocPilotPreferencesButton, g_tocPilotScanButton,
@@ -1517,7 +1516,7 @@ void LayoutControls(HWND hwnd) {
     for (HWND control : tocPilotViewButtons) {
         if (!control) continue;
         ShowWindow(control, tp::ui::ShowsTocPilot(g_mainView) ? SW_SHOW : SW_HIDE);
-        MoveWindow(control, margin, tocY,
+        MoveWindow(control, pageLeft, tocY,
                    ScaleUi(hwnd, control == g_tocPilotScanButton ? 320 : 220),
                    ScaleUi(hwnd, 34), TRUE);
         tocY += ScaleUi(hwnd, 46);
@@ -1526,11 +1525,11 @@ void LayoutControls(HWND hwnd) {
                          g_tocPilotReleasesButton}) {
         if (control) ShowWindow(control, tp::ui::ShowsTocPilot(g_mainView) ? SW_SHOW : SW_HIDE);
     }
-    if (g_tocPilotVersionLabel) MoveWindow(g_tocPilotVersionLabel, margin, tocY + ScaleUi(hwnd, 10),
-                                          contentWidth, ScaleUi(hwnd, 28), TRUE);
-    if (g_tocPilotRepositoryButton) MoveWindow(g_tocPilotRepositoryButton, margin, tocY + ScaleUi(hwnd, 46),
+    if (g_tocPilotVersionLabel) MoveWindow(g_tocPilotVersionLabel, pageLeft, tocY + ScaleUi(hwnd, 10),
+                                          pageWidth, ScaleUi(hwnd, 28), TRUE);
+    if (g_tocPilotRepositoryButton) MoveWindow(g_tocPilotRepositoryButton, pageLeft, tocY + ScaleUi(hwnd, 46),
                                                ScaleUi(hwnd, 220), ScaleUi(hwnd, 34), TRUE);
-    if (g_tocPilotReleasesButton) MoveWindow(g_tocPilotReleasesButton, margin, tocY + ScaleUi(hwnd, 88),
+    if (g_tocPilotReleasesButton) MoveWindow(g_tocPilotReleasesButton, pageLeft, tocY + ScaleUi(hwnd, 88),
                                              ScaleUi(hwnd, 220), ScaleUi(hwnd, 34), TRUE);
     const bool tocView = tp::ui::ShowsTocPilot(g_mainView);
     for (HWND control : {g_tocPilotDevBuildsInline, g_tocPilotUpdateInline})
@@ -1538,7 +1537,7 @@ void LayoutControls(HWND hwnd) {
     for (HWND control : {g_tocPilotIconsInline, g_tocPilotWordsInline})
         if (control) ShowWindow(control, SW_HIDE);
     if (g_tocPilotDevBuildsInline) {
-        MoveWindow(g_tocPilotDevBuildsInline, margin + ScaleUi(hwnd, 240), listTop,
+        MoveWindow(g_tocPilotDevBuildsInline, pageLeft + ScaleUi(hwnd, 240), listTop,
                    ScaleUi(hwnd, 260), ScaleUi(hwnd, 34), TRUE);
         SendMessageW(g_tocPilotDevBuildsInline, BM_SETCHECK,
                      g_stateReady && g_state.settings.receiveDevelopmentBuilds
@@ -1546,14 +1545,14 @@ void LayoutControls(HWND hwnd) {
         EnableWindow(g_tocPilotDevBuildsInline, g_stateReady);
     }
     if (g_tocPilotIconsInline) {
-        MoveWindow(g_tocPilotIconsInline, margin + ScaleUi(hwnd, 240),
+        MoveWindow(g_tocPilotIconsInline, pageLeft + ScaleUi(hwnd, 240),
                    listTop + ScaleUi(hwnd, 50), ScaleUi(hwnd, 115),
                    ScaleUi(hwnd, 32), TRUE);
         SendMessageW(g_tocPilotIconsInline, BM_SETCHECK,
                      ToolbarUsesIcons() ? BST_CHECKED : BST_UNCHECKED, 0);
     }
     if (g_tocPilotWordsInline) {
-        MoveWindow(g_tocPilotWordsInline, margin + ScaleUi(hwnd, 360),
+        MoveWindow(g_tocPilotWordsInline, pageLeft + ScaleUi(hwnd, 360),
                    listTop + ScaleUi(hwnd, 50), ScaleUi(hwnd, 115),
                    ScaleUi(hwnd, 32), TRUE);
         SendMessageW(g_tocPilotWordsInline, BM_SETCHECK,
@@ -1561,27 +1560,27 @@ void LayoutControls(HWND hwnd) {
     }
     if (g_textScaleLabel) {
         ShowWindow(g_textScaleLabel, tocView ? SW_SHOW : SW_HIDE);
-        MoveWindow(g_textScaleLabel, margin + ScaleUi(hwnd, 240),
+        MoveWindow(g_textScaleLabel, pageLeft + ScaleUi(hwnd, 240),
                    listTop + ScaleUi(hwnd, 202), ScaleUi(hwnd, 112),
                    ScaleUi(hwnd, 30), TRUE);
     }
     if (g_textScaleCombo) {
         ShowWindow(g_textScaleCombo, tocView ? SW_SHOW : SW_HIDE);
-        MoveWindow(g_textScaleCombo, margin + ScaleUi(hwnd, 354),
+        MoveWindow(g_textScaleCombo, pageLeft + ScaleUi(hwnd, 354),
                    listTop + ScaleUi(hwnd, 202), ScaleUi(hwnd, 120),
                    ScaleUi(hwnd, 180), TRUE);
     }
     // Unified layout: no Compact/Advanced view switch.
     if (g_tocPilotUpdateInline) {
-        MoveWindow(g_tocPilotUpdateInline, margin + ScaleUi(hwnd, 240),
+        MoveWindow(g_tocPilotUpdateInline, pageLeft + ScaleUi(hwnd, 240),
                    listTop + ScaleUi(hwnd, 102), ScaleUi(hwnd, 220),
                    ScaleUi(hwnd, 34), TRUE);
     }
     if (g_tocPilotInlineUpdateStatus) {
         ShowWindow(g_tocPilotInlineUpdateStatus, tocView ? SW_SHOW : SW_HIDE);
-        MoveWindow(g_tocPilotInlineUpdateStatus, margin,
+        MoveWindow(g_tocPilotInlineUpdateStatus, pageLeft,
                    listTop + ScaleUi(hwnd, 270),
-                   contentWidth, ScaleUi(hwnd, 48), TRUE);
+                   pageWidth, ScaleUi(hwnd, 48), TRUE);
     }
     if (!packagesView && g_branchSelector) ShowWindow(g_branchSelector, SW_HIDE);
     if (packagesView) PositionBranchSelector();
@@ -7106,6 +7105,14 @@ HBRUSH MainSurfaceBrush(bool toolbar) {
 LRESULT HandleStatusColour(WPARAM wParam, LPARAM lParam) {
     HWND control = reinterpret_cast<HWND>(lParam);
     if (!tp::ui::HighContrast() &&
+        (control == g_launchTargetName || control == g_launchTargetPath)) {
+        HDC dc = reinterpret_cast<HDC>(wParam);
+        SetTextColor(dc, control == g_launchTargetName ?
+            tp::ui::Palette::primaryText : tp::ui::Palette::secondaryText);
+        SetBkColor(dc, tp::ui::Palette::window);
+        return reinterpret_cast<LRESULT>(MainSurfaceBrush(false));
+    }
+    if (!tp::ui::HighContrast() &&
         (control == g_packageSummary || control == g_packageHint)) {
         static HBRUSH brush = CreateSolidBrush(tp::ui::Palette::packageDetails);
         HDC dc = reinterpret_cast<HDC>(wParam);
@@ -7488,39 +7495,45 @@ bool DrawToolbarButton(const DRAWITEMSTRUCT* draw) {
     HDC dc = draw->hDC;
     const RECT rect = draw->rcItem;
     const COLORREF backdrop = contrast ? GetSysColor(COLOR_BTNFACE) :
-        navigation || control == g_updateAllButton ||
-        control == g_refreshPackagesButton || control == g_addPackageButton ||
-        control == g_launchWowButton
-            ? tp::ui::Palette::toolbar : tp::ui::Palette::window;
+        tp::ui::Palette::window;
     HBRUSH backing = CreateSolidBrush(backdrop);
     FillRect(dc, &rect, backing);
     DeleteObject(backing);
 
     const COLORREF surface = contrast
         ? (active ? GetSysColor(COLOR_HIGHLIGHT) : GetSysColor(COLOR_BTNFACE))
-        : visual.fill;
-    const COLORREF edge = contrast ? GetSysColor(COLOR_BTNTEXT) : visual.border;
+        : navigation ? (active ? tp::ui::Palette::tabActive :
+                        hot ? tp::ui::Lift(tp::ui::Palette::tabInactive) :
+                              tp::ui::Palette::tabInactive) : visual.fill;
+    const COLORREF edge = contrast ? GetSysColor(COLOR_BTNTEXT) :
+        navigation ? tp::ui::Palette::tabOutline : visual.border;
     HPEN pen = CreatePen(PS_SOLID, 1, edge);
     HBRUSH brush = CreateSolidBrush(surface);
     const HGDIOBJ oldPen = SelectObject(dc, pen);
     const HGDIOBJ oldBrush = SelectObject(dc, brush);
-    const int radius = ScaleUi(control, navigation ? 8 : 12);
-    RoundRect(dc, rect.left + 1, rect.top + 1,
-              rect.right - 1, rect.bottom - 1, radius, radius);
+    if (navigation) {
+        RECT fill{rect.left + 1, rect.top + 1, rect.right - 1, rect.bottom};
+        FillRect(dc, &fill, brush);
+        const int bevel = ScaleUi(control, 5);
+        MoveToEx(dc, rect.left, rect.bottom - 1, nullptr);
+        LineTo(dc, rect.left, rect.top + bevel);
+        LineTo(dc, rect.left + bevel, rect.top);
+        LineTo(dc, rect.right - bevel - 1, rect.top);
+        LineTo(dc, rect.right - 1, rect.top + bevel);
+        LineTo(dc, rect.right - 1, rect.bottom);
+        if (!active) {
+            MoveToEx(dc, rect.left, rect.bottom - 1, nullptr);
+            LineTo(dc, rect.right, rect.bottom - 1);
+        }
+    } else {
+        const int radius = ScaleUi(control, 12);
+        RoundRect(dc, rect.left + 1, rect.top + 1,
+                  rect.right - 1, rect.bottom - 1, radius, radius);
+    }
     SelectObject(dc, oldPen);
     SelectObject(dc, oldBrush);
     DeleteObject(pen);
     DeleteObject(brush);
-
-    if (visual.activeUnderline && !contrast) {
-        RECT underline{rect.left + ScaleUi(control, 12),
-                       rect.bottom - ScaleUi(control, 4),
-                       rect.right - ScaleUi(control, 12),
-                       rect.bottom - ScaleUi(control, 1)};
-        HBRUSH accent = CreateSolidBrush(tp::ui::Palette::alreadyGood);
-        FillRect(dc, &underline, accent);
-        DeleteObject(accent);
-    }
 
     const bool useIcon = ToolbarControlUsesIcon(control) &&
         !navigation && ToolbarButtonIcon(control, disabled) != nullptr;
@@ -9576,10 +9589,14 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             createToolbarButton(
                 L"Scan",
                 IDC_ADOPT_GIT);
-        g_brandLabel = CreateWindowExW(
-            0, L"STATIC", L"TocPilot",
-            WS_CHILD | WS_VISIBLE | SS_LEFT | SS_CENTERIMAGE,
-            0, 0, 140, 48, hwnd, nullptr, GetModuleHandleW(nullptr), nullptr);
+        g_launchTargetName = CreateWindowExW(
+            0, L"STATIC", L"WoW.exe",
+            WS_CHILD | WS_VISIBLE | SS_LEFT | SS_CENTERIMAGE | SS_NOPREFIX,
+            0, 0, 320, 24, hwnd, nullptr, GetModuleHandleW(nullptr), nullptr);
+        g_launchTargetPath = CreateWindowExW(
+            0, L"STATIC", L"",
+            WS_CHILD | WS_VISIBLE | SS_LEFT | SS_PATHELLIPSIS | SS_NOPREFIX,
+            0, 0, 320, 24, hwnd, nullptr, GetModuleHandleW(nullptr), nullptr);
         g_packagesNavLabel = CreateWindowExW(
             0, L"BUTTON", L"Packages",
             WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON,
@@ -9807,12 +9824,15 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             SW_HIDE);
 
         std::error_code vanillaFixesEc;
-        g_hasVanillaFixes =
-            std::filesystem::is_regular_file(
-                g_root /
-                    L"VanillaFixes.exe",
-                vanillaFixesEc);
-
+        g_hasVanillaFixes = std::filesystem::is_regular_file(
+            g_root / L"VanillaFixes.exe", vanillaFixesEc);
+        const auto launchExecutable = g_root /
+            (g_hasVanillaFixes ? L"VanillaFixes.exe" : L"WoW.exe");
+        g_launchTargetFullPath = launchExecutable.wstring();
+        SetWindowTextW(g_launchTargetName, launchExecutable.filename().c_str());
+        SetWindowTextW(g_launchTargetPath, g_launchTargetFullPath.c_str());
+        tp::AddToolbarTooltip(g_toolbarTooltip, hwnd, g_launchTargetPath,
+                              g_launchTargetFullPath.c_str());
         ReloadToolbarImages(hwnd);
         ApplyToolbarPresentation(hwnd);
 
@@ -9917,6 +9937,11 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             HDC dc = reinterpret_cast<HDC>(wParam);
             RECT client{}; GetClientRect(hwnd, &client);
             FillRect(dc, &client, MainSurfaceBrush(false));
+            const int margin = ScaleUi(hwnd, 20);
+            const auto shell = tp::UnifiedShellLayout(
+                client.bottom - client.top, ScaleUi(hwnd, kShellTabTop),
+                ScaleUi(hwnd, kShellTabHeight), ScaleUi(hwnd, kShellFooterHeight),
+                ScaleUi(hwnd, kShellFooterGap));
             if (g_packageSummary && IsWindowVisible(g_packageSummary)) {
                 RECT panel{};
                 GetWindowRect(g_packageSummary, &panel);
@@ -9924,24 +9949,31 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                 panel.left = std::max(0L, panel.left - ScaleUi(hwnd, 12));
                 panel.top = std::max(0L, panel.top - ScaleUi(hwnd, 8));
                 panel.right = std::min(client.right, panel.right + ScaleUi(hwnd, 12));
-                panel.bottom = client.bottom - ScaleUi(hwnd, 8);
+                panel.bottom = static_cast<LONG>(shell.contentBottom - ScaleUi(hwnd, 5));
                 HBRUSH brush = CreateSolidBrush(tp::ui::Palette::packageDetails);
                 FillRect(dc, &panel, brush);
                 DeleteObject(brush);
             }
-            // Use existing child positions so Compact/Advanced and DPI layouts stay authoritative.
-            if (g_packageList && IsWindowVisible(g_packageList)) {
-                RECT list{}; GetWindowRect(g_packageList, &list);
-                MapWindowPoints(nullptr, hwnd, reinterpret_cast<POINT*>(&list), 2);
-                RECT toolbar = client; toolbar.bottom = std::max(client.top, list.top - ScaleUi(hwnd, 6));
-                FillRect(dc, &toolbar, MainSurfaceBrush(true));
-            }
-            if (g_accountSyncTilesView && IsWindowVisible(g_accountSyncTilesView)) {
-                RECT sync{}; GetWindowRect(g_accountSyncTilesView, &sync);
-                MapWindowPoints(nullptr, hwnd, reinterpret_cast<POINT*>(&sync), 2);
-                RECT panel = client; panel.top = std::max(client.top, sync.top - ScaleUi(hwnd, 6));
-                FillRect(dc, &panel, MainSurfaceBrush(true));
-            }
+            const int left = margin, right = client.right - margin;
+            const int y = shell.contentTop;
+            const int index = g_mainView == MainView::Packages ? 0 :
+                g_mainView == MainView::AccountSync ? 1 : 2;
+            const int tabLeft = left + index *
+                ScaleUi(hwnd, kShellTabWidth + kShellTabGap);
+            const int tabRight = tabLeft + ScaleUi(hwnd, kShellTabWidth);
+            HPEN pen = CreatePen(PS_SOLID, 1, tp::ui::Palette::tabOutline);
+            HGDIOBJ oldPen = SelectObject(dc, pen);
+            MoveToEx(dc, left, y, nullptr);
+            LineTo(dc, tabLeft, y);
+            MoveToEx(dc, tabRight - 1, y, nullptr);
+            LineTo(dc, right, y);
+            LineTo(dc, right - 1, shell.contentBottom);
+            LineTo(dc, left, shell.contentBottom);
+            LineTo(dc, left, y);
+            MoveToEx(dc, left, shell.footerTop, nullptr);
+            LineTo(dc, right, shell.footerTop);
+            SelectObject(dc, oldPen);
+            DeleteObject(pen);
             return TRUE;
         }
         break;

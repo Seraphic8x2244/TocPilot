@@ -5,6 +5,18 @@
 
 namespace tp {
 
+// Shared tab, content-frame and permanently bottom-anchored launch-footer bands.
+struct UnifiedShellBands {
+    int tabTop, tabBottom, contentTop, contentBottom, footerTop;
+};
+inline UnifiedShellBands UnifiedShellLayout(
+    int clientHeight, int tabTop, int tabHeight, int footerHeight, int footerGap) {
+    const int tabBottom = tabTop + tabHeight;
+    const int footerTop = std::max(0, clientHeight - footerHeight);
+    return {tabTop, tabBottom, tabBottom - 1,
+            std::max(tabBottom, footerTop - footerGap), footerTop};
+}
+
 // Name width is authoritative. Status fills the spare viewport width;
 // a narrow ListView scrolls horizontally, never changing stored Name width.
 inline std::array<int, 2> UnifiedPackageColumnWidths(
