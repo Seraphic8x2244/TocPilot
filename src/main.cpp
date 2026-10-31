@@ -7546,7 +7546,9 @@ bool DrawToolbarButton(const DRAWITEMSTRUCT* draw) {
         if (previousFont) SelectObject(dc, previousFont);
     }
 
-    if ((draw->itemState & ODS_FOCUS) != 0) {
+    // The selected navigation tab already has a distinct outline and label.
+    // Avoid drawing the native dotted focus rectangle inside its text area.
+    if (!navigation && (draw->itemState & ODS_FOCUS) != 0) {
         RECT focus = rect;
         InflateRect(&focus, -ScaleUi(control, 4), -ScaleUi(control, 4));
         DrawFocusRect(dc, &focus);
@@ -9965,7 +9967,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                 FillRect(dc, &panel, brush);
                 DeleteObject(brush);
             }
-            const int left = margin, right = client.right - margin;
+            const int left = margin, right = client.right - margin - 1;
             const int y = shell.contentTop;
             const int index = g_mainView == MainView::Packages ? 0 :
                 g_mainView == MainView::AccountSync ? 1 : 2;
@@ -9978,11 +9980,13 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             LineTo(dc, tabLeft, y);
             MoveToEx(dc, tabRight - 1, y, nullptr);
             LineTo(dc, right, y);
-            LineTo(dc, right - 1, shell.contentBottom);
+            // Use the same x-coordinate for the entire right border:
+            // the former -1 on the second endpoint created a resize-step.
+            LineTo(dc, right, shell.contentBottom);
             LineTo(dc, left, shell.contentBottom);
             LineTo(dc, left, y);
-            MoveToEx(dc, left, shell.footerTop, nullptr);
-            LineTo(dc, right, shell.footerTop);
+            // The frame's bottom border is already the footer divider;
+            // do not draw another horizontal line at shell.footerTop.
             SelectObject(dc, oldPen);
             DeleteObject(pen);
             EndPaint(hwnd, &ps);

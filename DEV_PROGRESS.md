@@ -1,6 +1,16 @@
 # TocPilot Development Progress
 
-## Current Handoff — v0.6.0-dev.12 runtime-review release (2026-10-31)
+## Current Handoff — Frame-line and selected-tab focus cleanup (2026-10-31)
+
+**Runtime observation:** User installed `v0.6.0-dev.12`; confirms resize ghosting is resolved and TocPilot options layout improved. Three remaining small UI faults in the screenshot: slight step/jog in right-hand main content frame, duplicate bottom horizontal rule above footer, and a dotted/pink native focus outline *inside* the selected tab. User explicitly wants code edits, not screenshot/image generation.
+
+**Implementation:** In `src/main.cpp`, main frame uses a single constant right-edge x-coordinate for top and vertical segments (previously LineTo right, then LineTo right-1 created one-pixel diagonal over long vertical height); remove the separately drawn `footerTop` rule, leaving the existing frame bottom as sole separator; suppress `DrawFocusRect` only for navigation tabs, preserving focus indication for ordinary buttons, tab active bold/accent and all existing tab-click/keyboard behaviour. Preserve page layout, footer, options, updater and package operations. No new feature or Packages mockup implementation. Work `dev` only, `main` untouched. Source version remains `v0.6.0-dev.12` pending next approved updater-installable prerelease.
+
+**Next:** Exact-SHA Windows MSVC x64 Release/CTest gate for this source commit, then one updater-installable dev.13 when CI passes so the user can verify in Windows. Do not claim runtime proof before the user has updated and inspected the new layout. The separate Packages redesign is still audit-only pending user go-ahead.
+
+---
+
+## Previous Handoff — v0.6.0-dev.12 runtime-review release (2026-10-31)
 
 **Build completed:** Exact-SHA Windows Build/CTest [41217856967](https://github.com/Seraphic8x2244/TocPilot/actions/runs/41217856967) passed at `ba8dd441f191ef5eaa303236a057f1d1a2dc6aa8`. This release-only commit advances `src/version.h` and `.github/development-release-version` to `v0.6.0-dev.12`, triggering the development-release workflow. Do not claim published or bootstrap dev-channel self-update passed without verifying its release workflow and GitHub assets. `main` remains untouched.
 
