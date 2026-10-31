@@ -9850,6 +9850,11 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
 
     case WM_SIZE:
         LayoutControls(hwnd);
+        // Live-resize moves many owner-drawn children and changes the page
+        // outline. Repaint the complete new layout, not just exposed strips.
+        // Defer painting until this message returns (no synchronous flicker).
+        RedrawWindow(hwnd, nullptr, nullptr,
+                     RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN);
         return 0;
 
     case WM_DPICHANGED: {
@@ -9934,8 +9939,15 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
     }
 
     case WM_ERASEBKGND:
+        // The frame and themed background are rendered together in WM_PAINT.
+        // Prevent a partial background erase from leaving resize ghosting.
+        if (!tp::ui::HighContrast()) return TRUE;
+        break;
+
+    case WM_PAINT:
         if (!tp::ui::HighContrast()) {
-            HDC dc = reinterpret_cast<HDC>(wParam);
+            PAINTSTRUCT ps{};
+            HDC dc = BeginPaint(hwnd, &ps);
             RECT client{}; GetClientRect(hwnd, &client);
             FillRect(dc, &client, MainSurfaceBrush(false));
             const int margin = ScaleUi(hwnd, 20);
@@ -9975,7 +9987,8 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             LineTo(dc, right, shell.footerTop);
             SelectObject(dc, oldPen);
             DeleteObject(pen);
-            return TRUE;
+            EndPaint(hwnd, &ps);
+            return 0;
         }
         break;
     case WM_CTLCOLORSTATIC: {
@@ -13015,7 +13028,7 @@ int RunMainWindow(HINSTANCE instance) {
         0,
         g_windowClassName.c_str(),
         title.c_str(),
-        WS_OVERLAPPEDWINDOW,
+        WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN,
         CW_USEDEFAULT,
         CW_USEDEFAULT,
         ScaleForDpi(

@@ -1,6 +1,18 @@
 # TocPilot Development Progress
 
-## Current Handoff — v0.6.0-dev.11 right-edge fix release (2026-10-30)
+## Current Handoff — Fix live-resize repaint of outlined UI (2026-10-31)
+
+**Windows runtime report:** User installed `v0.6.0-dev.11` and provided normal-width and maximized Packages screenshots. Tabs and footer remain acceptable, but live resizing produces repeated frame edges, unpainted strips and ghost remnants of package controls throughout newly exposed space. Do not start the user's proposed future resizing-layout design until this repaint bug is corrected.
+
+**Root cause/targeted fix:** Main `WindowProc` was drawing the whole themed surface and tab/page outlines from `WM_ERASEBKGND`, with no `WS_CLIPCHILDREN`; `WM_SIZE` repeatedly moved/resized owner-drawn children without invalidating the whole newly sized parent. Incremental invalid-region updates could leave copied/stale pixels and overpaint child controls. Move background/frame rendering into a single `BeginPaint`/`EndPaint` `WM_PAINT` pass, suppress themed background erase, add `WS_CLIPCHILDREN` on the main HWND, and invalidate the full parent and all children at the end of `WM_SIZE` (`RDW_INVALIDATE|RDW_ERASE|RDW_ALLCHILDREN`, deferred). High-contrast retains Windows background-erasing fallback. Do not alter page geometry, tab surfaces, package operations, column persistence, or the selected launcher.
+
+**Baseline/validation:** `dev` only; prior release `v0.6.0-dev.11` at `f4c67879b9e8095afcbe92a51d3f679c22334515`; its Development Release [41141642763](https://github.com/Seraphic8x2244/TocPilot/actions/runs/41141642763) and Build [41141642754](https://github.com/Seraphic8x2244/TocPilot/actions/runs/41141642754) passed, and user installed and photographed it. This repaint correction is implemented, not yet CI-checked or runtime-tested. Automated CTest cannot establish live native-window resize behaviour.
+
+**Next action:** Verify exact-SHA MSVC Build + CTest once; user explicitly needs updater-installable releases to test. Publish one `v0.6.0-dev.12` prerelease after green CI, then ask for a single Windows live-resize/maximize/restore test (Packages, Account Sync, TocPilot) and only then discuss the user's proposed resizing concept. Keep `main` untouched.
+
+---
+
+## Previous Handoff — v0.6.0-dev.11 right-edge fix release (2026-10-30)
 
 **Release preparation and QA:** The user confirmed the outlined tabs look good on a running `v0.6.0-dev.10`, but the Packages panel/list and contextual controls overflowed the right edge. `LayoutControls` accidentally initialised `pageWidth` from its own uninitialised value. Fixed by `tp::UnifiedPageWidth(contentWidth, pageInset)` with regression coverage in `e2d7e4b2ed0cf3820308e1829eec21e2ab097387`. Exact-SHA Windows Release/CTest [Build 41140947246](https://github.com/Seraphic8x2244/TocPilot/actions/runs/41140947246) **completed successfully**. Trigger `v0.6.0-dev.11` by advancing the version header and development release marker together in this release-only commit. `main` remains untouched. The prior `dev.10` published EXE+checksum, but [Development Release 41134724919](https://github.com/Seraphic8x2244/TocPilot/actions/runs/41134724919) **failed its automated bootstrap development-channel self-update check** (expected updated EXE hash; got bootstrap hash); user nevertheless installed and showed dev.10. This deviation must remain visible until the new workflow's end-to-end check succeeds; do not conflate publication and successful E2E. Release and runtime visual validation are separate.
 
