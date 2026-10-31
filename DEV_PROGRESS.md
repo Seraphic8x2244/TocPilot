@@ -1,6 +1,16 @@
 # TocPilot Development Progress
 
-## Current Handoff — TocPilot tab implementation + Packages mockup audit (2026-10-31)
+## Current Handoff — v0.6.0-dev.12 runtime-review release (2026-10-31)
+
+**Build completed:** Exact-SHA Windows Build/CTest [41217856967](https://github.com/Seraphic8x2244/TocPilot/actions/runs/41217856967) passed at `ba8dd441f191ef5eaa303236a057f1d1a2dc6aa8`. This release-only commit advances `src/version.h` and `.github/development-release-version` to `v0.6.0-dev.12`, triggering the development-release workflow. Do not claim published or bootstrap dev-channel self-update passed without verifying its release workflow and GitHub assets. `main` remains untouched.
+
+**Contents of dev.12:** Native resize repaint remediation from `86d81a8921b802ccc533edd6649e07acb7496627`; TocPilot tab regrouping under Addon Management / Options / About with real actions, readable development-builds setting, update-check timestamp and source links from `ba8dd441f191ef5eaa303236a057f1d1a2dc6aa8`. The Packages side-by-side/status+type icons/Copy Link mockup is **audit only, not implemented**. User runtime evidence is still `v0.6.0-dev.11`, where resizing produces ghost borders.
+
+**Single next step:** Verify dev.12 development-release workflow's exact SHA, Release and CTest, EXE and SHA-256 assets, and updater E2E. Then runtime-review TocPilot section arrangement, the checkbox label, links, check-time, resizing ghosting across tabs, and footer. Preserve proposed Packages layout for later explicit approval. Don't confuse CI green with Windows runtime acceptance.
+
+---
+
+## Previous Handoff — TocPilot tab implementation + Packages mockup audit (2026-10-31)
 
 **Scope chosen by user:** (1) Reorganise the **TocPilot** tab now, (2) **audit only** the proposed Packages tab before programming. The user posted three screenshots from installed **v0.6.0-dev.11**: maximized Packages exhibits persistent ghost borders on resize, TocPilot tab has useless Preferences/About focus buttons and invisible dark checkbox text, and a narrow mockup gives exact proposed Packages layout. The earlier native-window repaint fix is on `dev` commit `86d81a8921b802ccc533edd6649e07acb7496627`; [Build 41192606398](https://github.com/Seraphic8x2244/TocPilot/actions/runs/41192606398) **passed** but that fix is *not present in user-installed dev.11*, so no claim it has resolved the ghosting. Published baseline remains dev.11 at `f4c67879b9e8095afcbe92a51d3f679c22334515`. Work `dev` only, never `main`.
 
