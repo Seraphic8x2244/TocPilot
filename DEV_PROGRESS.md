@@ -1,6 +1,16 @@
 # TocPilot Development Progress
 
-## Current Handoff — Frame-line and selected-tab focus cleanup (2026-10-31)
+## Current Handoff — v0.6.0-dev.13 UI polish release (2026-10-31)
+
+**Source and release gate:** `dev` source commit `5883fbfddbc2a34dc630f33a7317f8bd2c4573d6` passed Windows x64 Release/CTest in [Build 41231565339](https://github.com/Seraphic8x2244/TocPilot/actions/runs/41231565339). This coherent release-only commit sets `src/version.h` and `.github/development-release-version` to `v0.6.0-dev.13` to trigger the updater-installable Development Release. Preserve `main` unchanged. The prior published and user-tested release is `dev.12` at `6efdaf6d64dfb4dd6c94688597560a0ff640135c`. Release workflow, assets and self-update E2E must be verified separately before asserting publication or successful app upgrade.
+
+**Delta:** Remove inner focus rectangle from selected navigation tabs (bold/outline keep active indication); fix one-pixel change in right-hand content border coordinate; remove duplicate footer rule. User confirmed live-resize redraw ghosting was fixed in dev.12, and requested precisely these additional changes; no Packages redesign or visual image editing.
+
+**Single next action:** Verify the dev.13 Development Release workflow for exact SHA, Microsoft Release build/CTest, published `TocPilot.exe` + SHA-256 and development-channel self-update. Then user runtime check of right border, footer line and tab focus. The user-proposed side-by-side Packages layout remains **audit-only**, not implemented.
+
+---
+
+## Previous Handoff — Frame-line and selected-tab focus cleanup (2026-10-31)
 
 **Runtime observation:** User installed `v0.6.0-dev.12`; confirms resize ghosting is resolved and TocPilot options layout improved. Three remaining small UI faults in the screenshot: slight step/jog in right-hand main content frame, duplicate bottom horizontal rule above footer, and a dotted/pink native focus outline *inside* the selected tab. User explicitly wants code edits, not screenshot/image generation.
 
