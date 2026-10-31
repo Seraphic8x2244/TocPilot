@@ -122,6 +122,7 @@ constexpr int IDC_TOCPILOT_UPDATE_INLINE = 1048;
 constexpr int IDC_PACKAGE_OPEN_FOLDER = 1049;
 constexpr int IDC_PACKAGE_SOURCE = 1050;
 constexpr int IDC_PACKAGE_CHANGE_BRANCH = 1051;
+constexpr int IDC_TOCPILOT_DEVBUILDS_TEXT = 1052;
 
 constexpr int kCompactWindowWidth = 790;
 constexpr int kShellTabTop = 16;
@@ -201,9 +202,12 @@ HWND g_launchTargetName = nullptr;
 HWND g_launchTargetPath = nullptr;
 std::wstring g_launchTargetFullPath;
 HWND g_syncConfigureButton = nullptr;
-HWND g_tocPilotPreferencesButton = nullptr;
+HWND g_tocPilotAddonHeader = nullptr;
+HWND g_tocPilotOptionsHeader = nullptr;
+HWND g_tocPilotAboutHeader = nullptr;
 HWND g_tocPilotScanButton = nullptr;
-HWND g_tocPilotAboutButton = nullptr;
+HWND g_tocPilotDevBuildsLabel = nullptr;
+HWND g_tocPilotLastCheckLabel = nullptr;
 HWND g_tocPilotVersionLabel = nullptr;
 HWND g_tocPilotRepositoryButton = nullptr;
 HWND g_tocPilotReleasesButton = nullptr;
@@ -1510,79 +1514,60 @@ void LayoutControls(HWND hwnd) {
         if (syncView) MoveWindow(g_accountSyncWindow, pageLeft, listTop,
                                  pageWidth, ScaleUi(hwnd, 244), TRUE);
     }
-    const std::array<HWND, 3> tocPilotViewButtons{
-        g_tocPilotPreferencesButton, g_tocPilotScanButton,
-        g_tocPilotAboutButton};
-    int tocY = listTop;
-    for (HWND control : tocPilotViewButtons) {
-        if (!control) continue;
-        ShowWindow(control, tp::ui::ShowsTocPilot(g_mainView) ? SW_SHOW : SW_HIDE);
-        MoveWindow(control, pageLeft, tocY,
-                   ScaleUi(hwnd, control == g_tocPilotScanButton ? 320 : 220),
-                   ScaleUi(hwnd, 34), TRUE);
-        tocY += ScaleUi(hwnd, 46);
-    }
-    for (HWND control : {g_tocPilotVersionLabel, g_tocPilotRepositoryButton,
-                         g_tocPilotReleasesButton}) {
-        if (control) ShowWindow(control, tp::ui::ShowsTocPilot(g_mainView) ? SW_SHOW : SW_HIDE);
-    }
-    if (g_tocPilotVersionLabel) MoveWindow(g_tocPilotVersionLabel, pageLeft, tocY + ScaleUi(hwnd, 10),
-                                          pageWidth, ScaleUi(hwnd, 28), TRUE);
-    if (g_tocPilotRepositoryButton) MoveWindow(g_tocPilotRepositoryButton, pageLeft, tocY + ScaleUi(hwnd, 46),
-                                               ScaleUi(hwnd, 220), ScaleUi(hwnd, 34), TRUE);
-    if (g_tocPilotReleasesButton) MoveWindow(g_tocPilotReleasesButton, pageLeft, tocY + ScaleUi(hwnd, 88),
-                                             ScaleUi(hwnd, 220), ScaleUi(hwnd, 34), TRUE);
+    // One TocPilot options page with actionable controls and real headings.
     const bool tocView = tp::ui::ShowsTocPilot(g_mainView);
-    for (HWND control : {g_tocPilotDevBuildsInline, g_tocPilotUpdateInline})
-        if (control) ShowWindow(control, tocView ? SW_SHOW : SW_HIDE);
-    for (HWND control : {g_tocPilotIconsInline, g_tocPilotWordsInline})
-        if (control) ShowWindow(control, SW_HIDE);
+    const int tocY = shell.contentTop + ScaleUi(hwnd, 12);
+    const auto placeToc = [&](HWND control, int x, int y, int w, int h) {
+        if (!control) return;
+        ShowWindow(control, tocView ? SW_SHOW : SW_HIDE);
+        if (tocView) MoveWindow(control, x, y, w, h, TRUE);
+    };
+    const auto rowY = [&](int offset) { return tocY + ScaleUi(hwnd, offset); };
+    const int normalButtonWidth = std::min(ScaleUi(hwnd, 220), pageWidth);
+    const int scanButtonWidth = std::min(ScaleUi(hwnd, 320), pageWidth);
+    for (HWND header : {g_tocPilotAddonHeader, g_tocPilotOptionsHeader,
+                        g_tocPilotAboutHeader}) {
+        if (header && g_boldUiFont) SendMessageW(header, WM_SETFONT,
+            reinterpret_cast<WPARAM>(g_boldUiFont), TRUE);
+    }
+    placeToc(g_tocPilotAddonHeader, pageLeft, rowY(0), pageWidth, ScaleUi(hwnd, 26));
+    placeToc(g_tocPilotScanButton, pageLeft, rowY(32),
+             scanButtonWidth, ScaleUi(hwnd, 34));
+    placeToc(g_tocPilotOptionsHeader, pageLeft, rowY(80),
+             pageWidth, ScaleUi(hwnd, 26));
+    placeToc(g_textScaleLabel, pageLeft + ScaleUi(hwnd, 4), rowY(109),
+             ScaleUi(hwnd, 95), ScaleUi(hwnd, 26));
+    placeToc(g_textScaleCombo, pageLeft + ScaleUi(hwnd, 106), rowY(106),
+             ScaleUi(hwnd, 120), ScaleUi(hwnd, 180));
+    placeToc(g_tocPilotDevBuildsInline, pageLeft + ScaleUi(hwnd, 4), rowY(143),
+             ScaleUi(hwnd, 24), ScaleUi(hwnd, 30));
+    placeToc(g_tocPilotDevBuildsLabel, pageLeft + ScaleUi(hwnd, 31), rowY(145),
+             std::max(1, pageWidth - ScaleUi(hwnd, 31)), ScaleUi(hwnd, 27));
     if (g_tocPilotDevBuildsInline) {
-        MoveWindow(g_tocPilotDevBuildsInline, pageLeft + ScaleUi(hwnd, 240), listTop,
-                   ScaleUi(hwnd, 260), ScaleUi(hwnd, 34), TRUE);
         SendMessageW(g_tocPilotDevBuildsInline, BM_SETCHECK,
-                     g_stateReady && g_state.settings.receiveDevelopmentBuilds
-                         ? BST_CHECKED : BST_UNCHECKED, 0);
+            g_stateReady && g_state.settings.receiveDevelopmentBuilds
+                ? BST_CHECKED : BST_UNCHECKED, 0);
         EnableWindow(g_tocPilotDevBuildsInline, g_stateReady);
     }
-    if (g_tocPilotIconsInline) {
-        MoveWindow(g_tocPilotIconsInline, pageLeft + ScaleUi(hwnd, 240),
-                   listTop + ScaleUi(hwnd, 50), ScaleUi(hwnd, 115),
-                   ScaleUi(hwnd, 32), TRUE);
-        SendMessageW(g_tocPilotIconsInline, BM_SETCHECK,
-                     ToolbarUsesIcons() ? BST_CHECKED : BST_UNCHECKED, 0);
-    }
-    if (g_tocPilotWordsInline) {
-        MoveWindow(g_tocPilotWordsInline, pageLeft + ScaleUi(hwnd, 360),
-                   listTop + ScaleUi(hwnd, 50), ScaleUi(hwnd, 115),
-                   ScaleUi(hwnd, 32), TRUE);
-        SendMessageW(g_tocPilotWordsInline, BM_SETCHECK,
-                     ToolbarUsesIcons() ? BST_UNCHECKED : BST_CHECKED, 0);
-    }
-    if (g_textScaleLabel) {
-        ShowWindow(g_textScaleLabel, tocView ? SW_SHOW : SW_HIDE);
-        MoveWindow(g_textScaleLabel, pageLeft + ScaleUi(hwnd, 240),
-                   listTop + ScaleUi(hwnd, 202), ScaleUi(hwnd, 112),
-                   ScaleUi(hwnd, 30), TRUE);
-    }
-    if (g_textScaleCombo) {
-        ShowWindow(g_textScaleCombo, tocView ? SW_SHOW : SW_HIDE);
-        MoveWindow(g_textScaleCombo, pageLeft + ScaleUi(hwnd, 354),
-                   listTop + ScaleUi(hwnd, 202), ScaleUi(hwnd, 120),
-                   ScaleUi(hwnd, 180), TRUE);
-    }
-    // Unified layout: no Compact/Advanced view switch.
-    if (g_tocPilotUpdateInline) {
-        MoveWindow(g_tocPilotUpdateInline, pageLeft + ScaleUi(hwnd, 240),
-                   listTop + ScaleUi(hwnd, 102), ScaleUi(hwnd, 220),
-                   ScaleUi(hwnd, 34), TRUE);
-    }
-    if (g_tocPilotInlineUpdateStatus) {
-        ShowWindow(g_tocPilotInlineUpdateStatus, tocView ? SW_SHOW : SW_HIDE);
-        MoveWindow(g_tocPilotInlineUpdateStatus, pageLeft,
-                   listTop + ScaleUi(hwnd, 270),
-                   pageWidth, ScaleUi(hwnd, 48), TRUE);
-    }
+    placeToc(g_tocPilotAboutHeader, pageLeft, rowY(188),
+             pageWidth, ScaleUi(hwnd, 26));
+    placeToc(g_tocPilotVersionLabel, pageLeft + ScaleUi(hwnd, 4), rowY(215),
+             pageWidth - ScaleUi(hwnd, 4), ScaleUi(hwnd, 26));
+    placeToc(g_tocPilotUpdateInline, pageLeft, rowY(243),
+             normalButtonWidth, ScaleUi(hwnd, 34));
+    placeToc(g_tocPilotLastCheckLabel, pageLeft + ScaleUi(hwnd, 4), rowY(283),
+             pageWidth - ScaleUi(hwnd, 4), ScaleUi(hwnd, 24));
+    placeToc(g_tocPilotInlineUpdateStatus, pageLeft + ScaleUi(hwnd, 4), rowY(309),
+             pageWidth - ScaleUi(hwnd, 4), ScaleUi(hwnd, 34));
+    const int linkWidth = std::min(ScaleUi(hwnd, 160),
+        std::max(1, (pageWidth - ScaleUi(hwnd, 10)) / 2));
+    placeToc(g_tocPilotRepositoryButton, pageLeft, rowY(350),
+             linkWidth, ScaleUi(hwnd, 34));
+    placeToc(g_tocPilotReleasesButton, pageLeft + linkWidth + ScaleUi(hwnd, 10),
+             rowY(350), linkWidth, ScaleUi(hwnd, 34));
+    // Existing saved icon preference is retained, not shown as a second mode.
+    for (HWND control : {g_tocPilotIconsInline, g_tocPilotWordsInline})
+        if (control) ShowWindow(control, SW_HIDE);
     if (!packagesView && g_branchSelector) ShowWindow(g_branchSelector, SW_HIDE);
     if (packagesView) PositionBranchSelector();
 }
@@ -7353,8 +7338,7 @@ bool IsMainChromeButton(HWND control) {
         g_addPackageButton, g_installPackageButton, g_removePackageButton,
         g_inspectPackageButton, g_adoptGitButton, g_advancedButton,
         g_packagesNavLabel, g_accountSyncButton, g_tocPilotButton,
-        g_syncConfigureButton, g_tocPilotPreferencesButton,
-        g_tocPilotScanButton, g_tocPilotAboutButton,
+        g_syncConfigureButton, g_tocPilotScanButton,
         g_tocPilotRepositoryButton, g_tocPilotReleasesButton,
         g_tocPilotUpdateInline, g_packageOpenFolder,
         g_packageSourceButton, g_packageChangeBranchButton,
@@ -7459,8 +7443,7 @@ void ApplyToolbarPresentation(
     }
 
     for (HWND control : {
-        g_syncConfigureButton, g_tocPilotPreferencesButton,
-        g_tocPilotScanButton, g_tocPilotAboutButton,
+        g_syncConfigureButton, g_tocPilotScanButton,
         g_tocPilotRepositoryButton, g_tocPilotReleasesButton,
         g_tocPilotUpdateInline, g_packageOpenFolder,
         g_packageSourceButton, g_packageChangeBranchButton,
@@ -9613,19 +9596,33 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                 L"TocPilot",
                 IDC_TOCPILOT);
         g_syncConfigureButton = createToolbarButton(L"Configure Account Sync", IDC_SYNC_CONFIGURE);
-        g_tocPilotPreferencesButton = createToolbarButton(L"Preferences", IDC_TOCPILOT_PREFERENCES);
-        g_tocPilotScanButton = createToolbarButton(L"Scan existing folder for addons", IDC_TOCPILOT_SCAN);
-        g_tocPilotAboutButton = createToolbarButton(L"About", IDC_TOCPILOT_ABOUT);
+        const auto createSectionHeading = [&](const wchar_t* title) {
+            return CreateWindowExW(0, L"STATIC", title,
+                WS_CHILD | SS_LEFT | SS_NOPREFIX, 0, 0, 320, 28,
+                hwnd, nullptr, GetModuleHandleW(nullptr), nullptr);
+        };
+        g_tocPilotAddonHeader = createSectionHeading(L"Addon Management");
+        g_tocPilotOptionsHeader = createSectionHeading(L"Options");
+        g_tocPilotAboutHeader = createSectionHeading(L"About");
+        g_tocPilotScanButton = createToolbarButton(
+            L"Scan for existing addons", IDC_TOCPILOT_SCAN);
         const std::wstring aboutVersion = std::wstring(L"TocPilot ") + TOCPILOT_VERSION_TAG_W;
         g_tocPilotVersionLabel = CreateWindowExW(
             0, L"STATIC", aboutVersion.c_str(), WS_CHILD | SS_LEFT,
             0, 0, 220, 28, hwnd, nullptr, GetModuleHandleW(nullptr), nullptr);
-        g_tocPilotRepositoryButton = createToolbarButton(L"GitHub repository", IDC_TOCPILOT_REPO_INLINE);
+        g_tocPilotRepositoryButton = createToolbarButton(L"GitHub", IDC_TOCPILOT_REPO_INLINE);
         g_tocPilotReleasesButton = createToolbarButton(L"Releases", IDC_TOCPILOT_RELEASES_INLINE);
+        // A separate STATIC caption avoids unreadable black native checkbox
+        // text under the dark visual theme without changing checked-state logic.
         g_tocPilotDevBuildsInline = CreateWindowExW(
-            0, L"BUTTON", L"Receive development builds",
-            WS_CHILD | WS_TABSTOP | BS_AUTOCHECKBOX, 0, 0, 260, 34,
+            0, L"BUTTON", L"",
+            WS_CHILD | WS_TABSTOP | BS_AUTOCHECKBOX, 0, 0, 26, 30,
             hwnd, reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_TOCPILOT_DEVBUILDS_INLINE)),
+            GetModuleHandleW(nullptr), nullptr);
+        g_tocPilotDevBuildsLabel = CreateWindowExW(
+            0, L"STATIC", L"Receive development builds",
+            WS_CHILD | SS_LEFT | SS_NOTIFY | SS_NOPREFIX, 0, 0, 280, 28,
+            hwnd, reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_TOCPILOT_DEVBUILDS_TEXT)),
             GetModuleHandleW(nullptr), nullptr);
         g_tocPilotIconsInline = CreateWindowExW(
             0, L"BUTTON", L"Icons", WS_CHILD | WS_TABSTOP | BS_AUTORADIOBUTTON | WS_GROUP,
@@ -9633,6 +9630,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_TOCPILOT_TOOLBAR_ICONS_INLINE)),
             GetModuleHandleW(nullptr), nullptr);
         g_tocPilotUpdateInline = createToolbarButton(L"Check for Updates", IDC_TOCPILOT_UPDATE_INLINE);
+        g_tocPilotLastCheckLabel = createSectionHeading(L"Last update check: Not checked this session");
         g_tocPilotInlineUpdateStatus = CreateWindowExW(
             0, L"STATIC", L"Ready to check for updates.",
             WS_CHILD | SS_LEFT | SS_NOPREFIX,
@@ -9698,7 +9696,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             0,
             L"STATIC",
             L"Text size",
-            WS_CHILD | WS_VISIBLE | SS_RIGHT,
+            WS_CHILD | WS_VISIBLE | SS_LEFT | SS_NOPREFIX,
             650,
             151,
             70,
@@ -9909,7 +9907,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
 
         const int minimumClientHeight =
             g_mainView == MainView::AccountSync ? 680 :
-            g_mainView == MainView::TocPilot ? 520 : 680;
+            g_mainView == MainView::TocPilot ? 560 : 680;
         RECT minimum{
             0,
             0,
@@ -10141,6 +10139,17 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
     }
 
     case WM_COMMAND:
+        // The themed caption is clickable, as with a native checkbox label.
+        if (LOWORD(wParam) == IDC_TOCPILOT_DEVBUILDS_TEXT &&
+            HIWORD(wParam) == STN_CLICKED && g_tocPilotDevBuildsInline) {
+            const bool current = g_stateReady &&
+                g_state.settings.receiveDevelopmentBuilds;
+            SetReceiveDevelopmentBuilds(hwnd, !current);
+            SendMessageW(g_tocPilotDevBuildsInline, BM_SETCHECK,
+                g_stateReady && g_state.settings.receiveDevelopmentBuilds
+                    ? BST_CHECKED : BST_UNCHECKED, 0);
+            return 0;
+        }
         if (HIWORD(wParam) == BN_CLICKED &&
             LOWORD(wParam) == IDC_ACCOUNT_SYNC_TILE_REFRESH) {
             RefreshAccountSyncPreview();
@@ -10175,12 +10184,6 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             }
             case IDC_TOCPILOT: g_mainView = MainView::TocPilot; break;
             case IDC_SYNC_CONFIGURE: ShowAccountSyncWindow(hwnd); return 0;
-            case IDC_TOCPILOT_PREFERENCES:
-                if (g_tocPilotDevBuildsInline) SetFocus(g_tocPilotDevBuildsInline);
-                return 0;
-            case IDC_TOCPILOT_ABOUT:
-                if (g_tocPilotVersionLabel) SetFocus(g_tocPilotRepositoryButton);
-                return 0;
             case IDC_TOCPILOT_REPO_INLINE:
                 OpenWebLink(hwnd, kTocPilotGitHubUrl); return 0;
             case IDC_TOCPILOT_RELEASES_INLINE:
@@ -10807,6 +10810,19 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
         }
 
         g_appUpdateCheckInProgress = false;
+        if (g_tocPilotLastCheckLabel) {
+            SYSTEMTIME time{};
+            GetLocalTime(&time);
+            wchar_t stamp[96]{};
+            swprintf_s(stamp,
+                L"Last update check: %02u/%02u/%04u %02u:%02u",
+                static_cast<unsigned>(time.wDay),
+                static_cast<unsigned>(time.wMonth),
+                static_cast<unsigned>(time.wYear),
+                static_cast<unsigned>(time.wHour),
+                static_cast<unsigned>(time.wMinute));
+            SetWindowTextW(g_tocPilotLastCheckLabel, stamp);
+        }
         const bool refreshAddonsAfter =
             g_refreshAddonsAfterAppCheck;
         g_refreshAddonsAfterAppCheck =
@@ -10822,7 +10838,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                 L"Release: Unavailable");
             SetTocPilotUpdateUi(
                 L"Update check failed. Check your connection and try again.",
-                L"Retry Check",
+                L"Check for Updates",
                 true);
             if (refreshAddonsAfter) {
                 if (tp::IsStartupSplashActive()) {
@@ -10847,7 +10863,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                 L"Release: Not found");
             SetTocPilotUpdateUi(
                 L"No published TocPilot release was found.",
-                L"Retry Check",
+                L"Check for Updates",
                 true);
             break;
 
@@ -10861,7 +10877,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             SetTocPilotUpdateUi(
                 result->release.tag +
                     L" is available.",
-                L"Update Available",
+                L"Install Update",
                 true);
 
             if (refreshAddonsAfter) {
@@ -10883,8 +10899,8 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                     std::wstring(
                         TOCPILOT_VERSION_TAG_W) +
                     L" is the latest release.",
-                L"Up to date",
-                false);
+                L"Check for Updates",
+                true);
             break;
         }
 
