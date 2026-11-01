@@ -23,6 +23,34 @@ inline UnifiedShellBands UnifiedShellLayout(
             std::max(tabBottom, footerTop - footerGap), footerTop};
 }
 
+
+// A single footer group fixed to the right-hand client edge. The Launch
+// button leads; the executable filename and path occupy the text area to
+// its right. The text area shrinks first at narrow widths.
+struct RightAnchoredLaunchFooter {
+    int buttonLeft;
+    int buttonWidth;
+    int textLeft;
+    int textWidth;
+};
+inline RightAnchoredLaunchFooter LayoutRightAnchoredLaunchFooter(
+    int clientWidth, int margin, int preferredButtonWidth,
+    int preferredTextWidth, int gap) {
+    const int safeMargin = std::max(0, margin);
+    const int available = std::max(1, clientWidth - 2 * safeMargin);
+    const int buttonWidth =
+        std::min(std::max(1, preferredButtonWidth), available);
+    const int remaining = available - buttonWidth;
+    const int actualGap = std::min(std::max(0, gap),
+                                   std::max(0, remaining - 1));
+    const int textWidth = std::min(std::max(0, preferredTextWidth),
+                                   remaining - actualGap);
+    const int buttonLeft = clientWidth - safeMargin -
+        (buttonWidth + actualGap + textWidth);
+    return {buttonLeft, buttonWidth,
+            buttonLeft + buttonWidth + actualGap, textWidth};
+}
+
 // Name width is authoritative. Status fills the spare viewport width;
 // a narrow ListView scrolls horizontally, never changing stored Name width.
 inline std::array<int, 2> UnifiedPackageColumnWidths(

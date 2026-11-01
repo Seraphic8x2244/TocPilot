@@ -27,6 +27,34 @@ void ExpectEqual(
 } // namespace
 
 int main() {
+    {
+        const auto footer = tp::LayoutRightAnchoredLaunchFooter(
+            790, 20, 118, 350, 14);
+        ExpectEqual(footer.buttonLeft, 288, "Footer group is right anchored");
+        ExpectEqual(footer.buttonWidth, 118, "Launch button keeps compact width");
+        ExpectEqual(footer.textLeft, 420, "Client details follow Launch button");
+        ExpectEqual(footer.textWidth, 350, "Client details retain preferred width");
+        ExpectEqual(footer.textLeft + footer.textWidth, 770,
+                    "Client details end at right margin");
+        const auto wide = tp::LayoutRightAnchoredLaunchFooter(
+            1560, 20, 118, 350, 14);
+        ExpectEqual(wide.textLeft + wide.textWidth, 1540,
+                    "Right alignment survives maximize");
+        ExpectEqual(wide.buttonLeft, 1058,
+                    "Launch button travels with footer details");
+        const auto narrow = tp::LayoutRightAnchoredLaunchFooter(
+            480, 20, 118, 350, 14);
+        ExpectEqual(narrow.buttonLeft, 20,
+                    "Compact footer stays within left margin");
+        ExpectEqual(narrow.textWidth, 308,
+                    "Client path shrinks instead of clipping the button");
+        ExpectEqual(narrow.textLeft + narrow.textWidth, 460,
+                    "Compact footer stays within right margin");
+        const auto dpi = tp::LayoutRightAnchoredLaunchFooter(
+            1185, 30, 177, 525, 21);
+        ExpectEqual(dpi.textLeft + dpi.textWidth, 1155,
+                    "DPI-scaled footer remains right anchored");
+    }
     ExpectEqual(tp::UnifiedPageWidth(750, 12), 726,
                 "Outer page width honours both insets");
     ExpectEqual(tp::UnifiedPageWidth(650, 15), 620,

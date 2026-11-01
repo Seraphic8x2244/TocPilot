@@ -1,6 +1,18 @@
 # TocPilot Development Progress
 
-## Current Handoff — v0.6.0-dev.13 UI polish release (2026-10-31)
+## Current Handoff — Right-anchored Launch footer group (2026-11-01)
+
+**Approved user request:** Move the persistent footer controls into a single bottom-right-anchored group with **Launch** as the button caption and selected client executable name/path immediately **to the button's right**. The released `v0.6.0-dev.13` had its Launch WoW button at the far right but its executable text at the far left; this slice deliberately groups them to meet both the right-anchor and right-of-button placement requirements. Keep the actual launcher selection and tooltip untouched, with full-path ellipsis when the footer text width narrows.
+
+**Implemented (CI pending):** `ToolbarButtonName(g_launchWowButton)` now returns `Launch`; the current CreateWindow call already used `Launch`, so this fixes subsequent toolbar refresh renaming. New `tp::LayoutRightAnchoredLaunchFooter` supplies a stable right-anchored button/text geometry; at a narrow window only the text area shrinks, and the selected-client filename/path remain vertically stacked. Regression checks cover default, maximized, narrow and DPI-scaled window sizes. Same HWNDs, actions and footer vertical placement; no package, updater, account sync or Packages mockup changes.
+
+**Baseline:** `dev` only (never `main`), based on `b5bc5da8d0bb4ed3172e86c754a9a64fd79428fc`, published `v0.6.0-dev.13`; release workflow [41238484774](https://github.com/Seraphic8x2244/TocPilot/actions/runs/41238484774) and Build [41238484766](https://github.com/Seraphic8x2244/TocPilot/actions/runs/41238484766) passed. This new footer slice has not yet been built or runtime-verified. The approved two-pane Packages layout remains audit-only.
+
+**Next:** Verify exact-SHA push Build + CTest and then produce one updater-installable development prerelease when green so the user can inspect footer positioning and label at actual Windows sizes. Leave colours and Packages redesign out of scope.
+
+---
+
+## Previous Handoff — v0.6.0-dev.13 UI polish release (2026-10-31)
 
 **Source and release gate:** `dev` source commit `5883fbfddbc2a34dc630f33a7317f8bd2c4573d6` passed Windows x64 Release/CTest in [Build 41231565339](https://github.com/Seraphic8x2244/TocPilot/actions/runs/41231565339). This coherent release-only commit sets `src/version.h` and `.github/development-release-version` to `v0.6.0-dev.13` to trigger the updater-installable Development Release. Preserve `main` unchanged. The prior published and user-tested release is `dev.12` at `6efdaf6d64dfb4dd6c94688597560a0ff640135c`. Release workflow, assets and self-update E2E must be verified separately before asserting publication or successful app upgrade.
 

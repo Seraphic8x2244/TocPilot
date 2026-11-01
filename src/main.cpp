@@ -1338,25 +1338,30 @@ void LayoutControls(HWND hwnd) {
             shell.tabTop + inset, tabWidth,
             shell.tabBottom - shell.tabTop - inset, TRUE);
     }
-    const int launchWidth = ScaleUi(hwnd, 160);
-    const int labelWidth = std::max(1, contentWidth - launchWidth - ScaleUi(hwnd, 26));
+    // One bottom-right-anchored footer group: Launch, then the actual
+    // selected client executable's name/path immediately to its right.
+    const auto footer = tp::LayoutRightAnchoredLaunchFooter(
+        width, margin, ScaleUi(hwnd, 118), ScaleUi(hwnd, 350),
+        ScaleUi(hwnd, 14));
     if (g_launchWowButton) {
         ShowWindow(g_launchWowButton, SW_SHOW);
-        MoveWindow(g_launchWowButton, width - margin - launchWidth,
+        MoveWindow(g_launchWowButton, footer.buttonLeft,
             shell.footerTop + ScaleUi(hwnd, 17),
-            launchWidth, toolbarRowHeight, TRUE);
+            footer.buttonWidth, toolbarRowHeight, TRUE);
     }
     if (g_launchTargetName) {
         ShowWindow(g_launchTargetName, SW_SHOW);
-        MoveWindow(g_launchTargetName, margin + ScaleUi(hwnd, 6),
-            shell.footerTop + ScaleUi(hwnd, 9), labelWidth, ScaleUi(hwnd, 25), TRUE);
+        MoveWindow(g_launchTargetName, footer.textLeft,
+            shell.footerTop + ScaleUi(hwnd, 9),
+            footer.textWidth, ScaleUi(hwnd, 25), TRUE);
         if (g_boldUiFont) SendMessageW(g_launchTargetName, WM_SETFONT,
             reinterpret_cast<WPARAM>(g_boldUiFont), TRUE);
     }
     if (g_launchTargetPath) {
         ShowWindow(g_launchTargetPath, SW_SHOW);
-        MoveWindow(g_launchTargetPath, margin + ScaleUi(hwnd, 6),
-            shell.footerTop + ScaleUi(hwnd, 36), labelWidth, ScaleUi(hwnd, 24), TRUE);
+        MoveWindow(g_launchTargetPath, footer.textLeft,
+            shell.footerTop + ScaleUi(hwnd, 36),
+            footer.textWidth, ScaleUi(hwnd, 24), TRUE);
     }
     const int packageToolbarY = shell.contentTop + ScaleUi(hwnd, 14);
     if (!g_advancedVisible) {
@@ -7199,7 +7204,7 @@ const wchar_t* ToolbarButtonName(
         return L"Refresh";
     }
     if (control == g_launchWowButton) {
-        return L"Launch WoW";
+        return L"Launch";
     }
     if (control == g_packagesNavLabel) {
         return L"Packages";
