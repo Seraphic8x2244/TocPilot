@@ -2230,10 +2230,11 @@ bool PackageColumnCellRect(
 }
 
 // Shape-based, deliberately neutral GDI glyphs; no dependency on installed icon fonts.
-void PaintPackageGlyph(HDC dc, const RECT& cell, tp::ui::PackageKind kind) {
+void PaintPackageGlyph(HDC dc, const RECT& cell, tp::ui::PackageKind kind,
+                       COLORREF colour) {
     const int n = 12, x = cell.left + 10;
     const int y = cell.top + (cell.bottom - cell.top - n) / 2;
-    HPEN pen = CreatePen(PS_SOLID, 1, tp::ui::Palette::primaryText);
+    HPEN pen = CreatePen(PS_SOLID, 1, colour);
     HGDIOBJ oldPen = SelectObject(dc, pen);
     HGDIOBJ oldBrush = SelectObject(dc, GetStockObject(NULL_BRUSH));
     if (kind == tp::ui::PackageKind::Dll) {
@@ -2459,14 +2460,14 @@ LRESULT HandlePackageListCustomDraw(
     statusRect.left += ScaleUi(g_packageList, offsets.statusLeft);
     RECT typeRect = rect;
     typeRect.left += ScaleUi(g_packageList, offsets.typeLeft);
-    const COLORREF glyphColour = highContrast ? rowTextColour
-                                              : tp::ui::Palette::primaryText;
+    const COLORREF glyphColour =
+        tp::ui::CompactGlyphInk(highContrast, rowTextColour);
     PaintPackageStatusGlyph(draw->nmcd.hdc, statusRect,
                             tp::ui::ResolvePackageStatusIcon(
                                 PackageRowLiveStatus(displayRow, package)),
                             glyphColour);
     PaintPackageGlyph(draw->nmcd.hdc, typeRect,
-                      tp::ui::KindFromTarget(package.target));
+                      tp::ui::KindFromTarget(package.target), glyphColour);
     RECT textRect = rect;
     textRect.left += ScaleUi(g_packageList, offsets.nameLeft);
     textRect.right -= 5;

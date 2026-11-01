@@ -49,6 +49,10 @@ inline std::wstring PackageCellTooltip(
     result += status;
     return result;
 }
+// Both glyph types share the same readable colour in high-contrast mode.
+constexpr COLORREF CompactGlyphInk(bool highContrast, COLORREF systemText) {
+    return highContrast ? systemText : Palette::primaryText;
+}
 struct CompactPackageCellOffsets { int statusLeft, typeLeft, nameLeft; };
 constexpr CompactPackageCellOffsets PackageCellOffsets() {
     return {0, 22, 60};

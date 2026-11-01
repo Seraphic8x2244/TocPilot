@@ -61,6 +61,10 @@ int main() {
     Check(PackageCellTooltip(L"Project (dev)", L"Refresh failed", PackageKind::Dll) ==
           L"Project (dev)\r\nType: DLL\r\nStatus: Refresh failed",
           "Full hover tooltip and actual error status");
+    Check(CompactGlyphInk(true, RGB(12, 34, 56)) == RGB(12, 34, 56),
+          "High-contrast status and type glyphs use system text ink");
+    Check(CompactGlyphInk(false, RGB(12, 34, 56)) == Palette::primaryText,
+          "Normal glyphs use theme ink");
     const auto offsets = PackageCellOffsets();
     for (int scale : {1, 2, 3}) {
         Check((offsets.typeLeft - offsets.statusLeft)*scale >= 12*scale,
