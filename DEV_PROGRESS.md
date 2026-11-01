@@ -2,7 +2,7 @@
 
 ## ACTIVE CONTRACT — Packages two-pane redesign: exactly four chunks / four chats (2026-11-01)
 
-**Status:** User approved the audited design and this fixed four-chunk implementation plan. **Chunk 1 IN PROGRESS; 0/4 implementation chunks complete.** This is the canonical current contract and **supersedes historical statements below that the Packages redesign is only an unapproved audit**. Do not silently alter the design, chunk boundaries or execution conditions. A documentation-only planning commit does **not** constitute a completed implementation chunk.
+**Status:** User approved the audited design and this fixed four-chunk implementation plan. **Chunk 1 RELEASED (runtime unverified); 1/4 implementation chunks complete; next = Chunk 2, only in its own chat.** This is the canonical current contract and **supersedes historical statements below that the Packages redesign is only an unapproved audit**. Do not silently alter the design, chunk boundaries or execution conditions. A documentation-only planning commit does **not** constitute a completed implementation chunk.
 
 **Branch/release baseline:** `Seraphic8x2244/TocPilot`, only `dev`; never edit `main`. Starting code/released version `v0.6.0-dev.14` at `431c4d259146f91f82ce65b14823a508eed67791` (development release, direct EXE + .sha256; workflow passed). No Packages redesign source changes yet. Existing tab styling, TocPilot Options, Account Sync and bottom-right `Launch` footer are unrelated and must remain stable. Verify remote `dev` HEAD, rulebook, this section and latest published release at the start of **each** chat. Use GitHub connector tools directly in chat. Don't redirect to Work/Codex.
 
@@ -40,12 +40,21 @@ Each chunk's **implemented code, associated tests, DEV_PROGRESS update, CI corre
 
 | Chunk | State | Exact code SHA | Published dev version / workflow | Runtime evidence / remaining debt |
 | --- | --- | --- | --- | --- |
-| 1 — Geometry | **CI-CHECKED** | [ac707d81](https://github.com/Seraphic8x2244/TocPilot/commit/ac707d81fca9ef7488a018e8c2b8e8fe69ab60d6) | dev.15 release pending | Windows x64 Release/CTest [41332863858](https://github.com/Seraphic8x2244/TocPilot/actions/runs/41332863858) passed; runtime pending |
+| 1 — Geometry | **RELEASED (runtime unverified)** | [ac707d81](https://github.com/Seraphic8x2244/TocPilot/commit/ac707d81fca9ef7488a018e8c2b8e8fe69ab60d6) | [v0.6.0-dev.15](https://github.com/Seraphic8x2244/TocPilot/releases/tag/v0.6.0-dev.15) at `61ef388e`; [workflow 41333362190](https://github.com/Seraphic8x2244/TocPilot/actions/runs/41333362190) **passed** | [Build 41332863858](https://github.com/Seraphic8x2244/TocPilot/actions/runs/41332863858) Release/CTest passed; release Build/CTest, EXE+SHA-256 and bootstrap self-update E2E passed; real Windows geometry/interaction QA pending |
 | 2 — List | **NOT STARTED** | — | — | Depends on 1 |
 | 3 — Details/actions | **NOT STARTED** | — | — | Depends on 2 |
 | 4 — Stabilisation | **NOT STARTED** | — | — | Depends on 3 |
 
-**Current instruction:** Chunk 1 implementation and exact-SHA Windows Release/CTest are complete at `ac707d81`. Publish and verify development prerelease dev.15 (direct EXE, checksum and bootstrap updater E2E), then record released-but-runtime-unverified state; do not start Chunk 2. `main` stays untouched.
+**Next instruction:** Chunk 1 is finished from the implementation/CI/release standpoint, with Windows runtime acceptance still due. User may install `v0.6.0-dev.15` via the development updater and check Packages at minimum/normal/maximized/DPI sizes, scroll and selection, all five contextual actions, multiline status overflow/tooltip, tab switching and intact Account Sync/Launch footer. Record observations against `dev.15` without asserting runtime approval in advance. **Only in the next numbered implementation chat**, execute Chunk 2; do not revisit/split Chunk 1 or begin Chunk 3. `main` stays untouched.
+
+### Chunk 1 completion evidence (2026-11-01)
+
+- Runtime source implementation `ac707d81fca9ef7488a018e8c2b8e8fe69ab60d6`: pure two-pane responsive layout and tests, existing ListView and multiline selected-package summary moved side by side, five existing action HWNDs/handlers retained, operational hint relocated to toolbar-below full-width wrap region with live full-text tooltip, existing details background repositioned; resize invalidation and clipping retained. Temporary original list Name/Status cells and provisional five-button layout are explicitly allowed for Chunk 1.
+- Exact source SHA Windows x64 Release + CTest: [Build 41332863858](https://github.com/Seraphic8x2244/TocPilot/actions/runs/41332863858) **passed**.
+- Release commit `61ef388e43003f88cff181cc98c766d01bfcf51b` changed only source version, development trigger and CI-checkpoint docs. [Development Release 41333362190](https://github.com/Seraphic8x2244/TocPilot/actions/runs/41333362190) **passed** all gates: source/tag match, Release build/CTest, SHA-256 sidecar, exact-commit tag, non-draft prerelease, direct `TocPilot.exe` and `TocPilot.exe.sha256`, stable/latest channel unchanged, real bootstrap dev-channel self-update hash check.
+- Published release: [v0.6.0-dev.15](https://github.com/Seraphic8x2244/TocPilot/releases/tag/v0.6.0-dev.15), tag `61ef388e`. This documentation-only completion entry after the tag does not require another version/release.
+- User Windows visual/interactive verification **not yet reported**, so do not claim runtime acceptance. User's previous dev.14 runtime state is independent of Chunk 1.
+- Chunk 2, 3 and 4 remain **NOT STARTED**. No backend or saved settings migration was introduced.
 
 ---
 
