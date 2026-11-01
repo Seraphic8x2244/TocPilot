@@ -40,12 +40,12 @@ Each chunk's **implemented code, associated tests, DEV_PROGRESS update, CI corre
 
 | Chunk | State | Exact code SHA | Published dev version / workflow | Runtime evidence / remaining debt |
 | --- | --- | --- | --- | --- |
-| 1 — Geometry | **IN PROGRESS** | Pending CI | Pending dev.15 | UI geometry migration implemented; awaiting exact-SHA CI and release |
+| 1 — Geometry | **CI-CHECKED** | [ac707d81](https://github.com/Seraphic8x2244/TocPilot/commit/ac707d81fca9ef7488a018e8c2b8e8fe69ab60d6) | dev.15 release pending | Windows x64 Release/CTest [41332863858](https://github.com/Seraphic8x2244/TocPilot/actions/runs/41332863858) passed; runtime pending |
 | 2 — List | **NOT STARTED** | — | — | Depends on 1 |
 | 3 — Details/actions | **NOT STARTED** | — | — | Depends on 2 |
 | 4 — Stabilisation | **NOT STARTED** | — | — | Depends on 3 |
 
-**Current instruction:** Complete Chunk 1 in this same chat: exact-SHA MSVC Release/CTest, correct any failures, publish and verify one updater-installable dev.15 with EXE/checksum and E2E updater. Do not start Chunk 2. `main` stays untouched.
+**Current instruction:** Chunk 1 implementation and exact-SHA Windows Release/CTest are complete at `ac707d81`. Publish and verify development prerelease dev.15 (direct EXE, checksum and bootstrap updater E2E), then record released-but-runtime-unverified state; do not start Chunk 2. `main` stays untouched.
 
 ---
 
