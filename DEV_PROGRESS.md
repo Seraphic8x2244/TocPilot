@@ -2,7 +2,7 @@
 
 ## ACTIVE CONTRACT — Packages two-pane redesign: exactly four chunks / four chats (2026-11-01)
 
-**Status:** User approved the audited design and this fixed four-chunk implementation plan. **Chunk 1 RELEASED (runtime unverified); 1/4 implementation chunks complete; next = Chunk 2, only in its own chat.** This is the canonical current contract and **supersedes historical statements below that the Packages redesign is only an unapproved audit**. Do not silently alter the design, chunk boundaries or execution conditions. A documentation-only planning commit does **not** constitute a completed implementation chunk.
+**Status:** User approved the audited design and this fixed four-chunk implementation plan. **Chunk 1 RELEASED (runtime unverified); Chunk 2 CI-CHECKED (development release pending), 2/4 implementation chunks coded. Remain in Chunk 2 until v0.6.0-dev.16 release and updater E2E are verified.** This is the canonical current contract and **supersedes historical statements below that the Packages redesign is only an unapproved audit**. Do not silently alter the design, chunk boundaries or execution conditions. A documentation-only planning commit does **not** constitute a completed implementation chunk.
 
 **Branch/release baseline:** `Seraphic8x2244/TocPilot`, only `dev`; never edit `main`. Starting code/released version `v0.6.0-dev.14` at `431c4d259146f91f82ce65b14823a508eed67791` (development release, direct EXE + .sha256; workflow passed). No Packages redesign source changes yet. Existing tab styling, TocPilot Options, Account Sync and bottom-right `Launch` footer are unrelated and must remain stable. Verify remote `dev` HEAD, rulebook, this section and latest published release at the start of **each** chat. Use GitHub connector tools directly in chat. Don't redirect to Work/Codex.
 
@@ -41,11 +41,11 @@ Each chunk's **implemented code, associated tests, DEV_PROGRESS update, CI corre
 | Chunk | State | Exact code SHA | Published dev version / workflow | Runtime evidence / remaining debt |
 | --- | --- | --- | --- | --- |
 | 1 — Geometry | **RELEASED (runtime unverified)** | [ac707d81](https://github.com/Seraphic8x2244/TocPilot/commit/ac707d81fca9ef7488a018e8c2b8e8fe69ab60d6) | [v0.6.0-dev.15](https://github.com/Seraphic8x2244/TocPilot/releases/tag/v0.6.0-dev.15) at `61ef388e`; [workflow 41333362190](https://github.com/Seraphic8x2244/TocPilot/actions/runs/41333362190) **passed** | [Build 41332863858](https://github.com/Seraphic8x2244/TocPilot/actions/runs/41332863858) Release/CTest passed; release Build/CTest, EXE+SHA-256 and bootstrap self-update E2E passed; real Windows geometry/interaction QA pending |
-| 2 — List | **NOT STARTED** | — | — | Depends on 1 |
+| 2 — List | **CI-CHECKED (release pending)** | [686b2e98](https://github.com/Seraphic8x2244/TocPilot/commit/686b2e981afadd6515e5f7b14609ca8a614aec97) | v0.6.0-dev.16 requested by release-trigger version commit; workflow/asset gate pending | [Build 41335734687](https://github.com/Seraphic8x2244/TocPilot/actions/runs/41335734687) Windows Release + **30/30 CTest** passed; updater and user Windows visual acceptance pending |
 | 3 — Details/actions | **NOT STARTED** | — | — | Depends on 2 |
 | 4 — Stabilisation | **NOT STARTED** | — | — | Depends on 3 |
 
-**Next instruction:** Chunk 1 is finished from the implementation/CI/release standpoint, with Windows runtime acceptance still due. User may install `v0.6.0-dev.15` via the development updater and check Packages at minimum/normal/maximized/DPI sizes, scroll and selection, all five contextual actions, multiline status overflow/tooltip, tab switching and intact Account Sync/Launch footer. Record observations against `dev.15` without asserting runtime approval in advance. **Only in the next numbered implementation chat**, execute Chunk 2; do not revisit/split Chunk 1 or begin Chunk 3. `main` stays untouched.
+**Next instruction:** Finish Chunk 2 **in this same chat**. Its source implementation at `686b2e98` passed exact-SHA Windows Release/30 CTest in Build 41335734687; this release-only commit bumps to `v0.6.0-dev.16` and triggers the real development-release workflow. Verify release's exact-SHA build/tests, non-draft prerelease, direct EXE + SHA-256 sidecar, stable-channel isolation and bootstrap development self-update E2E before marking Chunk 2 RELEASED (runtime unverified). User-machine visual/keyboard/sort/high-contrast smoke remains separate validation debt. Do not begin Chunk 3; `main` untouched.
 
 ### Chunk 1 completion evidence (2026-11-01)
 
@@ -55,6 +55,13 @@ Each chunk's **implemented code, associated tests, DEV_PROGRESS update, CI corre
 - Published release: [v0.6.0-dev.15](https://github.com/Seraphic8x2244/TocPilot/releases/tag/v0.6.0-dev.15), tag `61ef388e`. This documentation-only completion entry after the tag does not require another version/release.
 - User Windows visual/interactive verification **not yet reported**, so do not claim runtime acceptance. User's previous dev.14 runtime state is independent of Chunk 1.
 - Chunk 2, 3 and 4 remain **NOT STARTED**. No backend or saved settings migration was introduced.
+
+### Chunk 2 implementation and exact-SHA CI evidence (2026-11-01)
+
+- Compact Packages ListView at source `539e2a0`, contrast correction `686b2e98`: existing live Status subitem now hidden (zero-width), retaining all seven legacy widths/order/sort and revision/status operations; one viewport-fitting Name cell draws status + package-type glyph + bold package name with unchanged branch suffix.
+- New pure `src/package_list_status.h` resolves actual live operational status (checking/updating/current/update available/not configured/not installed/needs attention/failure) independently of row colour. Text remains available in native ListView accessible Name and full infottip; in-flight status changes refresh both icon and accessible label. Type glyph respects Windows high-contrast ink.
+- `tests/package_list_status_tests.cpp` covers the existing status vocabulary, kind mapping, tooltip/accessibility, icon separation, high contrast and visual-column/width policy. Existing sort/selection/viewport and package backend paths were not replaced.
+- Build [41335342344](https://github.com/Seraphic8x2244/TocPilot/actions/runs/41335342344) and corrected exact-source Build [41335734687](https://github.com/Seraphic8x2244/TocPilot/actions/runs/41335734687) passed MSVC x64 Release and **30/30 CTest**. A release-only version bump requests `v0.6.0-dev.16`; release publication and updater E2E are not yet assumed.
 
 ---
 
