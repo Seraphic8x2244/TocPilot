@@ -2,7 +2,7 @@
 
 ## ACTIVE CONTRACT — Packages two-pane redesign: exactly four chunks / four chats (2026-11-01)
 
-**Status:** User approved the audited design and this fixed four-chunk implementation plan. **0/4 implementation chunks complete; next = Chunk 1.** This is the canonical current contract and **supersedes historical statements below that the Packages redesign is only an unapproved audit**. Do not silently alter the design, chunk boundaries or execution conditions. A documentation-only planning commit does **not** constitute a completed implementation chunk.
+**Status:** User approved the audited design and this fixed four-chunk implementation plan. **Chunk 1 IN PROGRESS; 0/4 implementation chunks complete.** This is the canonical current contract and **supersedes historical statements below that the Packages redesign is only an unapproved audit**. Do not silently alter the design, chunk boundaries or execution conditions. A documentation-only planning commit does **not** constitute a completed implementation chunk.
 
 **Branch/release baseline:** `Seraphic8x2244/TocPilot`, only `dev`; never edit `main`. Starting code/released version `v0.6.0-dev.14` at `431c4d259146f91f82ce65b14823a508eed67791` (development release, direct EXE + .sha256; workflow passed). No Packages redesign source changes yet. Existing tab styling, TocPilot Options, Account Sync and bottom-right `Launch` footer are unrelated and must remain stable. Verify remote `dev` HEAD, rulebook, this section and latest published release at the start of **each** chat. Use GitHub connector tools directly in chat. Don't redirect to Work/Codex.
 
@@ -40,12 +40,12 @@ Each chunk's **implemented code, associated tests, DEV_PROGRESS update, CI corre
 
 | Chunk | State | Exact code SHA | Published dev version / workflow | Runtime evidence / remaining debt |
 | --- | --- | --- | --- | --- |
-| 1 — Geometry | **NOT STARTED** | — | — | Start from dev.14 |
+| 1 — Geometry | **IN PROGRESS** | Pending CI | Pending dev.15 | UI geometry migration implemented; awaiting exact-SHA CI and release |
 | 2 — List | **NOT STARTED** | — | — | Depends on 1 |
 | 3 — Details/actions | **NOT STARTED** | — | — | Depends on 2 |
 | 4 — Stabilisation | **NOT STARTED** | — | — | Depends on 3 |
 
-**Next instruction:** In a **new chat**, execute **Chunk 1 in full** against latest verified `dev`. Do not initiate Chunk 2 or carve Chunk 1 into another chat. Existing repo CI/release workflow must finish and be checked before declaring Chunk 1 complete. `main` stays untouched.
+**Current instruction:** Complete Chunk 1 in this same chat: exact-SHA MSVC Release/CTest, correct any failures, publish and verify one updater-installable dev.15 with EXE/checksum and E2E updater. Do not start Chunk 2. `main` stays untouched.
 
 ---
 

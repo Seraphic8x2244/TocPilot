@@ -24,6 +24,50 @@ inline UnifiedShellBands UnifiedShellLayout(
 }
 
 
+// Layout-only model for the Packages page. All coordinates are already DPI-scaled
+// client pixels. The toolbar remains independent of the ListView and details.
+struct PackageTwoPaneMetrics {
+    int pageLeft;
+    int pageWidth;
+    int toolbarBottom;
+    int contentBottom;
+    int statusGap;
+    int statusHeight;
+    int bodyGap;
+    int paneGap;
+    int bottomGap;
+    int minimumListWidth;
+    int minimumDetailsWidth;
+};
+struct PackageTwoPaneLayout {
+    int statusLeft, statusTop, statusWidth, statusHeight;
+    int listLeft, listTop, listWidth, listHeight;
+    int detailsLeft, detailsTop, detailsWidth, detailsHeight;
+};
+inline PackageTwoPaneLayout LayoutPackageTwoPanes(const PackageTwoPaneMetrics& m) {
+    const int width = std::max(2, m.pageWidth);
+    const int statusTop = m.toolbarBottom + std::max(0, m.statusGap);
+    const int statusHeight = std::max(1, m.statusHeight);
+    const int bodyTop = statusTop + statusHeight + std::max(0, m.bodyGap);
+    const int bodyHeight = std::max(1, m.contentBottom -
+        std::max(0, m.bottomGap) - bodyTop);
+
+    const int gap = std::min(std::max(0, m.paneGap), width - 2);
+    const int available = width - gap;
+    const int minimumList = std::max(1, m.minimumListWidth);
+    const int minimumDetails = std::max(1, m.minimumDetailsWidth);
+    // A constrained 56:44 split. At supported sizes neither pane falls
+    // below its minimum. Extreme/temporary sizes still never overlap.
+    const int preferredList = available * 56 / 100;
+    const int listWidth = available >= minimumList + minimumDetails
+        ? std::clamp(preferredList, minimumList, available - minimumDetails)
+        : std::clamp(preferredList, 1, available - 1);
+    const int detailsWidth = available - listWidth;
+    return {m.pageLeft, statusTop, width, statusHeight,
+            m.pageLeft, bodyTop, listWidth, bodyHeight,
+            m.pageLeft + listWidth + gap, bodyTop, detailsWidth, bodyHeight};
+}
+
 // A single footer group fixed to the right-hand client edge. The Launch
 // button leads; the executable filename and path occupy the text area to
 // its right. The text area shrinks first at narrow widths.

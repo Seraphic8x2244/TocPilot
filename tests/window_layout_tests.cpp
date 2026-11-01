@@ -1,6 +1,7 @@
 #include "window_layout.h"
 
 #include <iostream>
+#include <array>
 
 namespace {
 
@@ -27,6 +28,66 @@ void ExpectEqual(
 } // namespace
 
 int main() {
+    // Chunk 1: unchanged toolbar and full-width readable status band above
+    // two native side-by-side panes, at minimum, ordinary, maximized and DPI.
+    for (const auto [scale, clientWidth, clientHeight] :
+         {std::array<int, 3>{1, 690, 680}, {1, 790, 760},
+          {1, 1560, 1024}, {2, 690, 680}, {2, 1560, 1024}}) {
+        const int margin = 20 * scale;
+        const int pageLeft = margin + 12 * scale;
+        const int pageWidth = tp::UnifiedPageWidth(
+            (clientWidth - 2 * 20) * scale, 12 * scale);
+        const auto shell = tp::UnifiedShellLayout(
+            clientHeight * scale, 16 * scale, 42 * scale,
+            78 * scale, 12 * scale);
+        const int toolbarBottom = shell.contentTop + (14 + 40) * scale;
+        const auto panes = tp::LayoutPackageTwoPanes({
+            pageLeft, pageWidth, toolbarBottom, shell.contentBottom,
+            8 * scale, 56 * scale, 10 * scale, 12 * scale,
+            6 * scale, 270 * scale, 270 * scale});
+        const auto yes = [](bool condition) { return condition ? 1 : 0; };
+        ExpectEqual(panes.statusTop, toolbarBottom + 8 * scale,
+                    "Status band directly follows toolbar");
+        ExpectEqual(panes.listTop, panes.statusTop + panes.statusHeight +
+                    10 * scale, "List begins below status text");
+        ExpectEqual(panes.listTop, panes.detailsTop,
+                    "Both panes share a top edge");
+        ExpectEqual(panes.listHeight, panes.detailsHeight,
+                    "Both panes use remaining vertical space");
+        ExpectEqual(panes.detailsLeft - (panes.listLeft + panes.listWidth),
+                    12 * scale, "Horizontal panes have a consistent gap");
+        ExpectEqual(panes.detailsLeft + panes.detailsWidth,
+                    pageLeft + pageWidth, "Right pane stops at page edge");
+        ExpectEqual(panes.statusLeft + panes.statusWidth,
+                    pageLeft + pageWidth, "Status spans the whole page");
+        ExpectEqual(panes.listTop + panes.listHeight,
+                    shell.contentBottom - 6 * scale,
+                    "Both panes stop above footer");
+        ExpectEqual(yes(panes.listWidth >= 270 * scale), 1,
+                    "List minimum is respected at supported widths");
+        ExpectEqual(yes(panes.detailsWidth >= 270 * scale), 1,
+                    "Details minimum is respected at supported widths");
+        ExpectEqual(yes(panes.listHeight > 320 * scale), 1,
+                    "Controls fit vertically at supported heights");
+        ExpectEqual(yes(panes.listLeft >= margin), 1,
+                    "List stays inside the content frame");
+        // Provisional five actions: 2+2+1, each inside the details pane.
+        const int inset = 12 * scale;
+        const int gap = 8 * scale;
+        const int actionWidth = (panes.detailsWidth - 2 * inset - gap) / 2;
+        for (int index = 0; index < 5; ++index) {
+            const int x = panes.detailsLeft + inset +
+                (index % 2) * (actionWidth + gap);
+            const int y = panes.detailsTop + 198 * scale +
+                (index / 2) * 42 * scale;
+            ExpectEqual(yes(x >= panes.detailsLeft && x + actionWidth <=
+                            panes.detailsLeft + panes.detailsWidth), 1,
+                        "Context action does not escape right pane");
+            ExpectEqual(yes(y + 34 * scale <=
+                            panes.detailsTop + panes.detailsHeight), 1,
+                        "Context action does not collide with footer");
+        }
+    }
     {
         const auto footer = tp::LayoutRightAnchoredLaunchFooter(
             790, 20, 118, 350, 14);

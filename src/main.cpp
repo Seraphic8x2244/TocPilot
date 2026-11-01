@@ -238,6 +238,7 @@ HWND g_packageList = nullptr;
 int g_hoverPackageRow = -1;
 HWND g_branchSelector = nullptr;
 HWND g_packageHint = nullptr;
+std::wstring g_packageHintTooltipText;
 HWND g_packageSummary = nullptr;
 HWND g_packageOpenFolder = nullptr;
 HWND g_packageSourceButton = nullptr;
@@ -1409,11 +1410,14 @@ void LayoutControls(HWND hwnd) {
                          g_adoptGitButton, g_advancedButton}) {
         if (control && !packagesView) ShowWindow(control, SW_HIDE);
     }
+    // Status feedback spans the page immediately below the action strip.
+    // The ListView and selected-package pane share the remaining height.
     const int listTop = packageToolbarY + toolbarRowHeight + ScaleUi(hwnd, 10);
-
-    const bool showSummary = packagesView;
-    const int summaryHeight = packagesView ? ScaleUi(hwnd, 208) : 0;
-    const int listBottomPadding = summaryHeight;
+    const auto packagePanes = tp::LayoutPackageTwoPanes({
+        pageLeft, pageWidth, packageToolbarY + toolbarRowHeight,
+        shell.contentBottom, ScaleUi(hwnd, 8), ScaleUi(hwnd, 56),
+        ScaleUi(hwnd, 10), ScaleUi(hwnd, 12), ScaleUi(hwnd, 6),
+        ScaleUi(hwnd, 270), ScaleUi(hwnd, 270)});
 
     const bool showAccountSyncPanel =
         g_stateReady &&
@@ -1432,31 +1436,13 @@ void LayoutControls(HWND hwnd) {
     const int accountSyncPanelGap =
         ScaleUi(hwnd, 10);
 
-    // Account Sync has its own view; no room is reserved beneath Packages.
-    const int reservedForAccountSync = 0;
-
-    const int listHeight =
-        std::max(
-            ScaleUi(
-                hwnd,
-                showAccountSyncPanel
-                    ? tp::kSyncTileMinimumPackageListHeight
-                    : 220),
-            shell.contentBottom -
-                listTop -
-                listBottomPadding -
-                reservedForAccountSync);
-
     if (g_packageList) {
         ShowWindow(g_packageList, packagesView ? SW_SHOW : SW_HIDE);
-        MoveWindow(
-            g_packageList,
-            pageLeft,
-            listTop,
-            pageWidth,
-            listHeight,
-            TRUE);
-
+        if (packagesView) {
+            MoveWindow(g_packageList,
+                packagePanes.listLeft, packagePanes.listTop,
+                packagePanes.listWidth, packagePanes.listHeight, TRUE);
+        }
         ResizeListColumns();
     }
 
@@ -1484,32 +1470,38 @@ void LayoutControls(HWND hwnd) {
         }
     }
 
-    // Unified package details: metadata, contextual actions and status/progress.
-    const int detailsY = listTop + listHeight + ScaleUi(hwnd, 10);
+    // Existing multiline summary and the same five contextual handlers now
+    // live in the right pane. Final six-action ordering belongs to Chunk 3.
     if (g_packageSummary) {
-        ShowWindow(g_packageSummary, showSummary ? SW_SHOW : SW_HIDE);
-        if (showSummary) MoveWindow(g_packageSummary,
-            pageLeft + ScaleUi(hwnd, 12), detailsY + ScaleUi(hwnd, 8),
-            std::max(1, pageWidth - ScaleUi(hwnd, 24)), ScaleUi(hwnd, 106), TRUE);
+        ShowWindow(g_packageSummary, packagesView ? SW_SHOW : SW_HIDE);
+        if (packagesView) MoveWindow(g_packageSummary,
+            packagePanes.detailsLeft + ScaleUi(hwnd, 12),
+            packagePanes.detailsTop + ScaleUi(hwnd, 8),
+            std::max(1, packagePanes.detailsWidth - ScaleUi(hwnd, 24)),
+            ScaleUi(hwnd, 180), TRUE);
     }
     const std::array<HWND, 5> actions{
         g_installPackageButton, g_removePackageButton, g_packageOpenFolder,
         g_packageChangeBranchButton, g_packageSourceButton};
     const int gap = ScaleUi(hwnd, 8);
-    const int actionWidth = std::max(1, (pageWidth - ScaleUi(hwnd, 24) - 4*gap) / 5);
-    for (std::size_t i=0; i < actions.size(); ++i) {
+    const int actionWidth = std::max(1,
+        (packagePanes.detailsWidth - ScaleUi(hwnd, 24) - gap) / 2);
+    for (std::size_t i = 0; i < actions.size(); ++i) {
         HWND control = actions[i];
         if (!control) continue;
         ShowWindow(control, packagesView ? SW_SHOW : SW_HIDE);
         if (packagesView) MoveWindow(control,
-            pageLeft + ScaleUi(hwnd, 12) + static_cast<int>(i)*(actionWidth+gap),
-            detailsY + ScaleUi(hwnd, 120), actionWidth, ScaleUi(hwnd, 34), TRUE);
+            packagePanes.detailsLeft + ScaleUi(hwnd, 12) +
+                static_cast<int>(i % 2) * (actionWidth + gap),
+            packagePanes.detailsTop + ScaleUi(hwnd, 198) +
+                static_cast<int>(i / 2) * ScaleUi(hwnd, 42),
+            actionWidth, ScaleUi(hwnd, 34), TRUE);
     }
     if (g_packageHint) {
         ShowWindow(g_packageHint, packagesView ? SW_SHOW : SW_HIDE);
         if (packagesView) MoveWindow(g_packageHint,
-            pageLeft + ScaleUi(hwnd, 12), detailsY + ScaleUi(hwnd, 164),
-            std::max(1, pageWidth - ScaleUi(hwnd, 24)), ScaleUi(hwnd, 26), TRUE);
+            packagePanes.statusLeft, packagePanes.statusTop,
+            packagePanes.statusWidth, packagePanes.statusHeight, TRUE);
     }
     // The original Account Sync control/editor window is now an
     // embedded child rather than a separate popup.
@@ -7104,13 +7096,18 @@ LRESULT HandleStatusColour(WPARAM wParam, LPARAM lParam) {
         return reinterpret_cast<LRESULT>(MainSurfaceBrush(false));
     }
     if (!tp::ui::HighContrast() &&
-        (control == g_packageSummary || control == g_packageHint)) {
+        control == g_packageSummary) {
         static HBRUSH brush = CreateSolidBrush(tp::ui::Palette::packageDetails);
         HDC dc = reinterpret_cast<HDC>(wParam);
-        SetTextColor(dc, control == g_packageHint
-            ? tp::ui::Palette::secondaryText : tp::ui::Palette::primaryText);
+        SetTextColor(dc, tp::ui::Palette::primaryText);
         SetBkColor(dc, tp::ui::Palette::packageDetails);
         return reinterpret_cast<LRESULT>(brush);
+    }
+    if (!tp::ui::HighContrast() && control == g_packageHint) {
+        HDC dc = reinterpret_cast<HDC>(wParam);
+        SetTextColor(dc, tp::ui::Palette::secondaryText);
+        SetBkColor(dc, tp::ui::Palette::window);
+        return reinterpret_cast<LRESULT>(MainSurfaceBrush(false));
     }
     const int id = GetDlgCtrlID(control);
     const int length = GetWindowTextLengthW(control);
@@ -9682,6 +9679,10 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
         tp::AddToolbarTooltip(g_toolbarTooltip, hwnd, g_tocPilotButton, L"Info");
         tp::AddToolbarTooltip(g_toolbarTooltip, hwnd, g_packageChangeBranchButton, L"Change tracked Git branch");
         tp::AddToolbarTooltip(g_toolbarTooltip, hwnd, g_packageSourceButton, L"Open repository source");
+        // Show the full live operation text when the multiline status band
+        // cannot accommodate a long provider/rate-limit/error explanation.
+        tp::AddToolbarTooltip(g_toolbarTooltip, hwnd, g_packageHint,
+                              LPSTR_TEXTCALLBACKW);
 
         EnableWindow(g_updateAllButton, FALSE);
         EnableWindow(g_refreshPackagesButton, FALSE);
@@ -9738,11 +9739,11 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             0,
             L"STATIC",
             L"Select a package or use Add Git to manage a repository.",
-            WS_CHILD | SS_LEFT | SS_NOPREFIX | SS_ENDELLIPSIS,
+            WS_CHILD | SS_LEFT | SS_NOPREFIX,
             20,
             188,
             820,
-            22,
+            56,
             hwnd,
             nullptr,
             GetModuleHandleW(nullptr),
@@ -9967,7 +9968,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                 panel.left = std::max(0L, panel.left - ScaleUi(hwnd, 12));
                 panel.top = std::max(0L, panel.top - ScaleUi(hwnd, 8));
                 panel.right = std::min(client.right, panel.right + ScaleUi(hwnd, 12));
-                panel.bottom = static_cast<LONG>(shell.contentBottom - ScaleUi(hwnd, 5));
+                panel.bottom = static_cast<LONG>(shell.contentBottom - ScaleUi(hwnd, 6));
                 HBRUSH brush = CreateSolidBrush(tp::ui::Palette::packageDetails);
                 FillRect(dc, &panel, brush);
                 DeleteObject(brush);
@@ -10007,6 +10008,18 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
     case WM_NOTIFY: {
         const auto* header =
             reinterpret_cast<NMHDR*>(lParam);
+        if (header && header->hwndFrom == g_toolbarTooltip &&
+            header->idFrom == reinterpret_cast<UINT_PTR>(g_packageHint) &&
+            header->code == TTN_GETDISPINFOW && g_packageHint) {
+            auto* tip = reinterpret_cast<NMTTDISPINFOW*>(lParam);
+            const int length = GetWindowTextLengthW(g_packageHint);
+            g_packageHintTooltipText.resize(static_cast<std::size_t>(length) + 1);
+            GetWindowTextW(g_packageHint, g_packageHintTooltipText.data(),
+                           length + 1);
+            g_packageHintTooltipText.resize(static_cast<std::size_t>(length));
+            tip->lpszText = g_packageHintTooltipText.data();
+            return 0;
+        }
 
         if (header &&
             g_packageList &&
