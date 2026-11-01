@@ -68,6 +68,42 @@ inline PackageTwoPaneLayout LayoutPackageTwoPanes(const PackageTwoPaneMetrics& m
             m.pageLeft + listWidth + gap, bodyTop, detailsWidth, bodyHeight};
 }
 
+
+struct PackageActionRect { int left, top, width, height; };
+struct PackageDetailsLayout {
+    int titleLeft, titleTop, titleWidth, titleHeight;
+    int bodyLeft, bodyTop, bodyWidth, bodyHeight;
+    std::array<PackageActionRect, 6> actions;
+};
+inline PackageDetailsLayout LayoutPackageDetails(
+    const PackageTwoPaneLayout& pane, int unit, int buttonHeight,
+    int buttonGap, int inset) {
+    const int scale = std::max(1, unit);
+    const int padding = std::max(0, inset);
+    const int innerWidth = std::max(1, pane.detailsWidth - 2 * padding);
+    const int gap = std::max(0, buttonGap);
+    const int available = std::max(2, innerWidth - gap);
+    const int first = available / 2, second = available - first;
+    const int bh = std::max(1, buttonHeight);
+    const int actionsTop = pane.detailsTop + std::max(0,
+        pane.detailsHeight - padding - (bh * 3 + gap * 2));
+    const int titleTop = pane.detailsTop + 8 * scale;
+    const int titleHeight = 28 * scale;
+    const int bodyTop = titleTop + titleHeight + 6 * scale;
+    const int bodyHeight = std::max(1, actionsTop - 8 * scale - bodyTop);
+    PackageDetailsLayout result{
+        pane.detailsLeft + padding, titleTop, innerWidth, titleHeight,
+        pane.detailsLeft + padding, bodyTop, innerWidth, bodyHeight, {}};
+    for (int i=0; i<6; ++i) {
+        result.actions[static_cast<std::size_t>(i)] = {
+            pane.detailsLeft + padding + (i%2==0 ? 0 : first+gap),
+            actionsTop + (i/2) * (bh+gap),
+            i%2==0 ? first : second, bh
+        };
+    }
+    return result;
+}
+
 // A single footer group fixed to the right-hand client edge. The Launch
 // button leads; the executable filename and path occupy the text area to
 // its right. The text area shrinks first at narrow widths.

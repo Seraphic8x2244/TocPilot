@@ -71,21 +71,30 @@ int main() {
                     "Controls fit vertically at supported heights");
         ExpectEqual(yes(panes.listLeft >= margin), 1,
                     "List stays inside the content frame");
-        // Provisional five actions: 2+2+1, each inside the details pane.
-        const int inset = 12 * scale;
-        const int gap = 8 * scale;
-        const int actionWidth = (panes.detailsWidth - 2 * inset - gap) / 2;
-        for (int index = 0; index < 5; ++index) {
-            const int x = panes.detailsLeft + inset +
-                (index % 2) * (actionWidth + gap);
-            const int y = panes.detailsTop + 198 * scale +
-                (index / 2) * 42 * scale;
-            ExpectEqual(yes(x >= panes.detailsLeft && x + actionWidth <=
-                            panes.detailsLeft + panes.detailsWidth), 1,
-                        "Context action does not escape right pane");
-            ExpectEqual(yes(y + 34 * scale <=
-                            panes.detailsTop + panes.detailsHeight), 1,
-                        "Context action does not collide with footer");
+        // Chunk 3: separated title/details and exact two-by-three actions.
+        const auto detail = tp::LayoutPackageDetails(panes,
+            scale, 34*scale, 8*scale, 12*scale);
+        ExpectEqual(yes(detail.titleTop>=panes.detailsTop),1,
+                    "Details title inside right pane");
+        ExpectEqual(yes(detail.bodyTop>=detail.titleTop+detail.titleHeight),1,
+                    "Metadata below selected name");
+        ExpectEqual(yes(detail.bodyHeight>=140*scale),1,
+                    "Seven full metadata lines fit above contextual actions");
+        const int metadataBottom = detail.bodyTop+detail.bodyHeight;
+        for (int index=0;index<6;++index) {
+            const auto& rect=detail.actions[static_cast<std::size_t>(index)];
+            ExpectEqual(yes(rect.left>=panes.detailsLeft &&
+                rect.left+rect.width<=panes.detailsLeft+panes.detailsWidth),1,
+                "Every action contained horizontally");
+            ExpectEqual(yes(rect.top>metadataBottom &&
+                rect.top+rect.height<=panes.detailsTop+panes.detailsHeight),1,
+                "Every action below details and inside body");
+            if(index%2==1)
+                ExpectEqual(rect.top,detail.actions[static_cast<std::size_t>(index-1)].top,
+                            "Two action buttons per row");
+            if(index>=2)
+                ExpectEqual(rect.top-detail.actions[static_cast<std::size_t>(index-2)].top,
+                            42*scale,"Context action row spacing");
         }
     }
     {

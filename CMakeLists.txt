@@ -98,6 +98,15 @@ if(BUILD_TESTING)
         target_compile_options(TocPilotCompactPackageListTests PRIVATE /W4 /permissive- /utf-8)
     endif()
     add_test(NAME compact-package-list-status COMMAND TocPilotCompactPackageListTests)
+    add_executable(TocPilotPackageDetailsTests tests/package_details_tests.cpp)
+    target_compile_features(TocPilotPackageDetailsTests PRIVATE cxx_std_20)
+    target_compile_definitions(TocPilotPackageDetailsTests PRIVATE
+        UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
+    target_include_directories(TocPilotPackageDetailsTests PRIVATE src)
+    if(MSVC)
+        target_compile_options(TocPilotPackageDetailsTests PRIVATE /W4 /permissive- /utf-8)
+    endif()
+    add_test(NAME selected-package-details-and-clipboard COMMAND TocPilotPackageDetailsTests)
     add_executable(TocPilotProviderTests
         tests/provider_tests.cpp
         src/provider.cpp

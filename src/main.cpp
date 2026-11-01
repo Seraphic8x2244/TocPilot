@@ -25,6 +25,8 @@
 #include "ui_theme.h"
 #include "main_view.h"
 #include "package_list_status.h"
+#include "package_details.h"
+#include "provider.h"
 #include "package_folder.h"
 #include "update.h"
 #include "update_all.h"
@@ -124,6 +126,7 @@ constexpr int IDC_PACKAGE_OPEN_FOLDER = 1049;
 constexpr int IDC_PACKAGE_SOURCE = 1050;
 constexpr int IDC_PACKAGE_CHANGE_BRANCH = 1051;
 constexpr int IDC_TOCPILOT_DEVBUILDS_TEXT = 1052;
+constexpr int IDC_PACKAGE_COPY_LINK = 1053;
 
 constexpr int kCompactWindowWidth = 790;
 constexpr int kShellTabTop = 16;
@@ -241,6 +244,9 @@ HWND g_branchSelector = nullptr;
 HWND g_packageHint = nullptr;
 std::wstring g_packageHintTooltipText;
 HWND g_packageSummary = nullptr;
+HWND g_packageTitle = nullptr;
+std::wstring g_packageDetailsTooltipText;
+HWND g_packageCopyLink = nullptr;
 HWND g_packageOpenFolder = nullptr;
 HWND g_packageSourceButton = nullptr;
 HWND g_packageChangeBranchButton = nullptr;
@@ -1470,32 +1476,35 @@ void LayoutControls(HWND hwnd) {
         }
     }
 
-    // Existing multiline summary and the same five contextual handlers now
-    // live in the right pane. Final six-action ordering belongs to Chunk 3.
+    // Selected-package metadata stays above the final six-action grid.
+    const auto details = tp::LayoutPackageDetails(packagePanes,
+        ScaleUi(hwnd, 1), ScaleUi(hwnd, 34),
+        ScaleUi(hwnd, 8), ScaleUi(hwnd, 12));
+    if (g_packageTitle) {
+        ShowWindow(g_packageTitle, packagesView ? SW_SHOW : SW_HIDE);
+        if (packagesView) MoveWindow(g_packageTitle,
+            details.titleLeft, details.titleTop, details.titleWidth,
+            details.titleHeight, TRUE);
+        if (g_boldUiFont) SendMessageW(g_packageTitle, WM_SETFONT,
+            reinterpret_cast<WPARAM>(g_boldUiFont), TRUE);
+    }
     if (g_packageSummary) {
         ShowWindow(g_packageSummary, packagesView ? SW_SHOW : SW_HIDE);
         if (packagesView) MoveWindow(g_packageSummary,
-            packagePanes.detailsLeft + ScaleUi(hwnd, 12),
-            packagePanes.detailsTop + ScaleUi(hwnd, 8),
-            std::max(1, packagePanes.detailsWidth - ScaleUi(hwnd, 24)),
-            ScaleUi(hwnd, 180), TRUE);
+            details.bodyLeft, details.bodyTop, details.bodyWidth,
+            details.bodyHeight, TRUE);
     }
-    const std::array<HWND, 5> actions{
-        g_installPackageButton, g_removePackageButton, g_packageOpenFolder,
-        g_packageChangeBranchButton, g_packageSourceButton};
-    const int gap = ScaleUi(hwnd, 8);
-    const int actionWidth = std::max(1,
-        (packagePanes.detailsWidth - ScaleUi(hwnd, 24) - gap) / 2);
+    const std::array<HWND, 6> actions{
+        g_installPackageButton, g_removePackageButton,
+        g_packageSourceButton, g_packageCopyLink,
+        g_packageOpenFolder, g_packageChangeBranchButton};
     for (std::size_t i = 0; i < actions.size(); ++i) {
         HWND control = actions[i];
         if (!control) continue;
         ShowWindow(control, packagesView ? SW_SHOW : SW_HIDE);
-        if (packagesView) MoveWindow(control,
-            packagePanes.detailsLeft + ScaleUi(hwnd, 12) +
-                static_cast<int>(i % 2) * (actionWidth + gap),
-            packagePanes.detailsTop + ScaleUi(hwnd, 198) +
-                static_cast<int>(i / 2) * ScaleUi(hwnd, 42),
-            actionWidth, ScaleUi(hwnd, 34), TRUE);
+        const auto& action = details.actions[i];
+        if (packagesView) MoveWindow(control, action.left, action.top,
+            action.width, action.height, TRUE);
     }
     if (g_packageHint) {
         ShowWindow(g_packageHint, packagesView ? SW_SHOW : SW_HIDE);
@@ -1635,23 +1644,24 @@ std::wstring BranchProviderHost(
 
 std::wstring PackageRepositoryUrl(
     const tp::PackageRecord& package) {
-    if (package.repository.empty()) {
+    // Use the same verified canonical URL for Open Repo and Copy Link.
+    const wchar_t* host = package.provider == L"github"
+        ? L"github.com" : package.provider == L"gitlab"
+        ? L"gitlab.com" : nullptr;
+    if (!host || package.repository.empty()) return {};
+    tp::RepositoryIdentity identity;
+    std::wstring error;
+    if (!tp::NormalizeRepositoryUrl(
+            std::wstring(L"https://") + host + L"/" + package.repository,
+            identity, error) ||
+        identity.repository != package.repository ||
+        (package.provider == L"github" &&
+            identity.provider != tp::ProviderKind::GitHub) ||
+        (package.provider == L"gitlab" &&
+            identity.provider != tp::ProviderKind::GitLab)) {
         return {};
     }
-
-    if (package.provider == L"github") {
-        return
-            L"https://github.com/" +
-            package.repository;
-    }
-
-    if (package.provider == L"gitlab") {
-        return
-            L"https://gitlab.com/" +
-            package.repository;
-    }
-
-    return {};
+    return identity.canonicalUrl;
 }
 
 bool ResolvePackageBranchHead(
@@ -3781,14 +3791,13 @@ void UpdatePackageButtons() {
         selectedPackage =
             &g_state.packages[
                 static_cast<std::size_t>(row)];
+        const auto& p = *selectedPackage;
+        if (g_packageTitle) SetWindowTextW(g_packageTitle,
+            p.name.empty() ? L"Unnamed package" : p.name.c_str());
         if (g_packageSummary) {
-            const auto& p = *selectedPackage;
-            std::wstring detail = p.name + L"  |  " + PackageStatusText(p)
-                + L"\r\nSource: " + ProviderLabel(p.provider) + L" / " + p.repository
-                + L"  |  Branch: " + PackageSourceText(p)
-                + L"\r\nInstalled: " + PackageRevisionText(p.installedRevision)
-                + L"  |  Latest: " + PackageRevisionText(p.latestRevision)
-                + L"  |  Type: " + p.target;
+            const auto detail = tp::ui::PackageDetailsText(
+                p, ProviderLabel(p.provider), PackageSourceText(p),
+                PackageStatusText(p));
             SetWindowTextW(g_packageSummary, detail.c_str());
         }
 
@@ -3833,8 +3842,10 @@ void UpdatePackageButtons() {
             !selectedPackage->installedFiles.empty();
     }
 
-    if (!validSelection && g_packageSummary) {
-        SetWindowTextW(g_packageSummary, L"Select a package to view its source, branch and revisions.");
+    if (!validSelection) {
+        if (g_packageTitle) SetWindowTextW(g_packageTitle, L"Select a package");
+        if (g_packageSummary) SetWindowTextW(g_packageSummary,
+            L"Select a package to view source, owner, type, branch, revisions and status.");
     }
 
     if (g_stateReady) {
@@ -3856,10 +3867,12 @@ void UpdatePackageButtons() {
         g_packageOpenFolder, hasPackageFolder && !packageBusy ? TRUE : FALSE);
     if (g_packageChangeBranchButton) EnableWindow(
         g_packageChangeBranchButton, canSetBranch && !packageBusy ? TRUE : FALSE);
-    if (g_packageSourceButton) EnableWindow(
-        g_packageSourceButton,
-        selectedPackage && !PackageRepositoryUrl(*selectedPackage).empty() && !packageBusy
-            ? TRUE : FALSE);
+    const bool canUseRepoLink = selectedPackage &&
+        !PackageRepositoryUrl(*selectedPackage).empty() && !packageBusy;
+    if (g_packageSourceButton)
+        EnableWindow(g_packageSourceButton, canUseRepoLink ? TRUE : FALSE);
+    if (g_packageCopyLink)
+        EnableWindow(g_packageCopyLink, canUseRepoLink ? TRUE : FALSE);
 
     if (g_updateAllButton) {
         EnableWindow(
@@ -6999,7 +7012,7 @@ LRESULT HandleStatusColour(WPARAM wParam, LPARAM lParam) {
         return reinterpret_cast<LRESULT>(MainSurfaceBrush(false));
     }
     if (!tp::ui::HighContrast() &&
-        control == g_packageSummary) {
+        (control == g_packageSummary || control == g_packageTitle)) {
         static HBRUSH brush = CreateSolidBrush(tp::ui::Palette::packageDetails);
         HDC dc = reinterpret_cast<HDC>(wParam);
         SetTextColor(dc, tp::ui::Palette::primaryText);
@@ -7131,7 +7144,8 @@ const wchar_t* ToolbarButtonName(
         return L"TocPilot";
     }
     if (control == g_advancedButton) return L"Advanced";
-    if (control == g_packageSourceButton) return L"Open Source";
+    if (control == g_packageSourceButton) return L"Open Repo";
+    if (control == g_packageCopyLink) return L"Copy Link";
     if (control == g_packageChangeBranchButton) return L"Change Branch";
     return L"";
 }
@@ -7246,7 +7260,7 @@ bool IsMainChromeButton(HWND control) {
         g_syncConfigureButton, g_tocPilotScanButton,
         g_tocPilotRepositoryButton, g_tocPilotReleasesButton,
         g_tocPilotUpdateInline, g_packageOpenFolder,
-        g_packageSourceButton, g_packageChangeBranchButton,
+        g_packageSourceButton, g_packageCopyLink, g_packageChangeBranchButton,
         g_accountSyncTileRefreshButton, g_accountSyncTileSyncButton
     }) {
         if (control && control == candidate) return true;
@@ -7351,7 +7365,7 @@ void ApplyToolbarPresentation(
         g_syncConfigureButton, g_tocPilotScanButton,
         g_tocPilotRepositoryButton, g_tocPilotReleasesButton,
         g_tocPilotUpdateInline, g_packageOpenFolder,
-        g_packageSourceButton, g_packageChangeBranchButton,
+        g_packageSourceButton, g_packageCopyLink, g_packageChangeBranchButton,
         g_accountSyncTileRefreshButton, g_accountSyncTileSyncButton
     }) StyleMainChromeButton(control);
 
@@ -9581,7 +9595,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
         tp::AddToolbarTooltip(g_toolbarTooltip, hwnd, g_accountSyncButton, L"Account Sync");
         tp::AddToolbarTooltip(g_toolbarTooltip, hwnd, g_tocPilotButton, L"Info");
         tp::AddToolbarTooltip(g_toolbarTooltip, hwnd, g_packageChangeBranchButton, L"Change tracked Git branch");
-        tp::AddToolbarTooltip(g_toolbarTooltip, hwnd, g_packageSourceButton, L"Open repository source");
+        tp::AddToolbarTooltip(g_toolbarTooltip, hwnd, g_packageSourceButton, L"Open repository");
         // Show the full live operation text when the multiline status band
         // cannot accommodate a long provider/rate-limit/error explanation.
         tp::AddToolbarTooltip(g_toolbarTooltip, hwnd, g_packageHint,
@@ -9654,11 +9668,21 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
 
         g_packageOpenFolder = createToolbarButton(L"Open Folder", IDC_PACKAGE_OPEN_FOLDER);
         g_packageChangeBranchButton = createToolbarButton(L"Change Branch", IDC_PACKAGE_CHANGE_BRANCH);
-        g_packageSourceButton = createToolbarButton(L"Open Source", IDC_PACKAGE_SOURCE);
+        g_packageSourceButton = createToolbarButton(L"Open Repo", IDC_PACKAGE_SOURCE);
+        g_packageCopyLink = createToolbarButton(L"Copy Link", IDC_PACKAGE_COPY_LINK);
+        g_packageTitle = CreateWindowExW(
+            0, L"STATIC", L"Select a package",
+            WS_CHILD | SS_LEFT | SS_NOPREFIX | SS_ENDELLIPSIS,
+            0, 0, 200, 30, hwnd, nullptr, GetModuleHandleW(nullptr), nullptr);
         g_packageSummary = CreateWindowExW(
             0, L"STATIC", L"Select a package to view its details.",
-            WS_CHILD | SS_LEFT | SS_NOPREFIX,
-            0, 0, 200, 95, hwnd, nullptr, GetModuleHandleW(nullptr), nullptr);
+            WS_CHILD | SS_LEFT | SS_NOPREFIX | SS_EDITCONTROL,
+            0, 0, 200, 180, hwnd, nullptr, GetModuleHandleW(nullptr), nullptr);
+        // Register after creation: the tooltip helper needs actual HWNDs.
+        tp::AddToolbarTooltip(g_toolbarTooltip, hwnd, g_packageTitle, LPSTR_TEXTCALLBACKW);
+        tp::AddToolbarTooltip(g_toolbarTooltip, hwnd, g_packageSummary, LPSTR_TEXTCALLBACKW);
+        tp::AddToolbarTooltip(g_toolbarTooltip, hwnd, g_packageHint, LPSTR_TEXTCALLBACKW);
+        tp::AddToolbarTooltip(g_toolbarTooltip, hwnd, g_packageCopyLink, L"Copy repository URL");
         g_packageList = CreateWindowExW(
             tp::ui::HighContrast() ? WS_EX_CLIENTEDGE : 0,
             WC_LISTVIEWW,
@@ -9865,9 +9889,9 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                 client.bottom - client.top, ScaleUi(hwnd, kShellTabTop),
                 ScaleUi(hwnd, kShellTabHeight), ScaleUi(hwnd, kShellFooterHeight),
                 ScaleUi(hwnd, kShellFooterGap));
-            if (g_packageSummary && IsWindowVisible(g_packageSummary)) {
+            if (g_packageTitle && IsWindowVisible(g_packageTitle)) {
                 RECT panel{};
-                GetWindowRect(g_packageSummary, &panel);
+                GetWindowRect(g_packageTitle, &panel);
                 MapWindowPoints(nullptr, hwnd, reinterpret_cast<POINT*>(&panel), 2);
                 panel.left = std::max(0L, panel.left - ScaleUi(hwnd, 12));
                 panel.top = std::max(0L, panel.top - ScaleUi(hwnd, 8));
@@ -9913,7 +9937,19 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
         const auto* header =
             reinterpret_cast<NMHDR*>(lParam);
         if (header && header->hwndFrom == g_toolbarTooltip &&
-            header->idFrom == reinterpret_cast<UINT_PTR>(g_packageHint) &&
+            header->code == TTN_GETDISPINFOW &&
+            (header->idFrom == reinterpret_cast<UINT_PTR>(g_packageTitle) ||
+             header->idFrom == reinterpret_cast<UINT_PTR>(g_packageSummary))) {
+            const HWND control = reinterpret_cast<HWND>(header->idFrom);
+            const int length = GetWindowTextLengthW(control);
+            g_packageDetailsTooltipText.resize(static_cast<std::size_t>(length)+1);
+            GetWindowTextW(control, g_packageDetailsTooltipText.data(), length+1);
+            g_packageDetailsTooltipText.resize(static_cast<std::size_t>(length));
+            reinterpret_cast<NMTTDISPINFOW*>(lParam)->lpszText =
+                g_packageDetailsTooltipText.data();
+            return 0;
+        }
+        if (header &&             header->idFrom == reinterpret_cast<UINT_PTR>(g_packageHint) &&
             header->code == TTN_GETDISPINFOW && g_packageHint) {
             auto* tip = reinterpret_cast<NMTTDISPINFOW*>(lParam);
             const int length = GetWindowTextLengthW(g_packageHint);
@@ -10146,6 +10182,22 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                     const auto url = PackageRepositoryUrl(
                         g_state.packages[static_cast<std::size_t>(selected)]);
                     if (!url.empty()) OpenWebLink(hwnd, url.c_str());
+                }
+                return 0;
+            }
+            case IDC_PACKAGE_COPY_LINK: {
+                const int selected = SelectedPackageRow();
+                if (!g_stateReady || PackageOperationBusy() || selected < 0 ||
+                    selected >= static_cast<int>(g_state.packages.size())) return 0;
+                const auto url = PackageRepositoryUrl(
+                    g_state.packages[static_cast<std::size_t>(selected)]);
+                if (url.empty()) return 0;
+                tp::ui::Win32ClipboardApi clipboard;
+                if (!tp::ui::CopyUnicodeClipboard(clipboard, hwnd, url)) {
+                    MessageBoxW(hwnd, L"Windows could not copy the repository link.",
+                        L"TocPilot - Copy Link", MB_OK | MB_ICONERROR);
+                } else {
+                    SetRoutinePackageFeedback(L"Copied repository link: " + url);
                 }
                 return 0;
             }
