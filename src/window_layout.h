@@ -104,6 +104,12 @@ inline std::array<int, 2> UnifiedPackageColumnWidths(
 }
 
 
+// One visual column; the internal seven-column state and sort are unchanged.
+constexpr bool CompactListColumnVisible(int column) { return column == 0; }
+inline int CompactPackageNameWidth(int saved, int viewport, int minimum) {
+    return std::max({0, saved, viewport, minimum});
+}
+
 inline std::array<int, 2> FitCompactColumnWidths(
     int firstWidth,
     int secondWidth,

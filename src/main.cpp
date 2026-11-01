@@ -24,6 +24,7 @@
 #include "toolbar_icons.h"
 #include "ui_theme.h"
 #include "main_view.h"
+#include "package_list_status.h"
 #include "package_folder.h"
 #include "update.h"
 #include "update_all.h"
@@ -919,7 +920,8 @@ void ResizeListColumns();
 
 void SaveCurrentPackageColumnLayout() {
     if (!g_packageList || !g_stateReady) return;
-    // Save only user-edited Name width. Never save viewport-induced Status fit.
+    // Save only a user-edited Name width from the header notification;
+    // automatic viewport fitting must not overwrite legacy saved widths.
     const int width = std::clamp(
         UnscaleUi(g_packageList, ListView_GetColumnWidth(g_packageList, kPackageColumnName)),
         kCompactNameColumnMinWidth, 2000);
@@ -940,16 +942,14 @@ void ResizeListColumns() {
     if (!g_packageList) return;
     const auto& saved = g_stateReady
         ? g_state.settings.packageColumnWidths : tp::kDefaultPackageColumnWidths;
-    const auto widths = tp::UnifiedPackageColumnWidths(
-        ScaleUi(g_packageList, saved[static_cast<std::size_t>(kPackageColumnName)]),
-        PackageListClientWidth(),
-        ScaleUi(g_packageList, kCompactNameColumnMinWidth),
-        ScaleUi(g_packageList, kCompactStatusColumnMinWidth));
-    // Preserve stored metadata for migration; show it in the details area.
-    for (int column = kPackageColumnWww; column < kPackageColumnStatus; ++column)
+    // Keep all seven legacy fields/order/sort, but expose only a visual Name
+    // cell. Status remains live in a zero-width subitem for operation feedback.
+    for (int column = kPackageColumnWww; column <= kPackageColumnStatus; ++column)
         ListView_SetColumnWidth(g_packageList, column, 0);
-    ListView_SetColumnWidth(g_packageList, kPackageColumnName, widths[0]);
-    ListView_SetColumnWidth(g_packageList, kPackageColumnStatus, widths[1]);
+    ListView_SetColumnWidth(g_packageList, kPackageColumnName,
+        tp::CompactPackageNameWidth(
+            ScaleUi(g_packageList, saved[static_cast<std::size_t>(kPackageColumnName)]),
+            PackageListClientWidth(), ScaleUi(g_packageList, kCompactNameColumnMinWidth)));
 }
 
 // Legacy wide text-toolbar layout retained as reference for the
@@ -2258,6 +2258,59 @@ void PaintPackageGlyph(HDC dc, const RECT& cell, tp::ui::PackageKind kind) {
     SelectObject(dc,oldBrush); SelectObject(dc,oldPen); DeleteObject(pen);
 }
 
+// Seven distinct symbols; never infer a package status from the row colour.
+void PaintPackageStatusGlyph(HDC dc, const RECT& cell,
+                             tp::ui::PackageStatusIcon icon, COLORREF colour) {
+    const int x = cell.left + 10;
+    const int y = cell.top + (cell.bottom - cell.top - 12) / 2;
+    HPEN pen = CreatePen(PS_SOLID, 2, colour);
+    HGDIOBJ oldPen = SelectObject(dc, pen);
+    HGDIOBJ oldBrush = SelectObject(dc, GetStockObject(NULL_BRUSH));
+    switch (icon) {
+    case tp::ui::PackageStatusIcon::Busy:
+        Ellipse(dc,x+1,y+1,x+11,y+11);
+        MoveToEx(dc,x+6,y+2,nullptr); LineTo(dc,x+6,y+6); LineTo(dc,x+9,y+7);
+        break;
+    case tp::ui::PackageStatusIcon::UpdateAvailable:
+        MoveToEx(dc,x+6,y+11,nullptr); LineTo(dc,x+6,y+1);
+        MoveToEx(dc,x+2,y+5,nullptr); LineTo(dc,x+6,y+1); LineTo(dc,x+10,y+5);
+        break;
+    case tp::ui::PackageStatusIcon::Current:
+        MoveToEx(dc,x+1,y+6,nullptr); LineTo(dc,x+5,y+10); LineTo(dc,x+11,y+2);
+        break;
+    case tp::ui::PackageStatusIcon::NotConfigured:
+        Ellipse(dc,x+1,y+1,x+11,y+11);
+        MoveToEx(dc,x+4,y+4,nullptr); LineTo(dc,x+6,y+2);
+        LineTo(dc,x+8,y+4); LineTo(dc,x+6,y+6);
+        MoveToEx(dc,x+6,y+8,nullptr); LineTo(dc,x+6,y+9);
+        break;
+    case tp::ui::PackageStatusIcon::NotInstalled:
+        Rectangle(dc,x+1,y+1,x+11,y+11);
+        MoveToEx(dc,x+6,y+3,nullptr); LineTo(dc,x+6,y+9);
+        MoveToEx(dc,x+3,y+6,nullptr); LineTo(dc,x+9,y+6);
+        break;
+    case tp::ui::PackageStatusIcon::NeedsAttention: {
+        POINT triangle[3]={{x+6,y+1},{x+11,y+11},{x+1,y+11}};
+        Polygon(dc,triangle,3);
+        MoveToEx(dc,x+6,y+5,nullptr); LineTo(dc,x+6,y+8);
+        break;
+    }
+    case tp::ui::PackageStatusIcon::Error:
+        Ellipse(dc,x+1,y+1,x+11,y+11);
+        MoveToEx(dc,x+4,y+4,nullptr); LineTo(dc,x+8,y+8);
+        MoveToEx(dc,x+8,y+4,nullptr); LineTo(dc,x+4,y+8);
+        break;
+    }
+    SelectObject(dc,oldBrush); SelectObject(dc,oldPen); DeleteObject(pen);
+}
+
+std::wstring PackageRowLiveStatus(int row, const tp::PackageRecord& package) {
+    wchar_t text[256]{};
+    if (g_packageList)
+        ListView_GetItemText(g_packageList,row,kPackageColumnStatus,text,256);
+    return text[0] ? std::wstring(text) : PackageStatusText(package);
+}
+
 LRESULT CALLBACK PackageListHoverSubclass(HWND hwnd, UINT message,
                                             WPARAM wParam, LPARAM lParam,
                                             UINT_PTR id, DWORD_PTR) {
@@ -2379,49 +2432,14 @@ LRESULT HandlePackageListCustomDraw(
         draw->clrTextBk = visual.fill;
     }
 
-    const bool drawName =
-        draw->iSubItem == 0;
-    const bool drawWebsite =
-        g_advancedVisible &&
-        draw->iSubItem == kPackageColumnWww &&
-        !PackageRepositoryUrl(
-            package).empty();
-    const bool drawBranch =
-        g_advancedVisible &&
-        draw->iSubItem == kPackageColumnBranch &&
-        PackageBranchMode(
-            package);
-
-    if (!drawName && !drawWebsite && !drawBranch && highContrast) {
-        draw->clrText = rowTextColour;
-        return CDRF_DODEFAULT;
-    }
+    // Hidden legacy subitems still contain operational text, never a second
+    // visible Status column or hidden columns consuming viewport width.
+    if (!tp::CompactListColumnVisible(draw->iSubItem))
+        return CDRF_SKIPDEFAULT;
 
     RECT rect{};
-
-    if (drawName) {
-        if (!PackageColumnCellRect(
-                displayRow,
-                kPackageColumnName,
-                rect)) {
-            return CDRF_DODEFAULT;
-        }
-    } else if (drawWebsite) {
-        if (!ListView_GetSubItemRect(
-                g_packageList,
-                displayRow,
-                kPackageColumnWww,
-                LVIR_BOUNDS,
-                &rect)) {
-            return CDRF_DODEFAULT;
-        }
-    } else {
-        if (!ListView_GetSubItemRect(g_packageList, displayRow,
-                                     draw->iSubItem, LVIR_BOUNDS, &rect)) {
-            return CDRF_DODEFAULT;
-        }
-    }
-
+    if (!PackageColumnCellRect(displayRow, kPackageColumnName, rect))
+        return CDRF_DODEFAULT;
     if (highContrast) {
         FillRect(draw->nmcd.hdc, &rect,
                  GetSysColorBrush(selected && focused ? COLOR_HIGHLIGHT : COLOR_WINDOW));
@@ -2430,147 +2448,28 @@ LRESULT HandlePackageListCustomDraw(
         FillRect(draw->nmcd.hdc, &rect, fill);
         DeleteObject(fill);
     }
+    SetBkMode(draw->nmcd.hdc, TRANSPARENT);
+    SetTextColor(draw->nmcd.hdc, rowTextColour);
+    HFONT normal = g_uiFont ? g_uiFont
+        : reinterpret_cast<HFONT>(GetStockObject(DEFAULT_GUI_FONT));
+    HFONT bold = g_boldUiFont ? g_boldUiFont : normal;
 
-    SetBkMode(
-        draw->nmcd.hdc,
-        TRANSPARENT);
-    SetTextColor(
-        draw->nmcd.hdc,
-        rowTextColour);
-
-    HFONT normal =
-        g_uiFont
-            ? g_uiFont
-            : reinterpret_cast<HFONT>(
-                GetStockObject(
-                    DEFAULT_GUI_FONT));
-    HFONT bold =
-        g_boldUiFont
-            ? g_boldUiFont
-            : normal;
-    HFONT link =
-        g_linkUiFont
-            ? g_linkUiFont
-            : normal;
-
-    if (!drawName && !drawWebsite && !drawBranch) {
-        wchar_t cellText[2048]{};
-        ListView_GetItemText(g_packageList, displayRow, draw->iSubItem, cellText, 2048);
-        RECT text = rect; text.left += 6; text.right -= 5;
-        DrawTextW(draw->nmcd.hdc, cellText, -1, &text,
-                  DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS | DT_NOPREFIX);
-        return CDRF_SKIPDEFAULT;
-    }
-
-    if (drawWebsite) {
-        SetTextColor(
-            draw->nmcd.hdc,
-            highContrast ? GetSysColor(COLOR_HOTLIGHT) : tp::ui::Palette::primaryText);
-
-        const HGDIOBJ oldFont =
-            SelectObject(
-                draw->nmcd.hdc,
-                link);
-
-        RECT textRect =
-            rect;
-        textRect.left += 6;
-        textRect.right -= 5;
-
-        const std::wstring website =
-            PackageRepositoryUrl(
-                package);
-
-        DrawTextW(
-            draw->nmcd.hdc,
-            website.c_str(),
-            -1,
-            &textRect,
-            DT_SINGLELINE |
-                DT_VCENTER |
-                DT_END_ELLIPSIS |
-                DT_NOPREFIX);
-
-        SelectObject(
-            draw->nmcd.hdc,
-            oldFont);
-
-        return CDRF_SKIPDEFAULT;
-    }
-
-    if (drawBranch) {
-        const HGDIOBJ oldFont =
-            SelectObject(
-                draw->nmcd.hdc,
-                normal);
-
-        RECT arrowRect =
-            rect;
-        const int arrowWidth =
-            std::max(
-                16,
-                std::min(
-                    GetSystemMetrics(
-                        SM_CXVSCROLL),
-                    static_cast<int>(
-                        rect.right -
-                        rect.left) /
-                        3));
-
-        arrowRect.left =
-            std::max(
-                arrowRect.left,
-                arrowRect.right -
-                    arrowWidth);
-
-        const auto* branchInfo =
-            CachedRepositoryBranchInfo(
-                package);
-        const bool showArrow =
-            branchInfo &&
-            branchInfo->branches.size() > 1;
-
-        if (showArrow) {
-            DrawFrameControl(
-                draw->nmcd.hdc,
-                &arrowRect,
-                DFC_SCROLL,
-                DFCS_SCROLLCOMBOBOX);
-        }
-
-        RECT textRect =
-            rect;
-        textRect.left += 6;
-        textRect.right =
-            showArrow
-                ? arrowRect.left - 4
-                : rect.right - 5;
-
-        const std::wstring branchText =
-            PackageSourceText(
-                package);
-
-        DrawTextW(
-            draw->nmcd.hdc,
-            branchText.c_str(),
-            -1,
-            &textRect,
-            DT_SINGLELINE |
-                DT_VCENTER |
-                DT_END_ELLIPSIS |
-                DT_NOPREFIX);
-
-        SelectObject(
-            draw->nmcd.hdc,
-            oldFont);
-
-        return CDRF_SKIPDEFAULT;
-    }
-
+    const auto offsets = tp::ui::PackageCellOffsets();
+    RECT statusRect = rect;
+    statusRect.left += ScaleUi(g_packageList, offsets.statusLeft);
+    RECT typeRect = rect;
+    typeRect.left += ScaleUi(g_packageList, offsets.typeLeft);
+    const COLORREF glyphColour = highContrast ? rowTextColour
+                                              : tp::ui::Palette::primaryText;
+    PaintPackageStatusGlyph(draw->nmcd.hdc, statusRect,
+                            tp::ui::ResolvePackageStatusIcon(
+                                PackageRowLiveStatus(displayRow, package)),
+                            glyphColour);
+    PaintPackageGlyph(draw->nmcd.hdc, typeRect,
+                      tp::ui::KindFromTarget(package.target));
     RECT textRect = rect;
-    textRect.left += highContrast ? 8 : 30;
+    textRect.left += ScaleUi(g_packageList, offsets.nameLeft);
     textRect.right -= 5;
-    if (!highContrast) PaintPackageGlyph(draw->nmcd.hdc, rect, tp::ui::KindFromTarget(package.target));
 
     const std::wstring suffix =
         PackageBranchSuffix(
@@ -2932,8 +2831,10 @@ void PopulatePackageList() {
             g_state.packages[
                 packageIndex];
 
-        const std::wstring displayName =
-            PackageDisplayName(package);
+        const std::wstring status = PackageStatusText(package);
+        const std::wstring displayName = tp::ui::AccessiblePackageCell(
+            PackageDisplayName(package), status,
+            tp::ui::KindFromTarget(package.target));
 
         int row =
             static_cast<int>(
@@ -2984,10 +2885,6 @@ void PopulatePackageList() {
         const std::wstring latest =
             PackageRevisionText(
                 package.latestRevision);
-        const std::wstring status =
-            PackageStatusText(
-                package);
-
         ListView_SetItemText(
             g_packageList,
             row,
@@ -4077,12 +3974,17 @@ void SetPackageRowStatus(
         return;
     }
 
-    ListView_SetItemText(
-        g_packageList,
-        row,
-        kPackageColumnStatus,
-        const_cast<LPWSTR>(
-            text.c_str()));
+    ListView_SetItemText(g_packageList,row,kPackageColumnStatus,
+                         const_cast<LPWSTR>(text.c_str()));
+    const auto& package = g_state.packages[index];
+    const std::wstring accessible = tp::ui::AccessiblePackageCell(
+        PackageDisplayName(package), text,
+        tp::ui::KindFromTarget(package.target));
+    ListView_SetItemText(g_packageList,row,kPackageColumnName,
+                         const_cast<LPWSTR>(accessible.c_str()));
+    RECT bounds{};
+    if (ListView_GetItemRect(g_packageList,row,&bounds,LVIR_BOUNDS))
+        InvalidateRect(g_packageList,&bounds,FALSE);
 }
 
 void RefreshPackageStateUi() {
@@ -9783,7 +9685,8 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             g_packageList,
             LVS_EX_FULLROWSELECT |
                 LVS_EX_DOUBLEBUFFER |
-                LVS_EX_LABELTIP);
+                LVS_EX_LABELTIP |
+                LVS_EX_INFOTIP);
 
         g_accountSyncTilesView =
             tp::CreateAccountSyncTileViewport(
@@ -10033,7 +9936,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                 headerNotification
                     ? headerNotification->iItem
                     : -1;
-            // Name is manually resizable. Status is the automatic remainder.
+            // Only Name is manually resizable; all legacy metadata is hidden.
             if (headerColumn != kPackageColumnName &&
                 (header->code == HDN_BEGINTRACKW ||
                  header->code == HDN_BEGINDRAG ||
@@ -10082,11 +9985,28 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
         if (header &&
             header->idFrom ==
                 IDC_PACKAGE_LIST) {
-            if (header->code ==
-                NM_CUSTOMDRAW) {
-                return
-                    HandlePackageListCustomDraw(
-                        lParam);
+            if (header->code == LVN_GETINFOTIPW) {
+                auto* tip = reinterpret_cast<NMLVGETINFOTIPW*>(lParam);
+                if (tip && tip->pszText && tip->cchTextMax > 0 &&
+                    tip->iItem >= 0 &&
+                    tip->iItem < static_cast<int>(g_packageViewOrder.size())) {
+                    const std::size_t index =
+                        g_packageViewOrder[static_cast<std::size_t>(tip->iItem)];
+                    if (index < g_state.packages.size()) {
+                        const auto& package = g_state.packages[index];
+                        const std::wstring text = tp::ui::PackageCellTooltip(
+                            PackageDisplayName(package),
+                            PackageRowLiveStatus(tip->iItem, package),
+                            tp::ui::KindFromTarget(package.target));
+                        wcsncpy_s(tip->pszText,
+                                  static_cast<std::size_t>(tip->cchTextMax),
+                                  text.c_str(), _TRUNCATE);
+                    }
+                }
+                return 0;
+            }
+            if (header->code == NM_CUSTOMDRAW) {
+                return HandlePackageListCustomDraw(lParam);
             }
 
             if (header->code ==

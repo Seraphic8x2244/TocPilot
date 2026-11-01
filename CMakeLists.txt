@@ -89,6 +89,15 @@ if(BUILD_TESTING)
         target_compile_options(TocPilotUiThemeTests PRIVATE /W4 /permissive- /utf-8)
     endif()
     add_test(NAME ui-theme-visual-policy COMMAND TocPilotUiThemeTests)
+    add_executable(TocPilotCompactPackageListTests tests/package_list_status_tests.cpp)
+    target_compile_features(TocPilotCompactPackageListTests PRIVATE cxx_std_20)
+    target_compile_definitions(TocPilotCompactPackageListTests PRIVATE
+        UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
+    target_include_directories(TocPilotCompactPackageListTests PRIVATE src)
+    if(MSVC)
+        target_compile_options(TocPilotCompactPackageListTests PRIVATE /W4 /permissive- /utf-8)
+    endif()
+    add_test(NAME compact-package-list-status COMMAND TocPilotCompactPackageListTests)
     add_executable(TocPilotProviderTests
         tests/provider_tests.cpp
         src/provider.cpp
