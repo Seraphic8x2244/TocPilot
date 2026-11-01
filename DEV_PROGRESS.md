@@ -1,6 +1,16 @@
 # TocPilot Development Progress
 
-## Current Handoff — Right-anchored Launch footer group (2026-11-01)
+## Current Handoff — v0.6.0-dev.14 development release (2026-11-01)
+
+**Pre-release validation:** Exact-SHA Windows Build/CTest [41293632988](https://github.com/Seraphic8x2244/TocPilot/actions/runs/41293632988) **passed** for `c8d4c8cf47b09acf77495ed9feecc234002713be` on `dev`. This release-only commit bumps `src/version.h` and `.github/development-release-version` to `v0.6.0-dev.14` to trigger the official updater-installable development-release workflow. `main` stays untouched. Verify release workflow exact-SHA Windows build/CTest, published EXE and SHA-256, and real development-channel self-update E2E before claiming publication.
+
+**Delta:** Bottom-right-anchored footer group with **Launch** button left of the selected client executable name/path; name/path aligned immediately right of button; text width shrinks for narrow windows. Launch caption is consistently `Launch`, including owner-draw refresh. Geometry tests cover default, maximized, narrow and DPI-scaled sizes. No other UI or functional changes. The user's Packages redesign is still audit-only.
+
+**Next:** Confirm `v0.6.0-dev.14` workflow and assets, then ask for Windows runtime verification of the Launch footer group. Do not confuse CI pass with user's visual acceptance.
+
+---
+
+## Previous Handoff — Right-anchored Launch footer group (2026-11-01)
 
 **Approved user request:** Move the persistent footer controls into a single bottom-right-anchored group with **Launch** as the button caption and selected client executable name/path immediately **to the button's right**. The released `v0.6.0-dev.13` had its Launch WoW button at the far right but its executable text at the far left; this slice deliberately groups them to meet both the right-anchor and right-of-button placement requirements. Keep the actual launcher selection and tooltip untouched, with full-path ellipsis when the footer text width narrows.
 
