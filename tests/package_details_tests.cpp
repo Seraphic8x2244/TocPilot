@@ -108,6 +108,21 @@ void TestDetails() {
           L"Status: \u2014")!=std::wstring::npos,
           "Default/null-like metadata has safe placeholders");
 }
+void TestLiveStatus() {
+    using tp::ui::EffectiveDetailStatus;
+    Check(EffectiveDetailStatus(L"Checking...",L"Up To Date") == L"Checking...",
+          "Live checking status overrides persisted status");
+    Check(EffectiveDetailStatus(L"Install failed",L"Up To Date") == L"Install failed",
+          "Failed operation remains visible in details");
+    Check(EffectiveDetailStatus(L"",L"Not Installed") == L"Not Installed",
+          "Unpopulated row falls back to stored package status");
+    const std::wstring veryLong = L"Branch lookup failed: " + std::wstring(800,L'x');
+    Check(EffectiveDetailStatus(veryLong,L"Needs Attention") == veryLong,
+          "Long status is preserved for detail panel and tooltip");
+    Check(EffectiveDetailStatus(L"\u65E5\u672C\u8A9E \u66F4\u65B0\u4E2D...",L"Not Installed") ==
+          L"\u65E5\u672C\u8A9E \u66F4\u65B0\u4E2D...",
+          "Unicode live status preserved");
+}
 void TestActions() {
     using A=tp::ui::PackageDetailAction;
     const auto& actions=tp::ui::kPackageDetailActions;
@@ -134,6 +149,7 @@ void TestActions() {
 int main() {
     TestClipboard();
     TestDetails();
+    TestLiveStatus();
     TestActions();
     return failures ? 1 : 0;
 }

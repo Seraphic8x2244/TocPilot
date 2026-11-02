@@ -72,6 +72,17 @@ int main() {
         Check((offsets.nameLeft - offsets.typeLeft)*scale >= 22*scale,
               "Type and Name don't overlap");
     }
+    // Status updates can be repeated while the row stays selected/focused;
+    // the category must follow the latest live status, not old row colours.
+    for (const auto [label, kind] : std::array{
+        std::pair{L"Checking...", PackageStatusIcon::Busy},
+        std::pair{L"Update Available", PackageStatusIcon::UpdateAvailable},
+        std::pair{L"Updating...", PackageStatusIcon::Busy},
+        std::pair{L"Up To Date", PackageStatusIcon::Current},
+        std::pair{L"Refresh failed", PackageStatusIcon::Error}}) {
+        Check(ResolvePackageStatusIcon(label) == kind,
+              "Repeated status updates resolve the latest icon");
+    }
     Check(tp::CompactListColumnVisible(0), "Name visible");
     for (int index = 1; index < static_cast<int>(tp::kPackageColumnCount); ++index)
         Check(!tp::CompactListColumnVisible(index),

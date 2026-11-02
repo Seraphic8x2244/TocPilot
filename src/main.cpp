@@ -2242,29 +2242,29 @@ bool PackageColumnCellRect(
 // Shape-based, deliberately neutral GDI glyphs; no dependency on installed icon fonts.
 void PaintPackageGlyph(HDC dc, const RECT& cell, tp::ui::PackageKind kind,
                        COLORREF colour) {
-    const int n = 12, x = cell.left + 10;
+    const int n = ScaleUi(g_packageList, 12), x = cell.left + ScaleUi(g_packageList, 10);
     const int y = cell.top + (cell.bottom - cell.top - n) / 2;
-    HPEN pen = CreatePen(PS_SOLID, 1, colour);
+    HPEN pen = CreatePen(PS_SOLID, std::max(1, ScaleUi(g_packageList, 1)), colour);
     HGDIOBJ oldPen = SelectObject(dc, pen);
     HGDIOBJ oldBrush = SelectObject(dc, GetStockObject(NULL_BRUSH));
     if (kind == tp::ui::PackageKind::Dll) {
-        Rectangle(dc, x+2, y+2, x+10, y+10);
+        Rectangle(dc, x+ScaleUi(g_packageList, 2), y+ScaleUi(g_packageList, 2), x+ScaleUi(g_packageList, 10), y+ScaleUi(g_packageList, 10));
         for (int i = 4; i <= 8; i += 4) {
-            MoveToEx(dc,x+i,y,nullptr); LineTo(dc,x+i,y+2);
-            MoveToEx(dc,x+i,y+10,nullptr); LineTo(dc,x+i,y+12);
-            MoveToEx(dc,x,y+i,nullptr); LineTo(dc,x+2,y+i);
-            MoveToEx(dc,x+10,y+i,nullptr); LineTo(dc,x+12,y+i);
+            MoveToEx(dc,x+i,y,nullptr); LineTo(dc,x+i,y+ScaleUi(g_packageList, 2));
+            MoveToEx(dc,x+i,y+ScaleUi(g_packageList, 10),nullptr); LineTo(dc,x+i,y+ScaleUi(g_packageList, 12));
+            MoveToEx(dc,x,y+i,nullptr); LineTo(dc,x+ScaleUi(g_packageList, 2),y+i);
+            MoveToEx(dc,x+ScaleUi(g_packageList, 10),y+i,nullptr); LineTo(dc,x+ScaleUi(g_packageList, 12),y+i);
         }
     } else if (kind == tp::ui::PackageKind::Mpq) {
-        Rectangle(dc,x,y+2,x+12,y+12);
-        MoveToEx(dc,x,y+5,nullptr); LineTo(dc,x+12,y+5);
-        MoveToEx(dc,x+4,y+8,nullptr); LineTo(dc,x+8,y+8);
+        Rectangle(dc,x,y+ScaleUi(g_packageList, 2),x+ScaleUi(g_packageList, 12),y+ScaleUi(g_packageList, 12));
+        MoveToEx(dc,x,y+ScaleUi(g_packageList, 5),nullptr); LineTo(dc,x+ScaleUi(g_packageList, 12),y+ScaleUi(g_packageList, 5));
+        MoveToEx(dc,x+ScaleUi(g_packageList, 4),y+ScaleUi(g_packageList, 8),nullptr); LineTo(dc,x+ScaleUi(g_packageList, 8),y+ScaleUi(g_packageList, 8));
     } else {
-        POINT outline[6] = {{x+6,y},{x+12,y+3},{x+12,y+9},
-                            {x+6,y+12},{x,y+9},{x,y+3}};
+        POINT outline[6] = {{x+ScaleUi(g_packageList, 6),y},{x+ScaleUi(g_packageList, 12),y+ScaleUi(g_packageList, 3)},{x+ScaleUi(g_packageList, 12),y+ScaleUi(g_packageList, 9)},
+                            {x+ScaleUi(g_packageList, 6),y+ScaleUi(g_packageList, 12)},{x,y+ScaleUi(g_packageList, 9)},{x,y+ScaleUi(g_packageList, 3)}};
         Polygon(dc,outline,6);
-        MoveToEx(dc,x,y+3,nullptr); LineTo(dc,x+6,y+6); LineTo(dc,x+12,y+3);
-        MoveToEx(dc,x+6,y+6,nullptr); LineTo(dc,x+6,y+12);
+        MoveToEx(dc,x,y+ScaleUi(g_packageList, 3),nullptr); LineTo(dc,x+ScaleUi(g_packageList, 6),y+ScaleUi(g_packageList, 6)); LineTo(dc,x+ScaleUi(g_packageList, 12),y+ScaleUi(g_packageList, 3));
+        MoveToEx(dc,x+ScaleUi(g_packageList, 6),y+ScaleUi(g_packageList, 6),nullptr); LineTo(dc,x+ScaleUi(g_packageList, 6),y+ScaleUi(g_packageList, 12));
     }
     SelectObject(dc,oldBrush); SelectObject(dc,oldPen); DeleteObject(pen);
 }
@@ -2272,54 +2272,71 @@ void PaintPackageGlyph(HDC dc, const RECT& cell, tp::ui::PackageKind kind,
 // Seven distinct symbols; never infer a package status from the row colour.
 void PaintPackageStatusGlyph(HDC dc, const RECT& cell,
                              tp::ui::PackageStatusIcon icon, COLORREF colour) {
-    const int x = cell.left + 10;
-    const int y = cell.top + (cell.bottom - cell.top - 12) / 2;
-    HPEN pen = CreatePen(PS_SOLID, 2, colour);
+    const int x = cell.left + ScaleUi(g_packageList, 10);
+    const int y = cell.top + (cell.bottom - cell.top - ScaleUi(g_packageList, 12)) / 2;
+    HPEN pen = CreatePen(PS_SOLID, std::max(1, ScaleUi(g_packageList, 2)), colour);
     HGDIOBJ oldPen = SelectObject(dc, pen);
     HGDIOBJ oldBrush = SelectObject(dc, GetStockObject(NULL_BRUSH));
     switch (icon) {
     case tp::ui::PackageStatusIcon::Busy:
-        Ellipse(dc,x+1,y+1,x+11,y+11);
-        MoveToEx(dc,x+6,y+2,nullptr); LineTo(dc,x+6,y+6); LineTo(dc,x+9,y+7);
+        Ellipse(dc,x+ScaleUi(g_packageList, 1),y+ScaleUi(g_packageList, 1),x+ScaleUi(g_packageList, 11),y+ScaleUi(g_packageList, 11));
+        MoveToEx(dc,x+ScaleUi(g_packageList, 6),y+ScaleUi(g_packageList, 2),nullptr); LineTo(dc,x+ScaleUi(g_packageList, 6),y+ScaleUi(g_packageList, 6)); LineTo(dc,x+ScaleUi(g_packageList, 9),y+ScaleUi(g_packageList, 7));
         break;
     case tp::ui::PackageStatusIcon::UpdateAvailable:
-        MoveToEx(dc,x+6,y+11,nullptr); LineTo(dc,x+6,y+1);
-        MoveToEx(dc,x+2,y+5,nullptr); LineTo(dc,x+6,y+1); LineTo(dc,x+10,y+5);
+        MoveToEx(dc,x+ScaleUi(g_packageList, 6),y+ScaleUi(g_packageList, 11),nullptr); LineTo(dc,x+ScaleUi(g_packageList, 6),y+ScaleUi(g_packageList, 1));
+        MoveToEx(dc,x+ScaleUi(g_packageList, 2),y+ScaleUi(g_packageList, 5),nullptr); LineTo(dc,x+ScaleUi(g_packageList, 6),y+ScaleUi(g_packageList, 1)); LineTo(dc,x+ScaleUi(g_packageList, 10),y+ScaleUi(g_packageList, 5));
         break;
     case tp::ui::PackageStatusIcon::Current:
-        MoveToEx(dc,x+1,y+6,nullptr); LineTo(dc,x+5,y+10); LineTo(dc,x+11,y+2);
+        MoveToEx(dc,x+ScaleUi(g_packageList, 1),y+ScaleUi(g_packageList, 6),nullptr); LineTo(dc,x+ScaleUi(g_packageList, 5),y+ScaleUi(g_packageList, 10)); LineTo(dc,x+ScaleUi(g_packageList, 11),y+ScaleUi(g_packageList, 2));
         break;
     case tp::ui::PackageStatusIcon::NotConfigured:
-        Ellipse(dc,x+1,y+1,x+11,y+11);
-        MoveToEx(dc,x+4,y+4,nullptr); LineTo(dc,x+6,y+2);
-        LineTo(dc,x+8,y+4); LineTo(dc,x+6,y+6);
-        MoveToEx(dc,x+6,y+8,nullptr); LineTo(dc,x+6,y+9);
+        Ellipse(dc,x+ScaleUi(g_packageList, 1),y+ScaleUi(g_packageList, 1),x+ScaleUi(g_packageList, 11),y+ScaleUi(g_packageList, 11));
+        MoveToEx(dc,x+ScaleUi(g_packageList, 4),y+ScaleUi(g_packageList, 4),nullptr); LineTo(dc,x+ScaleUi(g_packageList, 6),y+ScaleUi(g_packageList, 2));
+        LineTo(dc,x+ScaleUi(g_packageList, 8),y+ScaleUi(g_packageList, 4)); LineTo(dc,x+ScaleUi(g_packageList, 6),y+ScaleUi(g_packageList, 6));
+        MoveToEx(dc,x+ScaleUi(g_packageList, 6),y+ScaleUi(g_packageList, 8),nullptr); LineTo(dc,x+ScaleUi(g_packageList, 6),y+ScaleUi(g_packageList, 9));
         break;
     case tp::ui::PackageStatusIcon::NotInstalled:
-        Rectangle(dc,x+1,y+1,x+11,y+11);
-        MoveToEx(dc,x+6,y+3,nullptr); LineTo(dc,x+6,y+9);
-        MoveToEx(dc,x+3,y+6,nullptr); LineTo(dc,x+9,y+6);
+        Rectangle(dc,x+ScaleUi(g_packageList, 1),y+ScaleUi(g_packageList, 1),x+ScaleUi(g_packageList, 11),y+ScaleUi(g_packageList, 11));
+        MoveToEx(dc,x+ScaleUi(g_packageList, 6),y+ScaleUi(g_packageList, 3),nullptr); LineTo(dc,x+ScaleUi(g_packageList, 6),y+ScaleUi(g_packageList, 9));
+        MoveToEx(dc,x+ScaleUi(g_packageList, 3),y+ScaleUi(g_packageList, 6),nullptr); LineTo(dc,x+ScaleUi(g_packageList, 9),y+ScaleUi(g_packageList, 6));
         break;
     case tp::ui::PackageStatusIcon::NeedsAttention: {
-        POINT triangle[3]={{x+6,y+1},{x+11,y+11},{x+1,y+11}};
+        POINT triangle[3]={{x+ScaleUi(g_packageList, 6),y+ScaleUi(g_packageList, 1)},{x+ScaleUi(g_packageList, 11),y+ScaleUi(g_packageList, 11)},{x+ScaleUi(g_packageList, 1),y+ScaleUi(g_packageList, 11)}};
         Polygon(dc,triangle,3);
-        MoveToEx(dc,x+6,y+5,nullptr); LineTo(dc,x+6,y+8);
+        MoveToEx(dc,x+ScaleUi(g_packageList, 6),y+ScaleUi(g_packageList, 5),nullptr); LineTo(dc,x+ScaleUi(g_packageList, 6),y+ScaleUi(g_packageList, 8));
         break;
     }
     case tp::ui::PackageStatusIcon::Error:
-        Ellipse(dc,x+1,y+1,x+11,y+11);
-        MoveToEx(dc,x+4,y+4,nullptr); LineTo(dc,x+8,y+8);
-        MoveToEx(dc,x+8,y+4,nullptr); LineTo(dc,x+4,y+8);
+        Ellipse(dc,x+ScaleUi(g_packageList, 1),y+ScaleUi(g_packageList, 1),x+ScaleUi(g_packageList, 11),y+ScaleUi(g_packageList, 11));
+        MoveToEx(dc,x+ScaleUi(g_packageList, 4),y+ScaleUi(g_packageList, 4),nullptr); LineTo(dc,x+ScaleUi(g_packageList, 8),y+ScaleUi(g_packageList, 8));
+        MoveToEx(dc,x+ScaleUi(g_packageList, 8),y+ScaleUi(g_packageList, 4),nullptr); LineTo(dc,x+ScaleUi(g_packageList, 4),y+ScaleUi(g_packageList, 8));
         break;
     }
     SelectObject(dc,oldBrush); SelectObject(dc,oldPen); DeleteObject(pen);
 }
 
 std::wstring PackageRowLiveStatus(int row, const tp::PackageRecord& package) {
-    wchar_t text[256]{};
-    if (g_packageList)
-        ListView_GetItemText(g_packageList,row,kPackageColumnStatus,text,256);
-    return text[0] ? std::wstring(text) : PackageStatusText(package);
+    if (!g_packageList || row < 0) return PackageStatusText(package);
+    // LVM_GETITEMTEXTW returns the number copied, so retry if the text
+    // fills the buffer. Busy/error feedback must not silently truncate.
+    std::wstring text(256, L'\0');
+    for (;;) {
+        LVITEMW item{};
+        item.iSubItem = kPackageColumnStatus;
+        item.pszText = text.data();
+        item.cchTextMax = static_cast<int>(text.size());
+        const int copied = static_cast<int>(SendMessageW(g_packageList,
+            LVM_GETITEMTEXTW, static_cast<WPARAM>(row),
+            reinterpret_cast<LPARAM>(&item)));
+        if (copied < static_cast<int>(text.size()) - 1) {
+            text.resize(static_cast<std::size_t>(std::max(0, copied)));
+            break;
+        }
+        // The Win32 API uses a signed int character count.
+        if (text.size() >= static_cast<std::size_t>(INT_MAX / 2)) break;
+        text.resize(text.size() * 2);
+    }
+    return text.empty() ? PackageStatusText(package) : text;
 }
 
 LRESULT CALLBACK PackageListHoverSubclass(HWND hwnd, UINT message,
@@ -2335,6 +2352,10 @@ LRESULT CALLBACK PackageListHoverSubclass(HWND hwnd, UINT message,
             g_hoverPackageRow = next;
             InvalidateRect(hwnd, nullptr, FALSE);
         }
+    } else if (message == WM_SETFOCUS || message == WM_KILLFOCUS) {
+        // The keyboard focus outline must follow focus even without mouse
+        // movement or a package status refresh.
+        InvalidateRect(hwnd, nullptr, FALSE);
     } else if (message == WM_MOUSELEAVE) {
         g_hoverPackageRow = -1;
         InvalidateRect(hwnd, nullptr, FALSE);
@@ -3768,6 +3789,9 @@ void SortPackageListByColumn(
         SelectPackageRow(
             static_cast<std::size_t>(
                 selected));
+        const int displayRow = PackageDisplayRow(static_cast<std::size_t>(selected));
+        if (displayRow >= 0)
+            ListView_EnsureVisible(g_packageList, displayRow, FALSE);
     }
 }
 
@@ -3797,7 +3821,10 @@ void UpdatePackageButtons() {
         if (g_packageSummary) {
             const auto detail = tp::ui::PackageDetailsText(
                 p, ProviderLabel(p.provider), PackageSourceText(p),
-                PackageStatusText(p));
+                tp::ui::EffectiveDetailStatus(
+                    PackageRowLiveStatus(PackageDisplayRow(
+                        static_cast<std::size_t>(row)), p),
+                    PackageStatusText(p)));
             SetWindowTextW(g_packageSummary, detail.c_str());
         }
 
@@ -3999,6 +4026,12 @@ void SetPackageRowStatus(
     RECT bounds{};
     if (ListView_GetItemRect(g_packageList,row,&bounds,LVIR_BOUNDS))
         InvalidateRect(g_packageList,&bounds,FALSE);
+    if (SelectedPackageRow() == static_cast<int>(index) && g_packageSummary) {
+        const auto details = tp::ui::PackageDetailsText(
+            package, ProviderLabel(package.provider), PackageSourceText(package),
+            tp::ui::EffectiveDetailStatus(text, PackageStatusText(package)));
+        SetWindowTextW(g_packageSummary, details.c_str());
+    }
 }
 
 void RefreshPackageStateUi() {

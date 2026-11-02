@@ -97,6 +97,27 @@ int main() {
                             42*scale,"Context action row spacing");
         }
     }
+    // Resize/DPI stress for the actual supported client-width band:
+    // both panes and the six action rectangles stay within the page.
+    for (int scale : {1, 2, 3}) {
+        for (int baseWidth : {690, 700, 790, 900, 1560, 1920}) {
+            const int left = 32 * scale, width = (baseWidth - 64) * scale;
+            const auto panes = tp::LayoutPackageTwoPanes({
+                left, width, 115 * scale, 610 * scale,
+                8 * scale, 56 * scale, 10 * scale, 12 * scale,
+                6 * scale, 270 * scale, 270 * scale});
+            const auto detail = tp::LayoutPackageDetails(panes,
+                scale, 34 * scale, 8 * scale, 12 * scale);
+            ExpectEqual(panes.listLeft + panes.listWidth + 12 * scale,
+                panes.detailsLeft, "Resize preserves pane separation");
+            ExpectEqual(panes.detailsLeft + panes.detailsWidth,
+                left + width, "Resize preserves right boundary");
+            ExpectEqual(detail.actions[5].left + detail.actions[5].width <=
+                left + width, 1, "Actions remain within right boundary");
+            ExpectEqual(detail.bodyTop + detail.bodyHeight <
+                detail.actions[0].top, 1, "Details do not overlap actions");
+        }
+    }
     {
         const auto footer = tp::LayoutRightAnchoredLaunchFooter(
             790, 20, 118, 350, 14);

@@ -40,6 +40,12 @@ inline std::wstring RepositoryOwner(std::wstring_view repository) {
 inline std::wstring PresentValue(std::wstring_view value) {
     return value.empty() ? L"\u2014" : std::wstring(value);
 }
+// Prefer the actual in-flight ListView status over the saved package model.
+// Empty/no-row states fall back to the authoritative package status.
+constexpr std::wstring_view EffectiveDetailStatus(
+    std::wstring_view live, std::wstring_view stored) noexcept {
+    return live.empty() ? stored : live;
+}
 inline std::wstring PackageDetailsText(
     const tp::PackageRecord& package,
     std::wstring_view providerLabel,
