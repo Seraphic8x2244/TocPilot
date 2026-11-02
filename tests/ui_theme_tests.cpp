@@ -52,5 +52,13 @@ int main() {
               Palette::buttonPressed)) return 1;
     if (!(disabledButton.fill == Palette::title &&
           disabledButton.text != primaryNormal.text)) return 1;
+    const auto packageEnabled = ResolveChrome(ChromeRole::PackageAction, false, false, false, false);
+    const auto packageDisabled = ResolveChrome(ChromeRole::PackageAction, false, false, false, true);
+    const auto packageHover = ResolveChrome(ChromeRole::PackageAction, false, true, false, false);
+    if (!(packageEnabled.fill == Palette::button &&
+          packageDisabled.fill == Palette::toolbar &&
+          packageDisabled.fill != Palette::title &&
+          packageDisabled.text == Palette::secondaryText &&
+          packageHover.fill == Lift(Palette::button))) return 1;
     return 0;
 }
