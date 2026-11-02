@@ -2279,10 +2279,10 @@ void PaintPackageGlyph(HDC dc, const RECT& cell, tp::ui::PackageKind kind,
     if (kind == tp::ui::PackageKind::Dll) {
         Rectangle(dc, x+p(2), y+p(2), x+p(10), y+p(10));
         for (int i = 4; i <= 8; i += 4) {
-            MoveToEx(dc,x+ScaleUi(g_packageList, i),y,nullptr); LineTo(dc,x+ScaleUi(g_packageList, i),y+p(2));
-            MoveToEx(dc,x+ScaleUi(g_packageList, i),y+p(10),nullptr); LineTo(dc,x+ScaleUi(g_packageList, i),y+p(12));
-            MoveToEx(dc,x,y+ScaleUi(g_packageList, i),nullptr); LineTo(dc,x+p(2),y+ScaleUi(g_packageList, i));
-            MoveToEx(dc,x+p(10),y+ScaleUi(g_packageList, i),nullptr); LineTo(dc,x+p(12),y+ScaleUi(g_packageList, i));
+            MoveToEx(dc,x+p(i),y,nullptr); LineTo(dc,x+p(i),y+p(2));
+            MoveToEx(dc,x+p(i),y+p(10),nullptr); LineTo(dc,x+p(i),y+p(12));
+            MoveToEx(dc,x,y+p(i),nullptr); LineTo(dc,x+p(2),y+p(i));
+            MoveToEx(dc,x+p(10),y+p(i),nullptr); LineTo(dc,x+p(12),y+p(i));
         }
     } else if (kind == tp::ui::PackageKind::Mpq) {
         Rectangle(dc,x,y+p(2),x+p(12),y+p(12));
