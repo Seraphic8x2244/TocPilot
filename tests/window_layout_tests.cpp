@@ -43,13 +43,13 @@ int main() {
         const int toolbarBottom = shell.contentTop + (14 + 40) * scale;
         const auto panes = tp::LayoutPackageTwoPanes({
             pageLeft, pageWidth, toolbarBottom, shell.contentBottom,
-            8 * scale, 56 * scale, 10 * scale, 12 * scale,
+            8 * scale, 24 * scale, 8 * scale, 12 * scale,
             6 * scale, 270 * scale, 270 * scale});
         const auto yes = [](bool condition) { return condition ? 1 : 0; };
         ExpectEqual(panes.statusTop, toolbarBottom + 8 * scale,
                     "Status band directly follows toolbar");
         ExpectEqual(panes.listTop, panes.statusTop + panes.statusHeight +
-                    10 * scale, "List begins below status text");
+                    8 * scale, "List begins below status text");
         ExpectEqual(panes.listTop, panes.detailsTop,
                     "Both panes share a top edge");
         ExpectEqual(panes.listHeight, panes.detailsHeight,
@@ -104,7 +104,7 @@ int main() {
             const int left = 32 * scale, width = (baseWidth - 64) * scale;
             const auto panes = tp::LayoutPackageTwoPanes({
                 left, width, 115 * scale, 610 * scale,
-                8 * scale, 56 * scale, 10 * scale, 12 * scale,
+                8 * scale, 24 * scale, 8 * scale, 12 * scale,
                 6 * scale, 270 * scale, 270 * scale});
             const auto detail = tp::LayoutPackageDetails(panes,
                 scale, 34 * scale, 8 * scale, 12 * scale);
@@ -119,32 +119,34 @@ int main() {
         }
     }
     {
-        const auto footer = tp::LayoutRightAnchoredLaunchFooter(
+        const auto footer = tp::LayoutLeftAnchoredLaunchFooter(
             790, 20, 118, 350, 14);
-        ExpectEqual(footer.buttonLeft, 288, "Footer group is right anchored");
-        ExpectEqual(footer.buttonWidth, 118, "Launch button keeps compact width");
-        ExpectEqual(footer.textLeft, 420, "Client details follow Launch button");
-        ExpectEqual(footer.textWidth, 350, "Client details retain preferred width");
-        ExpectEqual(footer.textLeft + footer.textWidth, 770,
-                    "Client details end at right margin");
-        const auto wide = tp::LayoutRightAnchoredLaunchFooter(
+        ExpectEqual(footer.buttonLeft, 20, "Launch anchored left");
+        ExpectEqual(footer.buttonWidth, 118, "Launch width unchanged");
+        ExpectEqual(footer.textLeft, 152, "Client info follows Launch");
+        ExpectEqual(footer.textWidth, 350, "Client width unchanged");
+        const auto wide = tp::LayoutLeftAnchoredLaunchFooter(
             1560, 20, 118, 350, 14);
-        ExpectEqual(wide.textLeft + wide.textWidth, 1540,
-                    "Right alignment survives maximize");
-        ExpectEqual(wide.buttonLeft, 1058,
-                    "Launch button travels with footer details");
-        const auto narrow = tp::LayoutRightAnchoredLaunchFooter(
+        ExpectEqual(wide.buttonLeft, footer.buttonLeft,
+                    "Maximize keeps Launch left anchored");
+        ExpectEqual(wide.textLeft, footer.textLeft,
+                    "Client info stays beside Launch");
+        const auto narrow = tp::LayoutLeftAnchoredLaunchFooter(
             480, 20, 118, 350, 14);
-        ExpectEqual(narrow.buttonLeft, 20,
-                    "Compact footer stays within left margin");
-        ExpectEqual(narrow.textWidth, 308,
-                    "Client path shrinks instead of clipping the button");
-        ExpectEqual(narrow.textLeft + narrow.textWidth, 460,
-                    "Compact footer stays within right margin");
-        const auto dpi = tp::LayoutRightAnchoredLaunchFooter(
+        ExpectEqual(narrow.buttonLeft, 20, "Narrow Launch at left margin");
+        ExpectEqual(narrow.textWidth, 308, "Narrow path width shrinks");
+        ExpectEqual(narrow.textLeft + narrow.textWidth, 460, "Narrow path fits");
+        const auto dpi = tp::LayoutLeftAnchoredLaunchFooter(
             1185, 30, 177, 525, 21);
-        ExpectEqual(dpi.textLeft + dpi.textWidth, 1155,
-                    "DPI-scaled footer remains right anchored");
+        ExpectEqual(dpi.buttonLeft, 30, "DPI left anchor");
+        ExpectEqual(dpi.textLeft, 228, "DPI client info beside Launch");
+        for (int contentHeight : {18, 28, 42, 80}) {
+            ExpectEqual(tp::PackageStatusBandHeight(contentHeight, 24, 4),
+                        std::max(24, contentHeight + 4),
+                        "Status height follows measured wrapped text");
+        }
+        ExpectEqual(tp::PackageStatusBandHeight(18, 24, 4), 24,
+                    "Single line status has no extra blank row");
     }
     ExpectEqual(tp::UnifiedPageWidth(750, 12), 726,
                 "Outer page width honours both insets");
