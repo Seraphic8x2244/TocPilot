@@ -1345,9 +1345,9 @@ void LayoutControls(HWND hwnd) {
             shell.tabTop + inset, tabWidth,
             shell.tabBottom - shell.tabTop - inset, TRUE);
     }
-    // One bottom-right-anchored footer group: Launch, then the actual
+    // One left-anchored footer group: Launch, then the actual
     // selected client executable's name/path immediately to its right.
-    const auto footer = tp::LayoutRightAnchoredLaunchFooter(
+    const auto footer = tp::LayoutLeftAnchoredLaunchFooter(
         width, margin, ScaleUi(hwnd, 118), ScaleUi(hwnd, 350),
         ScaleUi(hwnd, 14));
     if (g_launchWowButton) {
@@ -1419,10 +1419,32 @@ void LayoutControls(HWND hwnd) {
     // Status feedback spans the page immediately below the action strip.
     // The ListView and selected-package pane share the remaining height.
     const int listTop = packageToolbarY + toolbarRowHeight + ScaleUi(hwnd, 10);
+    // Size the status band for its actual wrapped text; one-line feedback
+    // should not reserve multiple blank rows above the two panes.
+    int measuredHeight = ScaleUi(hwnd, 18);
+    if (g_packageHint) {
+        const int len = GetWindowTextLengthW(g_packageHint);
+        std::wstring status(static_cast<std::size_t>(len) + 1, L'\0');
+        if (len > 0) GetWindowTextW(g_packageHint, status.data(), len + 1);
+        status.resize(static_cast<std::size_t>(len));
+        HDC dc = GetDC(hwnd);
+        if (dc) {
+            HGDIOBJ oldFont = g_uiFont ? SelectObject(dc, g_uiFont) : nullptr;
+            RECT textRect{0, 0, pageWidth, 0};
+            DrawTextW(dc, status.c_str(), len, &textRect,
+                DT_CALCRECT | DT_WORDBREAK | DT_NOPREFIX);
+            if (oldFont) SelectObject(dc, oldFont);
+            ReleaseDC(hwnd, dc);
+            measuredHeight = std::max(measuredHeight,
+                static_cast<int>(textRect.bottom - textRect.top));
+        }
+    }
+    const int statusHeight = tp::PackageStatusBandHeight(
+        measuredHeight, ScaleUi(hwnd, 24), ScaleUi(hwnd, 4));
     const auto packagePanes = tp::LayoutPackageTwoPanes({
         pageLeft, pageWidth, packageToolbarY + toolbarRowHeight,
-        shell.contentBottom, ScaleUi(hwnd, 8), ScaleUi(hwnd, 56),
-        ScaleUi(hwnd, 10), ScaleUi(hwnd, 12), ScaleUi(hwnd, 6),
+        shell.contentBottom, ScaleUi(hwnd, 8), statusHeight,
+        ScaleUi(hwnd, 8), ScaleUi(hwnd, 12), ScaleUi(hwnd, 6),
         ScaleUi(hwnd, 270), ScaleUi(hwnd, 270)});
 
     const bool showAccountSyncPanel =
@@ -1517,8 +1539,12 @@ void LayoutControls(HWND hwnd) {
     if (g_syncConfigureButton) ShowWindow(g_syncConfigureButton, SW_HIDE);
     if (g_accountSyncWindow) {
         ShowWindow(g_accountSyncWindow, syncView ? SW_SHOW : SW_HIDE);
-        if (syncView) MoveWindow(g_accountSyncWindow, pageLeft, listTop,
-                                 pageWidth, ScaleUi(hwnd, 244), TRUE);
+        if (syncView) {
+            MoveWindow(g_accountSyncWindow, pageLeft, listTop,
+                pageWidth, ScaleUi(hwnd, 244), TRUE);
+            RedrawWindow(g_accountSyncWindow, nullptr, nullptr,
+                RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN);
+        }
     }
     // One TocPilot options page with actionable controls and real headings.
     const bool tocView = tp::ui::ShowsTocPilot(g_mainView);
@@ -1545,32 +1571,33 @@ void LayoutControls(HWND hwnd) {
              ScaleUi(hwnd, 95), ScaleUi(hwnd, 26));
     placeToc(g_textScaleCombo, pageLeft + ScaleUi(hwnd, 106), rowY(106),
              ScaleUi(hwnd, 120), ScaleUi(hwnd, 180));
-    placeToc(g_tocPilotDevBuildsInline, pageLeft + ScaleUi(hwnd, 4), rowY(143),
-             ScaleUi(hwnd, 24), ScaleUi(hwnd, 30));
-    placeToc(g_tocPilotDevBuildsLabel, pageLeft + ScaleUi(hwnd, 31), rowY(145),
-             std::max(1, pageWidth - ScaleUi(hwnd, 31)), ScaleUi(hwnd, 27));
+    placeToc(g_tocPilotAboutHeader, pageLeft, rowY(153),
+             pageWidth, ScaleUi(hwnd, 26));
+    placeToc(g_tocPilotVersionLabel, pageLeft + ScaleUi(hwnd, 4), rowY(181),
+             pageWidth - ScaleUi(hwnd, 4), ScaleUi(hwnd, 25));
+    // The development-channel option belongs below the installed version.
+    placeToc(g_tocPilotDevBuildsInline, pageLeft + ScaleUi(hwnd, 4), rowY(210),
+             ScaleUi(hwnd, 24), ScaleUi(hwnd, 26));
+    placeToc(g_tocPilotDevBuildsLabel, pageLeft + ScaleUi(hwnd, 31), rowY(210),
+             std::max(1, pageWidth - ScaleUi(hwnd, 31)), ScaleUi(hwnd, 26));
     if (g_tocPilotDevBuildsInline) {
         SendMessageW(g_tocPilotDevBuildsInline, BM_SETCHECK,
             g_stateReady && g_state.settings.receiveDevelopmentBuilds
                 ? BST_CHECKED : BST_UNCHECKED, 0);
         EnableWindow(g_tocPilotDevBuildsInline, g_stateReady);
     }
-    placeToc(g_tocPilotAboutHeader, pageLeft, rowY(188),
-             pageWidth, ScaleUi(hwnd, 26));
-    placeToc(g_tocPilotVersionLabel, pageLeft + ScaleUi(hwnd, 4), rowY(215),
-             pageWidth - ScaleUi(hwnd, 4), ScaleUi(hwnd, 26));
-    placeToc(g_tocPilotUpdateInline, pageLeft, rowY(243),
+    placeToc(g_tocPilotUpdateInline, pageLeft, rowY(246),
              normalButtonWidth, ScaleUi(hwnd, 34));
-    placeToc(g_tocPilotLastCheckLabel, pageLeft + ScaleUi(hwnd, 4), rowY(283),
+    placeToc(g_tocPilotLastCheckLabel, pageLeft + ScaleUi(hwnd, 4), rowY(286),
              pageWidth - ScaleUi(hwnd, 4), ScaleUi(hwnd, 24));
-    placeToc(g_tocPilotInlineUpdateStatus, pageLeft + ScaleUi(hwnd, 4), rowY(309),
+    placeToc(g_tocPilotInlineUpdateStatus, pageLeft + ScaleUi(hwnd, 4), rowY(312),
              pageWidth - ScaleUi(hwnd, 4), ScaleUi(hwnd, 34));
     const int linkWidth = std::min(ScaleUi(hwnd, 160),
         std::max(1, (pageWidth - ScaleUi(hwnd, 10)) / 2));
-    placeToc(g_tocPilotRepositoryButton, pageLeft, rowY(350),
+    placeToc(g_tocPilotRepositoryButton, pageLeft, rowY(354),
              linkWidth, ScaleUi(hwnd, 34));
     placeToc(g_tocPilotReleasesButton, pageLeft + linkWidth + ScaleUi(hwnd, 10),
-             rowY(350), linkWidth, ScaleUi(hwnd, 34));
+             rowY(354), linkWidth, ScaleUi(hwnd, 34));
     // Existing saved icon preference is retained, not shown as a second mode.
     for (HWND control : {g_tocPilotIconsInline, g_tocPilotWordsInline})
         if (control) ShowWindow(control, SW_HIDE);
@@ -3020,6 +3047,7 @@ void SetRoutinePackageFeedback(
     SetWindowTextW(
         g_packageHint,
         text.c_str());
+    if (HWND parent = GetParent(g_packageHint)) LayoutControls(parent);
 }
 
 void ScrollPackageListToTop() {
@@ -7419,8 +7447,14 @@ bool DrawToolbarButton(const DRAWITEMSTRUCT* draw) {
     const bool primary = control == g_updateAllButton ||
         control == g_launchWowButton || control == g_accountSyncTileSyncButton ||
         control == g_tocPilotUpdateInline;
+    const bool packageAction = control == g_installPackageButton ||
+        control == g_removePackageButton || control == g_packageSourceButton ||
+        control == g_packageCopyLink || control == g_packageOpenFolder ||
+        control == g_packageChangeBranchButton;
     const auto role = navigation ? tp::ui::ChromeRole::Navigation :
-        primary ? tp::ui::ChromeRole::Primary : tp::ui::ChromeRole::Secondary;
+        primary ? tp::ui::ChromeRole::Primary :
+        packageAction ? tp::ui::ChromeRole::PackageAction :
+        tp::ui::ChromeRole::Secondary;
     const bool disabled = (draw->itemState & ODS_DISABLED) != 0;
     const bool pressed = (draw->itemState & ODS_SELECTED) != 0;
     DWORD_PTR hovered = 0;
@@ -8749,12 +8783,17 @@ LRESULT CALLBACK AccountSyncWindowProc(
     LPARAM lParam) {
     switch (message) {
     case WM_ERASEBKGND:
+        if (!tp::ui::HighContrast()) return TRUE;
+        break;
+    case WM_PAINT:
         if (!tp::ui::HighContrast()) {
-            HDC dc = reinterpret_cast<HDC>(wParam);
+            PAINTSTRUCT ps{};
+            HDC dc = BeginPaint(hwnd, &ps);
             RECT bounds{};
             GetClientRect(hwnd, &bounds);
             FillRect(dc, &bounds, MainSurfaceBrush(true));
-            return TRUE;
+            EndPaint(hwnd, &ps);
+            return 0;
         }
         break;
     case WM_CTLCOLORSTATIC:
@@ -9064,7 +9103,8 @@ void ShowAccountSyncWindow(HWND owner) {
     // save/approval lifecycle as a child of the main window.
     g_accountSyncWindow = CreateWindowExW(
         0, kAccountSyncWindowClass, L"",
-        WS_CHILD | WS_CLIPCHILDREN,
+        // Group boxes have transparent centres; paint beneath them.
+        WS_CHILD,
         0, 0, 1, 1, owner, nullptr,
         GetModuleHandleW(nullptr), nullptr);
     if (!g_accountSyncWindow) {
@@ -9575,7 +9615,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             GetModuleHandleW(nullptr), nullptr);
         g_tocPilotDevBuildsLabel = CreateWindowExW(
             0, L"STATIC", L"Receive development builds",
-            WS_CHILD | SS_LEFT | SS_NOTIFY | SS_NOPREFIX, 0, 0, 280, 28,
+            WS_CHILD | SS_LEFT | SS_CENTERIMAGE | SS_NOTIFY | SS_NOPREFIX, 0, 0, 280, 28,
             hwnd, reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_TOCPILOT_DEVBUILDS_TEXT)),
             GetModuleHandleW(nullptr), nullptr);
         g_tocPilotIconsInline = CreateWindowExW(
