@@ -2269,29 +2269,31 @@ bool PackageColumnCellRect(
 // Shape-based, deliberately neutral GDI glyphs; no dependency on installed icon fonts.
 void PaintPackageGlyph(HDC dc, const RECT& cell, tp::ui::PackageKind kind,
                        COLORREF colour) {
-    const int n = ScaleUi(g_packageList, 12), x = cell.left + ScaleUi(g_packageList, 10);
+    const int n = ScaleUi(g_packageList, 16);
+    const auto p = [&](int offset) { return MulDiv(offset, n, 12); };
+    const int x = cell.left + ScaleUi(g_packageList, 7);
     const int y = cell.top + (cell.bottom - cell.top - n) / 2;
-    HPEN pen = CreatePen(PS_SOLID, std::max(1, ScaleUi(g_packageList, 1)), colour);
+    HPEN pen = CreatePen(PS_SOLID, std::max(1, p(1)), colour);
     HGDIOBJ oldPen = SelectObject(dc, pen);
     HGDIOBJ oldBrush = SelectObject(dc, GetStockObject(NULL_BRUSH));
     if (kind == tp::ui::PackageKind::Dll) {
-        Rectangle(dc, x+ScaleUi(g_packageList, 2), y+ScaleUi(g_packageList, 2), x+ScaleUi(g_packageList, 10), y+ScaleUi(g_packageList, 10));
+        Rectangle(dc, x+p(2), y+p(2), x+p(10), y+p(10));
         for (int i = 4; i <= 8; i += 4) {
-            MoveToEx(dc,x+ScaleUi(g_packageList, i),y,nullptr); LineTo(dc,x+ScaleUi(g_packageList, i),y+ScaleUi(g_packageList, 2));
-            MoveToEx(dc,x+ScaleUi(g_packageList, i),y+ScaleUi(g_packageList, 10),nullptr); LineTo(dc,x+ScaleUi(g_packageList, i),y+ScaleUi(g_packageList, 12));
-            MoveToEx(dc,x,y+ScaleUi(g_packageList, i),nullptr); LineTo(dc,x+ScaleUi(g_packageList, 2),y+ScaleUi(g_packageList, i));
-            MoveToEx(dc,x+ScaleUi(g_packageList, 10),y+ScaleUi(g_packageList, i),nullptr); LineTo(dc,x+ScaleUi(g_packageList, 12),y+ScaleUi(g_packageList, i));
+            MoveToEx(dc,x+ScaleUi(g_packageList, i),y,nullptr); LineTo(dc,x+ScaleUi(g_packageList, i),y+p(2));
+            MoveToEx(dc,x+ScaleUi(g_packageList, i),y+p(10),nullptr); LineTo(dc,x+ScaleUi(g_packageList, i),y+p(12));
+            MoveToEx(dc,x,y+ScaleUi(g_packageList, i),nullptr); LineTo(dc,x+p(2),y+ScaleUi(g_packageList, i));
+            MoveToEx(dc,x+p(10),y+ScaleUi(g_packageList, i),nullptr); LineTo(dc,x+p(12),y+ScaleUi(g_packageList, i));
         }
     } else if (kind == tp::ui::PackageKind::Mpq) {
-        Rectangle(dc,x,y+ScaleUi(g_packageList, 2),x+ScaleUi(g_packageList, 12),y+ScaleUi(g_packageList, 12));
-        MoveToEx(dc,x,y+ScaleUi(g_packageList, 5),nullptr); LineTo(dc,x+ScaleUi(g_packageList, 12),y+ScaleUi(g_packageList, 5));
-        MoveToEx(dc,x+ScaleUi(g_packageList, 4),y+ScaleUi(g_packageList, 8),nullptr); LineTo(dc,x+ScaleUi(g_packageList, 8),y+ScaleUi(g_packageList, 8));
+        Rectangle(dc,x,y+p(2),x+p(12),y+p(12));
+        MoveToEx(dc,x,y+p(5),nullptr); LineTo(dc,x+p(12),y+p(5));
+        MoveToEx(dc,x+p(4),y+p(8),nullptr); LineTo(dc,x+p(8),y+p(8));
     } else {
-        POINT outline[6] = {{x+ScaleUi(g_packageList, 6),y},{x+ScaleUi(g_packageList, 12),y+ScaleUi(g_packageList, 3)},{x+ScaleUi(g_packageList, 12),y+ScaleUi(g_packageList, 9)},
-                            {x+ScaleUi(g_packageList, 6),y+ScaleUi(g_packageList, 12)},{x,y+ScaleUi(g_packageList, 9)},{x,y+ScaleUi(g_packageList, 3)}};
+        POINT outline[6] = {{x+p(6),y},{x+p(12),y+p(3)},{x+p(12),y+p(9)},
+                            {x+p(6),y+p(12)},{x,y+p(9)},{x,y+p(3)}};
         Polygon(dc,outline,6);
-        MoveToEx(dc,x,y+ScaleUi(g_packageList, 3),nullptr); LineTo(dc,x+ScaleUi(g_packageList, 6),y+ScaleUi(g_packageList, 6)); LineTo(dc,x+ScaleUi(g_packageList, 12),y+ScaleUi(g_packageList, 3));
-        MoveToEx(dc,x+ScaleUi(g_packageList, 6),y+ScaleUi(g_packageList, 6),nullptr); LineTo(dc,x+ScaleUi(g_packageList, 6),y+ScaleUi(g_packageList, 12));
+        MoveToEx(dc,x,y+p(3),nullptr); LineTo(dc,x+p(6),y+p(6)); LineTo(dc,x+p(12),y+p(3));
+        MoveToEx(dc,x+p(6),y+p(6),nullptr); LineTo(dc,x+p(6),y+p(12));
     }
     SelectObject(dc,oldBrush); SelectObject(dc,oldPen); DeleteObject(pen);
 }
@@ -2299,44 +2301,46 @@ void PaintPackageGlyph(HDC dc, const RECT& cell, tp::ui::PackageKind kind,
 // Seven distinct symbols; never infer a package status from the row colour.
 void PaintPackageStatusGlyph(HDC dc, const RECT& cell,
                              tp::ui::PackageStatusIcon icon, COLORREF colour) {
-    const int x = cell.left + ScaleUi(g_packageList, 10);
-    const int y = cell.top + (cell.bottom - cell.top - ScaleUi(g_packageList, 12)) / 2;
-    HPEN pen = CreatePen(PS_SOLID, std::max(1, ScaleUi(g_packageList, 2)), colour);
+    const int n = ScaleUi(g_packageList, 16);
+    const auto p = [&](int offset) { return MulDiv(offset, n, 12); };
+    const int x = cell.left + ScaleUi(g_packageList, 7);
+    const int y = cell.top + (cell.bottom - cell.top - n) / 2;
+    HPEN pen = CreatePen(PS_SOLID, std::max(1, p(2)), colour);
     HGDIOBJ oldPen = SelectObject(dc, pen);
     HGDIOBJ oldBrush = SelectObject(dc, GetStockObject(NULL_BRUSH));
     switch (icon) {
     case tp::ui::PackageStatusIcon::Busy:
-        Ellipse(dc,x+ScaleUi(g_packageList, 1),y+ScaleUi(g_packageList, 1),x+ScaleUi(g_packageList, 11),y+ScaleUi(g_packageList, 11));
-        MoveToEx(dc,x+ScaleUi(g_packageList, 6),y+ScaleUi(g_packageList, 2),nullptr); LineTo(dc,x+ScaleUi(g_packageList, 6),y+ScaleUi(g_packageList, 6)); LineTo(dc,x+ScaleUi(g_packageList, 9),y+ScaleUi(g_packageList, 7));
+        Ellipse(dc,x+p(1),y+p(1),x+p(11),y+p(11));
+        MoveToEx(dc,x+p(6),y+p(2),nullptr); LineTo(dc,x+p(6),y+p(6)); LineTo(dc,x+p(9),y+p(7));
         break;
     case tp::ui::PackageStatusIcon::UpdateAvailable:
-        MoveToEx(dc,x+ScaleUi(g_packageList, 6),y+ScaleUi(g_packageList, 11),nullptr); LineTo(dc,x+ScaleUi(g_packageList, 6),y+ScaleUi(g_packageList, 1));
-        MoveToEx(dc,x+ScaleUi(g_packageList, 2),y+ScaleUi(g_packageList, 5),nullptr); LineTo(dc,x+ScaleUi(g_packageList, 6),y+ScaleUi(g_packageList, 1)); LineTo(dc,x+ScaleUi(g_packageList, 10),y+ScaleUi(g_packageList, 5));
+        MoveToEx(dc,x+p(6),y+p(11),nullptr); LineTo(dc,x+p(6),y+p(1));
+        MoveToEx(dc,x+p(2),y+p(5),nullptr); LineTo(dc,x+p(6),y+p(1)); LineTo(dc,x+p(10),y+p(5));
         break;
     case tp::ui::PackageStatusIcon::Current:
-        MoveToEx(dc,x+ScaleUi(g_packageList, 1),y+ScaleUi(g_packageList, 6),nullptr); LineTo(dc,x+ScaleUi(g_packageList, 5),y+ScaleUi(g_packageList, 10)); LineTo(dc,x+ScaleUi(g_packageList, 11),y+ScaleUi(g_packageList, 2));
+        MoveToEx(dc,x+p(1),y+p(6),nullptr); LineTo(dc,x+p(5),y+p(10)); LineTo(dc,x+p(11),y+p(2));
         break;
     case tp::ui::PackageStatusIcon::NotConfigured:
-        Ellipse(dc,x+ScaleUi(g_packageList, 1),y+ScaleUi(g_packageList, 1),x+ScaleUi(g_packageList, 11),y+ScaleUi(g_packageList, 11));
-        MoveToEx(dc,x+ScaleUi(g_packageList, 4),y+ScaleUi(g_packageList, 4),nullptr); LineTo(dc,x+ScaleUi(g_packageList, 6),y+ScaleUi(g_packageList, 2));
-        LineTo(dc,x+ScaleUi(g_packageList, 8),y+ScaleUi(g_packageList, 4)); LineTo(dc,x+ScaleUi(g_packageList, 6),y+ScaleUi(g_packageList, 6));
-        MoveToEx(dc,x+ScaleUi(g_packageList, 6),y+ScaleUi(g_packageList, 8),nullptr); LineTo(dc,x+ScaleUi(g_packageList, 6),y+ScaleUi(g_packageList, 9));
+        Ellipse(dc,x+p(1),y+p(1),x+p(11),y+p(11));
+        MoveToEx(dc,x+p(4),y+p(4),nullptr); LineTo(dc,x+p(6),y+p(2));
+        LineTo(dc,x+p(8),y+p(4)); LineTo(dc,x+p(6),y+p(6));
+        MoveToEx(dc,x+p(6),y+p(8),nullptr); LineTo(dc,x+p(6),y+p(9));
         break;
     case tp::ui::PackageStatusIcon::NotInstalled:
-        Rectangle(dc,x+ScaleUi(g_packageList, 1),y+ScaleUi(g_packageList, 1),x+ScaleUi(g_packageList, 11),y+ScaleUi(g_packageList, 11));
-        MoveToEx(dc,x+ScaleUi(g_packageList, 6),y+ScaleUi(g_packageList, 3),nullptr); LineTo(dc,x+ScaleUi(g_packageList, 6),y+ScaleUi(g_packageList, 9));
-        MoveToEx(dc,x+ScaleUi(g_packageList, 3),y+ScaleUi(g_packageList, 6),nullptr); LineTo(dc,x+ScaleUi(g_packageList, 9),y+ScaleUi(g_packageList, 6));
+        Rectangle(dc,x+p(1),y+p(1),x+p(11),y+p(11));
+        MoveToEx(dc,x+p(6),y+p(3),nullptr); LineTo(dc,x+p(6),y+p(9));
+        MoveToEx(dc,x+p(3),y+p(6),nullptr); LineTo(dc,x+p(9),y+p(6));
         break;
     case tp::ui::PackageStatusIcon::NeedsAttention: {
-        POINT triangle[3]={{x+ScaleUi(g_packageList, 6),y+ScaleUi(g_packageList, 1)},{x+ScaleUi(g_packageList, 11),y+ScaleUi(g_packageList, 11)},{x+ScaleUi(g_packageList, 1),y+ScaleUi(g_packageList, 11)}};
+        POINT triangle[3]={{x+p(6),y+p(1)},{x+p(11),y+p(11)},{x+p(1),y+p(11)}};
         Polygon(dc,triangle,3);
-        MoveToEx(dc,x+ScaleUi(g_packageList, 6),y+ScaleUi(g_packageList, 5),nullptr); LineTo(dc,x+ScaleUi(g_packageList, 6),y+ScaleUi(g_packageList, 8));
+        MoveToEx(dc,x+p(6),y+p(5),nullptr); LineTo(dc,x+p(6),y+p(8));
         break;
     }
     case tp::ui::PackageStatusIcon::Error:
-        Ellipse(dc,x+ScaleUi(g_packageList, 1),y+ScaleUi(g_packageList, 1),x+ScaleUi(g_packageList, 11),y+ScaleUi(g_packageList, 11));
-        MoveToEx(dc,x+ScaleUi(g_packageList, 4),y+ScaleUi(g_packageList, 4),nullptr); LineTo(dc,x+ScaleUi(g_packageList, 8),y+ScaleUi(g_packageList, 8));
-        MoveToEx(dc,x+ScaleUi(g_packageList, 8),y+ScaleUi(g_packageList, 4),nullptr); LineTo(dc,x+ScaleUi(g_packageList, 4),y+ScaleUi(g_packageList, 8));
+        Ellipse(dc,x+p(1),y+p(1),x+p(11),y+p(11));
+        MoveToEx(dc,x+p(4),y+p(4),nullptr); LineTo(dc,x+p(8),y+p(8));
+        MoveToEx(dc,x+p(8),y+p(4),nullptr); LineTo(dc,x+p(4),y+p(8));
         break;
     }
     SelectObject(dc,oldBrush); SelectObject(dc,oldPen); DeleteObject(pen);
