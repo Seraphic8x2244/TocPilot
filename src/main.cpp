@@ -2250,10 +2250,10 @@ void PaintPackageGlyph(HDC dc, const RECT& cell, tp::ui::PackageKind kind,
     if (kind == tp::ui::PackageKind::Dll) {
         Rectangle(dc, x+ScaleUi(g_packageList, 2), y+ScaleUi(g_packageList, 2), x+ScaleUi(g_packageList, 10), y+ScaleUi(g_packageList, 10));
         for (int i = 4; i <= 8; i += 4) {
-            MoveToEx(dc,x+i,y,nullptr); LineTo(dc,x+i,y+ScaleUi(g_packageList, 2));
-            MoveToEx(dc,x+i,y+ScaleUi(g_packageList, 10),nullptr); LineTo(dc,x+i,y+ScaleUi(g_packageList, 12));
-            MoveToEx(dc,x,y+i,nullptr); LineTo(dc,x+ScaleUi(g_packageList, 2),y+i);
-            MoveToEx(dc,x+ScaleUi(g_packageList, 10),y+i,nullptr); LineTo(dc,x+ScaleUi(g_packageList, 12),y+i);
+            MoveToEx(dc,x+ScaleUi(g_packageList, i),y,nullptr); LineTo(dc,x+ScaleUi(g_packageList, i),y+ScaleUi(g_packageList, 2));
+            MoveToEx(dc,x+ScaleUi(g_packageList, i),y+ScaleUi(g_packageList, 10),nullptr); LineTo(dc,x+ScaleUi(g_packageList, i),y+ScaleUi(g_packageList, 12));
+            MoveToEx(dc,x,y+ScaleUi(g_packageList, i),nullptr); LineTo(dc,x+ScaleUi(g_packageList, 2),y+ScaleUi(g_packageList, i));
+            MoveToEx(dc,x+ScaleUi(g_packageList, 10),y+ScaleUi(g_packageList, i),nullptr); LineTo(dc,x+ScaleUi(g_packageList, 12),y+ScaleUi(g_packageList, i));
         }
     } else if (kind == tp::ui::PackageKind::Mpq) {
         Rectangle(dc,x,y+ScaleUi(g_packageList, 2),x+ScaleUi(g_packageList, 12),y+ScaleUi(g_packageList, 12));
