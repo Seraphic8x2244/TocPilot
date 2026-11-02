@@ -69,6 +69,10 @@ inline PackageTwoPaneLayout LayoutPackageTwoPanes(const PackageTwoPaneMetrics& m
 }
 
 
+// Compact one-line status; expand only for measured wrapped text.
+constexpr int PackageStatusBandHeight(int measuredHeight, int minimum, int padding) {
+    return std::max(1, std::max(minimum, measuredHeight + std::max(0, padding)));
+}
 struct PackageActionRect { int left, top, width, height; };
 struct PackageDetailsLayout {
     int titleLeft, titleTop, titleWidth, titleHeight;
@@ -104,16 +108,15 @@ inline PackageDetailsLayout LayoutPackageDetails(
     return result;
 }
 
-// A single footer group fixed to the right-hand client edge. The Launch
-// button leads; the executable filename and path occupy the text area to
-// its right. The text area shrinks first at narrow widths.
-struct RightAnchoredLaunchFooter {
+// Keep Launch and the selected client text in one left-anchored group.
+// The path text shrinks at narrow widths; the button remains left-aligned.
+struct LeftAnchoredLaunchFooter {
     int buttonLeft;
     int buttonWidth;
     int textLeft;
     int textWidth;
 };
-inline RightAnchoredLaunchFooter LayoutRightAnchoredLaunchFooter(
+inline LeftAnchoredLaunchFooter LayoutLeftAnchoredLaunchFooter(
     int clientWidth, int margin, int preferredButtonWidth,
     int preferredTextWidth, int gap) {
     const int safeMargin = std::max(0, margin);
@@ -125,8 +128,7 @@ inline RightAnchoredLaunchFooter LayoutRightAnchoredLaunchFooter(
                                    std::max(0, remaining - 1));
     const int textWidth = std::min(std::max(0, preferredTextWidth),
                                    remaining - actualGap);
-    const int buttonLeft = clientWidth - safeMargin -
-        (buttonWidth + actualGap + textWidth);
+    const int buttonLeft = safeMargin;
     return {buttonLeft, buttonWidth,
             buttonLeft + buttonWidth + actualGap, textWidth};
 }
