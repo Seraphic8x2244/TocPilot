@@ -2266,84 +2266,22 @@ bool PackageColumnCellRect(
     return true;
 }
 
-// Shape-based, deliberately neutral GDI glyphs; no dependency on installed icon fonts.
-void PaintPackageGlyph(HDC dc, const RECT& cell, tp::ui::PackageKind kind,
-                       COLORREF colour) {
-    const int n = ScaleUi(g_packageList, 16);
-    const auto p = [&](int offset) { return MulDiv(offset, n, 12); };
-    const int x = cell.left + ScaleUi(g_packageList, 7);
-    const int y = cell.top + (cell.bottom - cell.top - n) / 2;
-    HPEN pen = CreatePen(PS_SOLID, std::max(1, p(1)), colour);
-    HGDIOBJ oldPen = SelectObject(dc, pen);
-    HGDIOBJ oldBrush = SelectObject(dc, GetStockObject(NULL_BRUSH));
-    if (kind == tp::ui::PackageKind::Dll) {
-        Rectangle(dc, x+p(2), y+p(2), x+p(10), y+p(10));
-        for (int i = 4; i <= 8; i += 4) {
-            MoveToEx(dc,x+p(i),y,nullptr); LineTo(dc,x+p(i),y+p(2));
-            MoveToEx(dc,x+p(i),y+p(10),nullptr); LineTo(dc,x+p(i),y+p(12));
-            MoveToEx(dc,x,y+p(i),nullptr); LineTo(dc,x+p(2),y+p(i));
-            MoveToEx(dc,x+p(10),y+p(i),nullptr); LineTo(dc,x+p(12),y+p(i));
-        }
-    } else if (kind == tp::ui::PackageKind::Mpq) {
-        Rectangle(dc,x,y+p(2),x+p(12),y+p(12));
-        MoveToEx(dc,x,y+p(5),nullptr); LineTo(dc,x+p(12),y+p(5));
-        MoveToEx(dc,x+p(4),y+p(8),nullptr); LineTo(dc,x+p(8),y+p(8));
-    } else {
-        POINT outline[6] = {{x+p(6),y},{x+p(12),y+p(3)},{x+p(12),y+p(9)},
-                            {x+p(6),y+p(12)},{x,y+p(9)},{x,y+p(3)}};
-        Polygon(dc,outline,6);
-        MoveToEx(dc,x,y+p(3),nullptr); LineTo(dc,x+p(6),y+p(6)); LineTo(dc,x+p(12),y+p(3));
-        MoveToEx(dc,x+p(6),y+p(6),nullptr); LineTo(dc,x+p(6),y+p(12));
-    }
-    SelectObject(dc,oldBrush); SelectObject(dc,oldPen); DeleteObject(pen);
-}
-
-// Seven distinct symbols; never infer a package status from the row colour.
-void PaintPackageStatusGlyph(HDC dc, const RECT& cell,
-                             tp::ui::PackageStatusIcon icon, COLORREF colour) {
-    const int n = ScaleUi(g_packageList, 16);
-    const auto p = [&](int offset) { return MulDiv(offset, n, 12); };
-    const int x = cell.left + ScaleUi(g_packageList, 7);
-    const int y = cell.top + (cell.bottom - cell.top - n) / 2;
-    HPEN pen = CreatePen(PS_SOLID, std::max(1, p(1)), colour);
-    HGDIOBJ oldPen = SelectObject(dc, pen);
-    HGDIOBJ oldBrush = SelectObject(dc, GetStockObject(NULL_BRUSH));
-    switch (icon) {
-    case tp::ui::PackageStatusIcon::Busy:
-        Ellipse(dc,x+p(1),y+p(1),x+p(11),y+p(11));
-        MoveToEx(dc,x+p(6),y+p(2),nullptr); LineTo(dc,x+p(6),y+p(6)); LineTo(dc,x+p(9),y+p(7));
-        break;
-    case tp::ui::PackageStatusIcon::UpdateAvailable:
-        MoveToEx(dc,x+p(6),y+p(11),nullptr); LineTo(dc,x+p(6),y+p(1));
-        MoveToEx(dc,x+p(2),y+p(5),nullptr); LineTo(dc,x+p(6),y+p(1)); LineTo(dc,x+p(10),y+p(5));
-        break;
-    case tp::ui::PackageStatusIcon::Current:
-        MoveToEx(dc,x+p(1),y+p(6),nullptr); LineTo(dc,x+p(5),y+p(10)); LineTo(dc,x+p(11),y+p(2));
-        break;
-    case tp::ui::PackageStatusIcon::NotConfigured:
-        Ellipse(dc,x+p(1),y+p(1),x+p(11),y+p(11));
-        MoveToEx(dc,x+p(4),y+p(4),nullptr); LineTo(dc,x+p(6),y+p(2));
-        LineTo(dc,x+p(8),y+p(4)); LineTo(dc,x+p(6),y+p(6));
-        MoveToEx(dc,x+p(6),y+p(8),nullptr); LineTo(dc,x+p(6),y+p(9));
-        break;
-    case tp::ui::PackageStatusIcon::NotInstalled:
-        Rectangle(dc,x+p(1),y+p(1),x+p(11),y+p(11));
-        MoveToEx(dc,x+p(6),y+p(3),nullptr); LineTo(dc,x+p(6),y+p(9));
-        MoveToEx(dc,x+p(3),y+p(6),nullptr); LineTo(dc,x+p(9),y+p(6));
-        break;
-    case tp::ui::PackageStatusIcon::NeedsAttention: {
-        POINT triangle[3]={{x+p(6),y+p(1)},{x+p(11),y+p(11)},{x+p(1),y+p(11)}};
-        Polygon(dc,triangle,3);
-        MoveToEx(dc,x+p(6),y+p(5),nullptr); LineTo(dc,x+p(6),y+p(8));
-        break;
-    }
-    case tp::ui::PackageStatusIcon::Error:
-        Ellipse(dc,x+p(1),y+p(1),x+p(11),y+p(11));
-        MoveToEx(dc,x+p(4),y+p(4),nullptr); LineTo(dc,x+p(8),y+p(8));
-        MoveToEx(dc,x+p(8),y+p(4),nullptr); LineTo(dc,x+p(4),y+p(8));
-        break;
-    }
-    SelectObject(dc,oldBrush); SelectObject(dc,oldPen); DeleteObject(pen);
+// Font Awesome glyphs from TocPilot's already-bundled solid icon font.
+// Draw antialiased, designer-made glyphs at a fixed position in each cell.
+// Font metrics, not independently rounded Polygon/LineTo points, own shape.
+void PaintPackageCellGlyph(HDC dc, const RECT& cell, wchar_t glyph,
+                           COLORREF colour) {
+    if (!g_toolbarIcons.packageListFont) return;
+    const int left = cell.left + ScaleUi(g_packageList, 2);
+    RECT glyphRect{left, cell.top, left + ScaleUi(g_packageList, 20), cell.bottom};
+    const HGDIOBJ previousFont = SelectObject(dc, g_toolbarIcons.packageListFont);
+    const int previousMode = SetBkMode(dc, TRANSPARENT);
+    const COLORREF previousColour = SetTextColor(dc, colour);
+    DrawTextW(dc, &glyph, 1, &glyphRect,
+              DT_SINGLELINE | DT_CENTER | DT_VCENTER | DT_NOPREFIX);
+    SetTextColor(dc, previousColour);
+    SetBkMode(dc, previousMode);
+    SelectObject(dc, previousFont);
 }
 
 std::wstring PackageRowLiveStatus(int row, const tp::PackageRecord& package) {
@@ -2524,12 +2462,12 @@ LRESULT HandlePackageListCustomDraw(
     typeRect.left += ScaleUi(g_packageList, offsets.typeLeft);
     const COLORREF glyphColour =
         tp::ui::CompactGlyphInk(highContrast, rowTextColour);
-    PaintPackageStatusGlyph(draw->nmcd.hdc, statusRect,
-                            tp::ui::ResolvePackageStatusIcon(
-                                PackageRowLiveStatus(displayRow, package)),
-                            glyphColour);
-    PaintPackageGlyph(draw->nmcd.hdc, typeRect,
-                      tp::ui::KindFromTarget(package.target), glyphColour);
+    PaintPackageCellGlyph(draw->nmcd.hdc, statusRect,
+        tp::ui::PackageStatusGlyph(tp::ui::ResolvePackageStatusIcon(
+            PackageRowLiveStatus(displayRow, package))), glyphColour);
+    PaintPackageCellGlyph(draw->nmcd.hdc, typeRect,
+        tp::ui::PackageKindGlyph(tp::ui::KindFromTarget(package.target)),
+        glyphColour);
     RECT textRect = rect;
     textRect.left += ScaleUi(g_packageList, offsets.nameLeft);
     textRect.right -= 5;

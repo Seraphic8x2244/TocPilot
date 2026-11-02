@@ -10,6 +10,28 @@ enum class PackageStatusIcon {
     Busy, UpdateAvailable, Current, NotConfigured, NotInstalled,
     NeedsAttention, Error
 };
+// Use the already-bundled Font Awesome 6 Free Solid font, never ad hoc GDI
+// line drawings. Keep the mapping pure and testable independently of Win32.
+constexpr wchar_t PackageStatusGlyph(PackageStatusIcon icon) {
+    switch (icon) {
+    case PackageStatusIcon::Busy: return L'\uf017';            // clock
+    case PackageStatusIcon::UpdateAvailable: return L'\uf062'; // arrow-up
+    case PackageStatusIcon::Current: return L'\uf00c';         // check
+    case PackageStatusIcon::NotConfigured: return L'\uf059';   // circle-question
+    case PackageStatusIcon::NotInstalled: return L'\uf055';    // circle-plus
+    case PackageStatusIcon::NeedsAttention: return L'\uf071'; // triangle-exclamation
+    case PackageStatusIcon::Error: return L'\uf00d';           // xmark
+    }
+    return L'\uf071';
+}
+constexpr wchar_t PackageKindGlyph(PackageKind kind) {
+    switch (kind) {
+    case PackageKind::Addon: return L'\uf1b2'; // cube
+    case PackageKind::Dll: return L'\uf2db';   // microchip
+    case PackageKind::Mpq: return L'\uf187';   // box-archive
+    }
+    return L'\uf1b2';
+}
 constexpr PackageStatusIcon ResolvePackageStatusIcon(std::wstring_view status) {
     if (status == L"Update Available") return PackageStatusIcon::UpdateAvailable;
     if (status == L"Up To Date") return PackageStatusIcon::Current;

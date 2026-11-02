@@ -51,6 +51,26 @@ int main() {
     for (const auto& item : cases)
         Check(ResolvePackageStatusIcon(item.first) == item.second,
               "Real operation status category");
+    // All glyphs resolve to distinct bundled Font Awesome symbols rather than
+    // improvised GDI polygons; preserve the status/type semantic mapping.
+    constexpr std::array statuses{
+        PackageStatusIcon::Busy, PackageStatusIcon::UpdateAvailable,
+        PackageStatusIcon::Current, PackageStatusIcon::NotConfigured,
+        PackageStatusIcon::NotInstalled, PackageStatusIcon::NeedsAttention,
+        PackageStatusIcon::Error};
+    constexpr std::array types{PackageKind::Addon, PackageKind::Dll, PackageKind::Mpq};
+    for (std::size_t i = 0; i < statuses.size(); ++i)
+        for (std::size_t j = i+1; j < statuses.size(); ++j)
+            Check(PackageStatusGlyph(statuses[i]) != PackageStatusGlyph(statuses[j]),
+                  "Distinct readable status font glyphs");
+    for (std::size_t i = 0; i < types.size(); ++i)
+        for (std::size_t j = i+1; j < types.size(); ++j)
+            Check(PackageKindGlyph(types[i]) != PackageKindGlyph(types[j]),
+                  "Distinct readable package type font glyphs");
+    Check(PackageStatusGlyph(PackageStatusIcon::Current) == L'\uf00c',
+          "Font Awesome check icon for current");
+    Check(PackageKindGlyph(PackageKind::Addon) == L'\uf1b2',
+          "Font Awesome cube icon for addons");
     Check(PackageKindLabel(PackageKind::Addon) == L"Addon", "Addon type");
     Check(PackageKindLabel(PackageKind::Dll) == L"DLL", "DLL type");
     Check(PackageKindLabel(PackageKind::Mpq) == L"MPQ", "MPQ type");

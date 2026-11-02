@@ -1,5 +1,6 @@
 #include "toolbar_icons.h"
 #include "ui_theme.h"
+#include "package_list_status.h"
 
 #include "resource.h"
 
@@ -46,7 +47,18 @@ bool HasToolbarGlyphs(HFONT font) {
         L'\uf07c',
         L'\uf362',
         L'\uf05a',
-        L'\uf7d9'
+        L'\uf7d9',
+        // All seven status glyphs and three package-type glyphs.
+        tp::ui::PackageStatusGlyph(tp::ui::PackageStatusIcon::Busy),
+        tp::ui::PackageStatusGlyph(tp::ui::PackageStatusIcon::UpdateAvailable),
+        tp::ui::PackageStatusGlyph(tp::ui::PackageStatusIcon::Current),
+        tp::ui::PackageStatusGlyph(tp::ui::PackageStatusIcon::NotConfigured),
+        tp::ui::PackageStatusGlyph(tp::ui::PackageStatusIcon::NotInstalled),
+        tp::ui::PackageStatusGlyph(tp::ui::PackageStatusIcon::NeedsAttention),
+        tp::ui::PackageStatusGlyph(tp::ui::PackageStatusIcon::Error),
+        tp::ui::PackageKindGlyph(tp::ui::PackageKind::Addon),
+        tp::ui::PackageKindGlyph(tp::ui::PackageKind::Dll),
+        tp::ui::PackageKindGlyph(tp::ui::PackageKind::Mpq)
     };
     constexpr int glyphCount =
         static_cast<int>(
@@ -404,15 +416,22 @@ bool InitializeToolbarIcons(
             std::max(
                 8,
                 pixelSize / 2));
+    HFONT packageListFont =
+        CreateFontAwesomeFont(
+            std::max(12, pixelSize * 4 / 5));
 
     if (!iconFont ||
-        !smallIconFont) {
+        !smallIconFont ||
+        !packageListFont) {
         if (iconFont) {
             DeleteObject(iconFont);
         }
         if (smallIconFont) {
             DeleteObject(
                 smallIconFont);
+        }
+        if (packageListFont) {
+            DeleteObject(packageListFont);
         }
         DestroyToolbarIcons(icons);
         return false;
@@ -472,6 +491,7 @@ bool InitializeToolbarIcons(
             pixelSize);
     icons.pixelSize =
         pixelSize;
+    icons.packageListFont = packageListFont;
 
     DeleteObject(smallIconFont);
     DeleteObject(iconFont);
@@ -515,6 +535,10 @@ void DestroyToolbarIcons(
     DestroyPair(icons.advanced);
 
     icons.pixelSize = 0;
+    if (icons.packageListFont) {
+        DeleteObject(icons.packageListFont);
+        icons.packageListFont = nullptr;
+    }
 
     if (icons.fontResource) {
         RemoveFontMemResourceEx(

@@ -22,6 +22,12 @@ struct Palette {
     static constexpr COLORREF button = Hex(0x4A4E54);
     static constexpr COLORREF buttonHover = Hex(0x5A5F66);
     static constexpr COLORREF buttonPressed = Hex(0x676D75);
+    // Consistent, deliberately lighter backgrounds for all six package
+    // actions, including actions disabled by their existing busy/branch rules.
+    static constexpr COLORREF packageAction = Hex(0x646A73);
+    static constexpr COLORREF packageActionHover = Hex(0x737A83);
+    static constexpr COLORREF packageActionPressed = Hex(0x808790);
+    static constexpr COLORREF packageActionDisabledText = Hex(0xABB1BA);
     static constexpr COLORREF primaryText = Hex(0xF1F3F5);
     static constexpr COLORREF secondaryText = Hex(0xC1C6CD);
     static constexpr COLORREF divider = Hex(0x555A61);
@@ -55,14 +61,19 @@ constexpr ChromeVisual ResolveChrome(ChromeRole role, bool active, bool hovered,
     const bool packageAction = role == ChromeRole::PackageAction;
     const COLORREF base = navigation
         ? (active ? Palette::title : Palette::toolbar)
-        : role == ChromeRole::Primary ? Palette::alreadyGood : Palette::button;
-    const COLORREF surface = pressed ? Palette::buttonPressed :
-        hovered && !disabled ? Lift(base) : base;
+        : role == ChromeRole::Primary ? Palette::alreadyGood :
+          packageAction ? Palette::packageAction : Palette::button;
+    const COLORREF surface = packageAction
+        ? (disabled ? Palette::packageAction :
+           pressed ? Palette::packageActionPressed :
+           hovered ? Palette::packageActionHover : Palette::packageAction)
+        : pressed ? Palette::buttonPressed :
+          hovered && !disabled ? Lift(base) : base;
     return {
-        disabled ? (packageAction ? Palette::toolbar : Palette::title) : surface,
+        disabled && !packageAction ? Palette::title : surface,
         navigation ? (active ? Palette::alreadyGood : Palette::toolbar)
                    : (role == ChromeRole::Primary ? Palette::alreadyGood : Palette::divider),
-        disabled ? (packageAction ? Palette::secondaryText : Hex(0x858B93)) :
+        disabled ? (packageAction ? Palette::packageActionDisabledText : Hex(0x858B93)) :
             navigation && !active ? Palette::secondaryText : Palette::primaryText,
         navigation && active
     };

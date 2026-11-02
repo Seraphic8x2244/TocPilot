@@ -21,6 +21,9 @@ struct ToolbarIcons {
     ToolbarIcon info;
     ToolbarIcon advanced;
     HANDLE fontResource = nullptr;
+    // Retained anti-aliased font for compact status/type icons. The font
+    // resource is loaded with the existing toolbar symbols.
+    HFONT packageListFont = nullptr;
     int pixelSize = 0;
 };
 
