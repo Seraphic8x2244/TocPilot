@@ -2305,7 +2305,7 @@ void PaintPackageStatusGlyph(HDC dc, const RECT& cell,
     const auto p = [&](int offset) { return MulDiv(offset, n, 12); };
     const int x = cell.left + ScaleUi(g_packageList, 7);
     const int y = cell.top + (cell.bottom - cell.top - n) / 2;
-    HPEN pen = CreatePen(PS_SOLID, std::max(1, p(2)), colour);
+    HPEN pen = CreatePen(PS_SOLID, std::max(1, p(1)), colour);
     HGDIOBJ oldPen = SelectObject(dc, pen);
     HGDIOBJ oldBrush = SelectObject(dc, GetStockObject(NULL_BRUSH));
     switch (icon) {
@@ -4099,6 +4099,7 @@ void RefreshPackageStateUi() {
         SetWindowTextW(
             g_packageHint,
             PackageHintText().c_str());
+        if (HWND parent = GetParent(g_packageHint)) LayoutControls(parent);
     }
 
     PopulatePackageList();
