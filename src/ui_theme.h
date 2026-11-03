@@ -47,6 +47,15 @@ constexpr COLORREF Lift(COLORREF colour) {
 }
 
 enum class ChromeRole { Navigation, Primary, Secondary, PackageAction };
+// The backdrop belongs to the surface CONTAINING the control, not the
+// button's own face or outline. Rounded corners expose this parent surface.
+// The six package actions sit inside the package-details panel; other chrome
+// lives on the main window. Reuse the very same semantic palette entries
+// used by the parent WM_PAINT renderer so the two cannot drift apart.
+constexpr COLORREF ChromeBackdrop(ChromeRole role) {
+    return role == ChromeRole::PackageAction
+        ? Palette::packageDetails : Palette::window;
+}
 struct ChromeVisual {
     COLORREF fill;
     COLORREF border;

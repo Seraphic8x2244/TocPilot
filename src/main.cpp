@@ -7407,8 +7407,10 @@ bool DrawToolbarButton(const DRAWITEMSTRUCT* draw) {
     const auto visual = tp::ui::ResolveChrome(role, active, hot, pressed, disabled);
     HDC dc = draw->hDC;
     const RECT rect = draw->rcItem;
+    // Rounded button corners expose the surface beneath the control.
+    // Package-action buttons sit on the details panel, not the window.
     const COLORREF backdrop = contrast ? GetSysColor(COLOR_BTNFACE) :
-        tp::ui::Palette::window;
+        tp::ui::ChromeBackdrop(role);
     HBRUSH backing = CreateSolidBrush(backdrop);
     FillRect(dc, &rect, backing);
     DeleteObject(backing);

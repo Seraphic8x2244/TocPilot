@@ -52,6 +52,13 @@ int main() {
               Palette::buttonPressed)) return 1;
     if (!(disabledButton.fill == Palette::title &&
           disabledButton.text != primaryNormal.text)) return 1;
+    // Owner-draw paints the pixels OUTSIDE the rounded face. Those corners
+    // must exactly match their parent painted surface in all button states.
+    if (!(ChromeBackdrop(ChromeRole::PackageAction) == Palette::packageDetails &&
+          ChromeBackdrop(ChromeRole::PackageAction) != Palette::window &&
+          ChromeBackdrop(ChromeRole::Navigation) == Palette::window &&
+          ChromeBackdrop(ChromeRole::Primary) == Palette::window &&
+          ChromeBackdrop(ChromeRole::Secondary) == Palette::window)) return 1;
     const auto packageEnabled = ResolveChrome(ChromeRole::PackageAction, false, false, false, false);
     const auto packageDisabled = ResolveChrome(ChromeRole::PackageAction, false, false, false, true);
     const auto packageHover = ResolveChrome(ChromeRole::PackageAction, false, true, false, false);
