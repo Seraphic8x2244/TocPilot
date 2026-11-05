@@ -37,6 +37,7 @@ struct AppSettings {
     double textScale = 1.0;
     bool checkAppUpdates = true;
     bool receiveDevelopmentBuilds = false;
+    bool clearWdbBeforeLaunch = false;
     bool toolbarIcons = true;
     int advancedWindowClientWidth = 0;
     std::vector<std::wstring> accountSyncAccounts;

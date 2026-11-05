@@ -51,6 +51,7 @@ add_executable(TocPilot WIN32
     src/toolbar_icons.cpp
     src/update.cpp
     src/update_all.cpp
+    src/wdb_cleanup.cpp
     src/ui_dialog.cpp
     resources/TocPilot.rc
 )
@@ -80,6 +81,18 @@ set_target_properties(TocPilot PROPERTIES
 include(CTest)
 
 if(BUILD_TESTING)
+    add_executable(TocPilotWdbCleanupTests
+        tests/wdb_cleanup_tests.cpp
+        src/wdb_cleanup.cpp
+    )
+    target_compile_features(TocPilotWdbCleanupTests PRIVATE cxx_std_20)
+    target_compile_definitions(TocPilotWdbCleanupTests PRIVATE
+        UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
+    target_include_directories(TocPilotWdbCleanupTests PRIVATE src)
+    if(MSVC)
+        target_compile_options(TocPilotWdbCleanupTests PRIVATE /W4 /permissive- /utf-8)
+    endif()
+    add_test(NAME wdb-cache-before-client-launch COMMAND TocPilotWdbCleanupTests)
     add_executable(TocPilotUiThemeTests tests/ui_theme_tests.cpp)
     target_compile_features(TocPilotUiThemeTests PRIVATE cxx_std_20)
     target_compile_definitions(TocPilotUiThemeTests PRIVATE

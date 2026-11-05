@@ -33,6 +33,7 @@
 #include "ui_dialog.h"
 #include "version.h"
 #include "window_layout.h"
+#include "wdb_cleanup.h"
 #include "resource.h"
 
 #include <windows.h>
@@ -127,6 +128,8 @@ constexpr int IDC_PACKAGE_SOURCE = 1050;
 constexpr int IDC_PACKAGE_CHANGE_BRANCH = 1051;
 constexpr int IDC_TOCPILOT_DEVBUILDS_TEXT = 1052;
 constexpr int IDC_PACKAGE_COPY_LINK = 1053;
+constexpr int IDC_TOCPILOT_CLEAR_WDB = 1054;
+constexpr int IDC_TOCPILOT_CLEAR_WDB_TEXT = 1055;
 
 constexpr int kCompactWindowWidth = 790;
 constexpr int kShellTabTop = 16;
@@ -211,6 +214,8 @@ HWND g_tocPilotOptionsHeader = nullptr;
 HWND g_tocPilotAboutHeader = nullptr;
 HWND g_tocPilotScanButton = nullptr;
 HWND g_tocPilotDevBuildsLabel = nullptr;
+HWND g_tocPilotClearWdbCheck = nullptr;
+HWND g_tocPilotClearWdbLabel = nullptr;
 HWND g_tocPilotLastCheckLabel = nullptr;
 HWND g_tocPilotVersionLabel = nullptr;
 HWND g_tocPilotRepositoryButton = nullptr;
@@ -1571,14 +1576,25 @@ void LayoutControls(HWND hwnd) {
              ScaleUi(hwnd, 95), ScaleUi(hwnd, 26));
     placeToc(g_textScaleCombo, pageLeft + ScaleUi(hwnd, 106), rowY(106),
              ScaleUi(hwnd, 120), ScaleUi(hwnd, 180));
-    placeToc(g_tocPilotAboutHeader, pageLeft, rowY(153),
+    // This opt-in setting affects Launch only; toggling never deletes WDB.
+    placeToc(g_tocPilotClearWdbCheck, pageLeft + ScaleUi(hwnd, 4), rowY(141),
+             ScaleUi(hwnd, 24), ScaleUi(hwnd, 26));
+    placeToc(g_tocPilotClearWdbLabel, pageLeft + ScaleUi(hwnd, 31), rowY(141),
+             std::max(1, pageWidth - ScaleUi(hwnd, 31)), ScaleUi(hwnd, 26));
+    if (g_tocPilotClearWdbCheck) {
+        SendMessageW(g_tocPilotClearWdbCheck, BM_SETCHECK,
+            g_stateReady && g_state.settings.clearWdbBeforeLaunch
+                ? BST_CHECKED : BST_UNCHECKED, 0);
+        EnableWindow(g_tocPilotClearWdbCheck, g_stateReady);
+    }
+    placeToc(g_tocPilotAboutHeader, pageLeft, rowY(191),
              pageWidth, ScaleUi(hwnd, 26));
-    placeToc(g_tocPilotVersionLabel, pageLeft + ScaleUi(hwnd, 4), rowY(181),
+    placeToc(g_tocPilotVersionLabel, pageLeft + ScaleUi(hwnd, 4), rowY(219),
              pageWidth - ScaleUi(hwnd, 4), ScaleUi(hwnd, 25));
     // The development-channel option belongs below the installed version.
-    placeToc(g_tocPilotDevBuildsInline, pageLeft + ScaleUi(hwnd, 4), rowY(210),
+    placeToc(g_tocPilotDevBuildsInline, pageLeft + ScaleUi(hwnd, 4), rowY(248),
              ScaleUi(hwnd, 24), ScaleUi(hwnd, 26));
-    placeToc(g_tocPilotDevBuildsLabel, pageLeft + ScaleUi(hwnd, 31), rowY(210),
+    placeToc(g_tocPilotDevBuildsLabel, pageLeft + ScaleUi(hwnd, 31), rowY(248),
              std::max(1, pageWidth - ScaleUi(hwnd, 31)), ScaleUi(hwnd, 26));
     if (g_tocPilotDevBuildsInline) {
         SendMessageW(g_tocPilotDevBuildsInline, BM_SETCHECK,
@@ -1586,18 +1602,18 @@ void LayoutControls(HWND hwnd) {
                 ? BST_CHECKED : BST_UNCHECKED, 0);
         EnableWindow(g_tocPilotDevBuildsInline, g_stateReady);
     }
-    placeToc(g_tocPilotUpdateInline, pageLeft, rowY(246),
+    placeToc(g_tocPilotUpdateInline, pageLeft, rowY(284),
              normalButtonWidth, ScaleUi(hwnd, 34));
-    placeToc(g_tocPilotLastCheckLabel, pageLeft + ScaleUi(hwnd, 4), rowY(286),
+    placeToc(g_tocPilotLastCheckLabel, pageLeft + ScaleUi(hwnd, 4), rowY(324),
              pageWidth - ScaleUi(hwnd, 4), ScaleUi(hwnd, 24));
-    placeToc(g_tocPilotInlineUpdateStatus, pageLeft + ScaleUi(hwnd, 4), rowY(312),
+    placeToc(g_tocPilotInlineUpdateStatus, pageLeft + ScaleUi(hwnd, 4), rowY(350),
              pageWidth - ScaleUi(hwnd, 4), ScaleUi(hwnd, 34));
     const int linkWidth = std::min(ScaleUi(hwnd, 160),
         std::max(1, (pageWidth - ScaleUi(hwnd, 10)) / 2));
-    placeToc(g_tocPilotRepositoryButton, pageLeft, rowY(354),
+    placeToc(g_tocPilotRepositoryButton, pageLeft, rowY(392),
              linkWidth, ScaleUi(hwnd, 34));
     placeToc(g_tocPilotReleasesButton, pageLeft + linkWidth + ScaleUi(hwnd, 10),
-             rowY(354), linkWidth, ScaleUi(hwnd, 34));
+             rowY(392), linkWidth, ScaleUi(hwnd, 34));
     // Existing saved icon preference is retained, not shown as a second mode.
     for (HWND control : {g_tocPilotIconsInline, g_tocPilotWordsInline})
         if (control) ShowWindow(control, SW_HIDE);
@@ -7901,6 +7917,27 @@ bool RunAccountSyncFromUi(
     return true;
 }
 
+void SetClearWdbBeforeLaunch(HWND owner, bool enabled) {
+    if (!g_stateReady) return;
+    if (g_state.settings.clearWdbBeforeLaunch != enabled) {
+        tp::AppState updated = g_state;
+        updated.settings.clearWdbBeforeLaunch = enabled;
+        std::wstring error;
+        if (tp::SaveState(g_root, updated, error)) {
+            g_state = std::move(updated);
+            g_stateCreated = false;
+            g_stateError.clear();
+        } else {
+            MessageBoxW(owner, error.c_str(),
+                L"TocPilot - WDB Cache", MB_OK | MB_ICONERROR);
+        }
+    }
+    // Keep the checkbox in sync with saved state if a write failed.
+    if (g_tocPilotClearWdbCheck)
+        SendMessageW(g_tocPilotClearWdbCheck, BM_SETCHECK,
+            g_state.settings.clearWdbBeforeLaunch ? BST_CHECKED : BST_UNCHECKED, 0);
+}
+
 void LaunchSiblingExecutable(
     HWND hwnd,
     std::wstring_view filename,
@@ -7919,6 +7956,17 @@ void LaunchSiblingExecutable(
 
         SetRoutinePackageFeedback(message);
         return;
+    }
+
+    // Account Sync (if configured) already completed. Clear the cache only
+    // immediately before starting the selected client executable.
+    if (g_stateReady && g_state.settings.clearWdbBeforeLaunch) {
+        std::wstring error;
+        if (!tp::ClearWdbBeforeLaunch(g_root, error)) {
+            MessageBoxW(hwnd, error.c_str(),
+                L"TocPilot - WDB Cache", MB_OK | MB_ICONERROR);
+            return; // Do not launch when the requested cleanup failed.
+        }
     }
 
     const HINSTANCE result =
@@ -9543,6 +9591,17 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
         g_tocPilotAddonHeader = createSectionHeading(L"Addon Management");
         g_tocPilotOptionsHeader = createSectionHeading(L"Options");
         g_tocPilotAboutHeader = createSectionHeading(L"About");
+        g_tocPilotClearWdbCheck = CreateWindowExW(
+            0, L"BUTTON", L"", WS_CHILD | WS_TABSTOP | BS_AUTOCHECKBOX,
+            0, 0, 26, 30, hwnd,
+            reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_TOCPILOT_CLEAR_WDB)),
+            GetModuleHandleW(nullptr), nullptr);
+        g_tocPilotClearWdbLabel = CreateWindowExW(
+            0, L"STATIC", L"Delete WDB folder before launch",
+            WS_CHILD | SS_LEFT | SS_CENTERIMAGE | SS_NOTIFY | SS_NOPREFIX,
+            0, 0, 320, 28, hwnd,
+            reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_TOCPILOT_CLEAR_WDB_TEXT)),
+            GetModuleHandleW(nullptr), nullptr);
         g_tocPilotScanButton = createToolbarButton(
             L"Scan for existing addons", IDC_TOCPILOT_SCAN);
         const std::wstring aboutVersion = std::wstring(L"TocPilot ") + TOCPILOT_VERSION_TAG_W;
@@ -10137,6 +10196,13 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
 
     case WM_COMMAND:
         // The themed caption is clickable, as with a native checkbox label.
+        if (LOWORD(wParam) == IDC_TOCPILOT_CLEAR_WDB_TEXT &&
+            HIWORD(wParam) == STN_CLICKED && g_tocPilotClearWdbCheck) {
+            if (g_stateReady)
+                SetClearWdbBeforeLaunch(hwnd,
+                    !g_state.settings.clearWdbBeforeLaunch);
+            return 0;
+        }
         if (LOWORD(wParam) == IDC_TOCPILOT_DEVBUILDS_TEXT &&
             HIWORD(wParam) == STN_CLICKED && g_tocPilotDevBuildsInline) {
             const bool current = g_stateReady &&
@@ -10239,6 +10305,10 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             case IDC_TOCPILOT_UPDATE_INLINE:
                 if (!g_release.assetUrl.empty()) StartUpdate(hwnd);
                 else StartUpdateCheck(hwnd);
+                return 0;
+            case IDC_TOCPILOT_CLEAR_WDB:
+                SetClearWdbBeforeLaunch(hwnd,
+                    SendMessageW(g_tocPilotClearWdbCheck, BM_GETCHECK, 0, 0) == BST_CHECKED);
                 return 0;
             case IDC_TOCPILOT_DEVBUILDS_INLINE:
                 SetReceiveDevelopmentBuilds(

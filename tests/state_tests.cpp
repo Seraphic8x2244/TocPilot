@@ -1628,6 +1628,64 @@ void TestDevelopmentBuildSettingCompatibility(
     }
 }
 
+void TestWdbLaunchSettingCompatibility(const std::filesystem::path& root) {
+    const std::string legacy =
+        "{\"schema\":1,\"settings\":{\"text_scale\":1.0,"
+        "\"check_app_updates\":true},\"packages\":[]}";
+    if (!WriteAll(tp::StatePath(root), legacy)) {
+        Fail("Could not write old WDB setting fixture");
+        return;
+    }
+    tp::AppState state;
+    bool created = false;
+    std::wstring error;
+    if (!tp::LoadOrCreateState(root, state, created, error) ||
+        state.settings.clearWdbBeforeLaunch) {
+        Fail("Old state should default WDB cleanup off");
+        return;
+    }
+    state.settings.clearWdbBeforeLaunch = true;
+    if (!tp::SaveState(root, state, error)) {
+        Fail("Could not save WDB cleanup enabled");
+        return;
+    }
+    if (ReadAll(tp::StatePath(root)).find(
+            "\"clear_wdb_before_launch\":true") == std::string::npos) {
+        Fail("WDB cleanup setting missing from saved JSON");
+        return;
+    }
+    tp::AppState enabled;
+    if (!tp::LoadOrCreateState(root, enabled, created, error) ||
+        !enabled.settings.clearWdbBeforeLaunch) {
+        Fail("Enabled WDB cleanup did not round-trip");
+        return;
+    }
+    enabled.settings.clearWdbBeforeLaunch = false;
+    if (!tp::SaveState(root, enabled, error)) {
+        Fail("Could not save WDB cleanup disabled");
+        return;
+    }
+    tp::AppState disabled;
+    if (!tp::LoadOrCreateState(root, disabled, created, error) ||
+        disabled.settings.clearWdbBeforeLaunch) {
+        Fail("Disabled WDB cleanup did not round-trip");
+        return;
+    }
+    const std::string invalid =
+        "{\"schema\":1,\"settings\":{\"text_scale\":1.0,"
+        "\"check_app_updates\":true,\"clear_wdb_before_launch\":\"maybe\"},"
+        "\"packages\":[]}";
+    if (!WriteAll(tp::StatePath(root), invalid)) {
+        Fail("Could not write invalid WDB option fixture");
+        return;
+    }
+    tp::AppState rejected;
+    error.clear();
+    if (tp::LoadOrCreateState(root, rejected, created, error) ||
+        error.find(L"clear_wdb_before_launch") == std::wstring::npos)
+        Fail("Invalid WDB cleanup preference was accepted");
+}
+
 void TestUnknownFieldPreservation(
     const std::filesystem::path& root) {
     const std::string json =
@@ -1707,6 +1765,7 @@ int main() {
         TestReleasePackageRoundTrip(root);
         TestReleaseTrackingMutators(root);
         TestDevelopmentBuildSettingCompatibility(root);
+        TestWdbLaunchSettingCompatibility(root);
         TestUnknownFieldPreservation(root);
 
         std::error_code ec;

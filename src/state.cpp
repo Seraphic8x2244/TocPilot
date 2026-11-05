@@ -1028,6 +1028,9 @@ std::string DefaultJson(const AppState& state) {
         << "    \"receive_development_builds\": "
         << (state.settings.receiveDevelopmentBuilds ? "true" : "false")
         << ",\n"
+        << "    \"clear_wdb_before_launch\": "
+        << (state.settings.clearWdbBeforeLaunch ? "true" : "false")
+        << ",\n"
         << "    \"toolbar_icons\": "
         << (state.settings.toolbarIcons ? "true" : "false")
         << ",\n"
@@ -2844,6 +2847,19 @@ bool LoadOrCreateState(
         return false;
     }
 
+    bool clearWdbBeforeLaunch = false;
+    std::size_t wdbStart = 0;
+    std::size_t wdbEnd = 0;
+    if (FindObjectMember(
+            json, settingsStart, settingsEnd,
+            "clear_wdb_before_launch", wdbStart, wdbEnd) &&
+        !ParseBoolToken(
+            std::string_view(json).substr(wdbStart, wdbEnd - wdbStart),
+            clearWdbBeforeLaunch)) {
+        error = L"TocPilot.json has an invalid settings.clear_wdb_before_launch value.";
+        return false;
+    }
+
     bool toolbarIcons = true;
     std::size_t toolbarIconsStart = 0;
     std::size_t toolbarIconsEnd = 0;
@@ -3268,6 +3284,7 @@ bool LoadOrCreateState(
     state.settings.checkAppUpdates = checkUpdates;
     state.settings.receiveDevelopmentBuilds =
         receiveDevelopmentBuilds;
+    state.settings.clearWdbBeforeLaunch = clearWdbBeforeLaunch;
     state.settings.toolbarIcons = toolbarIcons;
     state.settings.advancedWindowClientWidth =
         advancedWindowClientWidth;
@@ -3319,6 +3336,12 @@ bool SaveState(
             json,
             "receive_development_builds",
             state.settings.receiveDevelopmentBuilds
+                ? "true"
+                : "false") ||
+        !SetSettingsMemberJson(
+            json,
+            "clear_wdb_before_launch",
+            state.settings.clearWdbBeforeLaunch
                 ? "true"
                 : "false") ||
         !SetSettingsMemberJson(
